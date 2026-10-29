@@ -20,7 +20,13 @@ and a smaller part from the breadth of the source language that the yardstick re
 The findings are proposals, not decisions.
 Removing or changing an approved feature changes the references and requires approval
 under the [documentation rules](../../../AGENTS.md#documentation-structure-and-design-records).
-This record describes the measured revision and is not a backlog.
+On 2026-10-29 the record dropped the findings that later commits resolved: the checker's error plumbing
+and parallel construction interfaces, the duplicated support of the two stack IRs, the `--dump-passes` stack overflow,
+the abstract-machine Wasm backend and ZASM interpreter, and the dead code those commits deleted.
+It also dropped the tree-sitter bullet,
+which the audit's [dispositions](../2026-10-21-cleanup-audit/README.md#dispositions) retain,
+and the arena method `rebind` from the dead-code list, because the interpreter's linker calls it.
+The measurements, the reproduction, and the evidence for the remaining findings still describe the measured revision.
 
 ## Yardstick
 
@@ -150,13 +156,6 @@ copies one into the other before [`eval.rs`](../../../lang/dynamics/src/eval.rs)
 The evaluator binds environments to patterns and bodies; it could do so over statics computation IDs directly,
 which would remove the dynamics syntax, linker, and printer.
 
-High SPS and SPSLow realize the paper's two calculi and should remain distinct types,
-but they share only their node structs.
-Each declares its own identifiers, arena, traversal, free-variable analysis, printer, and structural checks.
-Excluding blanks, comments, and lines of punctuation alone, 474 of the 992 SPSLow lines
-in those six modules repeat a high SPS line verbatim, and the two traversals avoid recursion with different techniques:
-a hand-written work list for high SPS and the resumable folder driver for SPSLow.
-
 ### Judgment queries duplicate every checker rule
 
 Each CBPV typing rule exists twice.
@@ -182,27 +181,9 @@ the audit's [per-judgment finding](../2026-10-21-cleanup-audit/README.md#per-jud
 estimated the removal at 2.3k–2.8k lines.
 The layer was added on 2026-09-07 and has 11 commits, so it is shallow-rooted.
 
-### Constructor, destructor, and allocation interfaces
+### Diagnostic codes
 
-The typed syntax has four construction and inspection interfaces for the same node shapes:
-`Construct` in [`construct.rs`](../../../lang/statics/src/construct.rs), 1,178 lines;
-`MonConstruct` in [`elaborate/monadic/construct.rs`](../../../lang/statics/src/elaborate/monadic/construct.rs),
-1,193 lines, which re-implements the same impl family through a macro while threading a monadic environment
-and a fallible result; `Alloc` in [`alloc.rs`](../../../lang/statics/src/alloc.rs),
-528 lines; and the inspection helpers in [`destruct.rs`](../../../lang/statics/src/destruct.rs), 457 lines.
-One builder parameterized by its context would serve all three constructors.
-Seventeen of the twenty helper methods that `construct.rs` adds to `Tycker` have no callers.
-
-### Error plumbing
-
-Checker failures use two result types.
-`ResultKont` and plain `Result` coexist, with 241 `ResultKont` mentions in `lang/statics`,
-and 31 function names exist in both a `_k` form and a plain form.
-The error entry's `blame` field forces 404 `Location::caller()` arguments across the checker, 257 of them on lines
-of their own, and the audit's [dead-code finding](../2026-10-21-cleanup-audit/README.md#dead-code) records
-that only an unused renderer reads it.
-The diagnostic message arms exist twice, once for that renderer and once for the published diagnostics,
-and `TyckDiagnosticCode` repeats the 48 variants of `TyckError`.
+`TyckDiagnosticCode` repeats the 48 variants of `TyckError` to give each checker diagnostic a stable code.
 
 ### Sort dispatchers
 
@@ -216,7 +197,7 @@ Classified by the surrounding code, about 70 of the roughly 190 production sites
 about 40 narrow sorts, and most of the rest assert shapes that the package, field-route,
 monadic, or constructor code established earlier.
 The sort separation is not the cost; the union-typed checking result is, and it follows from the surface.
-One surface form such as `fn`, application, `let`, `pi`, or `match` can produce several sorts, so `check_let_k`
+One surface form such as `fn`, application, `let`, `pi`, or `match` can produce several sorts, so `check_let`
 in [`check/term/computation.rs`](../../../lang/statics/src/check/term/computation.rs) handles the product
 of its bound term's sort and its tail's sort.
 A core whose sorts are visible in the syntax would let each rule return one sort.
@@ -246,12 +227,9 @@ The three folders declare 97 `Work` variants.
 On 2026-09-14, nine commits moved those passes and CPS assembly lowering onto the frames
 and the shared driver, adding 1,606 production and 2,176 test lines net.
 The guarantee covers the folders and the two structural checks, which run on the traversals.
-The printers, the SPSLow protocol and contract checks, and protocol extraction still recurse, and in a debug build
-of the measured revision, `zydeco build lib/tests/core/fact.zy -t zir --dump-passes` overflows the main thread's stack
-while printing the unnormalized high SPS.
-The workspace already raises `RUST_MIN_STACK` to 16 MiB in [`.cargo/config.toml`](../../../.cargo/config.toml)
-for residual depth, so tests run on large threads while the CLI's main thread keeps the platform default;
-the suite passes where the dump overflows.
+The printers, the SPSLow protocol and contract checks, and protocol extraction still recurse.
+The workspace raises `RUST_MIN_STACK` to 16 MiB in [`.cargo/config.toml`](../../../.cargo/config.toml)
+for residual depth, so tests run on large threads while the CLI's main thread keeps the platform default.
 Plain recursion that calls `stacker::maybe_grow` in each recursive function, as rustc's `ensure_sufficient_stack` does,
 would protect every consumer with a fraction of the code.
 
@@ -312,7 +290,6 @@ The table lists the first commit that added each path and the number of commits 
 | --- | --- | ---: |
 | `lang/session/src/source/query.rs` | 2026-08-05 | 62 |
 | `lang/surface/src/textual/pretty.rs` | 2026-08-08 | 70 |
-| `lang/wasm-am` | 2026-08-30 | 18 |
 | `lang/statics/src/validate/lint.rs` | 2026-09-02 | 7 |
 | `lang/statics/src/query` | 2026-09-07 | 11 |
 | `lib/std/memory` | 2026-09-08 | 22 |
@@ -342,18 +319,16 @@ Line deltas marked ≈ are review estimates inferred from file sizes; they overl
 ### Deletions without design change
 
 These are the audit's first two steps, restated with the sizes at this revision:
-the [dead code](../2026-10-21-cleanup-audit/README.md#dead-code), the ZASM interpreter
-and `wasm-am`, the pass framework beyond one normalization switch and one dump option,
-the typed-arena lint with a small test helper kept, the recursive folder driver, the representation-policy trait,
+the remaining [dead code](../2026-10-21-cleanup-audit/README.md#dead-code),
+the pass framework beyond one normalization switch and one dump option, the typed-arena lint
+with a small test helper kept, the recursive folder driver, the representation-policy trait,
 the compact and moving frame variants, the raw memory kernels, and the test-only parser entry points and ugly printer.
-Together they are ≈8k–10k production lines plus their tests, and they change compiler reference text
+Together they are ≈6k–8k production lines plus their tests, and they change compiler reference text
 but no source behavior.
 
-This review adds dead code that the audit did not list: the 17 uncalled `Tycker` helpers in `construct.rs`;
-`Instruction::Clear`, which emitters match but nothing constructs; the unused `GenBindNull` grammar rule;
-uncalled arena methods such as `map_id`, `insert_or_same`, `rebind`, and `filter_map_value`;
-the `pats` and `terms` site maps of high SPS and SPSLow, whose only readers copy them
-into the next phase's arena; and the AMD64 emitter's three front-end arena references,
+This review adds dead code that the audit did not list: `Instruction::Clear`, which emitters match
+but nothing constructs; the unused `GenBindNull` grammar rule; the `pats` and `terms` site maps of high SPS and SPSLow,
+whose only readers copy them into the next phase's arena; and the AMD64 emitter's three front-end arena references,
 which nothing reads and which are the only reason `zydeco-amd64` depends on `zydeco-surface` and `zydeco-statics`.
 
 ### Structural simplifications
@@ -363,10 +338,6 @@ These keep the language and the pipeline and change only how the pipeline is wri
 - **Allocate directly in the checker.** Remove the per-judgment Salsa producers and the derived-identifier registry;
   the checker uses a sequential issuer, and Salsa remains, if at all, at file granularity for Cajun.
   This removes the query modules, most of `utils/arena.rs`, and about 20 lines from each of roughly 60 rules (≈5k–6k).
-- **One builder.** A single build trait parameterized by its context replaces `Construct`, `MonConstruct`,
-  and the `Alloc` impl families (≈1.5k).
-- **One error discipline.** Plain results carrying a diagnostic with the current task's span, without `blame`,
-  the second renderer, or the `_k` duplicates.
 - **Closed types.** Substitute aliases during elaboration and represent bound type variables
   without per-node environments, removing the six per-sort environment tables that `strip_checker_state` discards
   after checking and most of the 47 `subst_env` calls (≈0.8k–1.2k).
@@ -385,9 +356,6 @@ These keep the language and the pipeline and change only how the pipeline is wri
 - **Recursion with stack growth.** Replace the explicit frames with direct recursion
   that calls `stacker::maybe_grow` in each recursive function, which also protects the printers,
   the protocol and contract checks, and protocol extraction (≈1.5k, plus ≈1.2k test lines).
-- **Shared SPS infrastructure.** Declare the forms that high SPS and SPSLow share once,
-  with an extension variant for each calculus, so traversal, free variables, printing,
-  and the structural checks are written once and closure conversion keeps only its translation cases (≈0.6k–0.8k).
 - **One host ABI table** generating role signatures and stubs for the interpreter, native runtime, and Wasm host (≈2k).
   Giving arithmetic an intrinsic body first, as comparisons already have, removes the hosts' copies of it.
 - **One test harness per crate**, with file-based cases only under the directive-driven fixtures in `lang/tests`.
@@ -417,12 +385,12 @@ Each item changes approved reference text and needs a decision.
   This is a stronger artifact claim with fewer lines; debug-only validation is the fallback.
   The audit noted that Zydeco's polymorphism, packed values, and recursive codata need types beyond the paper's,
   so this item follows the IR boundary decision.
-- **Backend shape.** Keep `SPS_l` to the structured Wasm backend directly and `SPS_l`
-  through ZASM to AMD64, dropping `wasm-am` and the ZASM interpreter.
+- **Backend shape.** `SPS_l` reaches the structured Wasm backend directly and AMD64 through ZASM.
   Whether ZASM deserves its own representation, or AMD64 should be emitted from `SPS_l` with frame planning,
   is a real question; the paper's implementation claim includes ZASM today, so keeping it is the conservative choice.
-  Retained native frames are an optimization: `wasm-am` keeps every ZASM variable in a fixed slot
-  and passes the same end-to-end suite, so fixed slots on AMD64 would remove most frame planning (≈1.1k).
+  Retained native frames are an optimization: at the measured revision,
+  `wasm-am` kept every ZASM variable in a fixed slot and passed the same end-to-end suite,
+  so fixed slots on AMD64 would remove most frame planning (≈1.1k).
 - **Surface area.** Adopt the audit's [convention](../2026-10-21-cleanup-audit/README.md#recurring-pattern),
   unify the synonym spellings, and drop `.zyi`, `@[doc]`, and text blocks.
   The grammar's 56 productions and 85 tokens each feed the parser, the formatter, the desugarer, and the checker,
@@ -446,8 +414,8 @@ Each item changes approved reference text and needs a decision.
 
 1. Decide the artifact boundary.
 2. Apply the deletions without design change.
-3. Replace the explicit frames with recursion and stack growth, which also repairs `--dump-passes`.
-4. Allocate directly in the checker, then unify errors and builders.
+3. Replace the explicit frames with recursion and stack growth.
+4. Allocate directly in the checker.
 5. Decide the IR boundary, then either interpret the statics residual or introduce the core IR,
    and merge the front-end representations.
 6. Replace the generic arenas and the host implementations with their single forms.
@@ -461,7 +429,6 @@ That is an estimate, not a measurement.
 
 - `docs/evaluations` holds 90,248 tracked lines, most of them JSON and CSV measurement data;
   the data belongs in a release asset rather than the artifact tree.
-- `editor/tree-sitter-zydeco` holds 28,079 tracked lines, mostly generated parser tables.
 - The Markdown documentation is 17,849 lines,
   and the [reference-drift todo](../../todos/reference-drift.md) already records
   that `DESIGN.md` restates the references.
@@ -604,18 +571,17 @@ The frame migration sums `git show --format= --numstat` over `185332c2`, `ba2b8d
 `fb3b4ee7`, `194b944a`, `b8a9de75`, `9c1d3000`, `f6ea5a88`, `d97bbad0`, and `370195d8`,
 counting files under `tests/` or ending in `tests.rs` as test code.
 
-The Builtin and `--dump-passes` observations use a debug build of the measured revision:
+The Builtin observations use a debug build of the measured revision:
 
 ```sh
 cargo build -p zydeco-cli --bin zydeco
 target/debug/zydeco build lib/tests/core/fact.zy -t zir | grep -c '^\[parameter:'
 target/debug/zydeco build lib/tests/core/fact.zy -t zir --sps-passes none | wc -l
-target/debug/zydeco build lib/tests/core/fact.zy -t zir --dump-passes
 ```
 
 The integration-test target count comes from `cargo metadata --no-deps --format-version 1`.
-The tracked line counts outside Rust come from `git ls-files -z DIR | xargs -0 cat | wc -l`
-for `docs/evaluations` and `editor/tree-sitter-zydeco`, and from `git ls-files '*.md' | xargs cat | wc -l`
+The tracked line counts outside Rust come from `git ls-files -z docs/evaluations | xargs -0 cat | wc -l`
+and from `git ls-files '*.md' | xargs cat | wc -l`
 for the Markdown total. The rule line ranges come from reading the two computation modules at the measured revision.
 
 ## Limits
@@ -630,8 +596,6 @@ for the Markdown total. The rule line ranges come from reading the two computati
 - Figures that neither the script nor the listed commands reproduce come from the review passes
   and were checked selectively: the checker's feature attribution, the classification of `unreachable!` sites,
   the thirteen ways to register a test, and the ≈ deltas.
-- The `--dump-passes` overflow was observed in a debug build; a release build uses smaller frames
-  and may not overflow on the same input.
 - Variant counts recognize only the enum names the script lists and only variants written one per line
   at four-space indentation, which matches the syntax modules at this revision.
 - The support-module table counts files by name, so support code under other names is not included.
