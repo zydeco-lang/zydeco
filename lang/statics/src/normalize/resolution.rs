@@ -11,14 +11,7 @@ pub(crate) struct HoleResolver {
 }
 
 impl HoleResolver {
-    pub(crate) fn resolve_k(
-        &mut self, root: TypeId, tycker: &mut Tycker<'_>,
-    ) -> ResultKont<TypeId> {
-        let result = self.resolve(root, tycker);
-        tycker.err_p_to_k(result)
-    }
-
-    fn resolve(&mut self, root: TypeId, tycker: &mut Tycker<'_>) -> Result<TypeId> {
+    pub(crate) fn resolve(&mut self, root: TypeId, tycker: &mut Tycker<'_>) -> Result<TypeId> {
         if let Some(resolved) = self.types.get(&root).copied() {
             return Ok(resolved);
         }
@@ -47,10 +40,6 @@ impl TypeFolder for HoleResolver {
 }
 
 impl TypeId {
-    pub fn solution_k(&self, tycker: &mut Tycker<'_>) -> ResultKont<(TypeId, Vec<FillId>)> {
-        let res = self.solution(tycker);
-        tycker.err_p_to_k(res)
-    }
     /// Solve unfilled types as much as possible; returns the final type and the unfilled holes
     pub fn solution(&self, tycker: &mut Tycker<'_>) -> Result<(TypeId, Vec<FillId>)> {
         let mut resolver = HoleResolver::default();
@@ -106,15 +95,6 @@ impl TypeId {
 }
 
 impl<'a> Tycker<'a> {
-    pub fn filling_k<R>(
-        &mut self, id: &AnnId, f_set: impl FnOnce(&mut Tycker<'a>) -> Result<R>,
-        f_kind: impl FnOnce(&mut Tycker<'a>, Kind) -> Result<R>,
-        f_type: impl FnOnce(&mut Tycker<'a>, Type) -> Result<R>,
-        f_fill: impl FnOnce(&mut Tycker<'a>, FillId) -> Result<R>,
-    ) -> ResultKont<R> {
-        let res = self.filling(id, f_set, f_kind, f_type, f_fill);
-        self.err_p_to_k(res)
-    }
     /// internally resolves unfilled annotations; fails if the annotation has no solution.
     /// only fills the uppermost (or head?) annotation
     pub fn filling<R>(
@@ -148,10 +128,6 @@ impl<'a> Tycker<'a> {
         }
     }
 
-    pub fn kind_filled_k(&mut self, id: &KindId) -> ResultKont<Kind> {
-        let res = self.kind_filled(id);
-        self.err_p_to_k(res)
-    }
     /// internally resolves unfilled kinds; fails if the kind has no solution.
     /// only fills the uppermost (or head?) kind
     pub fn kind_filled(&mut self, id: &KindId) -> Result<Kind> {
@@ -164,10 +140,6 @@ impl<'a> Tycker<'a> {
         )
     }
 
-    pub fn type_filled_k(&mut self, id: &TypeId) -> ResultKont<Type> {
-        let res = self.type_filled(id);
-        self.err_p_to_k(res)
-    }
     /// internally resolves unfilled types; fails if the type has no solution.
     /// only fills the uppermost (or head?) type
     pub fn type_filled(&mut self, id: &TypeId) -> Result<Type> {

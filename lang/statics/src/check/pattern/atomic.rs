@@ -6,7 +6,7 @@ impl PatternChecker<'_> {
     pub(super) fn check_ann_k<'db>(
         &self, tycker: &mut Tycker<'db>, pat: su::Ann<su::PatId, su::TermId>,
         switch: Switch<AnnId>, skolems: PatternSkolems,
-    ) -> ResultKont<CheckedPattern> {
+    ) -> Result<CheckedPattern> {
         Ok({
             let su::Ann { tm, ty } = pat;
             let ty_out_ann = self.mk(ty).tyck_k(tycker, Action::syn())?;
@@ -15,10 +15,10 @@ impl PatternChecker<'_> {
                 | TermAnnId::Type(ty, _) => ty.into(),
                 | TermAnnId::Hole(_) => {
                     // Fixme: I forgor
-                    tycker.err_k(TyckError::SortMismatch)?
+                    tycker.err(TyckError::SortMismatch)?
                 }
                 | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
-                    tycker.err_k(TyckError::SortMismatch)?
+                    tycker.err(TyckError::SortMismatch)?
                 }
             };
             match switch {
@@ -26,7 +26,7 @@ impl PatternChecker<'_> {
                     .mk(tm)
                     .tyck_k(tycker, PatternAction::ana(ty_tm).with_skolems(skolems.clone()))?,
                 | Switch::Ana(ty_ana) => {
-                    let ty = Lub::lub_k(ty_ana, ty_tm, tycker)?;
+                    let ty = Lub::lub(ty_ana, ty_tm, tycker)?;
 
                     self.mk(tm)
                         .tyck_k(tycker, PatternAction::ana(ty).with_skolems(skolems.clone()))?
@@ -37,11 +37,11 @@ impl PatternChecker<'_> {
 
     pub(super) fn check_hole_k<'db>(
         &self, tycker: &mut Tycker<'db>, pat: su::Hole, switch: Switch<AnnId>,
-    ) -> ResultKont<CheckedPattern> {
+    ) -> Result<CheckedPattern> {
         Ok({
             let su::Hole = pat;
             match switch {
-                | Switch::Syn => tycker.err_k(TyckError::MissingAnnotation)?,
+                | Switch::Syn => tycker.err(TyckError::MissingAnnotation)?,
                 | Switch::Ana(ann) => {
                     let ann = PatternLeaf::Hole.materialize(tycker, &self.info, ann);
                     self.mk(PatternCheck::new(ann))
@@ -52,7 +52,7 @@ impl PatternChecker<'_> {
 
     pub(super) fn check_var_k<'db>(
         &self, tycker: &mut Tycker<'db>, def: su::DefId, switch: Switch<AnnId>,
-    ) -> ResultKont<CheckedPattern> {
+    ) -> Result<CheckedPattern> {
         Ok({
             let ann = match switch {
                 | Switch::Syn => match tycker.statics.annotations_var.get(&def) {
@@ -67,12 +67,12 @@ impl PatternChecker<'_> {
                 | AnnId::Type(ty) => {
                     let vtype = ss::VType.build(tycker, &self.info);
                     let kd = tycker.statics.type_kind(ty);
-                    Lub::lub_k(vtype, kd, tycker)?;
+                    Lub::lub(vtype, kd, tycker)?;
                     ty.into()
                 }
             };
             if let Some(ann_) = tycker.statics.annotations_var.insert_or_get(def, ann) {
-                let ann = Lub::lub_k(ann, ann_, tycker)?;
+                let ann = Lub::lub(ann, ann_, tycker)?;
                 tycker.statics.annotations_var.replace_existing(def, ann);
             }
 
@@ -84,22 +84,22 @@ impl PatternChecker<'_> {
     pub(super) fn check_view_k<'db>(
         &self, tycker: &mut Tycker<'db>, function: su::TermId, pattern: su::PatId,
         switch: Switch<AnnId>, skolems: PatternSkolems,
-    ) -> ResultKont<CheckedPattern> {
+    ) -> Result<CheckedPattern> {
         Ok({
             let function = self.mk(function).tyck_k(tycker, Action::syn())?;
             let (function, function_ty) = function.try_as_value(tycker, TyckError::SortMismatch)?;
             let function_kind = tycker.statics.type_kind(function_ty);
-            let function_ty = function_ty.normalize_k(tycker, function_kind)?;
-            let function_view = function_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
-            let ss::Type::ValPi(pi) = tycker.type_filled_k(&function_view)?.to_owned() else {
-                tycker.err_k(TyckError::TypeExpected {
+            let function_ty = function_ty.normalize(tycker, function_kind)?;
+            let function_view = function_ty.unroll(tycker)?.subst_env(tycker, &self.info)?;
+            let ss::Type::ValPi(pi) = tycker.type_filled(&function_view)?.to_owned() else {
+                tycker.err(TyckError::TypeExpected {
                     expected: "a value function with a runtime parameter".to_string(),
                     found: function_view,
                 })?
             };
             let ss::ValPi { binder, codomain } = *pi;
             let ss::ValPiBinder::Value(parameter) = binder else {
-                tycker.err_k(TyckError::TypeExpected {
+                tycker.err(TyckError::TypeExpected {
                     expected: "a value function with a runtime parameter".to_string(),
                     found: function_view,
                 })?
@@ -107,10 +107,10 @@ impl PatternChecker<'_> {
             let domain = match switch {
                 | Switch::Syn => parameter.domain,
                 | Switch::Ana(AnnId::Type(expected)) => {
-                    Lub::lub_k(expected, parameter.domain, tycker)?
+                    Lub::lub(expected, parameter.domain, tycker)?
                 }
                 | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
-                    tycker.err_k(TyckError::SortMismatch)?
+                    tycker.err(TyckError::SortMismatch)?
                 }
             };
             let (pattern_env, codomain, mut opened) = match parameter.witnesses {
@@ -141,7 +141,7 @@ impl PatternChecker<'_> {
 
     pub(super) fn check_triv_k<'db>(
         &self, tycker: &mut Tycker<'db>, switch: Switch<AnnId>,
-    ) -> ResultKont<CheckedPattern> {
+    ) -> Result<CheckedPattern> {
         Ok(match switch {
             | Switch::Syn => {
                 let pat = crate::query::InternedPat::new(tycker.db, self.inner);
@@ -161,11 +161,11 @@ impl PatternChecker<'_> {
             }
             | Switch::Ana(AnnId::Type(ana)) => {
                 let unit = ss::UnitTy.build(tycker, &self.info);
-                let ann = Lub::lub_k(ana, unit, tycker)?;
+                let ann = Lub::lub(ana, unit, tycker)?;
                 let triv = Alloc::alloc(tycker, ss::Triv, ann, &self.info);
                 self.mk(PatternCheck::new(PatAnnId::Value(triv, ann)))
             }
-            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker.err_k(TyckError::SortMismatch)?,
+            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker.err(TyckError::SortMismatch)?,
         })
     }
 }

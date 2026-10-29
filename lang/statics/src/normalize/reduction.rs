@@ -3,10 +3,6 @@
 use super::*;
 
 impl TypeId {
-    pub fn unroll_k(self, tycker: &mut Tycker<'_>) -> ResultKont<TypeId> {
-        let res = self.unroll(tycker);
-        tycker.err_p_to_k(res)
-    }
     pub fn unroll(self, tycker: &mut Tycker<'_>) -> Result<TypeId> {
         let kd = tycker.statics.type_kind(self);
         let env = tycker.statics.env_at(self);
@@ -183,10 +179,6 @@ impl TypeApplicationSpine {
 }
 
 impl TypeId {
-    pub fn normalize_k(self, tycker: &mut Tycker<'_>, kd: KindId) -> ResultKont<TypeId> {
-        let res = self.normalize(tycker, kd);
-        tycker.err_p_to_k(res)
-    }
     pub fn normalize(self, tycker: &mut Tycker<'_>, kd: KindId) -> Result<TypeId> {
         let res = match tycker.statics.types_pre[&self].to_owned() {
             | Fillable::Fill(_) => self,
@@ -231,12 +223,6 @@ impl TypeId {
         };
         Ok(res)
     }
-    pub fn normalize_app_k(
-        self, tycker: &mut Tycker<'_>, a_ty: TypeId, kd: KindId,
-    ) -> ResultKont<TypeId> {
-        let res = self.normalize_app(tycker, a_ty, kd);
-        tycker.err_p_to_k(res)
-    }
     pub fn normalize_app(
         self, tycker: &mut Tycker<'_>, a_ty: TypeId, kd: KindId,
     ) -> Result<TypeId> {
@@ -249,22 +235,13 @@ impl TypeId {
     /// function. A saturated result materializes the complete left-associated spine at once.
     pub(crate) fn apply_type_argument_k(
         self, tycker: &mut Tycker<'_>, argument: TypeId, result_kind: KindId,
-    ) -> ResultKont<TypeId> {
-        let result = (|| {
-            if matches!(tycker.kind_filled(&result_kind)?, Kind::Arrow(_)) {
-                let env = tycker.statics.env_at(self);
-                Ok(Alloc::alloc(tycker, App(self, argument), result_kind, &env))
-            } else {
-                self.normalize_app(tycker, argument, result_kind)
-            }
-        })();
-        tycker.err_p_to_k(result)
-    }
-    pub fn normalize_apps_k(
-        self, tycker: &mut Tycker<'_>, a_tys: Vec<TypeId>,
-    ) -> ResultKont<TypeId> {
-        let res = self.normalize_apps(tycker, a_tys);
-        tycker.err_p_to_k(res)
+    ) -> Result<TypeId> {
+        if matches!(tycker.kind_filled(&result_kind)?, Kind::Arrow(_)) {
+            let env = tycker.statics.env_at(self);
+            Ok(Alloc::alloc(tycker, App(self, argument), result_kind, &env))
+        } else {
+            self.normalize_app(tycker, argument, result_kind)
+        }
     }
     pub fn normalize_apps(self, tycker: &mut Tycker<'_>, a_tys: Vec<TypeId>) -> Result<TypeId> {
         let function_kind = tycker.statics.type_kind(self);

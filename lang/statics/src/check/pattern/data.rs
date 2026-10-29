@@ -6,7 +6,7 @@ impl PatternChecker<'_> {
     pub(super) fn check_ctor_k<'db>(
         &self, tycker: &mut Tycker<'db>, pat: su::Ctor<CtorName, su::PatId>, switch: Switch<AnnId>,
         skolems: PatternSkolems,
-    ) -> ResultKont<CheckedPattern> {
+    ) -> Result<CheckedPattern> {
         Ok(match switch {
             | Switch::Syn => {
                 let pat = crate::query::InternedPat::new(tycker.db, self.inner);
@@ -14,13 +14,13 @@ impl PatternChecker<'_> {
                 else {
                     unreachable!("constructor pattern judgments are query-produced")
                 };
-                tycker.err_k(error)?
+                tycker.err(error)?
             }
             | Switch::Ana(ann) => {
-                let AnnId::Type(ann_ty) = ann else { tycker.err_k(TyckError::SortMismatch)? };
-                let ann_ty_unroll = ann_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
-                let ss::Type::Data(data_id) = &tycker.type_filled_k(&ann_ty_unroll)? else {
-                    tycker.err_k(TyckError::TypeExpected {
+                let AnnId::Type(ann_ty) = ann else { tycker.err(TyckError::SortMismatch)? };
+                let ann_ty_unroll = ann_ty.unroll(tycker)?.subst_env(tycker, &self.info)?;
+                let ss::Type::Data(data_id) = &tycker.type_filled(&ann_ty_unroll)? else {
+                    tycker.err(TyckError::TypeExpected {
                         expected: "data type definition".to_string(),
                         found: ann_ty_unroll,
                     })?
@@ -35,7 +35,7 @@ impl PatternChecker<'_> {
                     .cloned()
                 {
                     | Some(ty) => ty,
-                    | None => tycker.err_k(TyckError::UnknownDataConstructor(ctor.clone()))?,
+                    | None => tycker.err(TyckError::UnknownDataConstructor(ctor.clone()))?,
                 };
                 let args_out_ann = self.mk(args).tyck_k(
                     tycker,
@@ -61,26 +61,24 @@ impl PatternChecker<'_> {
 
     pub(super) fn check_lit_k<'db>(
         &self, tycker: &mut Tycker<'db>, literal: su::Literal, switch: Switch<AnnId>,
-    ) -> ResultKont<CheckedPattern> {
+    ) -> Result<CheckedPattern> {
         Ok(match switch {
-            | Switch::Syn => tycker.err_k(TyckError::MissingAnnotation)?,
+            | Switch::Syn => tycker.err(TyckError::MissingAnnotation)?,
             | Switch::Ana(ann) => {
-                let AnnId::Type(expected) = ann else { tycker.err_k(TyckError::SortMismatch)? };
-                let expected_unroll = expected.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
+                let AnnId::Type(expected) = ann else { tycker.err(TyckError::SortMismatch)? };
+                let expected_unroll = expected.unroll(tycker)?.subst_env(tycker, &self.info)?;
                 match tycker.primitive_type_of(expected_unroll) {
                     | Some(ss::PrimitiveType::Integer(integer_type)) => {
                         use zydeco_syntax::Literal;
                         let Literal::Integer(i) = literal else {
-                            tycker.err_k(TyckError::Expressivity(
+                            tycker.err(TyckError::Expressivity(
                                 "literal patterns support integer literals only",
                             ))?
                         };
                         let value = i.value();
                         let Some(i) = i.with_type(integer_type) else {
-                            tycker.err_k(TyckError::IntegerLiteralOutOfRange {
-                                value,
-                                integer_type,
-                            })?
+                            tycker
+                                .err(TyckError::IntegerLiteralOutOfRange { value, integer_type })?
                         };
                         let lit = Alloc::alloc(
                             tycker,
@@ -90,7 +88,7 @@ impl PatternChecker<'_> {
                         );
                         self.mk(PatternCheck::new(PatAnnId::Value(lit, expected)))
                     }
-                    | Some(_) | None => tycker.err_k(TyckError::TypeExpected {
+                    | Some(_) | None => tycker.err(TyckError::TypeExpected {
                         expected: "an integer primitive type".to_string(),
                         found: expected_unroll,
                     })?,
@@ -102,7 +100,7 @@ impl PatternChecker<'_> {
     pub(super) fn check_alias_k<'db>(
         &self, tycker: &mut Tycker<'db>, patterns: su::ConsN<su::PatId, su::PatId>,
         switch: Switch<AnnId>, skolems: PatternSkolems,
-    ) -> ResultKont<CheckedPattern> {
+    ) -> Result<CheckedPattern> {
         Ok(match switch {
             | Switch::Syn => {
                 let pat = crate::query::InternedPat::new(tycker.db, self.inner);
@@ -110,7 +108,7 @@ impl PatternChecker<'_> {
                 else {
                     unreachable!("alias pattern judgments are query-produced")
                 };
-                tycker.err_k(error)?
+                tycker.err(error)?
             }
             | Switch::Ana(AnnId::Type(expected)) => {
                 let members =
@@ -129,7 +127,7 @@ impl PatternChecker<'_> {
                     let initial = (self.info.clone(), Vec::new(), Vec::new());
                     let (pattern_env, output, opened) = patterns.into_iter().try_fold(
                         initial,
-                        |(pattern_env, mut output, mut opened), pattern| -> ResultKont<_> {
+                        |(pattern_env, mut output, mut opened), pattern| -> Result<_> {
                             let checked = TyEnvT::new(pattern_env, pattern).tyck_k(
                                 tycker,
                                 PatternAction::ana(expected.into()).with_skolems(skolems.clone()),
@@ -138,7 +136,7 @@ impl PatternChecker<'_> {
                             let (pattern, _) =
                                 inner.annotation.try_as_value(tycker, TyckError::SortMismatch)?;
                             if !ValuePatternShape::is_irrefutable(tycker, pattern) {
-                                tycker.err_k(TyckError::RefutablePatternAlias)?
+                                tycker.err(TyckError::RefutablePatternAlias)?
                             }
                             output.push(pattern);
                             opened.extend(inner.opened);
@@ -159,7 +157,7 @@ impl PatternChecker<'_> {
                 }
             }
             | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
-                tycker.err_k(TyckError::PatternAliasRequiresValue)?
+                tycker.err(TyckError::PatternAliasRequiresValue)?
             }
         })
     }

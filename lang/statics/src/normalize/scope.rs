@@ -5,9 +5,12 @@ use super::*;
 impl TypeId {
     /// Test known existential evidence without changing inference-hole scopes.
     /// Static inspection may expose only witnesses already visible to its caller.
-    pub(crate) fn has_visible_witnesses(&self, tycker: &Tycker<'_>, scope: &SkolemScope) -> bool {
-        TypeSupport::of(*self, tycker)
-            .is_ok_and(|support| support.skolems.iter().all(|witness| scope.contains(witness)))
+    pub(crate) fn has_visible_witnesses(
+        &self, tycker: &mut Tycker<'_>, scope: &SkolemScope,
+    ) -> bool {
+        tycker
+            .speculate(|tycker| TypeSupport::of(*self, tycker))
+            .is_some_and(|support| support.skolems.iter().all(|witness| scope.contains(witness)))
     }
 
     /// Require this type to be well scoped under `scope`.
@@ -46,12 +49,6 @@ impl TypeId {
         });
         Ok(())
     }
-    pub fn constrain_to_scope_k(
-        &self, tycker: &mut Tycker<'_>, scope: &SkolemScope,
-    ) -> ResultKont<()> {
-        let result = self.constrain_to_scope(tycker, scope);
-        tycker.err_p_to_k(result)
-    }
 }
 
 #[derive(Default)]
@@ -65,7 +62,7 @@ pub(super) struct TypeSupport {
 }
 
 impl TypeSupport {
-    pub(super) fn of(root: TypeId, tycker: &Tycker<'_>) -> Result<Self> {
+    pub(super) fn of(root: TypeId, tycker: &mut Tycker<'_>) -> Result<Self> {
         let mut collector = TypeSupportCollector::new();
         collector.visit(root, tycker)?;
         Ok(collector.support)
@@ -144,7 +141,7 @@ impl TypeSupportCollector {
         }
     }
 
-    fn visit(&mut self, id: TypeId, tycker: &Tycker<'_>) -> Result<()> {
+    fn visit(&mut self, id: TypeId, tycker: &mut Tycker<'_>) -> Result<()> {
         match tycker.statics.types_pre[&id].to_owned() {
             | Fillable::Fill(fill) => {
                 let local_scope = self.pack_scope.clone();

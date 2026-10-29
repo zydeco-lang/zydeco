@@ -163,7 +163,7 @@ impl<'db> SourceCheckRequest<'db> {
         tycker.finish_judgments();
         tycker.resolve_holes_and_collect();
         let result = match root {
-            | None => Err(KontFailure),
+            | None => Err(ReportedError),
             | Some(root) => tycker
                 .normalize_and_validate_k()
                 .and_then(|()| tycker.elaborate_static_root_k(root))
@@ -180,7 +180,7 @@ impl<'db> SourceCheckRequest<'db> {
                 root,
                 observations: tycker.observations,
             }),
-            | Err(KontFailure) => SourceCheckOutcome::Rejected(RejectedSource {
+            | Err(ReportedError) => SourceCheckOutcome::Rejected(RejectedSource {
                 statics,
                 diagnostics: diagnostics.unwrap(),
                 observations: tycker.observations,

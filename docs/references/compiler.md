@@ -1096,10 +1096,14 @@ Checking can continue after an error when the next judgment's inputs are already
 The checker owns typing environments and inference constraints, so its recovery points follow judgment dependencies.
 A structural visitor alone cannot supply the missing classifier of a failed function or the scope of a failed binder.
 
-[ResultKontIterator::collect_k](../../lang/utils/src/err.rs) exhausts a sequence of independent `_k` requests.
-Each failing request stores its diagnostic and returns `KontFailure`;
-the collector returns all successful results in order only when every request succeeds.
+The checker follows the [diagnostic contract](#diagnostic-collection): each operation records its diagnostic
+where the failure arises and returns `ReportedError`, which callers propagate without reporting again.
+[CollectReported::collect_reported](../../lang/utils/src/err.rs) exhausts a sequence of independent requests
+and returns all successful results in order only when every request succeeds.
 Any failure rejects the combined result, so callers cannot accidentally publish an incomplete product or case tree.
+A probe asks whether a judgment holds, as a classifier view or completion's annotation compatibility does.
+Its failure answers the question instead of rejecting the program, so the probe keeps none
+of the diagnostics of a failed attempt; `Tycker::speculate` runs such a probe.
 The migrated judgment boundaries are:
 
 | Boundary | Work that continues | Required evidence |
@@ -3230,7 +3234,7 @@ Analyses may expose partial facts separately, and completion has its explicit re
 Dependent phases still require valid input.
 A failed binder cannot justify inventing a scope for its body.
 
-Semantic folders record each diagnostic once and propagate `ReportedError` when reconstruction fails.
+Semantic folders and the checker record each diagnostic once and propagate `ReportedError` when their work fails.
 Independent siblings continue where their input contracts remain satisfied; cached rejection does not replay errors.
 The session and CLI, TUI, and LSP retain and render every reported error with its own source location.
 Primary-location convenience APIs do not replace complete diagnostic enumeration.

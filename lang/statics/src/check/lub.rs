@@ -28,10 +28,6 @@ pub(super) struct LubProbe {
 /// mismatch diagnostic preserves this direction, including within type components.
 pub trait Lub<Rhs = Self>: Sized {
     type Out;
-    fn lub_k(self, other: Rhs, tycker: &mut Tycker) -> ResultKont<Self::Out> {
-        let res = self.lub(other, tycker);
-        tycker.err_p_to_k(res)
-    }
     /// Override this method to add administrative tasks for error tracking.
     fn lub(self, other: Rhs, tycker: &mut Tycker) -> Result<Self::Out> {
         self.lub_inner(other, tycker)
@@ -49,22 +45,21 @@ impl Tycker<'_> {
         self.lub_probe = Some(LubProbe::default());
         let result = candidate.lub(expected, self);
         let probe = self.lub_probe.take().unwrap();
-        let emitted_error = self.errors.len() != errors;
-        self.errors.truncate(errors);
+        // The probe keeps none of its diagnostics; the last one is the failure that rejected it.
+        let reported = self.errors.split_off(errors);
+        let mismatch = reported.last().is_some_and(|entry| {
+            matches!(
+                entry.error,
+                TyckError::SortMismatch
+                    | TyckError::KindMismatch
+                    | TyckError::TypeMismatch { .. }
+                    | TyckError::NamedLabelMismatch { .. }
+            )
+        });
 
         match result {
-            | Err(error)
-                if matches!(
-                    error.error,
-                    TyckError::SortMismatch
-                        | TyckError::KindMismatch
-                        | TyckError::TypeMismatch { .. }
-                        | TyckError::NamedLabelMismatch { .. }
-                ) =>
-            {
-                AnnotationCompatibility::Mismatch
-            }
-            | Ok(_) if !probe.deferred && !emitted_error => AnnotationCompatibility::Equal,
+            | Err(ReportedError) if mismatch => AnnotationCompatibility::Mismatch,
+            | Ok(_) if !probe.deferred && reported.is_empty() => AnnotationCompatibility::Equal,
             | Ok(_) | Err(_) => AnnotationCompatibility::Unknown,
         }
     }

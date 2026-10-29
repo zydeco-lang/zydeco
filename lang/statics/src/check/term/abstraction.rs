@@ -6,14 +6,14 @@ impl TermChecker<'_> {
     pub(super) fn check_val_abs_k<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::Abs<su::PatId, su::TermId>,
         switch: Switch<AnnId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         let su::Abs(source_binder, source_body) = term;
         match switch {
             | Switch::Syn => self.check_val_abs_syn_k(tycker, source_binder, source_body),
             | Switch::Ana(AnnId::Type(expected)) => {
                 self.check_val_abs_ana_k(tycker, source_binder, source_body, expected)
             }
-            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker.err_k(TyckError::SortMismatch),
+            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker.err(TyckError::SortMismatch),
         }
     }
 
@@ -21,11 +21,11 @@ impl TermChecker<'_> {
     /// polymorphic value function, a value binder a runtime one.
     fn check_val_abs_syn_k<'db>(
         &self, tycker: &mut Tycker<'db>, source_binder: su::PatId, source_body: su::TermId,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         let binder = self.mk(source_binder).tyck_k(tycker, PatternAction::syn())?;
         let vtype = ss::VType.build(tycker, &self.info);
         let (binder_node, body, classifier) = match binder.inner.annotation {
-            | PatAnnId::Kind(_) => tycker.err_k(TyckError::Expressivity(
+            | PatAnnId::Kind(_) => tycker.err(TyckError::Expressivity(
                 "kind parameters are not supported by value functions",
             ))?,
             | PatAnnId::Type(pattern, _) => {
@@ -48,12 +48,12 @@ impl TermChecker<'_> {
     fn check_val_abs_syn_type_binder_k<'db>(
         &self, tycker: &mut Tycker<'db>, binder: &CheckedPattern, pattern: ss::TPatId,
         source_body: su::TermId,
-    ) -> ResultKont<(ss::ValBinder, ss::ValueId, ss::ValPi)> {
+    ) -> Result<(ss::ValBinder, ss::ValueId, ss::ValPi)> {
         let witness = Alloc::alloc(tycker, pattern, (), &());
         let payload_kind = tycker.statics.annotations_abst[&witness];
         let payload = Alloc::alloc(tycker, witness, payload_kind, &self.info);
         let argument = pattern.introduce_payload(tycker, payload);
-        let argument = tycker.err_p_to_k(argument)?;
+        let argument = argument?;
         let body_env =
             TyEnvT::new(binder.info.clone(), Assign(pattern, argument)).tyck_k(tycker, ())?.info;
         let body = TyEnvT::new(body_env, source_body).tyck_k(tycker, Action::syn())?;
@@ -68,14 +68,14 @@ impl TermChecker<'_> {
     fn check_val_abs_syn_value_binder_k<'db>(
         &self, tycker: &mut Tycker<'db>, binder: &CheckedPattern, pattern: ss::VPatId,
         domain: ss::TypeId, source_body: su::TermId, vtype: ss::KindId,
-    ) -> ResultKont<(ss::ValBinder, ss::ValueId, ss::ValPi)> {
+    ) -> Result<(ss::ValBinder, ss::ValueId, ss::ValPi)> {
         if !ValuePatternShape::is_irrefutable(tycker, pattern) {
-            tycker.err_k(TyckError::Expressivity(
+            tycker.err(TyckError::Expressivity(
                 "value-function parameters must be irrefutable patterns",
             ))?
         }
         let domain_kind = tycker.statics.type_kind(domain);
-        Lub::lub_k(vtype, domain_kind, tycker)?;
+        Lub::lub(vtype, domain_kind, tycker)?;
         let body = TyEnvT::new(binder.info.clone(), source_body).tyck_k(tycker, Action::syn())?;
         let (body, codomain) = body.try_as_value(tycker, TyckError::SortMismatch)?;
         let witnesses = binder.package_telescope_k(tycker)?;
@@ -83,7 +83,7 @@ impl TermChecker<'_> {
         let projected_arity = PackageWitnessProjectionBuilder::abstract_arity(&witness_projection);
         let witness_arity = witnesses.as_ref().map_or(0, ss::PackTelescope::len);
         if projected_arity != witness_arity {
-            tycker.err_k(TyckError::PackageWitnessArityMismatch {
+            tycker.err(TyckError::PackageWitnessArityMismatch {
                 expected: witness_arity,
                 found: projected_arity,
             })?
@@ -114,13 +114,13 @@ impl TermChecker<'_> {
     fn check_val_abs_ana_k<'db>(
         &self, tycker: &mut Tycker<'db>, source_binder: su::PatId, source_body: su::TermId,
         expected: ss::TypeId,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         let vtype = ss::VType.build(tycker, &self.info);
         let expected_kind = tycker.statics.type_kind(expected);
-        Lub::lub_k(vtype, expected_kind, tycker)?;
-        let view = expected.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
-        let ss::Type::ValPi(pi) = tycker.type_filled_k(&view)?.to_owned() else {
-            tycker.err_k(TyckError::TypeExpected {
+        Lub::lub(vtype, expected_kind, tycker)?;
+        let view = expected.unroll(tycker)?.subst_env(tycker, &self.info)?;
+        let ss::Type::ValPi(pi) = tycker.type_filled(&view)?.to_owned() else {
+            tycker.err(TyckError::TypeExpected {
                 expected: "a value-function classifier".to_string(),
                 found: view,
             })?
@@ -149,7 +149,7 @@ impl TermChecker<'_> {
     fn check_val_abs_ana_type_binder_k<'db>(
         &self, tycker: &mut Tycker<'db>, source_binder: su::PatId, source_body: su::TermId,
         expected_binder: ss::TypeBinder, codomain: ss::TypeId,
-    ) -> ResultKont<(ss::ValBinder, ss::ValueId)> {
+    ) -> Result<(ss::ValBinder, ss::ValueId)> {
         let domain_kind = expected_binder.domain_kind(tycker);
         let binder =
             self.mk(source_binder).tyck_k(tycker, PatternAction::ana(domain_kind.into()))?;
@@ -157,7 +157,7 @@ impl TermChecker<'_> {
         let payload_kind = expected_binder.payload_kind(tycker);
         let payload = Alloc::alloc(tycker, expected_binder.witness, payload_kind, &self.info);
         let argument = expected_binder.pattern.introduce_payload(tycker, payload);
-        let argument = tycker.err_p_to_k(argument)?;
+        let argument = argument?;
         let body_env = TyEnvT::new(binder.info, Assign(pattern, argument)).tyck_k(tycker, ())?.info;
         let body = TyEnvT::new(body_env, source_body)
             .tyck_k(tycker, Action::ana_prepared(codomain.into(), &self.info))?;
@@ -168,7 +168,7 @@ impl TermChecker<'_> {
     fn check_val_abs_ana_value_binder_k<'db>(
         &self, tycker: &mut Tycker<'db>, source_binder: su::PatId, source_body: su::TermId,
         parameter: ss::ValueParameter, codomain: ss::TypeId,
-    ) -> ResultKont<(ss::ValBinder, ss::ValueId)> {
+    ) -> Result<(ss::ValBinder, ss::ValueId)> {
         let skolems = match &parameter.witnesses {
             | Some(witnesses) => self
                 .mk(ValuePiPatternSkolems {
@@ -187,9 +187,9 @@ impl TermChecker<'_> {
             .mk(source_binder)
             .tyck_k(tycker, PatternAction::ana(parameter.domain.into()).with_skolems(skolems))?;
         let (pattern, domain) = binder.try_as_value(tycker, TyckError::SortMismatch)?;
-        Lub::lub_k(parameter.domain, domain, tycker)?;
+        Lub::lub(parameter.domain, domain, tycker)?;
         if !ValuePatternShape::is_irrefutable(tycker, pattern) {
-            tycker.err_k(TyckError::Expressivity(
+            tycker.err(TyckError::Expressivity(
                 "value-function parameters must be irrefutable patterns",
             ))?
         }
@@ -198,13 +198,13 @@ impl TermChecker<'_> {
         match (&parameter.witnesses, &actual_witnesses) {
             | (None, None) => binder.close_scope_k(tycker, codomain)?,
             | (Some(expected), Some(actual)) if expected.len() == actual.len() => {}
-            | (expected, actual) => tycker.err_k(TyckError::PackageWitnessArityMismatch {
+            | (expected, actual) => tycker.err(TyckError::PackageWitnessArityMismatch {
                 expected: expected.as_ref().map_or(0, |w| w.len()),
                 found: actual.as_ref().map_or(0, |w| w.len()),
             })?,
         }
         if parameter.witness_projection != actual_projection {
-            tycker.err_k(TyckError::Expressivity(
+            tycker.err(TyckError::Expressivity(
                 "value-function package witness projection does not match its classifier",
             ))?
         }
@@ -217,11 +217,11 @@ impl TermChecker<'_> {
     pub(super) fn check_abs_k<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::Abs<su::PatId, su::TermId>,
         switch: Switch<AnnId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         let su::Abs(pat, body) = term;
         match switch {
             | Switch::Syn => self.check_abs_syn_k(tycker, pat, body),
-            | Switch::Ana(AnnId::Set) => tycker.err_k(TyckError::SortMismatch),
+            | Switch::Ana(AnnId::Set) => tycker.err(TyckError::SortMismatch),
             | Switch::Ana(AnnId::Kind(kd)) => self.check_abs_ana_kind_k(tycker, pat, body, kd),
             | Switch::Ana(AnnId::Type(ty)) => self.check_abs_ana_type_k(tycker, pat, body, ty),
         }
@@ -232,7 +232,7 @@ impl TermChecker<'_> {
     /// computation arrow.
     fn check_abs_syn_k<'db>(
         &self, tycker: &mut Tycker<'db>, pat: su::PatId, body: su::TermId,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         let pat_out_ann = self.mk(pat).tyck_k(tycker, PatternAction::syn())?;
         match pat_out_ann.annotation {
             | PatAnnId::Kind(_) => {
@@ -248,18 +248,18 @@ impl TermChecker<'_> {
     /// Report the rejection that the abstraction judgment produces for `arm`.
     fn reject_abs_syn_k<'db, T>(
         &self, tycker: &mut Tycker<'db>, arm: crate::query::AbsSynArm,
-    ) -> ResultKont<T> {
+    ) -> Result<T> {
         let input = crate::query::InternedAbsSyn::new(tycker.db, arm);
         let outcome = tycker.judge(self.inner, input, crate::query::abs_syn_judgment);
         let crate::query::AbsSynOutcome::Error(error) = outcome else {
             unreachable!("the rejection arms of abstraction judgments are query-produced")
         };
-        tycker.err_k(error)
+        tycker.err(error)
     }
 
     fn check_abs_syn_type_binder_k<'db>(
         &self, tycker: &mut Tycker<'db>, tpat: ss::TPatId, kd: ss::KindId, body: su::TermId,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         // could be either type-polymorphic function or type function
         let abst = Alloc::alloc(tycker, tpat, (), &());
         let subst_vec = {
@@ -316,7 +316,7 @@ impl TermChecker<'_> {
                 tycker.statics.env_compu.insert_new(abs_id, self.info.clone());
                 Ok(TermAnnId::Compu(abs_id, ann_id))
             }
-            | TermAnnId::Value(_, _) => tycker.err_k(TyckError::Expressivity(
+            | TermAnnId::Value(_, _) => tycker.err(TyckError::Expressivity(
                 "use `val` or block-form `param val` to introduce a pure value function",
             )),
             | TermAnnId::Hole(_) | TermAnnId::Kind(_) => {
@@ -328,14 +328,14 @@ impl TermChecker<'_> {
     fn check_abs_syn_value_binder_k<'db>(
         &self, tycker: &mut Tycker<'db>, pat: su::PatId, pat_out_ann: &CheckedPattern,
         vpat: ss::VPatId, ty: ss::TypeId, body: su::TermId,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         ValuePatternShape::require_binding_k(tycker, pat, vpat)?;
         // A value-pattern abstraction is pure when its body is a value
         // and computational when its body is a computation.
         let body_out_ann =
             TyEnvT::new(pat_out_ann.info.clone(), body).tyck_k(tycker, Action::syn())?;
         match body_out_ann {
-            | TermAnnId::Value(_, _) => tycker.err_k(TyckError::Expressivity(
+            | TermAnnId::Value(_, _) => tycker.err(TyckError::Expressivity(
                 "use `val` or block-form `param val` to introduce a pure value function",
             )),
             | TermAnnId::Compu(compu, body_ty) => {
@@ -374,7 +374,7 @@ impl TermChecker<'_> {
                 tycker.statics.types_pre.insert_new(ann_id, ss::Fillable::Done(ann), kd);
                 tycker.store_env(ann_id, &self.info);
                 if is_pack_pi {
-                    ann_id.constrain_to_scope_k(tycker, self.info.skolem_scope())?;
+                    ann_id.constrain_to_scope(tycker, self.info.skolem_scope())?;
                 }
                 tycker.statics.compus.insert_new(abs_id, abs);
                 tycker.statics.annotations_compu.insert_new(abs_id, ann_id);
@@ -390,11 +390,11 @@ impl TermChecker<'_> {
     /// Check a type function against a kind arrow.
     fn check_abs_ana_kind_k<'db>(
         &self, tycker: &mut Tycker<'db>, pat: su::PatId, body: su::TermId, kd: ss::KindId,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         // type function in f omega
         // expecting a kind arrow
-        let ss::Kind::Arrow(kd_arr) = tycker.kind_filled_k(&kd)?.to_owned() else {
-            tycker.err_k(TyckError::KindMismatch)?
+        let ss::Kind::Arrow(kd_arr) = tycker.kind_filled(&kd)?.to_owned() else {
+            tycker.err(TyckError::KindMismatch)?
         };
         let ss::Arrow(kd_1, kd_2) = kd_arr;
         let binder = self.mk(pat).tyck_k(tycker, PatternAction::ana(kd_1.into()))?;
@@ -427,15 +427,15 @@ impl TermChecker<'_> {
     /// package-dependent arrow, or a universal type.
     fn check_abs_ana_type_k<'db>(
         &self, tycker: &mut Tycker<'db>, pat: su::PatId, body: su::TermId, ty: ss::TypeId,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         // could be either a term function or a type-polymorphic term function
         let kind = tycker.statics.type_kind(ty);
-        let expected = match tycker.kind_filled_k(&kind)?.to_owned() {
-            | ss::Kind::VType(_) => tycker.err_k(TyckError::Expressivity(
+        let expected = match tycker.kind_filled(&kind)?.to_owned() {
+            | ss::Kind::VType(_) => tycker.err(TyckError::Expressivity(
                 "use `val` or block-form `param val` to introduce a pure value function",
             ))?,
-            | ss::Kind::CType(_) => tycker.type_filled_k(&ty)?.to_owned(),
-            | ss::Kind::Arrow(_) | ss::Kind::Label(_) => tycker.err_k(TyckError::KindMismatch)?,
+            | ss::Kind::CType(_) => tycker.type_filled(&ty)?.to_owned(),
+            | ss::Kind::Arrow(_) | ss::Kind::Label(_) => tycker.err(TyckError::KindMismatch)?,
         };
         match expected {
             | ss::Type::Arrow(arrow) => self.check_abs_ana_arrow_k(tycker, pat, body, arrow),
@@ -443,7 +443,7 @@ impl TermChecker<'_> {
                 .mk(PackPiIntroduction { binder: pat, body, signature: *signature })
                 .tyck_k(tycker, ()),
             | ss::Type::Forall(forall) => self.check_abs_ana_forall_k(tycker, pat, body, forall),
-            | _ => tycker.err_k(TyckError::TypeExpected {
+            | _ => tycker.err(TyckError::TypeExpected {
                 expected: "one of `_ -> _`, a package-dependent \
                                arrow, or `forall _ . _`"
                     .to_string(),
@@ -455,7 +455,7 @@ impl TermChecker<'_> {
     fn check_abs_ana_arrow_k<'db>(
         &self, tycker: &mut Tycker<'db>, pat: su::PatId, body: su::TermId,
         arrow: ss::Arrow<ss::TypeId, ss::TypeId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         // a term-term function
         let ss::Arrow(ty_1, ty_2) = arrow;
         let binder_elaboration = self.mk(pat).tyck_k(tycker, PatternAction::ana(ty_1.into()))?;
@@ -474,7 +474,7 @@ impl TermChecker<'_> {
 
     fn check_abs_ana_forall_k<'db>(
         &self, tycker: &mut Tycker<'db>, pat: su::PatId, body: su::TermId, forall: ss::Forall,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         let ss::Forall(source_binder, ty_body) = forall;
         let domain_kind = source_binder.domain_kind(tycker);
         let binder = self.mk(pat).tyck_k(tycker, PatternAction::ana(domain_kind.into()))?;
@@ -482,7 +482,7 @@ impl TermChecker<'_> {
         let payload_kind = source_binder.payload_kind(tycker);
         let abst_ty = Alloc::alloc(tycker, source_binder.witness, payload_kind, &self.info);
         let full_argument = source_binder.pattern.introduce_payload(tycker, abst_ty);
-        let full_argument = tycker.err_p_to_k(full_argument)?;
+        let full_argument = full_argument?;
         let env = self.mk(Assign(binder, full_argument)).tyck_k(tycker, ())?.info;
         let body_out_ann = TyEnvT { info: env, inner: body }
             .tyck_k(tycker, Action::ana_prepared(ty_body.into(), &self.info))?;

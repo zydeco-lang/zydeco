@@ -15,7 +15,7 @@ impl<'a> MonadicBasisElaboration<'a> {
         Self { syntax, env }
     }
 
-    fn check_k(&self, tycker: &mut Tycker<'_>) -> ResultKont<MonadicTypeBasis> {
+    fn check_k(&self, tycker: &mut Tycker<'_>) -> Result<MonadicTypeBasis> {
         let monad = self.definition_k(tycker, self.syntax.monad)?;
         let algebra = self.definition_k(tycker, self.syntax.algebra)?;
         let vtype = ss::VType.build(tycker, self.env);
@@ -30,9 +30,7 @@ impl<'a> MonadicBasisElaboration<'a> {
         Ok(MonadicTypeBasis { monad, algebra })
     }
 
-    fn definition_k(
-        &self, tycker: &mut Tycker<'_>, definition: su::TermId,
-    ) -> ResultKont<ss::TypeId> {
+    fn definition_k(&self, tycker: &mut Tycker<'_>, definition: su::TermId) -> Result<ss::TypeId> {
         let checked =
             TyEnvT { info: self.env.clone(), inner: definition }.tyck_k(tycker, Action::syn())?;
         let (definition, _) = checked.try_as_type(tycker, TyckError::SortMismatch)?;
@@ -41,9 +39,9 @@ impl<'a> MonadicBasisElaboration<'a> {
 
     fn expect_kind_k(
         &self, tycker: &mut Tycker<'_>, ty: ss::TypeId, expected: ss::KindId,
-    ) -> ResultKont<()> {
+    ) -> Result<()> {
         let actual = tycker.statics.type_kind(ty);
-        Lub::lub_k(expected, actual, tycker)?;
+        Lub::lub(expected, actual, tycker)?;
         Ok(())
     }
 }
@@ -60,7 +58,7 @@ impl<'a> MonadicBlockElaboration<'a> {
         Self { syntax, environment }
     }
 
-    pub(super) fn check_k(&self, tycker: &mut Tycker<'_>) -> ResultKont<TermAnnId> {
+    pub(super) fn check_k(&self, tycker: &mut Tycker<'_>) -> Result<TermAnnId> {
         let basis =
             MonadicBasisElaboration::new(&self.syntax.basis, self.environment).check_k(tycker)?;
         let body_environment = TyEnv::monadic_new(tycker, self.environment);
@@ -92,14 +90,14 @@ impl<'a> AlgebraicTranslation<'a> {
         Self { body, source, body_environment, basis, environment }
     }
 
-    fn build_k(self, tycker: &mut Tycker<'_>) -> ResultKont<TermAnnId> {
+    fn build_k(self, tycker: &mut Tycker<'_>) -> Result<TermAnnId> {
         let Self { body, source, body_environment, basis, environment } = self;
         let body = match body.root() {
             | TermAnnId::Type(body, _) => CheckedNode::Type(body),
             | TermAnnId::Value(body, _) => CheckedNode::Value(body),
             | TermAnnId::Compu(body, _) => CheckedNode::Computation(body),
             | TermAnnId::Hole(_) | TermAnnId::Kind(_) => {
-                return tycker.err_k(TyckError::SortMismatch);
+                return tycker.err(TyckError::SortMismatch);
             }
         };
 
@@ -130,13 +128,13 @@ impl<'a> AlgebraicTranslation<'a> {
         };
         use crate::elaborate::monadic::nominal::NominalTranslation;
         let prepared = NominalTranslation::prepare(tycker, menv, source, body);
-        let menv = tycker.err_p_to_k(prepared)?;
+        let menv = prepared?;
         let monad_ty_tpat: ss::TPatId =
             Alloc::alloc(tycker, monad_ty_var, monad_ty_kd, environment);
         let monad_binder = ss::TypeBinder { pattern: monad_ty_tpat, witness: abst };
         if let CheckedNode::Type(body) = body {
             // Type translation needs the carrier and nominal families, not runtime algebras.
-            let (_, body) = cs::TypeLift { ty: body }.construct_k(tycker, menv)?;
+            let (_, body) = cs::TypeLift { ty: body }.construct(tycker, menv)?;
             let kind =
                 ss::Arrow(monad_ty_kd, tycker.statics.type_kind(body)).build(tycker, environment);
             let body = Alloc::alloc(
@@ -149,12 +147,12 @@ impl<'a> AlgebraicTranslation<'a> {
         }
 
         let dictionary = NominalTranslation::dictionary(tycker, menv);
-        let (menv, dictionary) = tycker.err_p_to_k(dictionary)?;
+        let (menv, dictionary) = dictionary?;
         let monad_impl_vpat: ss::VPatId =
             Alloc::alloc(tycker, monad_impl_var, monad_impl_ty, environment);
         let body = match body {
             | CheckedNode::Value(body) => {
-                let (_, mut body) = cs::TermLift { tm: body }.construct_k(tycker, menv)?;
+                let (_, mut body) = cs::TermLift { tm: body }.construct(tycker, menv)?;
                 let body_ty = tycker.statics.annotations_value[&body];
                 if let Some((binder, bindee)) = dictionary {
                     body = Alloc::alloc(
@@ -203,7 +201,7 @@ impl<'a> AlgebraicTranslation<'a> {
                 unreachable!("type roots returned above; patterns are not monadic operands")
             }
         };
-        let (_, mut body_lift) = cs::TermLift { tm: body }.construct_k(tycker, menv)?;
+        let (_, mut body_lift) = cs::TermLift { tm: body }.construct(tycker, menv)?;
         if let Some((binder, bindee)) = dictionary {
             let ty = tycker.statics.annotations_compu[&body_lift];
             body_lift =

@@ -7,7 +7,7 @@ impl StaticElaborator<'_, '_> {
     pub(super) fn value_pattern(
         &mut self, source: ValueId, pattern: VPatId, value: StaticValue, env: &mut Environment,
         bindings: &mut Vec<Binding>,
-    ) -> ResultKont<bool> {
+    ) -> Result<bool> {
         match self.tycker.statics.vpats[&pattern].clone() {
             | ValuePattern::Ctor(Ctor(name, tail)) => {
                 let value = value.unnamed();
@@ -74,7 +74,7 @@ impl StaticElaborator<'_, '_> {
     pub(super) fn bind(
         &mut self, pattern: VPatId, value: StaticValue, env: &mut Environment,
         bindings: &mut Vec<Binding>,
-    ) -> ResultKont<()> {
+    ) -> Result<()> {
         match self.tycker.statics.vpats[&pattern].clone() {
             | ValuePattern::Hole(_) | ValuePattern::Triv(_) => {}
             | ValuePattern::Var(definition) => env.values += [(definition, value)],
@@ -137,7 +137,7 @@ impl StaticElaborator<'_, '_> {
     fn view(
         &mut self, source: ValueId, value: StaticValue, env: &Environment,
         bindings: &mut Vec<Binding>,
-    ) -> ResultKont<StaticValue> {
+    ) -> Result<StaticValue> {
         let function = self.value(source, env, bindings)?.unnamed();
         let ValueForm::Function { binder: ValBinder::Value(parameter), body, env: closure } =
             &function.0.form
@@ -158,7 +158,7 @@ impl StaticElaborator<'_, '_> {
     fn open_named(
         &mut self, pattern: VPatId, name: FieldName, tail: VPatId, value: StaticValue,
         env: &Environment, bindings: &mut Vec<Binding>,
-    ) -> ResultKont<StaticValue> {
+    ) -> Result<StaticValue> {
         if let ValueForm::Named(_, payload) = &value.0.form {
             return Ok(payload.clone());
         }
@@ -184,7 +184,7 @@ impl StaticElaborator<'_, '_> {
     fn open_package(
         &mut self, pattern: VPatId, prefix: Vec<StaticPatId>, tail: VPatId, value: StaticValue,
         env: &mut Environment, bindings: &mut Vec<Binding>,
-    ) -> ResultKont<StaticValue> {
+    ) -> Result<StaticValue> {
         let mut value = value.unnamed();
         let mut witnesses = Vec::with_capacity(prefix.len());
         // A projection pattern can open a whole telescope even when `pack`
@@ -255,19 +255,19 @@ impl StaticElaborator<'_, '_> {
     fn bind_witnesses(
         &mut self, pattern: VPatId, prefix: &[StaticPatId], witnesses: &[StaticTermId],
         env: &mut Environment,
-    ) -> ResultKont<()> {
-        let mut domain = self.tycker.statics.annotations_vpat[&pattern].unroll_k(self.tycker)?;
+    ) -> Result<()> {
+        let mut domain = self.tycker.statics.annotations_vpat[&pattern].unroll(self.tycker)?;
         let mut assignments = Vec::new();
         for (pattern, argument) in prefix.iter().zip(witnesses.iter()) {
             match self.tycker.statics.normalized_at(domain).cloned() {
                 | Some(Type::Exists(exists)) => {
                     let StaticTermId::Type(argument) = argument else { unreachable!() };
-                    let payload = exists.binder.pattern.bind_argument_k(self.tycker, *argument)?;
+                    let payload = exists.binder.pattern.bind_argument(self.tycker, *argument)?;
                     assignments.push((exists.binder.witness, payload));
                     if let StaticPatId::Type(pattern) = pattern
                         && let Some(witness) = self.pattern_witness(*pattern)
                     {
-                        let payload = pattern.bind_argument_k(self.tycker, *argument)?;
+                        let payload = pattern.bind_argument(self.tycker, *argument)?;
                         assignments.push((witness, payload));
                     }
                     domain = exists.body;
@@ -298,7 +298,7 @@ impl StaticElaborator<'_, '_> {
 
     pub(super) fn runtime_pattern(
         &mut self, pattern: VPatId, env: &mut Environment,
-    ) -> ResultKont<VPatId> {
+    ) -> Result<VPatId> {
         let ty = self.ty(self.tycker.statics.annotations_vpat[&pattern], env)?;
         let node = match self.tycker.statics.vpats[&pattern].clone() {
             | ValuePattern::Var(definition) => {
@@ -319,13 +319,13 @@ impl StaticElaborator<'_, '_> {
                 patterns
                     .into_iter()
                     .map(|pattern| self.runtime_pattern(pattern, env))
-                    .collect::<ResultKont<_>>()?,
+                    .collect::<Result<_>>()?,
             ),
             | ValuePattern::Alias(Alias(patterns)) => {
                 let patterns = patterns
                     .into_iter()
                     .map(|pattern| self.runtime_pattern(pattern, env))
-                    .collect::<ResultKont<Vec<_>>>()?;
+                    .collect::<Result<Vec<_>>>()?;
                 ValuePattern::Alias(Alias(ConsN::from_vec(patterns).unwrap()))
             }
             | ValuePattern::View(_) => unreachable!("views require static pattern elaboration"),
@@ -337,7 +337,7 @@ impl StaticElaborator<'_, '_> {
     pub(super) fn match_arms(
         &mut self, value: StaticValue, arms: &[Matcher<VPatId, CompuId>], env: &Environment,
         source: CompuId,
-    ) -> ResultKont<CompuId> {
+    ) -> Result<CompuId> {
         let Some((first, rest)) = arms.split_first() else {
             let ty = self.ty(self.tycker.statics.annotations_compu[&source], env)?;
             let scrut = self.reify(&value)?;
@@ -358,7 +358,7 @@ impl StaticElaborator<'_, '_> {
     fn match_steps(
         &mut self, mut pending: Vec<(VPatId, StaticValue)>, tail: CompuId, mut env: Environment,
         failure: &MatchFailure<'_>,
-    ) -> ResultKont<CompuId> {
+    ) -> Result<CompuId> {
         let mut bindings = Vec::new();
         while let Some((pattern, value)) = pending.pop() {
             match self.tycker.statics.vpats[&pattern].clone() {
@@ -393,7 +393,7 @@ impl StaticElaborator<'_, '_> {
                                 )?,
                             ))
                         })
-                        .collect::<ResultKont<Vec<_>>>()?;
+                        .collect::<Result<Vec<_>>>()?;
                     pending.extend(values.into_iter().rev());
                 }
                 | ValuePattern::Ctor(Ctor(name, payload)) => {

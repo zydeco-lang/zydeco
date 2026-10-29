@@ -4,16 +4,8 @@ use super::*;
 use crate::fold::{TypeFolder, TypeRebuilder, TypeScope};
 
 impl TypeId {
-    pub fn subst_env_k(&self, tycker: &mut Tycker<'_>, env: &TyEnv) -> ResultKont<TypeId> {
-        let res = self.subst_env(tycker, env);
-        tycker.err_p_to_k(res)
-    }
     pub fn subst_env(&self, tycker: &mut Tycker<'_>, env: &TyEnv) -> Result<TypeId> {
         LexicalSubstitution { env }.fold_type(tycker, *self)
-    }
-    pub fn subst_k(&self, tycker: &mut Tycker<'_>, var: DefId, with: TypeId) -> ResultKont<TypeId> {
-        let res = self.subst(tycker, var, with);
-        tycker.err_p_to_k(res)
     }
     pub fn subst(&self, tycker: &mut Tycker<'_>, var: DefId, with: TypeId) -> Result<TypeId> {
         let scope = tycker.statics.env_type[self].skolem_scope().clone();
@@ -23,12 +15,6 @@ impl TypeId {
 }
 
 impl TypeId {
-    pub fn subst_abst_k(
-        &self, tycker: &mut Tycker<'_>, assign: (AbstId, TypeId),
-    ) -> ResultKont<TypeId> {
-        let res = self.subst_abst(tycker, assign);
-        tycker.err_p_to_k(res)
-    }
     pub fn subst_abst(&self, tycker: &mut Tycker<'_>, assign: (AbstId, TypeId)) -> Result<TypeId> {
         self.subst_absts(tycker, &[assign])
     }
@@ -36,12 +22,6 @@ impl TypeId {
     ///
     /// A replacement receives only the suffix after its own assignment. Binders such as PackPi
     /// filter their witnesses before the sequence reaches either the body or a replacement.
-    pub fn subst_absts_k(
-        &self, tycker: &mut Tycker<'_>, assignments: &[(AbstId, TypeId)],
-    ) -> ResultKont<TypeId> {
-        let res = self.subst_absts(tycker, assignments);
-        tycker.err_p_to_k(res)
-    }
     pub fn subst_absts(
         &self, tycker: &mut Tycker<'_>, assignments: &[(AbstId, TypeId)],
     ) -> Result<TypeId> {

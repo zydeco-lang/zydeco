@@ -14,7 +14,7 @@ impl ConsScope {
     /// and witnesses it produces.
     fn check_value_k(
         &mut self, tycker: &mut Tycker<'_>, item: su::PatId, action: PatternAction,
-    ) -> ResultKont<(ss::VPatId, ss::TypeId)> {
+    ) -> Result<(ss::VPatId, ss::TypeId)> {
         let checked = TyEnvT::new(self.env.clone(), item).tyck_k(tycker, action)?;
         let component = checked.try_as_value(tycker, TyckError::SortMismatch)?;
         self.env = checked.info;
@@ -27,7 +27,7 @@ impl ConsScope {
     fn check_value_components_k(
         &mut self, tycker: &mut Tycker<'_>, items: &[su::PatId], tail: su::PatId,
         component_tys: &[ss::TypeId], skolems: &PatternSkolems,
-    ) -> ResultKont<(Vec<(ss::VPatId, ss::TypeId)>, (ss::VPatId, ss::TypeId))> {
+    ) -> Result<(Vec<(ss::VPatId, ss::TypeId)>, (ss::VPatId, ss::TypeId))> {
         let components = items
             .iter()
             .copied()
@@ -36,7 +36,7 @@ impl ConsScope {
                 let action = PatternAction::ana(item_ty.into()).with_skolems(skolems.clone());
                 self.check_value_k(tycker, item, action)
             })
-            .collect::<ResultKont<Vec<_>>>()?;
+            .collect::<Result<Vec<_>>>()?;
         let remaining = tycker.rest_product_k(&component_tys[items.len()..], &self.env)?;
         let action = PatternAction::ana(remaining.into()).with_skolems(skolems.clone());
         let tail = self.check_value_k(tycker, tail, action)?;
@@ -50,7 +50,7 @@ impl ConsScope {
     fn check_package_body_k(
         &mut self, tycker: &mut Tycker<'_>, body_items: &[su::PatId], tail: su::PatId,
         body_ty: ss::TypeId, skolems: &PatternSkolems,
-    ) -> ResultKont<ss::VPatId> {
+    ) -> Result<ss::VPatId> {
         if body_items.is_empty() {
             let action = PatternAction::ana(body_ty.into()).with_skolems(skolems.clone());
             let (body, _) = self.check_value_k(tycker, tail, action)?;
@@ -80,7 +80,7 @@ impl PackageOpening {
     fn open_manifest_kind_k(
         &mut self, tycker: &mut Tycker<'_>, item: su::PatId, definition: ss::KindId,
         skolems: &PatternSkolems,
-    ) -> ResultKont<()> {
+    ) -> Result<()> {
         let checked = TyEnvT::new(self.scope.env.clone(), item)
             .tyck_k(tycker, PatternAction::ana(AnnId::Set).with_skolems(skolems.clone()))?;
         let pattern = checked.annotation.try_as_kind(tycker, TyckError::SortMismatch)?;
@@ -96,7 +96,7 @@ impl PackageOpening {
         &mut self, tycker: &mut Tycker<'_>, item: su::PatId, source_binder: ss::TypeBinder,
         mode: DeferredTelescopeExistsMode, next_ty: DeferredTelescopeType,
         skolems: &PatternSkolems,
-    ) -> ResultKont<DeferredTelescopeType> {
+    ) -> Result<DeferredTelescopeType> {
         let domain_kind = source_binder.domain_kind(tycker);
         let payload_kind = source_binder.payload_kind(tycker);
         let checked = TyEnvT::new(self.scope.env.clone(), item)
@@ -126,12 +126,12 @@ impl PackageOpening {
     fn open_abstract_witness_k(
         &mut self, tycker: &mut Tycker<'_>, witness: OpenedWitness, canonical: Option<AbstId>,
         next_ty: DeferredTelescopeType,
-    ) -> ResultKont<DeferredTelescopeType> {
+    ) -> Result<DeferredTelescopeType> {
         let OpenedWitness { pattern, source_binder, payload_kind } = witness;
         let skolem = match canonical {
             | Some(skolem) => {
                 let expected = tycker.statics.annotations_abst[&skolem];
-                Lub::lub_k(expected, payload_kind, tycker)?;
+                Lub::lub(expected, payload_kind, tycker)?;
                 skolem
             }
             | None => {
@@ -139,12 +139,12 @@ impl PackageOpening {
                 Alloc::alloc(tycker, def, payload_kind, &())
             }
         };
-        tycker.transfer_builtin_role_k(source_binder.witness, skolem)?;
+        tycker.transfer_builtin_role(source_binder.witness, skolem)?;
         tycker.statics.existential_skolems.ensure(skolem);
         self.scope.env = self.scope.env.clone().with_skolem(skolem);
         let abstract_ty = Alloc::alloc(tycker, skolem, payload_kind, &self.scope.env);
         let full_witness = source_binder.pattern.introduce_payload(tycker, abstract_ty);
-        let full_witness = tycker.err_p_to_k(full_witness)?;
+        let full_witness = full_witness?;
         self.scope.env = TyEnvT::new(self.scope.env.clone(), Assign(pattern, full_witness))
             .tyck_k(tycker, ())?
             .info;
@@ -157,13 +157,13 @@ impl PackageOpening {
     fn open_manifest_witness_k(
         &mut self, tycker: &mut Tycker<'_>, witness: OpenedWitness,
         definition: DeferredTelescopeType, next_ty: DeferredTelescopeType,
-    ) -> ResultKont<DeferredTelescopeType> {
+    ) -> Result<DeferredTelescopeType> {
         let OpenedWitness { pattern, source_binder, payload_kind } = witness;
         let definition = definition.materialize_k(tycker)?;
         let definition_kind = tycker.statics.type_kind(definition);
-        Lub::lub_k(payload_kind, definition_kind, tycker)?;
+        Lub::lub(payload_kind, definition_kind, tycker)?;
         let full_definition = source_binder.pattern.introduce_payload(tycker, definition);
-        let full_definition = tycker.err_p_to_k(full_definition)?;
+        let full_definition = full_definition?;
         self.scope.env = TyEnvT::new(self.scope.env.clone(), Assign(pattern, full_definition))
             .tyck_k(tycker, ())?
             .info;
@@ -182,7 +182,7 @@ impl PatternChecker<'_> {
     pub(super) fn check_cons_k<'db>(
         &self, tycker: &mut Tycker<'db>, pat: Vec<su::PatId>, switch: Switch<AnnId>,
         skolems: PatternSkolems,
-    ) -> ResultKont<CheckedPattern> {
+    ) -> Result<CheckedPattern> {
         let mut items = pat;
         let tail = items.pop().expect("a cons pattern carries at least two components");
         match switch {
@@ -195,13 +195,13 @@ impl PatternChecker<'_> {
                     | ss::Type::Exists(_) | ss::Type::ManifestKind(_) => {
                         self.check_cons_ana_package_k(tycker, items, tail, expected, skolems)
                     }
-                    | _ => tycker.err_k(TyckError::TypeExpected {
+                    | _ => tycker.err(TyckError::TypeExpected {
                         expected: "one of `_ * _` or `exists _ . _`".to_string(),
                         found: expected,
                     }),
                 }
             }
-            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker.err_k(TyckError::SortMismatch),
+            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker.err(TyckError::SortMismatch),
         }
     }
 
@@ -209,7 +209,7 @@ impl PatternChecker<'_> {
     fn check_cons_syn_k(
         &self, tycker: &mut Tycker<'_>, items: Vec<su::PatId>, tail: su::PatId,
         skolems: PatternSkolems,
-    ) -> ResultKont<CheckedPattern> {
+    ) -> Result<CheckedPattern> {
         let mut scope = ConsScope { env: self.info.clone(), opened: Vec::new() };
         let components = items
             .into_iter()
@@ -217,7 +217,7 @@ impl PatternChecker<'_> {
                 let action = PatternAction::syn().with_skolems(skolems.clone());
                 scope.check_value_k(tycker, item, action)
             })
-            .collect::<ResultKont<Vec<_>>>()?;
+            .collect::<Result<Vec<_>>>()?;
         let tail = scope.check_value_k(
             tycker,
             tail,
@@ -230,10 +230,10 @@ impl PatternChecker<'_> {
     fn check_cons_ana_product_k(
         &self, tycker: &mut Tycker<'_>, items: Vec<su::PatId>, tail: su::PatId,
         expected: ss::TypeId, skolems: PatternSkolems,
-    ) -> ResultKont<CheckedPattern> {
+    ) -> Result<CheckedPattern> {
         let ss::Prod(component_tys) = expected.view_product_k(tycker, &self.info)?;
         if component_tys.len() != items.len() + 1 {
-            tycker.err_k(TyckError::TypeExpected {
+            tycker.err(TyckError::TypeExpected {
                 expected: "a product with matching components".to_string(),
                 found: expected,
             })?
@@ -282,7 +282,7 @@ impl PatternChecker<'_> {
     fn check_cons_ana_package_k(
         &self, tycker: &mut Tycker<'_>, items: Vec<su::PatId>, tail: su::PatId,
         expected: ss::TypeId, skolems: PatternSkolems,
-    ) -> ResultKont<CheckedPattern> {
+    ) -> Result<CheckedPattern> {
         let mut opening = PackageOpening {
             scope: ConsScope { env: self.info.clone(), opened: Vec::new() },
             static_patterns: Vec::new(),
@@ -308,7 +308,7 @@ impl PatternChecker<'_> {
         }
 
         if opening.static_patterns.is_empty() {
-            tycker.err_k(TyckError::TypeExpected {
+            tycker.err(TyckError::TypeExpected {
                 expected: "an existential package".to_string(),
                 found: expected,
             })?

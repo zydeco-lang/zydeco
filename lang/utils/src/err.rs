@@ -1,53 +1,44 @@
-/// Continuation-style result used by `_k` APIs.
-///
-/// `_k` functions report failures by returning `Err(KontFailure)` while storing the real
-/// error payload elsewhere (e.g., a mutable error list), so the checker can keep
-/// going and accumulate more diagnostics.
-pub type ResultKont<T> = Result<T, KontFailure>;
+//! Diagnostics that a producer records as it finds them.
+//!
+//! A producer records each diagnostic once, in a collection it owns, and rejects the failed
+//! request with [`ReportedError`]. Callers propagate the marker without reporting again,
+//! and independent requests continue through [`CollectReported::collect_reported`].
 
-/// The failure marker carried by a [`ResultKont`].
-///
-/// The real diagnostic lives in a mutable error list owned by the pass driver;
-/// this marker only tells the caller that a failure was recorded there and
-/// that the pass should stop descending into the failed branch.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct KontFailure;
+/// The producer has recorded the error; propagating rejection must not report it again.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ReportedError;
 
-/// Exhaust independent `_k` requests before propagating their recorded failures.
-pub trait ResultKontIterator<T>: Iterator<Item = ResultKont<T>> + Sized {
+/// Exhaust independent requests before rejecting the combined result.
+pub trait CollectReported<T>: Iterator<Item = Result<T, ReportedError>> + Sized {
     /// Collect all results in order, returning no partial product if any request failed.
-    /// Unlike `collect::<ResultKont<_>>()`, this always consumes the entire iterator.
-    fn collect_k<C: FromIterator<T>>(self) -> ResultKont<C> {
-        let mut failed = false;
+    /// Unlike `collect::<Result<_, _>>()`, this always consumes the entire iterator.
+    fn collect_reported<C: FromIterator<T>>(self) -> Result<C, ReportedError> {
+        let mut rejected = false;
         let values = self
             .filter_map(|result| match result {
                 | Ok(value) => Some(value),
-                | Err(KontFailure) => {
-                    failed = true;
+                | Err(ReportedError) => {
+                    rejected = true;
                     None
                 }
             })
             .collect();
-        if failed { Err(KontFailure) } else { Ok(values) }
+        if rejected { Err(ReportedError) } else { Ok(values) }
     }
 }
 
-impl<T, I: Iterator<Item = ResultKont<T>>> ResultKontIterator<T> for I {}
+impl<T, I: Iterator<Item = Result<T, ReportedError>>> CollectReported<T> for I {}
 
-pub trait Errorable<E> {
-    type Entry;
+/// A producer that records the diagnostics it finds.
+pub trait Report<E> {
+    /// Record `error` and return the marker that rejects the failed request.
+    fn report(&mut self, error: E) -> ReportedError;
 
-    /// Throw a pure error.
+    /// Record `error` and reject the request.
     #[must_use]
-    fn err<T>(&self, error: E) -> Result<T, Self::Entry>;
-
-    /// Throw a continuation error (used by `_k` APIs).
-    #[must_use]
-    fn err_k<T>(&mut self, error: E) -> ResultKont<T>;
-
-    /// Convert a pure result into a continuation result (used by `_k` APIs).
-    #[must_use]
-    fn err_p_to_k<T>(&mut self, res: Result<T, Self::Entry>) -> ResultKont<T>;
+    fn err<T>(&mut self, error: E) -> Result<T, ReportedError> {
+        Err(self.report(error))
+    }
 }
 
 #[cfg(test)]
@@ -57,12 +48,12 @@ mod tests {
     #[test]
     fn collection_exhausts_failures_and_retains_success_order() {
         let mut visits = 0;
-        let result = [Ok(1), Err(KontFailure), Ok(2), Err(KontFailure)]
+        let result = [Ok(1), Err(ReportedError), Ok(2), Err(ReportedError)]
             .into_iter()
             .inspect(|_| visits += 1)
-            .collect_k::<Vec<_>>();
-        assert_eq!(result, Err(KontFailure));
+            .collect_reported::<Vec<_>>();
+        assert_eq!(result, Err(ReportedError));
         assert_eq!(visits, 4);
-        assert_eq!([Ok(1), Ok(2)].into_iter().collect_k::<Vec<_>>(), Ok(vec![1, 2]));
+        assert_eq!([Ok(1), Ok(2)].into_iter().collect_reported::<Vec<_>>(), Ok(vec![1, 2]));
     }
 }

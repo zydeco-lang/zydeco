@@ -1,9 +1,9 @@
 use super::scope::ResolveEnv;
-use crate::diagnostic::{CollectReported, ReportedError};
 use crate::{
     bitter::syntax::{self as b, Term},
     scoped::{syntax::*, *},
 };
+use zydeco_utils::err::{CollectReported, Report, ReportedError};
 use zydeco_utils::prelude::IdAllocator;
 type FoldResult<T> = std::result::Result<T, ReportedError>;
 
@@ -362,7 +362,7 @@ impl<O: ResolutionObserver> ResolveFolder<'_, O> {
             .iter()
             .enumerate()
             .map(|(order, candidate)| candidate.resolve(self, block, env.clone(), order))
-            .collect_reported();
+            .collect_reported::<Vec<_>>();
         let residual = self.term(body, env);
         let bindings = match (bindings, residual) {
             | (Ok(bindings), Ok(_)) => {

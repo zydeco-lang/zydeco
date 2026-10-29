@@ -6,7 +6,7 @@ impl TermChecker<'_> {
     pub(super) fn check_val_pi_k<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::ValPi, switch: Switch<AnnId>,
         prepared_environment: Option<ss::TyEnv>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         Ok({
             let su::ValPi(binder, codomain) = term;
             let binder = self.mk(binder).tyck_k(tycker, PatternAction::syn())?;
@@ -17,21 +17,22 @@ impl TermChecker<'_> {
 
     pub(super) fn check_pi_k<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::Pi, switch: Switch<AnnId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         let su::Pi(binder, body) = term;
         match switch {
             | Switch::Syn => self.check_pi_syn_k(tycker, binder, body),
-            | Switch::Ana(AnnId::Set) => tycker.err_k(TyckError::SortMismatch),
-            | Switch::Ana(AnnId::Kind(kd)) => match tycker.kind_filled_k(&kd)?.to_owned() {
-                | ss::Kind::VType(_) => tycker
-                    .err_k(TyckError::Expressivity("use `val pi` to classify a value function")),
+            | Switch::Ana(AnnId::Set) => tycker.err(TyckError::SortMismatch),
+            | Switch::Ana(AnnId::Kind(kd)) => match tycker.kind_filled(&kd)?.to_owned() {
+                | ss::Kind::VType(_) => {
+                    tycker.err(TyckError::Expressivity("use `val pi` to classify a value function"))
+                }
                 | ss::Kind::CType(ss::CType) => self.check_pi_ana_ctype_k(tycker, binder, body),
                 | ss::Kind::Arrow(kd_arr) => {
                     self.check_pi_ana_kind_arrow_k(tycker, binder, body, kd_arr)
                 }
-                | ss::Kind::Label(_) => tycker.err_k(TyckError::KindMismatch),
+                | ss::Kind::Label(_) => tycker.err(TyckError::KindMismatch),
             },
-            | Switch::Ana(AnnId::Type(_)) => tycker.err_k(TyckError::SortMismatch),
+            | Switch::Ana(AnnId::Type(_)) => tycker.err(TyckError::SortMismatch),
         }
     }
 
@@ -39,11 +40,11 @@ impl TermChecker<'_> {
     /// universal type, a value binder a computation arrow.
     fn check_pi_syn_k(
         &self, tycker: &mut Tycker<'_>, binder: su::PatId, body: su::TermId,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         let binder_out_ann = self.mk(binder).tyck_k(tycker, PatternAction::syn())?;
         match binder_out_ann.annotation {
             | PatAnnId::Kind(_) => {
-                tycker.err_k(TyckError::Expressivity("kind quantification is not supported"))
+                tycker.err(TyckError::Expressivity("kind quantification is not supported"))
             }
             | PatAnnId::Type(tpat, kd_1) => {
                 self.check_pi_syn_type_binder_k(tycker, tpat, kd_1, body)
@@ -58,7 +59,7 @@ impl TermChecker<'_> {
     /// kind arrow, a computation-type body a universal type.
     fn check_pi_syn_type_binder_k(
         &self, tycker: &mut Tycker<'_>, tpat: ss::TPatId, kd_1: ss::KindId, body: su::TermId,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         let abst = Alloc::alloc(tycker, tpat, (), &());
         let subst_vec = {
             let mut subst_vec = Vec::new();
@@ -100,10 +101,10 @@ impl TermChecker<'_> {
     fn check_pi_syn_forall_k(
         &self, tycker: &mut Tycker<'_>, tpat: ss::TPatId, abst: ss::AbstId, ty_2: ss::TypeId,
         kd_2: ss::KindId,
-    ) -> ResultKont<TermAnnId> {
-        let arm = match tycker.kind_filled_k(&kd_2)?.to_owned() {
+    ) -> Result<TermAnnId> {
+        let arm = match tycker.kind_filled(&kd_2)?.to_owned() {
             | ss::Kind::VType(_) => {
-                tycker.err_k(TyckError::Expressivity("value-level universal types use `val pi`"))?
+                tycker.err(TyckError::Expressivity("value-level universal types use `val pi`"))?
             }
             | ss::Kind::CType(_) => crate::query::PiSynArm::Forall { ty_2, kd_2 },
             | ss::Kind::Arrow(_) | ss::Kind::Label(_) => crate::query::PiSynArm::KindMismatch,
@@ -115,7 +116,7 @@ impl TermChecker<'_> {
                 tycker.store_env(id, &self.info);
                 Ok(TermAnnId::Type(id, kd))
             }
-            | crate::query::PiSynOutcome::Error(error) => tycker.err_k(error),
+            | crate::query::PiSynOutcome::Error(error) => tycker.err(error),
             | crate::query::PiSynOutcome::Kind { .. } => {
                 unreachable!("the type arm of pi judgments is query-produced")
             }
@@ -126,25 +127,25 @@ impl TermChecker<'_> {
     fn reject_pi_syn_k(
         &self, tycker: &mut Tycker<'_>, arm: crate::query::PiSynArm, tpat: ss::TPatId,
         abst: ss::AbstId,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         let input = crate::query::InternedPiSyn::new(tycker.db, arm, tpat, abst);
         let outcome = tycker.judge(self.inner, input, crate::query::pi_syn_judgment);
         let crate::query::PiSynOutcome::Error(error) = outcome else {
             unreachable!("the rejection arms of pi judgments are query-produced")
         };
-        tycker.err_k(error)
+        tycker.err(error)
     }
 
     /// Check a pi against `CType`: a type binder forms a universal type, a
     /// value binder a computation arrow.
     fn check_pi_ana_ctype_k(
         &self, tycker: &mut Tycker<'_>, binder: su::PatId, body: su::TermId,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         // synthesize the binder
         let binder_out_ann = self.mk(binder).tyck_k(tycker, PatternAction::syn())?;
         match binder_out_ann.annotation {
             | PatAnnId::Kind(_) => {
-                tycker.err_k(TyckError::Expressivity("kind quantification is not supported"))
+                tycker.err(TyckError::Expressivity("kind quantification is not supported"))
             }
             | PatAnnId::Type(tpat, _kd_1) => {
                 let ctype = ss::CType.build(tycker, &self.info);
@@ -176,7 +177,7 @@ impl TermChecker<'_> {
     fn check_pi_ana_kind_arrow_k(
         &self, tycker: &mut Tycker<'_>, binder: su::PatId, body: su::TermId,
         kd_arr: ss::Arrow<ss::KindId, ss::KindId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         let ss::Arrow(kd_1, kd_2) = kd_arr;
         // ana binder with kd_1
         let binder_out_ann = self.mk(binder).tyck_k(tycker, PatternAction::ana(kd_1.into()))?;

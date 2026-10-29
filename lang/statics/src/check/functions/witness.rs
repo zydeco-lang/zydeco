@@ -5,14 +5,14 @@ use super::*;
 impl PackageWitnessProjectionBuilder {
     pub(in crate::check) fn build(
         pattern: ss::VPatId, tycker: &mut Tycker<'_>,
-    ) -> ResultKont<ss::PackageWitnessProjection> {
+    ) -> Result<ss::PackageWitnessProjection> {
         use ss::PackageWitnessProjection as Route;
         Ok(match tycker.statics.vpats[&pattern].to_owned() {
             | ss::ValuePattern::Named(ss::Named(_, inner)) => Self::build(inner, tycker)?,
             | ss::ValuePattern::Alias(ss::Alias(patterns)) => patterns
                 .iter()
                 .map(|pattern| Self::build(*pattern, tycker))
-                .collect::<ResultKont<Vec<_>>>()?
+                .collect::<Result<Vec<_>>>()?
                 .into_iter()
                 .find(|projection| !matches!(projection, Route::Ignore))
                 .unwrap_or(Route::Ignore),
@@ -20,14 +20,14 @@ impl PackageWitnessProjectionBuilder {
                 patterns
                     .iter()
                     .map(|pattern| Self::build(*pattern, tycker))
-                    .collect::<ResultKont<_>>()?,
+                    .collect::<Result<_>>()?,
             ),
             | ss::ValuePattern::SCons(ss::ConsN(prefix, body)) => {
                 let mut domain = tycker.statics.annotations_vpat[&pattern];
                 let mut abstracts = 0;
                 for _ in &prefix {
-                    domain = domain.unroll_k(tycker)?;
-                    domain = match tycker.type_filled_k(&domain)?.to_owned() {
+                    domain = domain.unroll(tycker)?;
+                    domain = match tycker.type_filled(&domain)?.to_owned() {
                         | ss::Type::Exists(exists) => {
                             abstracts +=
                                 usize::from(matches!(exists.mode, ss::ExistsMode::Abstract));
@@ -74,18 +74,18 @@ impl PackageSignature {
     /// checking the result pattern of a view pattern.
     pub(in crate::check) fn open_codomain_k(
         &self, tycker: &mut Tycker<'_>, env: &ss::TyEnv,
-    ) -> ResultKont<(ss::TyEnv, ss::TypeId, Vec<ss::AbstId>)> {
+    ) -> Result<(ss::TyEnv, ss::TypeId, Vec<ss::AbstId>)> {
         self.witnesses.iter().try_fold(
             (env.clone(), self.codomain, Vec::new()),
-            |(env, codomain, mut opened), canonical| -> ResultKont<_> {
+            |(env, codomain, mut opened), canonical| -> Result<_> {
                 let kind = tycker.statics.annotations_abst[canonical];
                 let name = tycker.statics.abst_hints.get(canonical).copied();
                 let fresh = Alloc::alloc(tycker, name, kind, &());
-                tycker.transfer_builtin_role_k(*canonical, fresh)?;
+                tycker.transfer_builtin_role(*canonical, fresh)?;
                 tycker.statics.existential_skolems.ensure(fresh);
                 let env = env.with_skolem(fresh);
                 let payload = Alloc::alloc(tycker, fresh, kind, &env);
-                let codomain = codomain.subst_abst_k(tycker, (*canonical, payload))?;
+                let codomain = codomain.subst_abst(tycker, (*canonical, payload))?;
                 opened.push(fresh);
                 Ok((env, codomain, opened))
             },
@@ -98,28 +98,28 @@ impl<'a> PackPiWitnessSkolems<'a> {
         Self { witnesses, domain, expected: witnesses.len() }
     }
 
-    fn collect_k(
+    fn collect_reported(
         self, tycker: &mut Tycker<'_>, env: &ss::TyEnv,
-    ) -> ResultKont<Vec<(ss::AbstId, ss::AbstId)>> {
+    ) -> Result<Vec<(ss::AbstId, ss::AbstId)>> {
         if self.witnesses.is_empty() {
             return Ok(Vec::new());
         }
-        let view = self.domain.unroll_k(tycker)?.subst_env_k(tycker, env)?;
-        match tycker.type_filled_k(&view)?.to_owned() {
+        let view = self.domain.unroll(tycker)?.subst_env(tycker, env)?;
+        match tycker.type_filled(&view)?.to_owned() {
             | ss::Type::ManifestKind(ss::ManifestKind { body, .. }) => {
                 Self { witnesses: self.witnesses, domain: body, expected: self.expected }
-                    .collect_k(tycker, env)
+                    .collect_reported(tycker, env)
             }
             | ss::Type::Label(ss::Label(_, payload)) => {
                 Self { witnesses: self.witnesses, domain: payload, expected: self.expected }
-                    .collect_k(tycker, env)
+                    .collect_reported(tycker, env)
             }
             | ss::Type::Prod(ss::Prod(components)) => {
                 let mut assignments = Vec::new();
                 let mut witnesses = self.witnesses;
                 for component in components {
                     let collected = Self { witnesses, domain: component, expected: self.expected }
-                        .collect_k(tycker, env)?;
+                        .collect_reported(tycker, env)?;
                     witnesses = &witnesses[collected.len()..];
                     assignments.extend(collected);
                 }
@@ -134,19 +134,19 @@ impl<'a> PackPiWitnessSkolems<'a> {
                         };
                         let kind = tycker.statics.annotations_abst[&canonical];
                         let payload = Alloc::alloc(tycker, canonical, kind, env);
-                        let domain = body.subst_abst_k(tycker, (binder.witness, payload))?;
+                        let domain = body.subst_abst(tycker, (binder.witness, payload))?;
                         let tail = Self { witnesses, domain, expected: self.expected }
-                            .collect_k(tycker, env)?;
+                            .collect_reported(tycker, env)?;
                         Ok(std::iter::once((binder.witness, canonical)).chain(tail).collect())
                     }
                     | ss::ExistsMode::Manifest(definition) => {
-                        let domain = body.subst_abst_k(tycker, (binder.witness, definition))?;
+                        let domain = body.subst_abst(tycker, (binder.witness, definition))?;
                         Self { witnesses: self.witnesses, domain, expected: self.expected }
-                            .collect_k(tycker, env)
+                            .collect_reported(tycker, env)
                     }
                 }
             }
-            | _ => tycker.err_k(TyckError::PackageWitnessArityMismatch {
+            | _ => tycker.err(TyckError::PackageWitnessArityMismatch {
                 expected: self.expected,
                 found: self.expected - self.witnesses.len(),
             }),
@@ -159,17 +159,17 @@ impl<'a> PackPiPatternAssignments<'a> {
         Self { items, witnesses, domain, expected: witnesses.len(), found: items.len() }
     }
 
-    fn collect_k(
+    fn collect_reported(
         self, tycker: &mut Tycker<'_>, env: &ss::TyEnv,
-    ) -> ResultKont<Vec<(su::PatId, ss::AbstId)>> {
+    ) -> Result<Vec<(su::PatId, ss::AbstId)>> {
         if self.witnesses.is_empty() {
             return Ok(Vec::new());
         }
         let Some((&item, items)) = self.items.split_first() else {
             return self.mismatch_k(tycker);
         };
-        let view = self.domain.unroll_k(tycker)?.subst_env_k(tycker, env)?;
-        match tycker.type_filled_k(&view)?.to_owned() {
+        let view = self.domain.unroll(tycker)?.subst_env(tycker, env)?;
+        match tycker.type_filled(&view)?.to_owned() {
             | ss::Type::ManifestKind(ss::ManifestKind { body, .. }) => Self {
                 items,
                 witnesses: self.witnesses,
@@ -177,7 +177,7 @@ impl<'a> PackPiPatternAssignments<'a> {
                 expected: self.expected,
                 found: self.found,
             }
-            .collect_k(tycker, env),
+            .collect_reported(tycker, env),
             | ss::Type::Exists(exists) => {
                 let ss::Exists { binder, mode, body } = *exists;
                 match mode {
@@ -187,7 +187,7 @@ impl<'a> PackPiPatternAssignments<'a> {
                         };
                         let kind = tycker.statics.annotations_abst[&witness];
                         let payload = Alloc::alloc(tycker, witness, kind, env);
-                        let domain = body.subst_abst_k(tycker, (binder.witness, payload))?;
+                        let domain = body.subst_abst(tycker, (binder.witness, payload))?;
                         let tail = Self {
                             items,
                             witnesses,
@@ -195,11 +195,11 @@ impl<'a> PackPiPatternAssignments<'a> {
                             expected: self.expected,
                             found: self.found,
                         }
-                        .collect_k(tycker, env)?;
+                        .collect_reported(tycker, env)?;
                         Ok(std::iter::once((item, witness)).chain(tail).collect())
                     }
                     | ss::ExistsMode::Manifest(definition) => {
-                        let domain = body.subst_abst_k(tycker, (binder.witness, definition))?;
+                        let domain = body.subst_abst(tycker, (binder.witness, definition))?;
                         Self {
                             items,
                             witnesses: self.witnesses,
@@ -207,15 +207,15 @@ impl<'a> PackPiPatternAssignments<'a> {
                             expected: self.expected,
                             found: self.found,
                         }
-                        .collect_k(tycker, env)
+                        .collect_reported(tycker, env)
                     }
                 }
             }
             | _ => self.mismatch_k(tycker),
         }
     }
-    fn mismatch_k<T>(&self, tycker: &mut Tycker<'_>) -> ResultKont<T> {
-        tycker.err_k(TyckError::PackageWitnessArityMismatch {
+    fn mismatch_k<T>(&self, tycker: &mut Tycker<'_>) -> Result<T> {
+        tycker.err(TyckError::PackageWitnessArityMismatch {
             expected: self.expected,
             found: self.found,
         })
@@ -225,14 +225,14 @@ impl<'a> PackPiPatternAssignments<'a> {
 impl PackPiPatternSkolems {
     fn assignments_k(
         &self, tycker: &mut Tycker<'_>, env: &ss::TyEnv, pattern: su::PatId,
-    ) -> ResultKont<Vec<(su::PatId, ss::AbstId)>> {
+    ) -> Result<Vec<(su::PatId, ss::AbstId)>> {
         match tycker.scoped.pats[&pattern].to_owned() {
             | su::Pattern::Ann(su::Ann { tm, .. }) => self.assignments_k(tycker, env, tm),
             | su::Pattern::Named(su::Named(_, inner)) => self.assignments_k(tycker, env, inner),
             | su::Pattern::Cons(items) => {
                 let witnesses = self.signature.witnesses.iter().copied().collect::<Vec<_>>();
                 PackPiPatternAssignments::new(&items, &witnesses, self.signature.domain)
-                    .collect_k(tycker, env)
+                    .collect_reported(tycker, env)
             }
             | su::Pattern::Project(_) => Ok(Vec::new()),
             | su::Pattern::View(_) => Ok(Vec::new()),
@@ -247,7 +247,7 @@ impl PackPiPatternSkolems {
             | su::Pattern::Ctor(_)
             | su::Pattern::Lit(_)
             | su::Pattern::Alias(_)
-            | su::Pattern::Triv(_) => tycker.err_k(TyckError::PackageWitnessArityMismatch {
+            | su::Pattern::Triv(_) => tycker.err(TyckError::PackageWitnessArityMismatch {
                 expected: self.signature.witnesses.len(),
                 found: 0,
             }),
@@ -259,11 +259,11 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiPatternSkolems> {
     type Out = PatternSkolems;
     type Action = ();
 
-    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> ResultKont<Self::Out> {
+    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> Result<Self::Out> {
         let patterns = self.inner.assignments_k(tycker, &self.info, self.inner.pattern)?;
         let canonical = self.inner.signature.witnesses.iter().copied().collect::<Vec<_>>();
         let witnesses = PackPiWitnessSkolems::new(&canonical, self.inner.signature.domain)
-            .collect_k(tycker, &self.info)?;
+            .collect_reported(tycker, &self.info)?;
         Ok(PatternSkolems::new(patterns, witnesses))
     }
 }
@@ -272,7 +272,7 @@ impl ValuePiPatternSkolems {
     fn collect_projection_k(
         tycker: &mut Tycker<'_>, env: &ss::TyEnv, pattern: su::PatId, domain: ss::TypeId,
         projection: &ss::PackageWitnessProjection, canonical: &[ss::AbstId], codomain: ss::TypeId,
-    ) -> ResultKont<(PatternSkolems, usize)> {
+    ) -> Result<(PatternSkolems, usize)> {
         match tycker.scoped.pats[&pattern].to_owned() {
             | su::Pattern::Ann(su::Ann { tm, .. }) | su::Pattern::Named(su::Named(_, tm)) => {
                 return Self::collect_projection_k(
@@ -291,7 +291,7 @@ impl ValuePiPatternSkolems {
                     }
                     | su::Pattern::Project(_) => vec![pattern],
                     | _ => {
-                        return tycker.err_k(TyckError::PackageWitnessArityMismatch {
+                        return tycker.err(TyckError::PackageWitnessArityMismatch {
                             expected: *prefix + 1,
                             found: 0,
                         });
@@ -300,13 +300,13 @@ impl ValuePiPatternSkolems {
                 let mut tail_domain = domain;
                 let mut remaining = canonical;
                 for _ in 0..*prefix {
-                    tail_domain = tail_domain.unroll_k(tycker)?.subst_env_k(tycker, env)?;
-                    tail_domain = match tycker.type_filled_k(&tail_domain)?.to_owned() {
+                    tail_domain = tail_domain.unroll(tycker)?.subst_env(tycker, env)?;
+                    tail_domain = match tycker.type_filled(&tail_domain)?.to_owned() {
                         | ss::Type::Exists(exists) => {
                             let payload = match exists.mode {
                                 | ss::ExistsMode::Abstract => {
                                     let Some((&witness, rest)) = remaining.split_first() else {
-                                        return tycker.err_k(
+                                        return tycker.err(
                                             TyckError::PackageWitnessArityMismatch {
                                                 expected: *abstracts,
                                                 found: canonical.len(),
@@ -319,11 +319,11 @@ impl ValuePiPatternSkolems {
                                 }
                                 | ss::ExistsMode::Manifest(definition) => definition,
                             };
-                            exists.body.subst_abst_k(tycker, (exists.binder.witness, payload))?
+                            exists.body.subst_abst(tycker, (exists.binder.witness, payload))?
                         }
                         | ss::Type::ManifestKind(manifest) => manifest.body,
                         | _ => {
-                            return tycker.err_k(TyckError::TypeExpected {
+                            return tycker.err(TyckError::TypeExpected {
                                 expected: "a package carrying witnesses".to_string(),
                                 found: tail_domain,
                             });
@@ -356,7 +356,7 @@ impl ValuePiPatternSkolems {
                     )?,
                     | patterns => {
                         let ss::PackageWitnessProjection::Product(projections) = &**body else {
-                            return tycker.err_k(TyckError::PackageWitnessArityMismatch {
+                            return tycker.err(TyckError::PackageWitnessArityMismatch {
                                 expected: 1,
                                 found: patterns.len(),
                             });
@@ -376,7 +376,7 @@ impl ValuePiPatternSkolems {
             }
             | ss::PackageWitnessProjection::Package { abstracts } => {
                 if *abstracts == 0 || *abstracts > canonical.len() {
-                    return tycker.err_k(TyckError::PackageWitnessArityMismatch {
+                    return tycker.err(TyckError::PackageWitnessArityMismatch {
                         expected: canonical.len(),
                         found: *abstracts,
                     });
@@ -388,12 +388,12 @@ impl ValuePiPatternSkolems {
                 let helper = PackPiPatternSkolems { pattern, signature: signature.clone() };
                 let patterns = helper.assignments_k(tycker, env, pattern)?;
                 let witnesses =
-                    PackPiWitnessSkolems::new(selected, domain).collect_k(tycker, env)?;
+                    PackPiWitnessSkolems::new(selected, domain).collect_reported(tycker, env)?;
                 Ok((PatternSkolems::new(patterns, witnesses), *abstracts))
             }
             | ss::PackageWitnessProjection::Product(projections) => {
                 let su::Pattern::Cons(patterns) = tycker.scoped.pats[&pattern].to_owned() else {
-                    return tycker.err_k(TyckError::PackageWitnessArityMismatch {
+                    return tycker.err(TyckError::PackageWitnessArityMismatch {
                         expected: projections.len(),
                         found: 0,
                     });
@@ -415,17 +415,16 @@ impl ValuePiPatternSkolems {
         tycker: &mut Tycker<'_>, env: &ss::TyEnv, patterns: &[su::PatId], domain: ss::TypeId,
         projections: &[ss::PackageWitnessProjection], canonical: &[ss::AbstId],
         codomain: ss::TypeId,
-    ) -> ResultKont<(PatternSkolems, usize)> {
-        let domain_view = domain.unroll_k(tycker)?.subst_env_k(tycker, env)?;
-        let ss::Type::Prod(ss::Prod(domains)) = tycker.type_filled_k(&domain_view)?.to_owned()
-        else {
-            return tycker.err_k(TyckError::TypeExpected {
+    ) -> Result<(PatternSkolems, usize)> {
+        let domain_view = domain.unroll(tycker)?.subst_env(tycker, env)?;
+        let ss::Type::Prod(ss::Prod(domains)) = tycker.type_filled(&domain_view)?.to_owned() else {
+            return tycker.err(TyckError::TypeExpected {
                 expected: "a product carrying package witnesses".to_string(),
                 found: domain_view,
             });
         };
         if projections.len() != domains.len() || domains.len() != patterns.len() {
-            return tycker.err_k(TyckError::PackageWitnessArityMismatch {
+            return tycker.err(TyckError::PackageWitnessArityMismatch {
                 expected: projections.len(),
                 found: patterns.len(),
             });
@@ -447,7 +446,7 @@ impl<'a> Tyck<'a> for TyEnvT<ValuePiPatternSkolems> {
     type Out = PatternSkolems;
     type Action = ();
 
-    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> ResultKont<Self::Out> {
+    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> Result<Self::Out> {
         let canonical = self.inner.signature.witnesses.iter().copied().collect::<Vec<_>>();
         let (skolems, consumed) = ValuePiPatternSkolems::collect_projection_k(
             tycker,
@@ -459,7 +458,7 @@ impl<'a> Tyck<'a> for TyEnvT<ValuePiPatternSkolems> {
             self.inner.signature.codomain,
         )?;
         if consumed != canonical.len() {
-            tycker.err_k(TyckError::PackageWitnessArityMismatch {
+            tycker.err(TyckError::PackageWitnessArityMismatch {
                 expected: canonical.len(),
                 found: consumed,
             })?

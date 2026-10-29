@@ -7,7 +7,7 @@ impl StaticElaborator<'_, '_> {
     #[allow(clippy::too_many_lines)]
     pub(super) fn value(
         &mut self, source: ValueId, env: &Environment, bindings: &mut Vec<Binding>,
-    ) -> ResultKont<StaticValue> {
+    ) -> Result<StaticValue> {
         let ty = self.ty(self.tycker.statics.annotations_value[&source], env)?;
         if self.tycker.statics.foreign_imports.get(&source).is_some() {
             return Ok(StaticValue::with_form(source, ty, ValueForm::Runtime(source)));
@@ -51,7 +51,7 @@ impl StaticElaborator<'_, '_> {
                             })
                         }
                     })
-                    .collect::<ResultKont<Vec<_>>>()?;
+                    .collect::<Result<Vec<_>>>()?;
                 let literal = Literal::Integer(IntegerLiteral::Int(
                     operation.evaluate([operands[0], operands[1]]),
                 ));
@@ -100,7 +100,7 @@ impl StaticElaborator<'_, '_> {
                 fields
                     .into_iter()
                     .map(|field| self.value(field, env, bindings))
-                    .collect::<ResultKont<_>>()?,
+                    .collect::<Result<_>>()?,
             ),
             | Value::Ctor(Ctor(name, payload)) => {
                 ValueForm::Constructor(name, self.value(payload, env, bindings)?)
@@ -115,7 +115,7 @@ impl StaticElaborator<'_, '_> {
                         | StaticTermId::Type(ty) => self.ty(ty, env).map(StaticTermId::Type),
                         | StaticTermId::Kind(_) => Ok(witness),
                     })
-                    .collect::<ResultKont<Vec<_>>>()?;
+                    .collect::<Result<Vec<_>>>()?;
                 ValueForm::Package(ConsN(prefix, self.value(payload, env, bindings)?))
             }
             | Value::Proj(Proj(head, field)) => {
@@ -137,7 +137,7 @@ impl StaticElaborator<'_, '_> {
                                     position: step.position,
                                 })
                             })
-                            .collect::<ResultKont<_>>()?;
+                            .collect::<Result<_>>()?;
                         let head = self.reify(&value)?;
                         let node = Value::Proj(Proj(
                             head,
@@ -178,7 +178,7 @@ impl StaticElaborator<'_, '_> {
     fn apply(
         &mut self, source: ValueId, function: StaticValue, argument: ValArgument,
         caller: &Environment, bindings: &mut Vec<Binding>,
-    ) -> ResultKont<StaticValue> {
+    ) -> Result<StaticValue> {
         self.enter_reduction(function.0.source)?;
         let previous = self.application_site;
         self.application_site = previous.or(Some(source));
@@ -191,9 +191,9 @@ impl StaticElaborator<'_, '_> {
     fn inspect_alias(
         &mut self, source: ValueId, definition: DefId, ty: TypeId, env: &Environment,
         bindings: &mut Vec<Binding>,
-    ) -> ResultKont<StaticValue> {
+    ) -> Result<StaticValue> {
         if !self.aliases.insert(definition) {
-            return Err(KontFailure);
+            return Err(ReportedError);
         }
         let alias = self.tycker.statics.value_aliases.get(&definition).copied();
         let result = match alias {
@@ -217,7 +217,7 @@ impl StaticElaborator<'_, '_> {
     fn apply_inner(
         &mut self, function: StaticValue, argument: ValArgument, caller: &Environment,
         bindings: &mut Vec<Binding>,
-    ) -> ResultKont<StaticValue> {
+    ) -> Result<StaticValue> {
         let function = function.unnamed();
         let ValueForm::Function { binder, body, env } = &function.0.form else {
             return self.fail(StaticEliminationError::UnresolvedApplication {
@@ -228,14 +228,14 @@ impl StaticElaborator<'_, '_> {
         match (binder, argument) {
             | (ValBinder::Type(pattern), ValArgument::Type(argument)) => {
                 let argument = self.ty(argument, caller)?;
-                let classifier = function.0.ty.unroll_k(self.tycker)?;
+                let classifier = function.0.ty.unroll(self.tycker)?;
                 let Some(Type::ValPi(pi)) = self.tycker.statics.normalized_at(classifier) else {
                     unreachable!()
                 };
                 let ValPiBinder::Type(binder) = &pi.binder else { unreachable!() };
                 let binder = binder.clone();
-                let payload = binder.pattern.bind_argument_k(self.tycker, argument)?;
-                let body_payload = pattern.bind_argument_k(self.tycker, argument)?;
+                let payload = binder.pattern.bind_argument(self.tycker, argument)?;
+                let body_payload = pattern.bind_argument(self.tycker, argument)?;
                 let assignments = std::iter::once((binder.witness, payload))
                     .chain(self.pattern_witness(*pattern).map(|witness| (witness, body_payload)));
                 local = local.with_types(assignments);
@@ -253,14 +253,14 @@ impl StaticElaborator<'_, '_> {
     pub(super) fn project(
         &mut self, value: StaticValue, product: TypeId, position: usize, source: ValueId,
         bindings: &mut Vec<Binding>,
-    ) -> ResultKont<StaticValue> {
+    ) -> Result<StaticValue> {
         match &value.0.form {
             | ValueForm::Named(_, inner) | ValueForm::Package(ConsN(_, inner)) => {
                 self.project(inner.clone(), product, position, source, bindings)
             }
             | ValueForm::Product(fields) => Ok(fields[position].clone()),
             | ValueForm::Runtime(_) => {
-                let product = product.unroll_k(self.tycker)?;
+                let product = product.unroll(self.tycker)?;
                 let Some(Type::Prod(Prod(fields))) =
                     self.tycker.statics.normalized_at(product).cloned()
                 else {

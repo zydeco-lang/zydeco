@@ -5,7 +5,7 @@ use super::*;
 impl TermChecker<'_> {
     pub(super) fn check_hole_k<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::Hole, switch: Switch<AnnId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         Ok({
             let su::Hole = term;
             match switch {
@@ -24,7 +24,7 @@ impl TermChecker<'_> {
                 }
                 | Switch::Ana(AnnId::Set) => {
                     // can't deduce kind for now
-                    tycker.err_k(TyckError::SortMismatch)?
+                    tycker.err(TyckError::SortMismatch)?
                 }
                 | Switch::Ana(AnnId::Kind(kd)) => {
                     // a type hole, with a specific kind in mind
@@ -54,7 +54,7 @@ impl TermChecker<'_> {
                     // Preserve typed holes for inspection; execution readiness rejects
                     // any that remain in the residual runtime program.
                     let kd = tycker.statics.type_kind(ty);
-                    match tycker.kind_filled_k(&kd)?.to_owned() {
+                    match tycker.kind_filled(&kd)?.to_owned() {
                         | ss::Kind::VType(ss::VType) => {
                             let input = crate::query::InternedHoleAna::new(
                                 tycker.db,
@@ -71,7 +71,7 @@ impl TermChecker<'_> {
                                 .statics
                                 .fills
                                 .insert_new(fill, ss::InferenceSite::Term(self.inner));
-                            fill.fill_k(tycker, ty.into())?;
+                            fill.fill(tycker, ty.into())?;
                             tycker.statics.fill_hints.insert_new(fill, ());
                             tycker.statics.values.insert_new(id, value);
                             tycker.statics.annotations_value.insert_new(id, ann);
@@ -96,7 +96,7 @@ impl TermChecker<'_> {
                                 .statics
                                 .fills
                                 .insert_new(fill, ss::InferenceSite::Term(self.inner));
-                            fill.fill_k(tycker, ty.into())?;
+                            fill.fill(tycker, ty.into())?;
                             tycker.statics.fill_hints.insert_new(fill, ());
                             tycker.statics.compus.insert_new(id, compu);
                             tycker.statics.annotations_compu.insert_new(id, ann);
@@ -104,7 +104,7 @@ impl TermChecker<'_> {
                             TermAnnId::Compu(id, ann)
                         }
                         | ss::Kind::Arrow(_) | ss::Kind::Label(_) => {
-                            tycker.err_k(TyckError::SortMismatch)?
+                            tycker.err(TyckError::SortMismatch)?
                         }
                     }
                 }
@@ -114,7 +114,7 @@ impl TermChecker<'_> {
 
     pub(super) fn check_var_k<'db>(
         &self, tycker: &mut Tycker<'db>, def: su::DefId, switch: Switch<AnnId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         Ok({
             let annotation =
                 tycker.statics.annotations_var.get(&def).copied().unwrap_or_else(|| {
@@ -126,7 +126,7 @@ impl TermChecker<'_> {
             let ann = {
                 match switch {
                     | Switch::Syn => annotation,
-                    | Switch::Ana(ana) => Lub::lub_k(ana, annotation, tycker)?,
+                    | Switch::Ana(ana) => Lub::lub(ana, annotation, tycker)?,
                 }
             };
             match ann {
@@ -185,7 +185,7 @@ impl TermChecker<'_> {
 
     pub(super) fn check_triv_k<'db>(
         &self, tycker: &mut Tycker<'db>, switch: Switch<AnnId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         Ok(match switch {
             | Switch::Syn => {
                 let term = crate::query::InternedTerm::new(tycker.db, self.inner);
@@ -205,17 +205,17 @@ impl TermChecker<'_> {
             }
             | Switch::Ana(AnnId::Type(ana)) => {
                 let unit = ss::UnitTy.build(tycker, &self.info);
-                let ann = Lub::lub_k(ana, unit, tycker)?;
+                let ann = Lub::lub(ana, unit, tycker)?;
                 let triv = Alloc::alloc(tycker, ss::Triv, ann, &self.info);
                 TermAnnId::Value(triv, ann)
             }
-            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker.err_k(TyckError::SortMismatch)?,
+            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker.err(TyckError::SortMismatch)?,
         })
     }
 
     pub(super) fn check_lit_k<'db>(
         &self, tycker: &mut Tycker<'db>, lit: su::Literal, switch: Switch<AnnId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         Ok(match switch {
             | Switch::Syn => {
                 let term = crate::query::InternedTerm::new(tycker.db, self.inner);
@@ -234,7 +234,7 @@ impl TermChecker<'_> {
                         tycker.statics.env_value.insert_new(id, self.info.clone());
                         TermAnnId::Value(id, ty)
                     }
-                    | crate::query::LiteralSynOutcome::Error(error) => tycker.err_k(error)?,
+                    | crate::query::LiteralSynOutcome::Error(error) => tycker.err(error)?,
                 }
             }
             | Switch::Ana(annotation) => {
@@ -242,15 +242,15 @@ impl TermChecker<'_> {
                 fn literal_type_k(
                     tycker: &mut Tycker<'_>, env: &ss::TyEnv, switch: Switch<AnnId>,
                     primitive: ss::PrimitiveType,
-                ) -> ResultKont<ss::TypeId> {
+                ) -> Result<ss::TypeId> {
                     let literal_ty = ss::PrimitiveTy(primitive).build(tycker, env);
                     match switch {
                         | Switch::Syn => unreachable!("the synth path is query-produced"),
                         | Switch::Ana(annotation) => {
                             let AnnId::Type(ty) = annotation else {
-                                tycker.err_k(TyckError::SortMismatch)?
+                                tycker.err(TyckError::SortMismatch)?
                             };
-                            Lub::lub_k(ty, literal_ty, tycker)
+                            Lub::lub(ty, literal_ty, tycker)
                         }
                     }
                 }
@@ -268,20 +268,18 @@ impl TermChecker<'_> {
                                         ss::IntegerType::Int,
                                     ))
                                     .build(tycker, &self.info);
-                                    let ty = Lub::lub_k(ty, default, tycker)?;
+                                    let ty = Lub::lub(ty, default, tycker)?;
                                     (ty, ss::IntegerType::Int)
                                 }
                             },
                             | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
-                                tycker.err_k(TyckError::SortMismatch)?
+                                tycker.err(TyckError::SortMismatch)?
                             }
                         };
                         let value = i.value();
                         let Some(i) = i.with_type(integer_type) else {
-                            tycker.err_k(TyckError::IntegerLiteralOutOfRange {
-                                value,
-                                integer_type,
-                            })?
+                            tycker
+                                .err(TyckError::IntegerLiteralOutOfRange { value, integer_type })?
                         };
                         (Lit::Integer(i), ty)
                     }
@@ -295,17 +293,17 @@ impl TermChecker<'_> {
                                         ss::FloatType::Float64,
                                     ))
                                     .build(tycker, &self.info);
-                                    let ty = Lub::lub_k(ty, default, tycker)?;
+                                    let ty = Lub::lub(ty, default, tycker)?;
                                     (ty, ss::FloatType::Float64)
                                 }
                             },
                             | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
-                                tycker.err_k(TyckError::SortMismatch)?
+                                tycker.err(TyckError::SortMismatch)?
                             }
                         };
                         let original = value;
                         let Some(value) = value.with_type(float_type) else {
-                            tycker.err_k(TyckError::FloatLiteralOutOfRange {
+                            tycker.err(TyckError::FloatLiteralOutOfRange {
                                 value: original.value(),
                                 float_type,
                             })?

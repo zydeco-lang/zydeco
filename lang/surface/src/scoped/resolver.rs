@@ -2,12 +2,12 @@
 use super::{
     alloc::ScopedBuilder, dependencies::DependencyAnalyzer, scope::ResolveEnv, syntax::*, *,
 };
-use crate::{
-    diagnostic::{CollectReported, Diagnostics, ReportedError},
-    fold::Folder,
-};
+use crate::{diagnostic::Diagnostics, fold::Folder};
 use std::collections::HashSet;
-use zydeco_utils::prelude::FrozenArena;
+use zydeco_utils::{
+    err::{CollectReported, Report, ReportedError},
+    prelude::FrozenArena,
+};
 
 type FoldResult<T> = std::result::Result<T, ReportedError>;
 
@@ -80,6 +80,13 @@ impl<'a> ResolveFolder<'a> {
     }
 }
 
+impl<O: ResolutionObserver> Report<ResolveError> for ResolveFolder<'_, O> {
+    fn report(&mut self, error: ResolveError) -> ReportedError {
+        self.diagnostics.push(error);
+        ReportedError
+    }
+}
+
 impl<O: ResolutionObserver> ResolveFolder<'_, O> {
     pub fn run_source(self, root: TermId) -> Result<ResolveSourceOut> {
         self.run_observed(root).program
@@ -108,11 +115,6 @@ impl<O: ResolutionObserver> ResolveFolder<'_, O> {
             })
         };
         ResolutionOutput { program, observations, diagnostics: self.diagnostics }
-    }
-
-    pub(super) fn report(&mut self, error: ResolveError) -> ReportedError {
-        self.diagnostics.push(error);
-        ReportedError
     }
 
     fn scope_event(&mut self, id: TermId, env: &ResolveEnv<'_>) {
@@ -312,14 +314,14 @@ impl<O: ResolutionObserver> ResolveFolder<'_, O> {
             }
             | Term::MobileParam(MobileParam { tail, .. }) => {
                 if env.local.boundary.is_none() {
-                    return Err(self.report(ResolveError::UnenclosedThat(*id.span(self))));
+                    return self.err(ResolveError::UnenclosedThat(*id.span(self)));
                 }
                 self.term(tail, env)?;
                 Residual(tail).into()
             }
             | Term::MobileBind(term) => {
                 if env.local.boundary.is_none() {
-                    return Err(self.report(ResolveError::UnenclosedThat(*id.span(self))));
+                    return self.err(ResolveError::UnenclosedThat(*id.span(self)));
                 }
                 self.term(term.tail, env)?;
                 Residual(term.tail).into()
@@ -343,7 +345,7 @@ impl<O: ResolutionObserver> ResolveFolder<'_, O> {
                         let binder = self.pattern(arm.binder, env.clone())?;
                         self.term(arm.tail, binder.env)
                     })
-                    .collect_reported();
+                    .collect_reported::<Vec<_>>();
                 scrut?;
                 arms?;
                 term.into()
@@ -360,7 +362,7 @@ impl<O: ResolutionObserver> ResolveFolder<'_, O> {
                         }
                         self.term(clause.tail, clause_env)
                     })
-                    .collect_reported()?;
+                    .collect_reported::<Vec<_>>()?;
                 term.into()
             }
             | Term::Residual(_) | Term::RecGroup(_) => {

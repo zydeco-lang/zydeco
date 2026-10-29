@@ -5,17 +5,17 @@ use super::*;
 impl TermChecker<'_> {
     pub(super) fn check_thunk_k<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::Thunk<su::TermId>, switch: Switch<AnnId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         Ok({
             let su::Thunk(body) = term;
             let ana = match switch {
                 | Switch::Syn => tycker.thk_hole(&self.info, self.inner).into(),
                 | Switch::Ana(ana) => ana,
             };
-            let AnnId::Type(ana_ty) = ana else { tycker.err_k(TyckError::SortMismatch)? };
+            let AnnId::Type(ana_ty) = ana else { tycker.err(TyckError::SortMismatch)? };
             let thunk_app_hole = tycker.thk_hole(&self.info, body);
-            let ty = Lub::lub_k(ana_ty, thunk_app_hole, tycker)?;
-            let ss::Type::App(thunk_app_body_ty) = tycker.type_filled_k(&ty)?.to_owned() else {
+            let ty = Lub::lub(ana_ty, thunk_app_hole, tycker)?;
+            let ss::Type::App(thunk_app_body_ty) = tycker.type_filled(&ty)?.to_owned() else {
                 unreachable!()
             };
             let ss::App(_thunk_ty, body_ty) = thunk_app_body_ty;
@@ -40,7 +40,7 @@ impl TermChecker<'_> {
 
     pub(super) fn check_force_k<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::Force<su::TermId>, switch: Switch<AnnId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         Ok({
             let su::Force(body) = term;
             let body_ty = {
@@ -52,15 +52,13 @@ impl TermChecker<'_> {
                     }
                     | Switch::Ana(ana) => {
                         let ana_ty = match ana {
-                            | AnnId::Set | AnnId::Kind(_) => {
-                                tycker.err_k(TyckError::SortMismatch)?
-                            }
+                            | AnnId::Set | AnnId::Kind(_) => tycker.err(TyckError::SortMismatch)?,
                             | AnnId::Type(ty) => ty,
                         };
                         // check ana_ty is computation type
                         let ctype = ss::CType.build(tycker, &self.info);
                         let ana_ty_kd = tycker.statics.type_kind(ana_ty);
-                        Lub::lub_k(ctype, ana_ty_kd, tycker)?;
+                        Lub::lub(ctype, ana_ty_kd, tycker)?;
                         // if ana, then ana the body with thunked body_ty
                         cs::Thk(ana_ty).build(tycker, &self.info)
                     }
@@ -75,7 +73,7 @@ impl TermChecker<'_> {
                 (body_out, body_ty)
             };
             let force_ty = {
-                let ss::Type::App(thunk_app_body_ty) = tycker.type_filled_k(&body_ty)?.to_owned()
+                let ss::Type::App(thunk_app_body_ty) = tycker.type_filled(&body_ty)?.to_owned()
                 else {
                     unreachable!()
                 };
@@ -93,17 +91,17 @@ impl TermChecker<'_> {
 
     pub(super) fn check_ret_k<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::Return<su::TermId>, switch: Switch<AnnId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         Ok({
             let su::Return(body) = term;
             let ana = match switch {
                 | Switch::Syn => tycker.ret_hole(&self.info, self.inner).into(),
                 | Switch::Ana(ana) => ana,
             };
-            let AnnId::Type(ana_ty) = ana else { tycker.err_k(TyckError::SortMismatch)? };
+            let AnnId::Type(ana_ty) = ana else { tycker.err(TyckError::SortMismatch)? };
             let ret_app_hole = tycker.ret_hole(&self.info, self.inner);
-            let ty = Lub::lub_k(ana_ty, ret_app_hole, tycker)?;
-            let ss::Type::App(ret_app_body_ty) = tycker.type_filled_k(&ty)?.to_owned() else {
+            let ty = Lub::lub(ana_ty, ret_app_hole, tycker)?;
+            let ss::Type::App(ret_app_body_ty) = tycker.type_filled(&ty)?.to_owned() else {
                 unreachable!()
             };
             let ss::App(_ret_ty, body_ty) = ret_app_body_ty;
@@ -129,7 +127,7 @@ impl TermChecker<'_> {
     pub(super) fn check_do_k<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::Bind<su::PatId, su::TermId, su::TermId>,
         switch: Switch<AnnId>, prepared_environment: Option<ss::TyEnv>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         Ok({
             let su::Bind { binder, bindee, tail } = term;
             // first, ana bindee with ret_app_hole, and we get a compu that should be ret_app_body_ty
@@ -140,7 +138,7 @@ impl TermChecker<'_> {
                 bindee_out_ann.try_as_compu(tycker, TyckError::SortMismatch)?
             };
             // then we get the binder_ty from bindee_ty and ana binder with it
-            let ss::Type::App(ret_app_binder_ty) = tycker.type_filled_k(&bindee_ty)?.to_owned()
+            let ss::Type::App(ret_app_binder_ty) = tycker.type_filled(&bindee_ty)?.to_owned()
             else {
                 unreachable!()
             };
@@ -171,7 +169,7 @@ impl TermChecker<'_> {
     pub(super) fn check_let_k<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::Let<su::PatId, su::TermId, su::TermId>,
         switch: Switch<AnnId>, prepared_environment: Option<ss::TyEnv>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         let su::Let { binder, bindee, tail } = term;
         let (bindee, is_sealed) = match bindee.syntactically_sealed(tycker) {
             | Some(bindee) => (bindee, true),
@@ -196,7 +194,7 @@ impl TermChecker<'_> {
                 );
             }
             | TermAnnId::Hole(_) | TermAnnId::Compu(_, _) => {
-                return tycker.err_k(TyckError::SortMismatch);
+                return tycker.err(TyckError::SortMismatch);
             }
         };
         // finally, we tyck the tail; type and kind aliases are static, so the
@@ -205,7 +203,7 @@ impl TermChecker<'_> {
             | tail_out @ (TermAnnId::Type(_, _)
             | TermAnnId::Value(_, _)
             | TermAnnId::Compu(_, _)) => Ok(tail_out),
-            | TermAnnId::Hole(_) | TermAnnId::Kind(_) => tycker.err_k(TyckError::SortMismatch),
+            | TermAnnId::Hole(_) | TermAnnId::Kind(_) => tycker.err(TyckError::SortMismatch),
         }
     }
 
@@ -214,7 +212,7 @@ impl TermChecker<'_> {
     fn bind_type_alias_k(
         &self, tycker: &mut Tycker<'_>, binder: su::PatId, bindee_out: ss::TypeId,
         bindee_kd: ss::KindId, is_sealed: bool,
-    ) -> ResultKont<TyEnvT<()>> {
+    ) -> Result<TyEnvT<()>> {
         // ana binder with bindee_kd
         let binder_out_ann =
             self.mk(binder).tyck_k(tycker, PatternAction::ana(bindee_kd.into()))?;
@@ -247,12 +245,12 @@ impl TermChecker<'_> {
     /// Bind a kind alias.
     fn bind_kind_alias_k(
         &self, tycker: &mut Tycker<'_>, binder: su::PatId, bindee_out: ss::KindId,
-    ) -> ResultKont<TyEnvT<()>> {
+    ) -> Result<TyEnvT<()>> {
         // Kind binders have no classifier, so check the
         // binder against the set of kinds.
         let binder_out_ann = self.mk(binder).tyck_k(tycker, PatternAction::ana(AnnId::Set))?;
         let ss::PatId::Kind(binder_out) = binder_out_ann.annotation.as_pat() else {
-            tycker.err_k(TyckError::SortMismatch)?
+            tycker.err(TyckError::SortMismatch)?
         };
         self.mk(Assign(binder_out, bindee_out)).tyck_k(tycker, ())
     }
@@ -261,7 +259,7 @@ impl TermChecker<'_> {
     fn check_let_value_k(
         &self, tycker: &mut Tycker<'_>, binder: su::PatId, bindee_out: ss::ValueId,
         bindee_ty: ss::TypeId, tail: su::TermId, tail_action: Action<AnnId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         // ana binder with bindee_ty
         let binder_elaboration =
             self.mk(binder).tyck_k(tycker, PatternAction::ana(bindee_ty.into()))?;
@@ -293,7 +291,7 @@ impl TermChecker<'_> {
     fn check_let_value_tail_k(
         &self, tycker: &mut Tycker<'_>, binder: su::PatId, binder_elaboration: &CheckedPattern,
         binder_out: ss::VPatId, bindee_out: ss::ValueId, tail_out_ann: TermAnnId,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         match tail_out_ann {
             | tail if ValuePatternShape::is_static_opening(tycker, binder_out)
                 && (binder_elaboration.inner.opened.is_empty()
@@ -311,13 +309,13 @@ impl TermChecker<'_> {
                         binder_elaboration.close_scope_k(tycker, ty)?;
                     }
                     | TermAnnId::Kind(_) => {}
-                    | TermAnnId::Hole(_) => tycker.err_k(TyckError::SortMismatch)?,
+                    | TermAnnId::Hole(_) => tycker.err(TyckError::SortMismatch)?,
                 }
                 Ok(tail)
             }
             | TermAnnId::Value(tail_out, tail_ty) => {
                 if !ValuePatternShape::is_irrefutable(tycker, binder_out) {
-                    tycker.err_k(TyckError::Expressivity(
+                    tycker.err(TyckError::Expressivity(
                         "value bindings must be irrefutable patterns",
                     ))?
                 }
@@ -354,7 +352,7 @@ impl TermChecker<'_> {
                 Ok(TermAnnId::Compu(id, ann))
             }
             | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Type(_, _) => {
-                tycker.err_k(TyckError::SortMismatch)
+                tycker.err(TyckError::SortMismatch)
             }
         }
     }

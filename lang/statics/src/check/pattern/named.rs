@@ -6,7 +6,7 @@ impl PatternChecker<'_> {
     pub(super) fn check_named_k<'db>(
         &self, tycker: &mut Tycker<'db>, pat: su::Named<FieldName, su::PatId>,
         switch: Switch<AnnId>, skolems: PatternSkolems,
-    ) -> ResultKont<CheckedPattern> {
+    ) -> Result<CheckedPattern> {
         let su::Named(name, inner) = pat;
         match switch {
             | Switch::Syn => self.check_named_syn_k(tycker, name, inner, skolems),
@@ -25,7 +25,7 @@ impl PatternChecker<'_> {
                 let crate::query::PatNamedAnaOutcome::Error(error) = outcome else {
                     unreachable!("the set arm of named pattern judgments is query-produced")
                 };
-                tycker.err_k(error)
+                tycker.err(error)
             }
         }
     }
@@ -34,7 +34,7 @@ impl PatternChecker<'_> {
     /// pattern through the judgment, a value inner pattern a labeled value.
     fn check_named_syn_k(
         &self, tycker: &mut Tycker<'_>, name: FieldName, inner: su::PatId, skolems: PatternSkolems,
-    ) -> ResultKont<CheckedPattern> {
+    ) -> Result<CheckedPattern> {
         let checked =
             self.mk(inner).tyck_k(tycker, PatternAction::syn().with_skolems(skolems.clone()))?;
         match checked.annotation {
@@ -49,13 +49,13 @@ impl PatternChecker<'_> {
                         tycker.statics.env_tpat.insert_new(named_id, self.info.clone());
                         Ok(checked.with_annotation(PatAnnId::Type(named_id, kind_id)))
                     }
-                    | crate::query::PatNamedSynOutcome::Error(error) => tycker.err_k(error),
+                    | crate::query::PatNamedSynOutcome::Error(error) => tycker.err(error),
                 }
             }
             | PatAnnId::Value(inner, inner_ty) => {
                 let inner_kind = tycker.statics.type_kind(inner_ty);
                 let vtype = ss::VType.build(tycker, &self.info);
-                Lub::lub_k(vtype, inner_kind, tycker)?;
+                Lub::lub(vtype, inner_kind, tycker)?;
                 let named_ty =
                     Alloc::alloc(tycker, ss::Label(name.clone(), inner_ty), vtype, &self.info);
                 let named = Alloc::alloc(tycker, ss::Named(name, inner), named_ty, &self.info);
@@ -68,14 +68,14 @@ impl PatternChecker<'_> {
     fn check_named_ana_kind_k(
         &self, tycker: &mut Tycker<'_>, name: FieldName, inner: su::PatId, expected: ss::KindId,
         skolems: PatternSkolems,
-    ) -> ResultKont<CheckedPattern> {
+    ) -> Result<CheckedPattern> {
         let ss::Kind::Label(ss::Label(expected_name, inner_kind)) =
-            tycker.kind_filled_k(&expected)?.to_owned()
+            tycker.kind_filled(&expected)?.to_owned()
         else {
-            tycker.err_k(TyckError::KindMismatch)?
+            tycker.err(TyckError::KindMismatch)?
         };
         if name != expected_name {
-            tycker.err_k(TyckError::NamedLabelMismatch {
+            tycker.err(TyckError::NamedLabelMismatch {
                 expected: expected_name,
                 found: name.clone(),
             })?
@@ -102,18 +102,18 @@ impl PatternChecker<'_> {
     fn check_named_ana_type_k(
         &self, tycker: &mut Tycker<'_>, name: FieldName, inner: su::PatId, expected: ss::TypeId,
         skolems: PatternSkolems,
-    ) -> ResultKont<CheckedPattern> {
-        let expected_view = expected.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
+    ) -> Result<CheckedPattern> {
+        let expected_view = expected.unroll(tycker)?.subst_env(tycker, &self.info)?;
         let ss::Type::Label(ss::Label(expected_name, inner_ty)) =
-            tycker.type_filled_k(&expected_view)?.to_owned()
+            tycker.type_filled(&expected_view)?.to_owned()
         else {
-            tycker.err_k(TyckError::TypeExpected {
+            tycker.err(TyckError::TypeExpected {
                 expected: "a named value type".to_string(),
                 found: expected,
             })?
         };
         if name != expected_name {
-            tycker.err_k(TyckError::NamedLabelMismatch {
+            tycker.err(TyckError::NamedLabelMismatch {
                 expected: expected_name,
                 found: name.clone(),
             })?
@@ -139,7 +139,7 @@ impl PatternChecker<'_> {
     pub(super) fn check_project_k<'db>(
         &self, tycker: &mut Tycker<'db>, field: FieldName, inner: su::PatId, switch: Switch<AnnId>,
         skolems: PatternSkolems,
-    ) -> ResultKont<CheckedPattern> {
+    ) -> Result<CheckedPattern> {
         Ok(match switch {
             | Switch::Syn => {
                 let pat = crate::query::InternedPat::new(tycker.db, self.inner);
@@ -148,7 +148,7 @@ impl PatternChecker<'_> {
                 else {
                     unreachable!("projection pattern judgments are query-produced")
                 };
-                tycker.err_k(error)?
+                tycker.err(error)?
             }
             | Switch::Ana(AnnId::Kind(expected)) => {
                 let candidate = FieldProjectionResolver::r#type(tycker, expected, &field)?;
@@ -174,7 +174,7 @@ impl PatternChecker<'_> {
                     skolems.clone(),
                 )?
             }
-            | Switch::Ana(AnnId::Set) => tycker.err_k(TyckError::SortMismatch)?,
+            | Switch::Ana(AnnId::Set) => tycker.err(TyckError::SortMismatch)?,
         })
     }
 }

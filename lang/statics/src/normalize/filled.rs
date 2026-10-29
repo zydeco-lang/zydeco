@@ -15,26 +15,12 @@ pub(crate) struct FilledNormalizer {
 }
 
 impl FilledNormalizer {
-    pub(crate) fn normalize_kind_k(
-        &mut self, root: KindId, tycker: &mut Tycker<'_>,
-    ) -> ResultKont<()> {
-        let result = self.normalize_kind(root, tycker);
-        tycker.err_p_to_k(result)
-    }
-
-    fn normalize_kind(&mut self, root: KindId, tycker: &mut Tycker<'_>) -> Result<()> {
+    pub(crate) fn normalize_kind(&mut self, root: KindId, tycker: &mut Tycker<'_>) -> Result<()> {
         let _ = root.filled_norm_id(tycker, self)?;
         Ok(())
     }
 
-    pub(crate) fn normalize_type_k(
-        &mut self, root: TypeId, tycker: &mut Tycker<'_>,
-    ) -> ResultKont<()> {
-        let result = self.normalize_type(root, tycker);
-        tycker.err_p_to_k(result)
-    }
-
-    fn normalize_type(&mut self, root: TypeId, tycker: &mut Tycker<'_>) -> Result<()> {
+    pub(crate) fn normalize_type(&mut self, root: TypeId, tycker: &mut Tycker<'_>) -> Result<()> {
         let _ = root.filled_norm_id(tycker, self)?;
         Ok(())
     }
@@ -51,11 +37,11 @@ impl KindId {
             | Fillable::Fill(fill) => match tycker.statics.solus.get(&fill).cloned() {
                 | Some(AnnId::Kind(kd)) => kd.filled_norm_id(tycker, norm)?,
                 | Some(AnnId::Set | AnnId::Type(_)) => {
-                    let _: ResultKont<()> = tycker.err_k(TyckError::SortMismatch);
+                    let _: Result<()> = tycker.err(TyckError::SortMismatch);
                     self
                 }
                 | None => {
-                    let _: ResultKont<()> = tycker.err_k(TyckError::MissingSolution(vec![fill]));
+                    let _: Result<()> = tycker.err(TyckError::MissingSolution(vec![fill]));
                     self
                 }
             },
@@ -109,11 +95,11 @@ impl TypeId {
             | Fillable::Fill(fill) => match tycker.statics.solus.get(&fill).cloned() {
                 | Some(AnnId::Type(ty)) => ty.filled_norm_id(tycker, norm)?,
                 | Some(AnnId::Set | AnnId::Kind(_)) => {
-                    let _: ResultKont<()> = tycker.err_k(TyckError::SortMismatch);
+                    let _: Result<()> = tycker.err(TyckError::SortMismatch);
                     self
                 }
                 | None => {
-                    let _: ResultKont<()> = tycker.err_k(TyckError::MissingSolution(vec![fill]));
+                    let _: Result<()> = tycker.err(TyckError::MissingSolution(vec![fill]));
                     self
                 }
             },

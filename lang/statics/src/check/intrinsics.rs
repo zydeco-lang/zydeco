@@ -29,7 +29,7 @@ pub(super) struct ForeignAttachment {
 struct BuiltinTypeResolution(ss::BuiltinTypeRole);
 
 impl BuiltinTypeResolution {
-    fn resolve_k(self, tycker: &mut Tycker<'_>, env: &ss::TyEnv) -> ResultKont<ss::TypeId> {
+    fn resolve_k(self, tycker: &mut Tycker<'_>, env: &ss::TyEnv) -> Result<ss::TypeId> {
         let mut witnesses = tycker
             .statics
             .builtin_roles
@@ -39,12 +39,12 @@ impl BuiltinTypeResolution {
         witnesses.sort_unstable();
 
         match witnesses.as_slice() {
-            | [] => tycker.err_k(TyckError::MissingBuiltinTypeRole { role: self.0 }),
+            | [] => tycker.err(TyckError::MissingBuiltinTypeRole { role: self.0 }),
             | [witness] => {
                 let kind = tycker.statics.annotations_abst[witness];
                 Ok(Alloc::alloc(tycker, *witness, kind, env))
             }
-            | _ => tycker.err_k(TyckError::AmbiguousBuiltinTypeRole { role: self.0, witnesses }),
+            | _ => tycker.err(TyckError::AmbiguousBuiltinTypeRole { role: self.0, witnesses }),
         }
     }
 }
@@ -122,7 +122,7 @@ impl IntrinsicMaterializer<'_, '_> {
 impl InternalTerm {
     pub(super) fn tyck_k(
         self, tycker: &mut Tycker<'_>, env: &ss::TyEnv, switch: Switch<AnnId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         let synthesized = match self.0 {
             | su::Internal::VType => TermAnnId::Kind(ss::VType.build(tycker, env)),
             | su::Internal::CType => TermAnnId::Kind(ss::CType.build(tycker, env)),
@@ -191,7 +191,7 @@ impl InternalTerm {
                 if let Some(error) =
                     crate::query::internal_judgment(tycker.db, tycker.data, term, env_data)
                 {
-                    tycker.err_k(error)?
+                    tycker.err(error)?
                 } else {
                     unreachable!("intrinsic rejections are query-produced")
                 }
@@ -201,13 +201,13 @@ impl InternalTerm {
     }
     fn builtin_type_k(
         &self, tycker: &mut Tycker<'_>, env: &ss::TyEnv, role: ss::BuiltinTypeRole,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         let ty = BuiltinTypeResolution(role).resolve_k(tycker, env)?;
         Ok(TermAnnId::Type(ty, tycker.statics.type_kind(ty)))
     }
     pub(super) fn reconcile_k(
         &self, tycker: &mut Tycker<'_>, synthesized: TermAnnId, switch: Switch<AnnId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         let annotation = match synthesized {
             | TermAnnId::Kind(_) => AnnId::Set,
             | TermAnnId::Type(_, kind) => AnnId::Kind(kind),
@@ -218,7 +218,7 @@ impl InternalTerm {
         };
         let annotation = match switch {
             | Switch::Syn => annotation,
-            | Switch::Ana(expected) => Lub::lub_k(expected, annotation, tycker)?,
+            | Switch::Ana(expected) => Lub::lub(expected, annotation, tycker)?,
         };
 
         match (synthesized, annotation) {
@@ -234,7 +234,7 @@ impl BuiltinAttachment {
     pub(super) fn new(role: ss::BuiltinRole, term: TermAnnId) -> Self {
         Self { role, term }
     }
-    pub(super) fn register_k(self, tycker: &mut Tycker<'_>, env: &ss::TyEnv) -> ResultKont<()> {
+    pub(super) fn register_k(self, tycker: &mut Tycker<'_>, env: &ss::TyEnv) -> Result<()> {
         match self.role {
             | ss::BuiltinRole::Type(role) => {
                 let expected = match role.universe() {
@@ -248,38 +248,30 @@ impl BuiltinAttachment {
                     | ss::BuiltinTypeUniverse::Value => ss::VType.build(tycker, env),
                     | ss::BuiltinTypeUniverse::Computation => ss::CType.build(tycker, env),
                 };
-                Lub::lub_k(expected_kind, kind, tycker)?;
+                Lub::lub(expected_kind, kind, tycker)?;
                 tycker.statics.builtin_roles.attach_type(witness, role).map_err(|existing| {
-                    tycker.errors.push(TyckErrorEntry {
-                        error: TyckError::ConflictingBuiltinRole { existing, found: self.role },
-                        stack: tycker.tasks.clone(),
-                    });
-                    KontFailure
+                    tycker.report(TyckError::ConflictingBuiltinRole { existing, found: self.role })
                 })
             }
             | ss::BuiltinRole::Value(role) => {
                 let TermAnnId::Type(entry, _) = self.term else {
-                    return tycker.err_k(TyckError::InvalidBuiltinAttachment {
+                    return tycker.err(TyckError::InvalidBuiltinAttachment {
                         role: self.role,
                         expected: "a named value classifier",
                     });
                 };
-                let ss::Type::Label(_) = tycker.type_filled_k(&entry)?.to_owned() else {
-                    return tycker.err_k(TyckError::InvalidBuiltinAttachment {
+                let ss::Type::Label(_) = tycker.type_filled(&entry)?.to_owned() else {
+                    return tycker.err(TyckError::InvalidBuiltinAttachment {
                         role: self.role,
                         expected: "a named value classifier",
                     });
                 };
                 let result =
                     tycker.statics.builtin_roles.attach_value(entry, role).map_err(|existing| {
-                        tycker.errors.push(TyckErrorEntry {
-                            error: TyckError::ConflictingBuiltinRole {
-                                existing: ss::BuiltinRole::Value(existing),
-                                found: self.role,
-                            },
-                            stack: tycker.tasks.clone(),
-                        });
-                        KontFailure
+                        tycker.report(TyckError::ConflictingBuiltinRole {
+                            existing: ss::BuiltinRole::Value(existing),
+                            found: self.role,
+                        })
                     });
                 if result.is_ok() {
                     tycker.invalidate_field_materializations();
@@ -290,15 +282,15 @@ impl BuiltinAttachment {
     }
     fn existential_witness_k(
         &self, tycker: &mut Tycker<'_>, expected: &'static str,
-    ) -> ResultKont<(ss::AbstId, ss::KindId)> {
+    ) -> Result<(ss::AbstId, ss::KindId)> {
         let TermAnnId::Type(entry, _) = self.term else {
-            return tycker.err_k(TyckError::InvalidBuiltinAttachment { role: self.role, expected });
+            return tycker.err(TyckError::InvalidBuiltinAttachment { role: self.role, expected });
         };
-        let ss::Type::Exists(exists) = tycker.type_filled_k(&entry)?.to_owned() else {
-            return tycker.err_k(TyckError::InvalidBuiltinAttachment { role: self.role, expected });
+        let ss::Type::Exists(exists) = tycker.type_filled(&entry)?.to_owned() else {
+            return tycker.err(TyckError::InvalidBuiltinAttachment { role: self.role, expected });
         };
         if !matches!(exists.mode, ss::ExistsMode::Abstract) {
-            return tycker.err_k(TyckError::InvalidBuiltinAttachment { role: self.role, expected });
+            return tycker.err(TyckError::InvalidBuiltinAttachment { role: self.role, expected });
         }
         Ok((exists.binder.witness, exists.binder.payload_kind(tycker)))
     }
@@ -310,9 +302,9 @@ impl ForeignAttachment {
     ) -> Self {
         Self { target, term, implementation }
     }
-    pub(super) fn register_k(self, tycker: &mut Tycker<'_>) -> ResultKont<()> {
+    pub(super) fn register_k(self, tycker: &mut Tycker<'_>) -> Result<()> {
         let TermAnnId::Value(value, classifier) = self.term else {
-            return tycker.err_k(TyckError::InvalidForeignAttachment);
+            return tycker.err(TyckError::InvalidForeignAttachment);
         };
         tycker.pending_foreign_imports.push(PendingForeignImport {
             value,
@@ -365,18 +357,10 @@ impl Tycker<'_> {
             | Err(existing) => self.err(TyckError::ConflictingBuiltinRole { existing, found }),
         }
     }
-    pub(super) fn transfer_builtin_role_k(
-        &mut self, source: ss::AbstId, target: ss::AbstId,
-    ) -> ResultKont<()> {
-        let result = self.transfer_builtin_role(source, target);
-        self.err_p_to_k(result)
-    }
-    pub(super) fn validate_builtin_signature_k(
-        &mut self, signature: &ss::PackPi,
-    ) -> ResultKont<()> {
+    pub(super) fn validate_builtin_signature_k(&mut self, signature: &ss::PackPi) -> Result<()> {
         match BuiltinSignatureValidator::new(&self.statics).validate(signature) {
             | Ok(()) => Ok(()),
-            | Err(error) => self.err_k(TyckError::InvalidBuiltinSignature(error)),
+            | Err(error) => self.err(TyckError::InvalidBuiltinSignature(error)),
         }
     }
 

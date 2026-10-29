@@ -5,14 +5,14 @@ use super::*;
 impl TermChecker<'_> {
     pub(super) fn check_type_of_k<'db>(
         &self, tycker: &mut Tycker<'db>, operand: su::TermId, switch: Switch<AnnId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         Ok({
             let environment = self.info.clone();
             let checked = tycker.synthesize_once_k(self.inner, &environment, |tycker| {
                 let operand = self.mk(operand).tyck_k(tycker, Action::syn())?;
                 let classifier = operand.classifier_k(tycker)?;
                 if let TermAnnId::Type(ty, _) = classifier {
-                    ty.constrain_to_scope_k(tycker, environment.skolem_scope())?;
+                    ty.constrain_to_scope(tycker, environment.skolem_scope())?;
                 }
                 Ok(classifier)
             })?;
@@ -23,7 +23,7 @@ impl TermChecker<'_> {
     pub(super) fn check_meta_k<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::MetaT<su::TermId>, switch: Switch<AnnId>,
         prepared_environment: Option<ss::TyEnv>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         Ok({
             let su::MetaT(meta, term) = term;
             let res = self
@@ -49,7 +49,7 @@ impl TermChecker<'_> {
 
     pub(super) fn check_source_boundary_k<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::TermId, switch: Switch<AnnId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         Ok({
             let environment = TyEnv::new();
             let checked = tycker.source_guarded(|tycker| {
@@ -69,7 +69,7 @@ impl TermChecker<'_> {
 
     pub(super) fn check_signature_boundary_k<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::TermId, switch: Switch<AnnId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         Ok({
             let environment = TyEnv::new();
             let checked = tycker.source_guarded(|tycker| {
@@ -86,7 +86,7 @@ impl TermChecker<'_> {
                     | TermAnnId::Hole(_)
                     | TermAnnId::Kind(_)
                     | TermAnnId::Value(_, _)
-                    | TermAnnId::Compu(_, _) => tycker.err_k(TyckError::SignatureNotType)?,
+                    | TermAnnId::Compu(_, _) => tycker.err(TyckError::SignatureNotType)?,
                 }
             })?;
             checked.reconcile_k(tycker, switch)?
@@ -96,7 +96,7 @@ impl TermChecker<'_> {
     pub(super) fn check_residual_k<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::Residual, switch: Switch<AnnId>,
         prepared_environment: Option<ss::TyEnv>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         Ok({
             let su::Residual(body) = term;
             self.mk(body).tyck_k(tycker, Action::forward(switch, prepared_environment.as_ref()))?
@@ -106,7 +106,7 @@ impl TermChecker<'_> {
     pub(super) fn check_block_k<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::Block, switch: Switch<AnnId>,
         prepared_environment: Option<ss::TyEnv>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         Ok({
             let su::Block(body) = term;
             let inference = InferenceRegion::enter(tycker);
@@ -121,7 +121,7 @@ impl TermChecker<'_> {
     pub(super) fn check_rec_group_k<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::RecGroup, switch: Switch<AnnId>,
         prepared_environment: Option<ss::TyEnv>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         Ok({
             let su::RecGroup { definitions, tail } = term;
             let bindings = definitions
@@ -142,7 +142,7 @@ impl TermChecker<'_> {
 
     pub(super) fn check_mo_block_k<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::MoBlock, switch: Switch<AnnId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         Ok({
             let environment = self.info.clone();
             let checked = tycker.synthesize_once_k(self.inner, &environment, |tycker| {

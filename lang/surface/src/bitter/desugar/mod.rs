@@ -1,4 +1,4 @@
-use crate::diagnostic::{CollectReported, Diagnostics, ReportedError};
+use crate::diagnostic::Diagnostics;
 use crate::{bitter::freshen::FreshenFolder, fold::Folder};
 use crate::{
     bitter::{syntax as b, *},
@@ -6,6 +6,7 @@ use crate::{
 };
 use derive_more::{AsMut, AsRef};
 use std::collections::HashMap;
+use zydeco_utils::err::{CollectReported, Report, ReportedError};
 
 type Result<T> = std::result::Result<T, ReportedError>;
 use zydeco_syntax::{IntrinsicRole, SpanView};
@@ -97,7 +98,7 @@ impl DesugarFolder<'_> {
             }
             | Pat::Manifest(_) => {
                 let pattern = id.span(self.spans).clone().make(id);
-                return Err(self.report(DesugarError::ManifestPatternOutsideExistential(pattern)));
+                return self.err(DesugarError::ManifestPatternOutsideExistential(pattern));
             }
             | Pat::Hole(pat) => {
                 let t::Hole = pat;
@@ -170,19 +171,23 @@ impl DesugarFolder<'_> {
             | t::CoPattern::Pat(pattern) => Ok(b::Appli(vec![self.pattern(pattern)?.into()])),
             | t::CoPattern::Dtor(name) => Ok(b::Appli(vec![name.into()])),
             | t::CoPattern::App(t::Appli(items)) => {
-                let items =
-                    items.into_iter().map(|item| self.copattern(item)).collect_reported()?;
+                let items = items
+                    .into_iter()
+                    .map(|item| self.copattern(item))
+                    .collect_reported::<Vec<_>>()?;
                 Ok(b::Appli(items.into_iter().flat_map(|b::Appli(items)| items).collect()))
             }
         }
     }
 }
-impl DesugarFolder<'_> {
+impl Report<DesugarError> for DesugarFolder<'_> {
     fn report(&mut self, error: DesugarError) -> ReportedError {
         self.diagnostics.push(error);
         ReportedError
     }
+}
 
+impl DesugarFolder<'_> {
     fn term(&mut self, id: t::TermId) -> Result<b::TermId> {
         if let Some(result) = self.terms.get(&id) {
             return *result;

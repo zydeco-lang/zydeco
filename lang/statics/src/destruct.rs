@@ -34,7 +34,7 @@ impl TypeBinder {
 
 impl KindId {
     pub fn destruct_arrow(&self, tycker: &mut Tycker) -> Option<(KindId, KindId)> {
-        let kind = tycker.kind_filled(self).ok()?;
+        let kind = tycker.speculate(|tycker| tycker.kind_filled(self))?;
         match kind {
             | Kind::Arrow(Arrow(from, to)) => Some((from, to)),
             | _ => None,
@@ -122,11 +122,6 @@ impl TPatId {
     ///
     /// A variable or hole binds the whole argument. A named pattern instead
     /// removes its matching name introduction before continuing recursively.
-    pub fn bind_argument_k(&self, tycker: &mut Tycker<'_>, argument: TypeId) -> ResultKont<TypeId> {
-        let result = self.bind_argument(tycker, argument);
-        tycker.err_p_to_k(result)
-    }
-
     pub fn bind_argument(&self, tycker: &mut Tycker<'_>, argument: TypeId) -> Result<TypeId> {
         match tycker.statics.tpats[self].to_owned() {
             | TypePattern::Hole(_) | TypePattern::Var(_) => Ok(argument),
@@ -211,10 +206,6 @@ impl TypeId {
         }
     }
 
-    pub fn destruct_type_app_nf_k(&self, tycker: &mut Tycker) -> ResultKont<(TypeId, Vec<TypeId>)> {
-        let res = self.destruct_type_app_nf(tycker);
-        tycker.err_p_to_k(res)
-    }
     pub fn destruct_type_app_nf(&self, tycker: &mut Tycker) -> Result<(TypeId, Vec<TypeId>)> {
         let ty = self.normalize(tycker, tycker.statics.type_kind(*self))?;
         let res = match tycker.type_filled(&ty)?.to_owned() {
@@ -250,8 +241,8 @@ impl TypeId {
         Ok(res)
     }
     pub fn destruct_thk_app(&self, tycker: &mut Tycker) -> Option<TypeId> {
-        let (f_ty, a_tys) = self.destruct_type_app_nf(tycker).ok()?;
-        let res = match tycker.type_filled(&f_ty).ok()?.to_owned() {
+        let (f_ty, a_tys) = tycker.speculate(|tycker| self.destruct_type_app_nf(tycker))?;
+        let res = match tycker.speculate(|tycker| tycker.type_filled(&f_ty))?.to_owned() {
             | Type::Thk(ThkTy) => {
                 if a_tys.len() == 1 {
                     let mut iter = a_tys.into_iter();
@@ -265,8 +256,8 @@ impl TypeId {
         Some(res)
     }
     pub fn destruct_ret_app(&self, tycker: &mut Tycker) -> Option<TypeId> {
-        let (f_ty, a_tys) = self.destruct_type_app_nf(tycker).ok()?;
-        let res = match tycker.type_filled(&f_ty).ok()?.to_owned() {
+        let (f_ty, a_tys) = tycker.speculate(|tycker| self.destruct_type_app_nf(tycker))?;
+        let res = match tycker.speculate(|tycker| tycker.type_filled(&f_ty))?.to_owned() {
             | Type::Ret(RetTy) => {
                 if a_tys.len() == 1 {
                     let mut iter = a_tys.into_iter();
@@ -280,7 +271,7 @@ impl TypeId {
         Some(res)
     }
     pub fn destruct_top(&self, _env: &TyEnv, tycker: &mut Tycker) -> Option<()> {
-        match tycker.type_filled(self).ok()?.to_owned() {
+        match tycker.speculate(|tycker| tycker.type_filled(self))?.to_owned() {
             | Type::CoData(coda) => {
                 let coda = tycker.statics.codatas[&coda].to_owned();
                 (coda.into_iter().count() == 0).then_some(())?
@@ -290,7 +281,7 @@ impl TypeId {
         Some(())
     }
     pub fn destruct_arrow(&self, tycker: &mut Tycker) -> Option<(TypeId, TypeId)> {
-        let res = match tycker.type_filled(self).ok()?.to_owned() {
+        let res = match tycker.speculate(|tycker| tycker.type_filled(self))?.to_owned() {
             | Type::Arrow(ty) => {
                 let Arrow(from, to) = ty;
                 (from, to)
@@ -300,7 +291,7 @@ impl TypeId {
         Some(res)
     }
     pub fn destruct_forall_binder(&self, tycker: &mut Tycker) -> Option<(TypeBinder, TypeId)> {
-        match tycker.type_filled(self).ok()?.to_owned() {
+        match tycker.speculate(|tycker| tycker.type_filled(self))?.to_owned() {
             | Type::Forall(Forall(binder, ty)) => Some((binder, ty)),
             | _ => None,
         }
@@ -309,27 +300,27 @@ impl TypeId {
         self.destruct_forall_binder(tycker).map(|(binder, ty)| (binder.witness, ty))
     }
     pub fn destruct_pack_pi(&self, tycker: &mut Tycker) -> Option<PackPi> {
-        match tycker.type_filled(self).ok()?.to_owned() {
+        match tycker.speculate(|tycker| tycker.type_filled(self))?.to_owned() {
             | Type::PackPi(pack_pi) => Some(*pack_pi),
             | _ => None,
         }
     }
     pub fn destruct_exists(&self, tycker: &mut Tycker) -> Option<(AbstId, TypeId)> {
-        match tycker.type_filled(self).ok()?.to_owned() {
+        match tycker.speculate(|tycker| tycker.type_filled(self))?.to_owned() {
             | Type::Exists(exists) => Some((exists.binder.witness, exists.body)),
             | _ => None,
         }
     }
     pub fn destruct_data<'t>(&self, _env: &TyEnv, tycker: &'t mut Tycker) -> Option<&'t Data> {
         use zydeco_utils::arena::ArenaAccess;
-        match tycker.type_filled(self).ok()?.to_owned() {
+        match tycker.speculate(|tycker| tycker.type_filled(self))?.to_owned() {
             | Type::Data(data) => tycker.statics.datas.get(&data),
             | _ => None,
         }
     }
     pub fn destruct_codata<'t>(&self, _env: &TyEnv, tycker: &'t mut Tycker) -> Option<&'t CoData> {
         use zydeco_utils::arena::ArenaAccess;
-        match tycker.type_filled(self).ok()?.to_owned() {
+        match tycker.speculate(|tycker| tycker.type_filled(self))?.to_owned() {
             | Type::CoData(coda) => tycker.statics.codatas.get(&coda),
             | _ => None,
         }

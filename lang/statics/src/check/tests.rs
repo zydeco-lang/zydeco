@@ -81,8 +81,8 @@ fn kind_normalization_stores_only_changed_forms() {
         tycker.statics.solus.insert_new(fill, unchanged.into());
 
         let mut normalizer = crate::normalize::FilledNormalizer::default();
-        normalizer.normalize_kind_k(unchanged, tycker).unwrap();
-        normalizer.normalize_kind_k(pending, tycker).unwrap();
+        normalizer.normalize_kind(unchanged, tycker).unwrap();
+        normalizer.normalize_kind(pending, tycker).unwrap();
 
         assert!(tycker.statics.kinds_normalized.get(&unchanged).is_none());
         assert!(matches!(tycker.statics.normalized_kind_at(unchanged), Some(ss::Kind::VType(_))));

@@ -56,13 +56,13 @@ impl<'a> Tycker<'a> {
     }
 
     /// Check the complete source term without the finish phase.
-    pub fn run_judgments_k(&mut self, root: su::TermId) -> ResultKont<TermAnnId> {
+    pub fn run_judgments_k(&mut self, root: su::TermId) -> Result<TermAnnId> {
         let checked = self.guarded(|tycker| {
             let env = TyEnvT::new(Default::default(), ());
             let inference = InferenceRegion::enter(tycker);
             let root = env.mk(root).tyck_k(tycker, Action::syn())?;
             if matches!(root, TermAnnId::Hole(_)) {
-                tycker.err_k(TyckError::SortMismatch)?
+                tycker.err(TyckError::SortMismatch)?
             }
             inference.close_k(tycker)?;
             Ok(root)
@@ -73,7 +73,7 @@ impl<'a> Tycker<'a> {
         checked
     }
 
-    pub fn run_source_k(&mut self, root: su::TermId) -> ResultKont<TermAnnId> {
+    pub fn run_source_k(&mut self, root: su::TermId) -> Result<TermAnnId> {
         let root = self.run_judgments_k(root);
         self.finish_judgments();
         let root = root?;
@@ -138,7 +138,7 @@ impl<'a> Tycker<'a> {
                     observations: self.observations,
                 })
             }
-            | Err(KontFailure) => {
+            | Err(ReportedError) => {
                 let diagnostics = self.error_diagnostics();
                 self.strip_checker_state();
                 SourceCheckOutcome::Rejected(RejectedSource {
@@ -150,12 +150,12 @@ impl<'a> Tycker<'a> {
         }
     }
 
-    pub(crate) fn finish_check_k(&mut self) -> ResultKont<()> {
+    pub(crate) fn finish_check_k(&mut self) -> Result<()> {
         self.resolve_holes_and_collect();
         self.normalize_and_validate_k()
     }
 
-    pub(crate) fn elaborate_static_root_k(&mut self, root: TermAnnId) -> ResultKont<()> {
+    pub(crate) fn elaborate_static_root_k(&mut self, root: TermAnnId) -> Result<()> {
         let elaboration = crate::elaborate::static_values::StaticElaborator::run(self, root)?;
         self.statics.static_elaboration = Some(elaboration);
         Ok(())
@@ -171,18 +171,18 @@ impl<'a> Tycker<'a> {
 
     /// Normalize and validate the checked arena, the second half of the finish
     /// phase.
-    pub(crate) fn normalize_and_validate_k(&mut self) -> ResultKont<()> {
+    pub(crate) fn normalize_and_validate_k(&mut self) -> Result<()> {
         let mut normalizer = crate::normalize::FilledNormalizer::default();
         let kind_ids: Vec<_> = self.statics.kinds_pre.iter().map(|(id, _)| *id).collect();
         let kinds = kind_ids
             .into_iter()
-            .map(|id| normalizer.normalize_kind_k(id, self).map(|_| ()))
-            .collect_k::<()>();
+            .map(|id| normalizer.normalize_kind(id, self).map(|_| ()))
+            .collect_reported::<()>();
         let type_ids: Vec<_> = self.statics.types_pre.iter().map(|(id, _)| id).collect();
         let types = type_ids
             .into_iter()
-            .map(|id| normalizer.normalize_type_k(id, self).map(|_| ()))
-            .collect_k::<()>();
+            .map(|id| normalizer.normalize_type(id, self).map(|_| ()))
+            .collect_reported::<()>();
         kinds?;
         types?;
         self.validate_foreign_imports();
@@ -198,7 +198,7 @@ impl<'a> Tycker<'a> {
             }));
         }
         if !self.errors.is_empty() {
-            Err(KontFailure)?
+            Err(ReportedError)?
         }
         Ok(())
     }
@@ -284,9 +284,9 @@ impl<'a> Tycker<'a> {
         let type_ids: Vec<_> = self.statics.types_pre.iter().map(|(id, _)| id.to_owned()).collect();
         let mut resolver = crate::normalize::HoleResolver::default();
         for id in type_ids {
-            let solu = match resolver.resolve_k(id, self) {
+            let solu = match resolver.resolve(id, self) {
                 | Ok(res) => res,
-                | Err(KontFailure) => continue,
+                | Err(ReportedError) => continue,
             };
             if solu != id {
                 let ty = self.statics.types_pre[&solu].to_owned();
@@ -296,7 +296,7 @@ impl<'a> Tycker<'a> {
         let missing = resolver.into_missing();
         if !missing.is_empty() {
             // keep running tycker even after unsuccessful solving hole
-            let _: ResultKont<()> = self.err_k(TyckError::MissingSolution(missing));
+            let _: Result<()> = self.err(TyckError::MissingSolution(missing));
         }
     }
     pub(super) fn collect_hole_solutions(&mut self) {
@@ -338,36 +338,29 @@ mod impl_tycker {
             res
         }
 
-        /// Push an error entry into the error list.
-        #[inline]
-        fn push_err_entry_k<T>(&mut self, entry: TyckErrorEntry) -> ResultKont<T> {
-            self.errors.push(entry);
-            Err(KontFailure)
+        /// Run `attempt` as a probe, keeping none of the diagnostics it reports when it fails.
+        ///
+        /// A probe asks whether a judgment holds; its failure answers the question
+        /// instead of rejecting the program.
+        pub(crate) fn speculate<T>(
+            &mut self, attempt: impl FnOnce(&mut Self) -> Result<T>,
+        ) -> Option<T> {
+            let errors = self.errors.len();
+            let result = attempt(self);
+            if result.is_err() {
+                self.errors.truncate(errors);
+            }
+            result.ok()
         }
     }
 
-    impl<'a> Errorable<TyckError> for Tycker<'a> {
-        type Entry = Box<TyckErrorEntry>;
-
-        /// Throw a pure error.
+    impl Report<TyckError> for Tycker<'_> {
+        /// Record `error` in the context of the current checking tasks.
         #[inline]
-        fn err<T>(&self, error: TyckError) -> Result<T> {
+        fn report(&mut self, error: TyckError) -> ReportedError {
             let stack = self.tasks.clone();
-            Err(Box::new(TyckErrorEntry { error, stack }))
-        }
-        /// Throw a continuation error.
-        #[inline]
-        fn err_k<T>(&mut self, error: TyckError) -> ResultKont<T> {
-            let stack = self.tasks.clone();
-            self.push_err_entry_k(TyckErrorEntry { error, stack })
-        }
-        /// Convert a pure result into a continuation result.
-        #[inline]
-        fn err_p_to_k<T>(&mut self, res: Result<T>) -> ResultKont<T> {
-            match res {
-                | Ok(t) => Ok(t),
-                | Err(entry) => self.push_err_entry_k(*entry),
-            }
+            self.errors.push(TyckErrorEntry { error, stack });
+            ReportedError
         }
     }
 }

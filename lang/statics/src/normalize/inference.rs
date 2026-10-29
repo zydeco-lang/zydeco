@@ -6,7 +6,7 @@ use super::*;
 struct InferenceRefinement;
 
 impl InferenceRefinement {
-    fn unresolved_type_fill(tycker: &Tycker<'_>, root: TypeId) -> Result<Option<FillId>> {
+    fn unresolved_type_fill(tycker: &mut Tycker<'_>, root: TypeId) -> Result<Option<FillId>> {
         let mut current = root;
         let mut visited = HashSet::default();
         loop {
@@ -57,38 +57,32 @@ impl TypeId {
     /// a value-to-computation arrow when application requires that shape.
     pub(crate) fn reveal_or_refine_arrow_k(
         self, tycker: &mut Tycker<'_>, env: &TyEnv,
-    ) -> ResultKont<Type> {
-        let result = (|| {
-            let ctype = Alloc::alloc(tycker, CType, (), &());
-            let kind = tycker.statics.type_kind(self);
-            Lub::lub(kind, ctype, tycker)?;
-            match InferenceRefinement::unresolved_type_fill(tycker, self)? {
-                | Some(fill) => InferenceRefinement::arrow(tycker, fill, env),
-                | None => tycker.type_filled(&self),
-            }
-        })();
-        tycker.err_p_to_k(result)
+    ) -> Result<Type> {
+        let ctype = Alloc::alloc(tycker, CType, (), &());
+        let kind = tycker.statics.type_kind(self);
+        Lub::lub(kind, ctype, tycker)?;
+        match InferenceRefinement::unresolved_type_fill(tycker, self)? {
+            | Some(fill) => InferenceRefinement::arrow(tycker, fill, env),
+            | None => tycker.type_filled(&self),
+        }
     }
 
     /// Reveal a solved value type, refining an unresolved metavariable to one
     /// product layer when tuple syntax requires that shape.
     pub(crate) fn reveal_or_refine_product_k(
         self, tycker: &mut Tycker<'_>, env: &TyEnv,
-    ) -> ResultKont<Type> {
-        let result = (|| {
-            let view = match InferenceRefinement::unresolved_type_fill(tycker, self)? {
-                | Some(_) => self,
-                | None => self.unroll(tycker)?.subst_env(tycker, env)?,
-            };
-            let vtype = Alloc::alloc(tycker, VType, (), &());
-            let kind = tycker.statics.type_kind(view);
-            Lub::lub(kind, vtype, tycker)?;
-            match InferenceRefinement::unresolved_type_fill(tycker, view)? {
-                | Some(fill) => InferenceRefinement::product(tycker, fill, env),
-                | None => tycker.type_filled(&view),
-            }
-        })();
-        tycker.err_p_to_k(result)
+    ) -> Result<Type> {
+        let view = match InferenceRefinement::unresolved_type_fill(tycker, self)? {
+            | Some(_) => self,
+            | None => self.unroll(tycker)?.subst_env(tycker, env)?,
+        };
+        let vtype = Alloc::alloc(tycker, VType, (), &());
+        let kind = tycker.statics.type_kind(view);
+        Lub::lub(kind, vtype, tycker)?;
+        match InferenceRefinement::unresolved_type_fill(tycker, view)? {
+            | Some(fill) => InferenceRefinement::product(tycker, fill, env),
+            | None => tycker.type_filled(&view),
+        }
     }
 
     /// Reveal a product from an expected type already prepared under `env`.
@@ -98,31 +92,28 @@ impl TypeId {
     /// receives the environment once.
     pub(crate) fn reveal_or_refine_prepared_product_k(
         self, tycker: &mut Tycker<'_>, env: &TyEnv,
-    ) -> ResultKont<Type> {
-        let result = (|| {
-            let view = match InferenceRefinement::unresolved_type_fill(tycker, self)? {
-                | Some(_) => self,
-                | None => {
-                    let unrolled = self.unroll(tycker)?;
-                    if unrolled == self { self } else { unrolled.subst_env(tycker, env)? }
-                }
-            };
-            let vtype = Alloc::alloc(tycker, VType, (), &());
-            let kind = tycker.statics.type_kind(view);
-            Lub::lub(kind, vtype, tycker)?;
-            match InferenceRefinement::unresolved_type_fill(tycker, view)? {
-                | Some(fill) => InferenceRefinement::product(tycker, fill, env),
-                | None => tycker.type_filled(&view),
+    ) -> Result<Type> {
+        let view = match InferenceRefinement::unresolved_type_fill(tycker, self)? {
+            | Some(_) => self,
+            | None => {
+                let unrolled = self.unroll(tycker)?;
+                if unrolled == self { self } else { unrolled.subst_env(tycker, env)? }
             }
-        })();
-        tycker.err_p_to_k(result)
+        };
+        let vtype = Alloc::alloc(tycker, VType, (), &());
+        let kind = tycker.statics.type_kind(view);
+        Lub::lub(kind, vtype, tycker)?;
+        match InferenceRefinement::unresolved_type_fill(tycker, view)? {
+            | Some(fill) => InferenceRefinement::product(tycker, fill, env),
+            | None => tycker.type_filled(&view),
+        }
     }
     pub(crate) fn view_product_k(
         self, tycker: &mut Tycker<'_>, env: &TyEnv,
-    ) -> ResultKont<Prod<TypeId>> {
+    ) -> Result<Prod<TypeId>> {
         match self.reveal_or_refine_product_k(tycker, env)? {
             | Type::Prod(product) => Ok(product),
-            | _ => tycker.err_k(TyckError::TypeExpected {
+            | _ => tycker.err(TyckError::TypeExpected {
                 expected: "a product with enough components".to_string(),
                 found: self,
             }),
@@ -130,10 +121,10 @@ impl TypeId {
     }
     pub(crate) fn view_prepared_product_k(
         self, tycker: &mut Tycker<'_>, env: &TyEnv,
-    ) -> ResultKont<Prod<TypeId>> {
+    ) -> Result<Prod<TypeId>> {
         match self.reveal_or_refine_prepared_product_k(tycker, env)? {
             | Type::Prod(product) => Ok(product),
-            | _ => tycker.err_k(TyckError::TypeExpected {
+            | _ => tycker.err(TyckError::TypeExpected {
                 expected: "a product with enough components".to_string(),
                 found: self,
             }),
@@ -142,10 +133,6 @@ impl TypeId {
 }
 
 impl FillId {
-    pub fn fill_k(&self, tycker: &mut Tycker<'_>, ann: AnnId) -> ResultKont<AnnId> {
-        let res = self.fill(tycker, ann);
-        tycker.err_p_to_k(res)
-    }
     pub fn fill(&self, tycker: &mut Tycker<'_>, candidate: AnnId) -> Result<AnnId> {
         if let Some((head, annotation)) = Self::unresolved_head(tycker, candidate)
             && head == *self

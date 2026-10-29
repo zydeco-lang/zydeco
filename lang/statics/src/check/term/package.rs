@@ -5,7 +5,7 @@ use super::*;
 impl TermChecker<'_> {
     pub(super) fn check_sigma_k<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::Sigma, switch: Switch<AnnId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         Ok({
             let su::Sigma(binder, body) = term;
             match switch {
@@ -23,7 +23,7 @@ impl TermChecker<'_> {
                             let crate::query::SigmaSynOutcome::Error(error) = outcome else {
                                 unreachable!("the kind arm of sigma judgments is query-produced")
                             };
-                            tycker.err_k(error)?
+                            tycker.err(error)?
                         }
                         | PatAnnId::Type(tpat, _kd) => {
                             // exists
@@ -42,7 +42,7 @@ impl TermChecker<'_> {
                                 body.try_as_type(tycker, TyckError::SortMismatch)?;
                             // body_kd should be of vtype
                             let vtype = ss::VType.build(tycker, &self.info);
-                            Lub::lub_k(vtype, body_kd, tycker)?;
+                            Lub::lub(vtype, body_kd, tycker)?;
                             let input = crate::query::InternedSigmaSyn::new(
                                 tycker.db,
                                 crate::query::SigmaSynArm::Exists { tpat, abst, body_ty },
@@ -60,13 +60,13 @@ impl TermChecker<'_> {
                             // ty should be of vtype
                             let kd_1 = tycker.statics.type_kind(ty_1);
                             let vtype = ss::VType.build(tycker, &self.info);
-                            Lub::lub_k(vtype, kd_1, tycker)?;
+                            Lub::lub(vtype, kd_1, tycker)?;
                             let ty_2 = TyEnvT::new(binder_out_ann.info.clone(), body)
                                 .tyck_k(tycker, Action::syn())?;
                             let (ty_2, kd_2) = ty_2.try_as_type(tycker, TyckError::SortMismatch)?;
                             binder_out_ann.close_scope_k(tycker, ty_2)?;
                             // kd_2 should be of vtype
-                            Lub::lub_k(vtype, kd_2, tycker)?;
+                            Lub::lub(vtype, kd_2, tycker)?;
                             let input = crate::query::InternedSigmaSyn::new(
                                 tycker.db,
                                 crate::query::SigmaSynArm::Prod { ty_1, ty_2 },
@@ -86,11 +86,11 @@ impl TermChecker<'_> {
                     | AnnId::Kind(kd) => {
                         let vtype = ss::VType.build(tycker, &self.info);
                         // prod or exists; should be of vtype
-                        Lub::lub_k(vtype, kd, tycker)?;
+                        Lub::lub(vtype, kd, tycker)?;
                         // just synthesize the whole thing
                         self.tyck_k(tycker, Action::syn())?
                     }
-                    | AnnId::Set | AnnId::Type(_) => tycker.err_k(TyckError::SortMismatch)?,
+                    | AnnId::Set | AnnId::Type(_) => tycker.err(TyckError::SortMismatch)?,
                 },
             }
         })
@@ -98,7 +98,7 @@ impl TermChecker<'_> {
 
     pub(super) fn check_manifest_exists_k<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::ManifestExists, switch: Switch<AnnId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         Ok({
             let su::ManifestExists { binder, definition, body } = term;
             match switch {
@@ -116,7 +116,7 @@ impl TermChecker<'_> {
                             let (body, body_kind) =
                                 body.try_as_type(tycker, TyckError::SortMismatch)?;
                             let vtype = ss::VType.build(tycker, &self.info);
-                            Lub::lub_k(vtype, body_kind, tycker)?;
+                            Lub::lub(vtype, body_kind, tycker)?;
                             let input = crate::query::InternedManifestSyn::new(
                                 tycker.db,
                                 crate::query::ManifestSynArm::Kind { pattern, definition, body },
@@ -143,17 +143,17 @@ impl TermChecker<'_> {
                                 binder.try_as_type(tycker, TyckError::SortMismatch)?;
                             let witness = Alloc::alloc(tycker, pattern, (), &());
                             let payload_kind = tycker.statics.annotations_abst[&witness];
-                            Lub::lub_k(payload_kind, definition_kind, tycker)?;
+                            Lub::lub(payload_kind, definition_kind, tycker)?;
 
                             let full_definition = pattern.introduce_payload(tycker, definition);
-                            let full_definition = tycker.err_p_to_k(full_definition)?;
+                            let full_definition = full_definition?;
                             let body_env =
                                 self.mk(Assign(pattern, full_definition)).tyck_k(tycker, ())?.info;
                             let body = TyEnvT::new(body_env, body).tyck_k(tycker, Action::syn())?;
                             let (body, body_kind) =
                                 body.try_as_type(tycker, TyckError::SortMismatch)?;
                             let vtype = ss::VType.build(tycker, &self.info);
-                            Lub::lub_k(vtype, body_kind, tycker)?;
+                            Lub::lub(vtype, body_kind, tycker)?;
 
                             let input = crate::query::InternedManifestSyn::new(
                                 tycker.db,
@@ -194,17 +194,17 @@ impl TermChecker<'_> {
                                     "the sort arm of manifest-exists judgments is query-produced"
                                 )
                             };
-                            tycker.err_k(error)?
+                            tycker.err(error)?
                         }
                     }
                 }
                 | Switch::Ana(AnnId::Kind(kind)) => {
                     let vtype = ss::VType.build(tycker, &self.info);
-                    Lub::lub_k(vtype, kind, tycker)?;
+                    Lub::lub(vtype, kind, tycker)?;
                     self.tyck_k(tycker, Action::syn())?
                 }
                 | Switch::Ana(AnnId::Set | AnnId::Type(_)) => {
-                    tycker.err_k(TyckError::SortMismatch)?
+                    tycker.err(TyckError::SortMismatch)?
                 }
             }
         })
@@ -212,7 +212,7 @@ impl TermChecker<'_> {
 
     pub(super) fn check_pack_k<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::Pack, switch: Switch<AnnId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         Ok({
             let su::Pack { mode, binder, definition: evidence, body } = term;
             match switch {
@@ -226,10 +226,10 @@ impl TermChecker<'_> {
                                 binder.try_as_type(tycker, TyckError::SortMismatch)?;
                             let witness = Alloc::alloc(tycker, pattern, (), &());
                             let payload_kind = tycker.statics.annotations_abst[&witness];
-                            Lub::lub_k(payload_kind, definition_kind, tycker)?;
+                            Lub::lub(payload_kind, definition_kind, tycker)?;
 
                             let full_definition = pattern.introduce_payload(tycker, definition);
-                            let full_definition = tycker.err_p_to_k(full_definition)?;
+                            let full_definition = full_definition?;
                             let body_env =
                                 self.mk(Assign(pattern, full_definition)).tyck_k(tycker, ())?.info;
                             // Sealing replaces the payload's references to the
@@ -257,9 +257,7 @@ impl TermChecker<'_> {
                             match body {
                                 | TermAnnId::Value(body, raw_body_ty) => {
                                     let body_ty = match &seal_absts {
-                                        | Some(absts) => {
-                                            raw_body_ty.subst_absts_k(tycker, absts)?
-                                        }
+                                        | Some(absts) => raw_body_ty.subst_absts(tycker, absts)?,
                                         | None => raw_body_ty,
                                     };
                                     let vtype = ss::VType.build(tycker, &self.info);
@@ -330,24 +328,24 @@ impl TermChecker<'_> {
                                             "the payload arm of pack judgments is query-produced"
                                         )
                                     };
-                                    tycker.err_k(error)?
+                                    tycker.err(error)?
                                 }
                             }
                         }
                         | TermAnnId::Hole(_)
                         | TermAnnId::Kind(_)
                         | TermAnnId::Value(_, _)
-                        | TermAnnId::Compu(_, _) => tycker.err_k(TyckError::SortMismatch)?,
+                        | TermAnnId::Compu(_, _) => tycker.err(TyckError::SortMismatch)?,
                     }
                 }
                 | Switch::Ana(AnnId::Type(expected)) => {
                     let checked = self.tyck_k(tycker, Action::syn())?;
                     let (cons, ty) = checked.try_as_value(tycker, TyckError::SortMismatch)?;
-                    let ty = Lub::lub_k(expected, ty, tycker)?;
+                    let ty = Lub::lub(expected, ty, tycker)?;
                     TermAnnId::Value(cons, ty)
                 }
                 | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
-                    tycker.err_k(TyckError::SortMismatch)?
+                    tycker.err(TyckError::SortMismatch)?
                 }
             }
         })

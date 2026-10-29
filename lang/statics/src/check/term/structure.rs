@@ -6,7 +6,7 @@ impl TermChecker<'_> {
     pub(super) fn check_named_k<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::Named<FieldName, su::TermId>,
         switch: Switch<AnnId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         let su::Named(name, inner) = term;
         match switch {
             | Switch::Syn => self.check_named_syn_k(tycker, name, inner),
@@ -14,7 +14,7 @@ impl TermChecker<'_> {
             | Switch::Ana(AnnId::Type(expected)) => {
                 self.check_named_ana_type_k(tycker, name, inner, expected)
             }
-            | Switch::Ana(AnnId::Set) => tycker.err_k(TyckError::SortMismatch),
+            | Switch::Ana(AnnId::Set) => tycker.err(TyckError::SortMismatch),
         }
     }
 
@@ -22,7 +22,7 @@ impl TermChecker<'_> {
     /// of label type, and any other payload goes through the named judgment.
     fn check_named_syn_k<'db>(
         &self, tycker: &mut Tycker<'db>, name: FieldName, inner: su::TermId,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         match self.mk(inner).tyck_k(tycker, Action::syn())? {
             | inner_out @ (TermAnnId::Type(..)
             | TermAnnId::Hole(_)
@@ -36,7 +36,7 @@ impl TermChecker<'_> {
 
     fn check_named_syn_judged_k<'db>(
         &self, tycker: &mut Tycker<'db>, inner_out: TermAnnId,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         let inner_interned = crate::query::InternedTermAnn::new(tycker.db, inner_out);
         match tycker.judge(self.inner, inner_interned, crate::query::named_syn_judgment) {
             | crate::query::NamedSynOutcome::Type { kind_id, kind, named_id, named } => {
@@ -45,16 +45,16 @@ impl TermChecker<'_> {
                 tycker.store_env(named_id, &self.info);
                 Ok(TermAnnId::Type(named_id, kind_id))
             }
-            | crate::query::NamedSynOutcome::Error(error) => tycker.err_k(error),
+            | crate::query::NamedSynOutcome::Error(error) => tycker.err(error),
         }
     }
 
     fn check_named_syn_value_k<'db>(
         &self, tycker: &mut Tycker<'db>, name: FieldName, inner: ss::ValueId, inner_ty: ss::TypeId,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         let inner_kind = tycker.statics.type_kind(inner_ty);
         let vtype = ss::VType.build(tycker, &self.info);
-        Lub::lub_k(vtype, inner_kind, tycker)?;
+        Lub::lub(vtype, inner_kind, tycker)?;
         let named_ty = Alloc::alloc(tycker, ss::Label(name.clone(), inner_ty), vtype, &self.info);
         let named = Alloc::alloc(tycker, ss::Named(name, inner), named_ty, &self.info);
         Ok(TermAnnId::Value(named, named_ty))
@@ -63,11 +63,11 @@ impl TermChecker<'_> {
     /// Check a named type against a label kind.
     fn check_named_ana_kind_k<'db>(
         &self, tycker: &mut Tycker<'db>, name: FieldName, inner: su::TermId, kd: ss::KindId,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         let ss::Kind::Label(ss::Label(expected_name, inner_kind)) =
-            tycker.kind_filled_k(&kd)?.to_owned()
+            tycker.kind_filled(&kd)?.to_owned()
         else {
-            tycker.err_k(TyckError::KindMismatch)?
+            tycker.err(TyckError::KindMismatch)?
         };
         Self::check_named_label_k(tycker, expected_name, &name)?;
         let checked = self.mk(inner).tyck_k(tycker, Action::ana(inner_kind.into()))?;
@@ -79,17 +79,14 @@ impl TermChecker<'_> {
     /// Check a named value against a label type, unrolling the expected type first.
     fn check_named_ana_type_k<'db>(
         &self, tycker: &mut Tycker<'db>, name: FieldName, inner: su::TermId, expected: ss::TypeId,
-    ) -> ResultKont<TermAnnId> {
-        let unrolled = expected.unroll_k(tycker)?;
-        let expected_view = if unrolled == expected {
-            expected
-        } else {
-            unrolled.subst_env_k(tycker, &self.info)?
-        };
+    ) -> Result<TermAnnId> {
+        let unrolled = expected.unroll(tycker)?;
+        let expected_view =
+            if unrolled == expected { expected } else { unrolled.subst_env(tycker, &self.info)? };
         let ss::Type::Label(ss::Label(expected_name, inner_ty)) =
-            tycker.type_filled_k(&expected_view)?.to_owned()
+            tycker.type_filled(&expected_view)?.to_owned()
         else {
-            tycker.err_k(TyckError::TypeExpected {
+            tycker.err(TyckError::TypeExpected {
                 expected: "a named value type".to_string(),
                 found: expected,
             })?
@@ -105,9 +102,9 @@ impl TermChecker<'_> {
     /// Reject a named term whose label differs from the one its classifier expects.
     fn check_named_label_k(
         tycker: &mut Tycker<'_>, expected: FieldName, found: &FieldName,
-    ) -> ResultKont<()> {
+    ) -> Result<()> {
         if *found != expected {
-            return tycker.err_k(TyckError::NamedLabelMismatch { expected, found: found.clone() });
+            return tycker.err(TyckError::NamedLabelMismatch { expected, found: found.clone() });
         }
         Ok(())
     }
@@ -115,7 +112,7 @@ impl TermChecker<'_> {
     pub(super) fn check_label_k<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::Label<FieldName, su::TermId>,
         switch: Switch<AnnId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         Ok({
             let su::Label(name, inner) = term;
             match switch {
@@ -135,12 +132,12 @@ impl TermChecker<'_> {
                                 tycker.statics.kinds_pre.insert_new(id, ss::Fillable::Done(kind));
                                 TermAnnId::Kind(id)
                             }
-                            | crate::query::LabelSynOutcome::Error(error) => tycker.err_k(error)?,
+                            | crate::query::LabelSynOutcome::Error(error) => tycker.err(error)?,
                         }
                     }
                     | TermAnnId::Type(inner, kind) => {
                         let vtype = ss::VType.build(tycker, &self.info);
-                        Lub::lub_k(vtype, kind, tycker)?;
+                        Lub::lub(vtype, kind, tycker)?;
                         let label = Alloc::alloc(tycker, ss::Label(name, inner), vtype, &self.info);
                         TermAnnId::Type(label, vtype)
                     }
@@ -155,7 +152,7 @@ impl TermChecker<'_> {
                 }
                 | Switch::Ana(AnnId::Kind(kind)) => {
                     let vtype = ss::VType.build(tycker, &self.info);
-                    Lub::lub_k(vtype, kind, tycker)?;
+                    Lub::lub(vtype, kind, tycker)?;
                     let (inner, _) = self
                         .mk(inner)
                         .tyck_k(tycker, Action::ana(vtype.into()))?
@@ -163,14 +160,14 @@ impl TermChecker<'_> {
                     let label = Alloc::alloc(tycker, ss::Label(name, inner), vtype, &self.info);
                     TermAnnId::Type(label, vtype)
                 }
-                | Switch::Ana(AnnId::Type(_)) => tycker.err_k(TyckError::SortMismatch)?,
+                | Switch::Ana(AnnId::Type(_)) => tycker.err(TyckError::SortMismatch)?,
             }
         })
     }
 
     pub(super) fn check_cons_k<'db>(
         &self, tycker: &mut Tycker<'db>, term: Vec<su::TermId>, switch: Switch<AnnId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         let mut items = term;
         let tail = items.pop().expect("a cons term carries at least two components");
         match switch {
@@ -183,7 +180,7 @@ impl TermChecker<'_> {
                     | ss::Type::Exists(_) | ss::Type::ManifestKind(_) => {
                         self.check_cons_ana_package_k(tycker, items, tail, expected)
                     }
-                    | _ => tycker.err_k(TyckError::TypeExpected {
+                    | _ => tycker.err(TyckError::TypeExpected {
                         expected: "one of `_ * _` or `exists _ . _`".to_string(),
                         found: expected,
                     }),
@@ -191,10 +188,10 @@ impl TermChecker<'_> {
             }
             | Switch::Ana(AnnId::Kind(kd)) => {
                 let vtype = ss::VType.build(tycker, &self.info);
-                Lub::lub_k(vtype, kd, tycker)?;
+                Lub::lub(vtype, kd, tycker)?;
                 self.tyck_k(tycker, Action::syn())
             }
-            | Switch::Ana(AnnId::Set) => tycker.err_k(TyckError::SortMismatch),
+            | Switch::Ana(AnnId::Set) => tycker.err(TyckError::SortMismatch),
         }
     }
 
@@ -202,14 +199,14 @@ impl TermChecker<'_> {
     /// (an infix product type) or all be values (a product value).
     fn check_cons_syn_k(
         &self, tycker: &mut Tycker<'_>, items: Vec<su::TermId>, tail: su::TermId,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         let mut components = items;
         components.push(tail);
         let outcomes = components
             .iter()
             .copied()
             .map(|component| self.mk(component).tyck_k(tycker, Action::syn()))
-            .collect_k::<Vec<_>>()?;
+            .collect_reported::<Vec<_>>()?;
         let typed = matches!(outcomes.first(), Some(TermAnnId::Type(_, _)));
         let mixed = outcomes.iter().any(|outcome| match outcome {
             | TermAnnId::Type(_, _) => !typed,
@@ -217,7 +214,7 @@ impl TermChecker<'_> {
             | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Compu(_, _) => true,
         });
         if mixed {
-            tycker.err_k(TyckError::SortMismatch)?
+            tycker.err(TyckError::SortMismatch)?
         }
         if typed {
             self.check_cons_syn_type_k(tycker, outcomes, components)
@@ -230,7 +227,7 @@ impl TermChecker<'_> {
     /// component types.
     fn check_cons_syn_type_k(
         &self, tycker: &mut Tycker<'_>, outcomes: Vec<TermAnnId>, components: Vec<su::TermId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         let vtype = ss::VType.build(tycker, &self.info);
         let component_tys = outcomes
             .into_iter()
@@ -240,14 +237,14 @@ impl TermChecker<'_> {
                     tycker.tasks.push_back_mut(TyckTask::Term(source, Switch::Syn));
                     match outcome {
                         | TermAnnId::Type(ty, kd) => {
-                            Lub::lub_k(vtype, kd, tycker)?;
+                            Lub::lub(vtype, kd, tycker)?;
                             Ok(ty)
                         }
                         | _ => unreachable!("sorted outcomes are uniform"),
                     }
                 })
             })
-            .collect_k::<Vec<_>>()?;
+            .collect_reported::<Vec<_>>()?;
         let prod = Alloc::alloc(tycker, ss::Prod(component_tys), vtype, &self.info);
         Ok(TermAnnId::Type(prod, vtype))
     }
@@ -293,10 +290,10 @@ impl TermChecker<'_> {
     fn check_cons_ana_product_k(
         &self, tycker: &mut Tycker<'_>, items: Vec<su::TermId>, tail: su::TermId,
         expected: ss::TypeId,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         let ss::Prod(component_tys) = expected.view_prepared_product_k(tycker, &self.info)?;
         if component_tys.len() != items.len() + 1 {
-            tycker.err_k(TyckError::TypeExpected {
+            tycker.err(TyckError::TypeExpected {
                 expected: "a product with matching components".to_string(),
                 found: expected,
             })?
@@ -311,16 +308,16 @@ impl TermChecker<'_> {
     fn check_value_product_k(
         &self, tycker: &mut Tycker<'_>,
         components: impl IntoIterator<Item = (su::TermId, ss::TypeId)>,
-    ) -> ResultKont<(ss::ValueId, ss::TypeId)> {
+    ) -> Result<(ss::ValueId, ss::TypeId)> {
         let (components, annotations): (Vec<_>, Vec<_>) = components
             .into_iter()
-            .map(|(item, item_ty)| -> ResultKont<_> {
+            .map(|(item, item_ty)| -> Result<_> {
                 let checked = self
                     .mk(item)
                     .tyck_k(tycker, Action::ana_prepared(item_ty.into(), &self.info))?;
                 checked.try_as_value(tycker, TyckError::SortMismatch)
             })
-            .collect_k::<Vec<_>>()?
+            .collect_reported::<Vec<_>>()?
             .into_iter()
             .unzip();
         let vtype = ss::VType.build(tycker, &self.info);
@@ -335,7 +332,7 @@ impl TermChecker<'_> {
     fn check_cons_ana_package_k(
         &self, tycker: &mut Tycker<'_>, items: Vec<su::TermId>, tail: su::TermId,
         expected: ss::TypeId,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         let mut body_ty = DeferredTelescopeType::new(expected);
         let mut body_index = items.len();
         let mut witnesses: Vec<ss::StaticTermId> = Vec::new();
@@ -359,7 +356,7 @@ impl TermChecker<'_> {
         }
 
         if witnesses.is_empty() {
-            tycker.err_k(TyckError::TypeExpected {
+            tycker.err(TyckError::TypeExpected {
                 expected: "an existential package".to_string(),
                 found: expected,
             })?
@@ -374,10 +371,10 @@ impl TermChecker<'_> {
     /// Check a manifest kind component against its definition.
     fn check_manifest_kind_witness_k(
         &self, tycker: &mut Tycker<'_>, item: su::TermId, definition: ss::KindId,
-    ) -> ResultKont<ss::StaticTermId> {
+    ) -> Result<ss::StaticTermId> {
         let checked = self.mk(item).tyck_k(tycker, Action::ana(AnnId::Set))?;
         let witness = checked.try_as_kind(tycker, TyckError::SortMismatch)?;
-        let witness = Lub::lub_k(definition, witness, tycker)?;
+        let witness = Lub::lub(definition, witness, tycker)?;
         Ok(witness.into())
     }
 
@@ -386,16 +383,16 @@ impl TermChecker<'_> {
     fn check_exists_witness_k(
         &self, tycker: &mut Tycker<'_>, item: su::TermId, binder: ss::TypeBinder,
         mode: DeferredTelescopeExistsMode, body: DeferredTelescopeType,
-    ) -> ResultKont<(ss::StaticTermId, DeferredTelescopeType)> {
+    ) -> Result<(ss::StaticTermId, DeferredTelescopeType)> {
         let domain_kind = binder.domain_kind(tycker);
         let checked = self.mk(item).tyck_k(tycker, Action::ana(domain_kind.into()))?;
         let (witness, _) = checked.try_as_type(tycker, TyckError::SortMismatch)?;
-        let payload = binder.pattern.bind_argument_k(tycker, witness)?;
+        let payload = binder.pattern.bind_argument(tycker, witness)?;
         let payload = match mode {
             | DeferredTelescopeExistsMode::Abstract => payload,
             | DeferredTelescopeExistsMode::Manifest(definition) => {
                 let definition = definition.materialize_k(tycker)?;
-                Lub::lub_k(definition, payload, tycker)?
+                Lub::lub(definition, payload, tycker)?
             }
         };
         Ok((witness.into(), body.with_abstract(binder.witness, payload)))
@@ -408,7 +405,7 @@ impl TermChecker<'_> {
     fn check_package_body_k(
         &self, tycker: &mut Tycker<'_>, body_items: &[su::TermId], tail: su::TermId,
         body_ty: ss::TypeId,
-    ) -> ResultKont<ss::ValueId> {
+    ) -> Result<ss::ValueId> {
         if body_items.is_empty() {
             let checked =
                 self.mk(tail).tyck_k(tycker, Action::ana_prepared(body_ty.into(), &self.info))?;
@@ -417,7 +414,7 @@ impl TermChecker<'_> {
         }
         let ss::Prod(body_component_tys) = body_ty.view_prepared_product_k(tycker, &self.info)?;
         if body_component_tys.len() < body_items.len() {
-            tycker.err_k(TyckError::TypeExpected {
+            tycker.err(TyckError::TypeExpected {
                 expected: "a product with matching components".to_string(),
                 found: body_ty,
             })?
@@ -436,7 +433,7 @@ impl TermChecker<'_> {
     pub(super) fn check_proj_k<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::Proj<su::TermId, FieldName>,
         switch: Switch<AnnId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         Ok({
             let su::Proj(head, name) = term;
             let checked = self.mk(head).tyck_k(tycker, Action::syn())?;
@@ -446,10 +443,10 @@ impl TermChecker<'_> {
                     let payload_kind = match switch {
                         | Switch::Syn => candidate.projected,
                         | Switch::Ana(AnnId::Kind(expected)) => {
-                            Lub::lub_k(expected, candidate.projected, tycker)?
+                            Lub::lub(expected, candidate.projected, tycker)?
                         }
                         | Switch::Ana(AnnId::Set | AnnId::Type(_)) => {
-                            tycker.err_k(TyckError::SortMismatch)?
+                            tycker.err(TyckError::SortMismatch)?
                         }
                     };
                     let projected = FieldProjectionResolver::project_type_k(
@@ -468,10 +465,10 @@ impl TermChecker<'_> {
                     let projected_ty = match switch {
                         | Switch::Syn => projected_ty,
                         | Switch::Ana(AnnId::Type(expected)) => {
-                            Lub::lub_k(expected, projected_ty, tycker)?
+                            Lub::lub(expected, projected_ty, tycker)?
                         }
                         | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
-                            tycker.err_k(TyckError::SortMismatch)?
+                            tycker.err(TyckError::SortMismatch)?
                         }
                     };
                     let field = ss::ResolvedField { name, target };
@@ -494,7 +491,7 @@ impl TermChecker<'_> {
                     TermAnnId::Value(outcome.id, outcome.ann)
                 }
                 | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Compu(_, _) => {
-                    tycker.err_k(TyckError::SortMismatch)?
+                    tycker.err(TyckError::SortMismatch)?
                 }
             }
         })
@@ -507,7 +504,7 @@ impl Tycker<'_> {
     /// several rejoin as one product.
     pub(in crate::check) fn rest_product_k(
         &mut self, components: &[ss::TypeId], env: &ss::TyEnv,
-    ) -> ResultKont<ss::TypeId> {
+    ) -> Result<ss::TypeId> {
         match components {
             | [] => {
                 let vtype = ss::VType.build(self, env);

@@ -177,7 +177,7 @@ pub enum HoleAnaOutcome {
 ///
 /// The first query to produce fill-state content: the type arm's pre-node is
 /// `Fillable::Fill`, derived at the term's site. The checker keeps the
-/// resolution side effects (`fill_k`'s solution write, `fill_hints`, and the
+/// resolution side effects (`fill`'s solution write, `fill_hints`, and the
 /// `fill_scopes` bookkeeping).
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn hole_ana_judgment<'db>(

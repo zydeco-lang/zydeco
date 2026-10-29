@@ -1,4 +1,4 @@
-//! Typed diagnostic collections and continuation after independent source failures.
+//! Typed diagnostic collections of rejected analyses.
 
 /// A nonempty collection of source failures from one rejected analysis.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
@@ -50,28 +50,3 @@ impl<E: std::fmt::Display> std::fmt::Display for Diagnostics<E> {
         Ok(())
     }
 }
-
-/// The producer has recorded the error; propagating rejection must not report it again.
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct ReportedError;
-
-pub(crate) trait CollectReported<T>:
-    Iterator<Item = Result<T, ReportedError>> + Sized
-{
-    /// Visit every independent input before rejecting the combined result.
-    fn collect_reported(self) -> Result<Vec<T>, ReportedError> {
-        let mut rejected = false;
-        let values = self
-            .filter_map(|result| match result {
-                | Ok(value) => Some(value),
-                | Err(ReportedError) => {
-                    rejected = true;
-                    None
-                }
-            })
-            .collect();
-        if rejected { Err(ReportedError) } else { Ok(values) }
-    }
-}
-
-impl<T, I: Iterator<Item = Result<T, ReportedError>>> CollectReported<T> for I {}

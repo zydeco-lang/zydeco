@@ -15,7 +15,7 @@ fn prepared_products_substitute_once_and_reenter_after_unrolling() {
             TyEnv::from_iter([(source_def, target.into()), (target_def, unit.into())]);
 
         let product = Alloc::alloc(tycker, ss::Prod(vec![source, source]), vtype, &empty);
-        let prepared = product.subst_env_k(tycker, &environment).unwrap();
+        let prepared = product.subst_env(tycker, &environment).unwrap();
         let ss::Prod(components) = prepared.view_prepared_product_k(tycker, &environment).unwrap();
         assert_eq!(components.as_slice(), [target, target]);
 
@@ -42,7 +42,7 @@ fn prepared_annotations_survive_lexical_environment_extensions() {
         let target: ss::TypeId = Alloc::alloc(tycker, target_def, vtype, &empty);
         let prepared_environment =
             TyEnv::from_iter([(source_def, target.into()), (target_def, unit.into())]);
-        let prepared = source.subst_env_k(tycker, &prepared_environment).unwrap();
+        let prepared = source.subst_env(tycker, &prepared_environment).unwrap();
         assert_eq!(prepared, target);
 
         let extended_environment = prepared_environment.clone() + [(inner_def, unit.into())];
@@ -103,7 +103,7 @@ fn forall_bodies_preserve_prepared_expected_types() {
                 panic!("a computation forall should check a computation abstraction")
             };
             let ss::Type::Forall(ss::Forall(_, body)) =
-                tycker.type_filled_k(&annotation).unwrap().to_owned()
+                tycker.type_filled(&annotation).unwrap().to_owned()
             else {
                 panic!("the checked abstraction should retain a forall annotation")
             };
@@ -144,18 +144,18 @@ fn checked_type_applications_suspend_function_kinded_prefixes() {
 
         let partial = function.apply_type_argument_k(tycker, first_argument, result_kind).unwrap();
         assert!(matches!(
-            tycker.type_filled_k(&partial).unwrap(),
+            tycker.type_filled(&partial).unwrap(),
             ss::Type::App(ss::App(found, argument))
                 if found == function && argument == first_argument
         ));
 
         let mut normalizer = crate::normalize::FilledNormalizer::default();
-        normalizer.normalize_type_k(partial, tycker).unwrap();
+        normalizer.normalize_type(partial, tycker).unwrap();
         assert!(matches!(tycker.statics.normalized_at(partial), Some(ss::Type::App(_))));
 
         let saturated = partial.apply_type_argument_k(tycker, second_argument, vtype).unwrap();
         let ss::Type::Prod(ss::Prod(found_components)) =
-            tycker.type_filled_k(&saturated).unwrap().to_owned()
+            tycker.type_filled(&saturated).unwrap().to_owned()
         else {
             panic!("saturating the application should materialize its product body")
         };

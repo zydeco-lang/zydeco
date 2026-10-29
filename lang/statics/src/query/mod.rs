@@ -6,7 +6,7 @@
 
 use crate::TyEnv;
 use crate::check::{
-    CheckedSource, CompletionTyping, KontFailure, RejectedSource, SourceCheckOutcome, Tycker,
+    CheckedSource, CompletionTyping, RejectedSource, ReportedError, SourceCheckOutcome, Tycker,
 };
 use crate::surface_syntax as su;
 use crate::syntax as ss;

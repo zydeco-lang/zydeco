@@ -110,7 +110,7 @@ pub(super) struct CheckedTerm(pub(super) TermAnnId);
 #[derive(Clone, Debug)]
 struct CheckedTermEntry {
     environment: TyEnv,
-    checked: ResultKont<CheckedTerm>,
+    checked: Result<CheckedTerm>,
 }
 
 /// Checker-global repository of typed term roots and recorded rejections.
@@ -125,9 +125,9 @@ impl CheckedTerm {
     }
     pub(super) fn require_complete_k(
         self, tycker: &mut Tycker<'_>, error: TyckError,
-    ) -> ResultKont<Self> {
+    ) -> Result<Self> {
         match self.0 {
-            | TermAnnId::Hole(_) => tycker.err_k(error),
+            | TermAnnId::Hole(_) => tycker.err(error),
             | TermAnnId::Kind(_)
             | TermAnnId::Type(_, _)
             | TermAnnId::Value(_, _)
@@ -139,7 +139,7 @@ impl CheckedTerm {
     /// classifier without changing the shared checked term.
     pub(super) fn reconcile_k(
         self, tycker: &mut Tycker<'_>, switch: Switch<AnnId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         let expected = match switch {
             | Switch::Syn => return Ok(self.0),
             | Switch::Ana(expected) => expected,
@@ -149,18 +149,16 @@ impl CheckedTerm {
             | TermAnnId::Type(_, kind) => AnnId::Kind(kind),
             | TermAnnId::Value(_, ty) | TermAnnId::Compu(_, ty) => AnnId::Type(ty),
             | TermAnnId::Hole(_) => {
-                return tycker.err_k(TyckError::MissingAnnotation);
+                return tycker.err(TyckError::MissingAnnotation);
             }
         };
-        Lub::lub_k(expected, synthesized, tycker)?;
+        Lub::lub(expected, synthesized, tycker)?;
         Ok(self.0)
     }
 }
 
 impl CheckedTermRepository {
-    pub(super) fn get(
-        &self, term: su::TermId, environment: &TyEnv,
-    ) -> Option<ResultKont<CheckedTerm>> {
+    pub(super) fn get(&self, term: su::TermId, environment: &TyEnv) -> Option<Result<CheckedTerm>> {
         let entry = self.entries.get(&term)?;
         assert!(
             environment.is_extension_of(&entry.environment),
@@ -174,8 +172,8 @@ impl CheckedTermRepository {
     /// successful paths must agree on the arena root. A later failure rejects
     /// the whole request, even if a nested elaborator retained a root already.
     pub(super) fn retain(
-        &mut self, term: su::TermId, environment: TyEnv, checked: ResultKont<CheckedTerm>,
-    ) -> ResultKont<CheckedTerm> {
+        &mut self, term: su::TermId, environment: TyEnv, checked: Result<CheckedTerm>,
+    ) -> Result<CheckedTerm> {
         use std::collections::hash_map::Entry;
         match self.entries.entry(term) {
             | Entry::Vacant(entry) => {
@@ -193,7 +191,7 @@ impl CheckedTermRepository {
                         previous, checked,
                         "one resolved term produced distinct checked roots"
                     ),
-                    | _ => canonical.checked = Err(KontFailure),
+                    | _ => canonical.checked = Err(ReportedError),
                 }
                 canonical.checked
             }
@@ -207,7 +205,7 @@ impl InferenceRegion {
         Self { inherited }
     }
 
-    pub(super) fn close_k(self, tycker: &mut Tycker<'_>) -> ResultKont<()> {
+    pub(super) fn close_k(self, tycker: &mut Tycker<'_>) -> Result<()> {
         let candidates = tycker
             .statics
             .fills
@@ -222,8 +220,8 @@ impl InferenceRegion {
                 unconstrained.push(fill);
                 continue;
             };
-            let AnnId::Type(solution) = solution else { tycker.err_k(TyckError::SortMismatch)? };
-            let (_, pending) = solution.solution_k(tycker)?;
+            let AnnId::Type(solution) = solution else { tycker.err(TyckError::SortMismatch)? };
+            let (_, pending) = solution.solution(tycker)?;
             if pending.into_iter().any(|fill| !self.inherited.contains(&fill)) {
                 unconstrained.push(fill);
             }
@@ -233,7 +231,7 @@ impl InferenceRegion {
         if unconstrained.is_empty() {
             Ok(())
         } else {
-            tycker.err_k(TyckError::UnconstrainedInference(unconstrained))
+            tycker.err(TyckError::UnconstrainedInference(unconstrained))
         }
     }
 }
@@ -257,8 +255,8 @@ impl Tycker<'_> {
     /// resulting typed root or recorded failure for every later reference.
     pub(super) fn synthesize_once_k(
         &mut self, term: su::TermId, environment: &TyEnv,
-        synthesize: impl FnOnce(&mut Self) -> ResultKont<TermAnnId>,
-    ) -> ResultKont<CheckedTerm> {
+        synthesize: impl FnOnce(&mut Self) -> Result<TermAnnId>,
+    ) -> Result<CheckedTerm> {
         if let Some(checked) = self.checked_terms.get(term, environment) {
             return checked;
         }
@@ -423,13 +421,13 @@ mod tests {
                     tycker.synthesize_once_k(provider, &environment, |tycker| {
                         TyEnvT::new(environment.clone(), provider).tyck_k(tycker, Action::syn())
                     })?;
-                    tycker.err_k(TyckError::MissingAnnotation)
+                    tycker.err(TyckError::MissingAnnotation)
                 });
-                assert_eq!(rejected, Err(KontFailure));
+                assert_eq!(rejected, Err(ReportedError));
                 let repeated = tycker.synthesize_once_k(provider, &environment, |_| {
                     panic!("a recorded rejection must not replay synthesis")
                 });
-                assert_eq!(repeated, Err(KontFailure));
+                assert_eq!(repeated, Err(ReportedError));
                 assert_eq!(tycker.check_counts.get(&su::EntityId::Term(provider)), Some(&1));
                 assert_eq!(tycker.errors.len(), 1);
                 assert!(tycker.statics.term_annotation(provider).is_some());

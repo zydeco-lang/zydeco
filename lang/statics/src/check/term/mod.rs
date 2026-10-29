@@ -37,7 +37,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
     type Out = TermAnnId;
     type Action = Action<AnnId>;
 
-    fn tyck_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> ResultKont<Self::Out> {
+    fn tyck_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> Result<Self::Out> {
         let switch = action.switch;
         tycker.guarded(|tycker| {
             // administrative
@@ -49,7 +49,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
         })
     }
 
-    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> ResultKont<Self::Out> {
+    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> Result<Self::Out> {
         let checker = TermChecker { site: self };
         let (switch, prepared_environment) = match checker.prepare_expected_k(tycker, action)? {
             | ControlFlow::Break(out_ann) => return Ok(out_ann),
@@ -84,7 +84,7 @@ impl TermChecker<'_> {
     /// environment unless an enclosing check already prepared it.
     fn prepare_expected_k(
         &self, tycker: &mut Tycker<'_>, action: Action<AnnId>,
-    ) -> ResultKont<ControlFlow<TermAnnId, (Switch<AnnId>, Option<ss::TyEnv>)>> {
+    ) -> Result<ControlFlow<TermAnnId, (Switch<AnnId>, Option<ss::TyEnv>)>> {
         let Action { switch, prepared_environment } = action;
         match switch {
             | Switch::Syn | Switch::Ana(AnnId::Set) => {}
@@ -104,7 +104,7 @@ impl TermChecker<'_> {
                     if !preparation_is_valid {
                         let kd = tycker.statics.type_kind(ty);
                         let switch = Switch::Ana(
-                            ty.subst_env_k(tycker, &self.info)?.normalize_k(tycker, kd)?.into(),
+                            ty.subst_env(tycker, &self.info)?.normalize(tycker, kd)?.into(),
                         );
                         return Ok(ControlFlow::Continue((switch, Some(self.info.clone()))));
                     }
@@ -117,17 +117,17 @@ impl TermChecker<'_> {
     /// Synthesize a type and fill the expected kind with its kind.
     fn fill_expected_kind_k(
         &self, tycker: &mut Tycker<'_>, switch: Switch<AnnId>, fill: FillId,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         tycker.observe_completion(self.inner, switch);
         match self.tyck_k(tycker, Action::syn())? {
             | TermAnnId::Type(ty, kd) => {
-                let kd = fill.fill_k(tycker, kd.into())?.as_kind();
+                let kd = fill.fill(tycker, kd.into())?.as_kind();
                 Ok(TermAnnId::Type(ty, kd))
             }
             | TermAnnId::Hole(_)
             | TermAnnId::Kind(_)
             | TermAnnId::Value(_, _)
-            | TermAnnId::Compu(_, _) => tycker.err_k(TyckError::SortMismatch),
+            | TermAnnId::Compu(_, _) => tycker.err(TyckError::SortMismatch),
         }
     }
 
@@ -135,19 +135,19 @@ impl TermChecker<'_> {
     /// type.
     fn fill_expected_type_k(
         &self, tycker: &mut Tycker<'_>, switch: Switch<AnnId>, fill: FillId,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         tycker.observe_completion(self.inner, switch);
         match self.tyck_k(tycker, Action::syn())? {
             | TermAnnId::Value(v, ty) => {
-                let ty = fill.fill_k(tycker, ty.into())?.as_type();
+                let ty = fill.fill(tycker, ty.into())?.as_type();
                 Ok(TermAnnId::Value(v, ty))
             }
             | TermAnnId::Compu(c, ty) => {
-                let ty = fill.fill_k(tycker, ty.into())?.as_type();
+                let ty = fill.fill(tycker, ty.into())?.as_type();
                 Ok(TermAnnId::Compu(c, ty))
             }
             | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Type(_, _) => {
-                tycker.err_k(TyckError::SortMismatch)
+                tycker.err(TyckError::SortMismatch)
             }
         }
     }
@@ -156,7 +156,7 @@ impl TermChecker<'_> {
     fn check_term_k(
         &self, tycker: &mut Tycker<'_>, term: su::Term<su::DefId>, switch: Switch<AnnId>,
         prepared_environment: Option<ss::TyEnv>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         use su::Term as Tm;
         Ok(match term {
             | Tm::TypeOf(su::TypeOf(operand)) => self.check_type_of_k(tycker, operand, switch)?,
@@ -220,19 +220,19 @@ impl TermChecker<'_> {
     fn check_ann_k(
         &self, tycker: &mut Tycker<'_>, term: su::Ann<su::TermId, su::TermId>,
         switch: Switch<AnnId>,
-    ) -> ResultKont<TermAnnId> {
+    ) -> Result<TermAnnId> {
         let su::Ann { tm, ty } = term;
         let ty_out_ann = self.mk(ty).tyck_k(tycker, Action::syn())?;
         let ty_ann = match ty_out_ann {
             | TermAnnId::Kind(kd) => kd.into(),
             | TermAnnId::Type(ty, _kd) => ty.into(),
             | TermAnnId::Hole(_) | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
-                tycker.err_k(TyckError::SortMismatch)?
+                tycker.err(TyckError::SortMismatch)?
             }
         };
         let ann = match switch {
             | Switch::Syn => ty_ann,
-            | Switch::Ana(ty_ana) => Lub::lub_k(ty_ana, ty_ann, tycker)?,
+            | Switch::Ana(ty_ana) => Lub::lub(ty_ana, ty_ann, tycker)?,
         };
 
         self.mk(tm).tyck_k(tycker, Action::ana_prepared(ann, &self.info))

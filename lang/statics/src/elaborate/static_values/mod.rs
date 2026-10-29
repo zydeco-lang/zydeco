@@ -7,14 +7,12 @@
 //! Dependent application checking uses a shape-only inspection of this same
 //! evaluator, restricted to witness identities visible in the caller's scope.
 
-use crate::{
-    Alloc, Env, KontFailure, ResultKont, SkolemScope, TyEnv, TyckError, Tycker, syntax::*,
-};
+use crate::{Alloc, Env, ReportedError, Result, SkolemScope, TyEnv, TyckError, Tycker, syntax::*};
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
-use zydeco_utils::{err::Errorable, prelude::ArenaAccess};
+use zydeco_utils::{err::Report, prelude::ArenaAccess};
 
 /// A static requirement that remains at an executable boundary.
 #[derive(Clone, Debug, thiserror::Error)]
@@ -76,7 +74,7 @@ pub(crate) enum StaticShape {
 }
 
 impl StaticShape {
-    fn in_scope(self, tycker: &Tycker<'_>, scope: &SkolemScope) -> Self {
+    fn in_scope(self, tycker: &mut Tycker<'_>, scope: &SkolemScope) -> Self {
         match self {
             | Self::Package(witnesses, body) => {
                 if witnesses.iter().all(|witness| match witness {
@@ -223,9 +221,7 @@ mod residual;
 impl<'a, 'db> StaticElaborator<'a, 'db> {
     const MAX_REDUCTION_DEPTH: usize = 128;
     const MAX_REDUCTIONS: usize = 65_536;
-    pub(crate) fn run(
-        tycker: &'a mut Tycker<'db>, root: TermAnnId,
-    ) -> ResultKont<StaticElaboration> {
+    pub(crate) fn run(tycker: &'a mut Tycker<'db>, root: TermAnnId) -> Result<StaticElaboration> {
         let purpose = if matches!(root, TermAnnId::Value(..)) {
             Purpose::SelectExports
         } else {
@@ -236,13 +232,13 @@ impl<'a, 'db> StaticElaborator<'a, 'db> {
 
     pub(crate) fn run_export(
         tycker: &'a mut Tycker<'db>, root: TermAnnId,
-    ) -> ResultKont<StaticElaboration> {
+    ) -> Result<StaticElaboration> {
         Self::run_with_purpose(tycker, root, Purpose::SelectExports)
     }
 
     fn run_with_purpose(
         tycker: &'a mut Tycker<'db>, root: TermAnnId, purpose: Purpose,
-    ) -> ResultKont<StaticElaboration> {
+    ) -> Result<StaticElaboration> {
         let mut evaluator = Self {
             tycker,
             types: HashMap::new(),
@@ -304,14 +300,14 @@ impl<'a, 'db> StaticElaborator<'a, 'db> {
             .unwrap_or(StaticShape::Opaque)
     }
 
-    fn fail<T>(&mut self, error: StaticEliminationError) -> ResultKont<T> {
+    fn fail<T>(&mut self, error: StaticEliminationError) -> Result<T> {
         if self.purpose == Purpose::Inspect {
-            return Err(KontFailure);
+            return Err(ReportedError);
         }
-        self.tycker.err_k(TyckError::StaticElimination(error))
+        self.tycker.err(TyckError::StaticElimination(error))
     }
 
-    fn ty(&mut self, ty: TypeId, env: &Environment) -> ResultKont<TypeId> {
+    fn ty(&mut self, ty: TypeId, env: &Environment) -> Result<TypeId> {
         if env.types.is_empty() {
             return Ok(ty);
         }
@@ -319,7 +315,7 @@ impl<'a, 'db> StaticElaborator<'a, 'db> {
         if let Some(result) = self.types.get(&key) {
             return Ok(*result);
         }
-        let result = ty.subst_absts_k(self.tycker, &env.types)?;
+        let result = ty.subst_absts(self.tycker, &env.types)?;
         self.types.insert(key, result);
         Ok(result)
     }
@@ -327,7 +323,7 @@ impl<'a, 'db> StaticElaborator<'a, 'db> {
     /// Recursive type aliases can encode self-application without `fix`.
     /// Bound both nesting and total work instead of exhausting the host stack
     /// or silently choosing a runtime representation for such a program.
-    fn enter_reduction(&mut self, function: ValueId) -> ResultKont<()> {
+    fn enter_reduction(&mut self, function: ValueId) -> Result<()> {
         if self.reduction_depth == Self::MAX_REDUCTION_DEPTH || self.remaining_reductions == 0 {
             return self.fail(StaticEliminationError::ReductionLimit { function });
         }

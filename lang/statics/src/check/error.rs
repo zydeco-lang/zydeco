@@ -739,7 +739,8 @@ impl<'a> Tycker<'a> {
     }
 }
 
-pub type Result<T> = std::result::Result<T, Box<TyckErrorEntry>>;
+/// The result of a checker operation, whose failure the checker has already recorded.
+pub type Result<T> = std::result::Result<T, ReportedError>;
 
 #[cfg(test)]
 mod code_tests {

@@ -8,27 +8,27 @@ impl<'a> Tyck<'a> for TyEnvT<ValuePiFormation> {
 
     fn tyck_inner_k(
         &self, tycker: &mut Tycker<'a>, Action { switch, .. }: Self::Action,
-    ) -> ResultKont<Self::Out> {
+    ) -> Result<Self::Out> {
         let ValuePiFormation { binder, codomain } = &self.inner;
         let vtype = ss::VType.build(tycker, &self.info);
         match switch {
             | Switch::Syn => {}
             | Switch::Ana(AnnId::Kind(expected)) => {
-                Lub::lub_k(vtype, expected, tycker)?;
+                Lub::lub(vtype, expected, tycker)?;
             }
-            | Switch::Ana(AnnId::Set | AnnId::Type(_)) => tycker.err_k(TyckError::SortMismatch)?,
+            | Switch::Ana(AnnId::Set | AnnId::Type(_)) => tycker.err(TyckError::SortMismatch)?,
         }
 
         let pi = match binder.inner.annotation {
             | PatAnnId::Kind(_) => {
-                tycker.err_k(TyckError::Expressivity("kind quantification is not supported"))?
+                tycker.err(TyckError::Expressivity("kind quantification is not supported"))?
             }
             | PatAnnId::Type(pattern, _) => {
                 let witness = Alloc::alloc(tycker, pattern, (), &());
                 let payload_kind = tycker.statics.annotations_abst[&witness];
                 let payload = Alloc::alloc(tycker, witness, payload_kind, &self.info);
                 let argument = pattern.introduce_payload(tycker, payload);
-                let argument = tycker.err_p_to_k(argument)?;
+                let argument = argument?;
                 let body_env = TyEnvT::new(binder.info.clone(), Assign(pattern, argument))
                     .tyck_k(tycker, ())?
                     .info;
@@ -42,12 +42,12 @@ impl<'a> Tyck<'a> for TyEnvT<ValuePiFormation> {
             }
             | PatAnnId::Value(pattern, domain) => {
                 if !ValuePatternShape::is_irrefutable(tycker, pattern) {
-                    tycker.err_k(TyckError::Expressivity(
+                    tycker.err(TyckError::Expressivity(
                         "value-function parameters must be irrefutable patterns",
                     ))?
                 }
                 let domain_kind = tycker.statics.type_kind(domain);
-                Lub::lub_k(vtype, domain_kind, tycker)?;
+                Lub::lub(vtype, domain_kind, tycker)?;
                 let codomain = TyEnvT::new(binder.info.clone(), *codomain)
                     .tyck_k(tycker, Action::ana(vtype.into()))?;
                 let (codomain, _) = codomain.try_as_type(tycker, TyckError::SortMismatch)?;
@@ -57,7 +57,7 @@ impl<'a> Tyck<'a> for TyEnvT<ValuePiFormation> {
                     PackageWitnessProjectionBuilder::abstract_arity(&witness_projection);
                 let witness_arity = witnesses.as_ref().map_or(0, ss::PackTelescope::len);
                 if projected_arity != witness_arity {
-                    tycker.err_k(TyckError::PackageWitnessArityMismatch {
+                    tycker.err(TyckError::PackageWitnessArityMismatch {
                         expected: witness_arity,
                         found: projected_arity,
                     })?
@@ -91,20 +91,20 @@ impl<'a> Tyck<'a> for TyEnvT<ComputationPiFormation> {
     type Out = TermAnnId;
     type Action = Action<AnnId>;
 
-    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> ResultKont<Self::Out> {
+    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> Result<Self::Out> {
         let ComputationPiFormation { binder, codomain } = &self.inner;
         let (_, domain) = binder.try_as_value(tycker, TyckError::SortMismatch)?;
 
         let domain_kind = tycker.statics.type_kind(domain);
         let vtype = ss::VType.build(tycker, &self.info);
-        Lub::lub_k(vtype, domain_kind, tycker)?;
+        Lub::lub(vtype, domain_kind, tycker)?;
 
         // Elaboration may inspect a value through `typeof`. Only the resulting
         // static type participates in the arrow; it cannot retain value terms.
         let codomain = TyEnvT::new(binder.info.clone(), *codomain).tyck_k(tycker, action)?;
         let (codomain, codomain_kind) = codomain.try_as_type(tycker, TyckError::SortMismatch)?;
-        let pi = match tycker.kind_filled_k(&codomain_kind)?.to_owned() {
-            | ss::Kind::VType(_) => tycker.err_k(TyckError::Expressivity(
+        let pi = match tycker.kind_filled(&codomain_kind)?.to_owned() {
+            | ss::Kind::VType(_) => tycker.err(TyckError::Expressivity(
                 "value-returning computation arrows are not supported; use `val pi`",
             ))?,
             | ss::Kind::CType(_) => match binder.package_telescope_k(tycker)? {
@@ -118,7 +118,7 @@ impl<'a> Tyck<'a> for TyEnvT<ComputationPiFormation> {
                     Alloc::alloc(tycker, signature, codomain_kind, &self.info)
                 }
             },
-            | ss::Kind::Arrow(_) | ss::Kind::Label(_) => tycker.err_k(TyckError::KindMismatch)?,
+            | ss::Kind::Arrow(_) | ss::Kind::Label(_) => tycker.err(TyckError::KindMismatch)?,
         };
         Ok(TermAnnId::Type(pi, codomain_kind))
     }

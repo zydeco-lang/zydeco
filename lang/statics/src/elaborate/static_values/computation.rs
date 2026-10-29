@@ -3,9 +3,7 @@
 use super::*;
 
 impl StaticElaborator<'_, '_> {
-    pub(super) fn computation(
-        &mut self, source: CompuId, env: &Environment,
-    ) -> ResultKont<CompuId> {
+    pub(super) fn computation(&mut self, source: CompuId, env: &Environment) -> Result<CompuId> {
         let residual = self.computation_inner(source, env)?;
         let ty = self.tycker.statics.annotations_compu[&residual];
         if !self.runtime_type(ty) {
@@ -20,7 +18,7 @@ impl StaticElaborator<'_, '_> {
         Ok(residual)
     }
 
-    fn computation_inner(&mut self, source: CompuId, env: &Environment) -> ResultKont<CompuId> {
+    fn computation_inner(&mut self, source: CompuId, env: &Environment) -> Result<CompuId> {
         let ty = self.ty(self.tycker.statics.annotations_compu[&source], env)?;
         let mut bindings = Vec::new();
         let node = match self.tycker.statics.compus[&source].clone() {
@@ -93,7 +91,7 @@ impl StaticElaborator<'_, '_> {
                     .map(|arm| {
                         Ok(CoMatcher { dtor: arm.dtor, tail: self.computation(arm.tail, env)? })
                     })
-                    .collect::<ResultKont<_>>()?;
+                    .collect::<Result<_>>()?;
                 Computation::CoMatch(CoMatch { arms })
             }
             | Computation::Dtor(Dtor(function, name)) => {
@@ -116,7 +114,7 @@ impl StaticElaborator<'_, '_> {
                             let binder = self.runtime_pattern(arm.binder, &mut local)?;
                             Ok(Matcher { binder, tail: self.computation(arm.tail, &local)? })
                         })
-                        .collect::<ResultKont<_>>()?;
+                        .collect::<Result<_>>()?;
                     let body =
                         self.alloc_compu(source, Computation::Match(Match { scrut, arms }), ty);
                     return Ok(self.compu_bindings(bindings, body));

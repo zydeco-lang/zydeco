@@ -30,33 +30,31 @@ impl DeferredTelescopeType {
         }
     }
 
-    pub(in crate::check) fn materialize_k(
-        &self, tycker: &mut Tycker<'_>,
-    ) -> ResultKont<ss::TypeId> {
+    pub(in crate::check) fn materialize_k(&self, tycker: &mut Tycker<'_>) -> Result<ss::TypeId> {
         let assignments = self
             .abstracts
             .iter()
             .map(|assignment| (assignment.witness, assignment.payload))
             .collect::<Vec<_>>();
-        let root = self.root.subst_absts_k(tycker, &assignments)?;
+        let root = self.root.subst_absts(tycker, &assignments)?;
         let Some(environment) = &self.environment else { return Ok(root) };
-        let root = if environment.unroll { root.unroll_k(tycker)? } else { root };
-        root.subst_env_k(tycker, &environment.value)
+        let root = if environment.unroll { root.unroll(tycker)? } else { root };
+        root.subst_env(tycker, &environment.value)
     }
 
     pub(in crate::check) fn reveal_k(
         self, tycker: &mut Tycker<'_>,
-    ) -> ResultKont<DeferredTelescopeView> {
+    ) -> Result<DeferredTelescopeView> {
         match tycker.statics.types_pre[&self.root].to_owned() {
             | ss::Fillable::Fill(_) => {
-                let structure = tycker.type_filled_k(&self.root)?.to_owned();
+                let structure = tycker.type_filled(&self.root)?.to_owned();
                 Ok(Self::new(self.root).view(structure))
             }
             | ss::Fillable::Done(
                 ss::Type::Var(_) | ss::Type::Abst(_) | ss::Type::App(_) | ss::Type::Proj(_),
             ) => {
                 let root = self.materialize_k(tycker)?;
-                let structure = tycker.type_filled_k(&root)?.to_owned();
+                let structure = tycker.type_filled(&root)?.to_owned();
                 Ok(Self::new(root).view(structure))
             }
             | ss::Fillable::Done(structure) => Ok(self.view(structure)),

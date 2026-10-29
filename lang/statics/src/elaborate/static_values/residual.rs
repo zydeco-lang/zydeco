@@ -124,9 +124,9 @@ impl StaticElaborator<'_, '_> {
         tail
     }
 
-    pub(super) fn reify(&mut self, value: &StaticValue) -> ResultKont<ValueId> {
+    pub(super) fn reify(&mut self, value: &StaticValue) -> Result<ValueId> {
         if self.purpose == Purpose::Inspect {
-            return Err(KontFailure);
+            return Err(ReportedError);
         }
         if !self.runtime_type(value.0.ty) {
             return self.fail(StaticEliminationError::RuntimeValue {
@@ -154,9 +154,9 @@ impl StaticElaborator<'_, '_> {
             | ValueForm::Runtime(runtime) => {
                 return Ok(*runtime);
             }
-            | ValueForm::Product(fields) => Value::VCons(
-                fields.iter().map(|value| self.reify(value)).collect::<ResultKont<_>>()?,
-            ),
+            | ValueForm::Product(fields) => {
+                Value::VCons(fields.iter().map(|value| self.reify(value)).collect::<Result<_>>()?)
+            }
             | ValueForm::Constructor(name, payload) => {
                 Value::Ctor(Ctor(name.clone(), self.reify(payload)?))
             }
@@ -172,7 +172,7 @@ impl StaticElaborator<'_, '_> {
 
     pub(super) fn share(
         &mut self, value: StaticValue, bindings: &mut Vec<Binding>,
-    ) -> ResultKont<StaticValue> {
+    ) -> Result<StaticValue> {
         if self.purpose == Purpose::Inspect
             || self.purpose == Purpose::SelectExports
             || value.0.shared.is_some()
@@ -187,7 +187,7 @@ impl StaticElaborator<'_, '_> {
                 fields
                     .iter()
                     .map(|field| self.share(field.clone(), bindings))
-                    .collect::<ResultKont<_>>()?,
+                    .collect::<Result<_>>()?,
             ),
             | ValueForm::Constructor(name, payload) => {
                 ValueForm::Constructor(name.clone(), self.share(payload.clone(), bindings)?)

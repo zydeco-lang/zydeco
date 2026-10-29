@@ -116,13 +116,6 @@ pub trait Construct<E, T>: Sized {
     ///
     /// See [`Construct`] level documentation for more details.
     fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, T)>;
-
-    /// Turn the result of [`Construct::construct`] into a [`ResultKont`].
-    /// Easier to use under a `_k` context.
-    fn construct_k(self, tycker: &mut Tycker<'_>, env: E) -> ResultKont<(E, T)> {
-        let res = self.construct(tycker, env);
-        tycker.err_p_to_k(res)
-    }
 }
 
 /// Builds a shape in a plain typing environment, where the checker's constructions cannot fail.
