@@ -11,12 +11,20 @@ Direct measurements covered feature usage and code size, and spot checks confirm
 The findings are proposals, not decisions.
 Removing or changing an approved feature changes the references and requires approval
 under the [documentation rules](../../../AGENTS.md#documentation-structure-and-design-records).
-This record describes the measured revision and is not a backlog: settled designs belong
-in the [references](../../references/README.md), and observed drift belongs in the [todos](../../todos/README.md).
-
-An uncommitted implicit-prelude migration touching about 290 files was in progress in the working tree during the audit.
-All measurements use a clean extraction of `7e5ee4c1`, so observations about prelude boilerplate may be superseded
-by that change.
+Settled designs belong in the [references](../../references/README.md),
+and observed drift belongs in the [todos](../../todos/README.md).
+On 2026-10-29 the record dropped the findings that later commits resolved: the abstract-machine Wasm backend,
+the ZASM interpreter, the checker's unused renderer and its `blame` field, the parallel constructor interfaces,
+the parallel visitors of the two stack IRs, the session's whole-program test pipeline, the documentation-dependent test,
+and the stale tutorial, OOPSLA links, placeholder ideas, and missing calculus correspondence.
+The pass framework no longer serves a single pass, because procedure localization became its second,
+so only its test-only combinators remain a finding.
+The record also dropped the tooling removals that the repository declined, namely the resumable test runner,
+the tracked shell completions and tree-sitter parser, and the reserved formatter options,
+together with the section that recorded those decisions.
+The yardstick no longer excludes the paper's duplicating and full schemes or its second-class procedures,
+which the compiler has since implemented.
+The measurements, the reproduction, and the evidence for the remaining findings still describe the measured revision.
 
 A post-audit verification pass re-derived the reproducible figures and corrected several statements;
 the changes are recorded under [Post-audit verification](#post-audit-verification).
@@ -40,9 +48,10 @@ which [`lang/stackir`](../../../lang/stackir/src/README.md) implements:
   Each program consumes one ambient stack `•` exactly once on every path, and no value captures it.
   Continuations, argument pushes, and tag pushes build stacks, closures receive one at each call,
   and value and stack let-bindings are the join points.
-  High SPS, `BranchJoinProgram` in [C8](../../references/compiler.md#c8-sps-lowering-normalization-and-demand),
-  realizes SPS in the paper's branch-join fragment `SPS_br`, whose stack lets occur exactly
-  around value-coproduct matches; the implementation treats scalar comparisons as a second branching form.
+  High SPS, `FragmentProgram` in [C8](../../references/compiler.md#c8-sps-lowering-normalization-and-demand),
+  realizes SPS in the fragment of the scheme that `--sps-scheme` selects:
+  by default the paper's branch-join fragment `SPS_br`, whose stack lets occur exactly around value-coproduct matches,
+  and otherwise its duplicating or full scheme; the implementation treats scalar comparisons as a second branching form.
 - **`SPS_l`**, which the code calls SPSLow, is the first-order target of closure conversion: blocks with self labels,
   jumps, value-existential closure packages, and stack-existential continuation packages.
   `SpsLowProgram` in [C9](../../references/compiler.md#c9-closure-conversion-and-first-order-spslow) realizes it.
@@ -53,14 +62,12 @@ and both add primitives, external calls, and memory steps that the calculi lack.
 The paper's implementation claim covers the compiled path: lowering checked CBPV to SPS, local β-simplification
 whose reductions orient the SPS βη equations and whose sharing policy orients the join-point equations,
 closure conversion with the existential-package representation, and lowering through ZASM to executable code.
-The paper's duplicating and full schemes, which the implementation does not realize,
-and its second-class procedures, an extension of SPS, are outside the yardstick.
 
 The OOPSLA artifact needs only `zydeco check` and the interpreter ([oopsla.rs](../../../lang/tests/tests/oopsla.rs)),
 whereas the SPS claims need the compiled pipeline through an executable backend.
 The `e2e_sources!` and `e2e_io_source!` macros
 in [`lang/tests/src/lib.rs`](../../../lang/tests/src/lib.rs) run the interpreter, AMD64,
-and both WebAssembly backends, and `runtime_source!` runs the interpreter and both WebAssembly backends without AMD64.
+and the WebAssembly backend, and `runtime_source!` runs the interpreter and the WebAssembly backend without AMD64.
 
 ## Where the weight is
 
@@ -86,10 +93,9 @@ which includes the SPSLow validators, and 1,703 in the protocol extraction.
 ## Recurring pattern
 
 Most removable weight belongs to features whose only clients are their tests or a small surface
-that the change also reworks: the manual-memory library beyond the 592 lines std reaches,
-C exports and native units, package relationships, monadic-translation extensions,
-view patterns, `@[doc]`, the typed-arena lint, high-SPS pass plans, the recursive folder driver,
-the generic representation-policy trait, and compact frame environments.
+that the change also reworks: the manual-memory library beyond the 592 lines std reaches, C exports and native units,
+package relationships, monadic-translation extensions, view patterns, `@[doc]`, the typed-arena lint,
+the recursive folder driver, the generic representation-policy trait, and compact frame environments.
 The SPSLow validators left this list with the SPS half of the yardstick, because they check part
 of `SPS_l`'s typing ([backend translation validators](#backend-translation-validators)).
 
@@ -181,19 +187,6 @@ Some heavily used spellings are also synonyms: `forall` and `pi` desugar to one 
 `param p in` equals `fn p =>`, and `def` on a value behaves as `let`.
 Unifying them requires a mechanical migration, including the OOPSLA examples.
 
-### Backend scope
-
-Two WebAssembly backends have been maintained side by side
-since the [backend proposal](../../proposals/wasm-backends.md) of 2026-08-30,
-and 15 of the 24 commits to their emitters changed both.
-The backend review favors `wasm-sps`, which maps SPSLow's explicit stacks directly, whereas `wasm-am` embeds ZASM
-in a dispatch loop; the proposal's 2026-08-30 prototype measurement counted 13,935 WebAssembly functions
-for `fact.zy` from `wasm-am` against 525 from `wasm-sps`, and a focused test still asserts the ordering.
-Removing `wasm-am` would save ≈1.1k lines, one crate, and a quarter of end-to-end runs.
-The SPS half of the yardstick strengthens that preference: `wasm-sps` executes `SPS_l` blocks directly
-as WebAssembly functions, and the paper's end-to-end evidence runs through ZASM and the native backend,
-so `wasm-am` serves neither half.
-
 ### Effect library breadth
 
 No non-test module outside `lib/std/effect` imports the effect library, and the OOPSLA artifact imports only `monad.zy`.
@@ -262,22 +255,6 @@ and it duplicates kind agreement and structural type equality.
 A test helper of about 200 lines that checks fill closure, annotation sorts,
 and hole policy would keep the useful part and save ≈2k lines.
 
-### Pass framework for one pass
-
-`HighSpsPass` in [`lang/stackir/src/passes.rs`](../../../lang/stackir/src/passes.rs) has a single variant, `Normalize`,
-yet [compiler pass composition](../../references/compiler.md#compiler-pass-composition) provides runtime sequences,
-observers, a plan grammar, a `zydeco passes` command, and four `--*-passes` options.
-The `when` and `by_ref` combinators have no users, and only a test uses `repeat`.
-A normalization switch and one dump option would save ≈1.0k–1.3k lines.
-
-The SPS half of the yardstick gives that switch and dump option a client.
-The paper's evidence shows a program's SPS before and after simplification and its lowered `SPS_l`
-under a recorded configuration; `--sps-passes none`, `--dump-passes`, and `build --target zir` provide that today,
-while the plan grammar, runtime sequences, and combinators still serve no client.
-The catalog would gain clients if the reductions the paper names separately became separately selectable passes:
-closure β as inlining, continuation β as call elimination, continuation η as tail-call optimization,
-and the sharing policy, which `Normalize` currently performs together.
-
 ### Test-only generality
 
 Several production interfaces carry parameters that only tests vary:
@@ -290,21 +267,18 @@ Several production interfaces carry parameters that only tests vary:
 - raw memory kernels, a fused IR that applies only to a 64-bit load, at most 32 operations,
   and a store of the same type (≈650–900);
 - the live editor configuration in Cajun, which serves two hover settings (≈270);
-- `--target-arch`, which accepts `Aarch64` but rejects it downstream, leaving one supported value.
+- `--target-arch`, which accepts `Aarch64` but rejects it downstream, leaving one supported value;
+- the pass combinators `when`, `by_ref`, and `repeat`, which only the pass framework's own tests use.
 
 ### Parallel implementations
 
 Each of these mechanisms exists more than once:
 
-- `MonConstruct` copies `Construct`, beside a third constructor interface, `Alloc` (≈700);
 - the walk over existential telescopes is written at least seven times, and field projection searches
   through two near-identical candidate functions (≈400);
 - `PackPi` and `ValPi` bind witnesses through separate machinery;
   formation walks nested products while application walks only the leading prefix, which
   is the [nested witness diagnostic](../../todos/compiler-boundaries.md#nested-witness-diagnostic) discrepancy (≈500);
-- high SPS, SPSLow, and scoped syntax each define a depth-first visitor framework (≈300);
-  a shared framework would still keep high SPS and SPSLow as distinct IRs,
-  since they realize the SPS paper's two calculi;
 - builtins are implemented in the interpreter, the native stub, and the Node host, with a separate role table;
 - the source scanner and the desugarer both validate builtin and intrinsic annotations (≈420);
 - the CLI and TUI repeat diagnostic dispatch, and the TUI strips ANSI escapes with a hand-written state machine;
@@ -315,10 +289,6 @@ Each of these mechanisms exists more than once:
 
 These items have no working production use:
 
-- `error_entry_output` and its second copy of the 48 diagnostic message arms in `check/error.rs`;
-  the `blame` field that only it reads forces 403 `Location::caller()` arguments (≈400);
-- the ZASM interpreter behind `build -t zasm -x`, which reaches `todo!()` at the `Terminator::Extern` case recorded
-  in the compiler todos at the time and at the `AllocContext` instruction that lowering emits at every jump (≈500);
 - `CommandCompiler::interpret` and `BackendProgram::lower`, and the `ProgKont::Dry` result,
   which the only live interpreter call never requests;
 - `StrictParser::term` and `pattern` with their recovering counterparts,
@@ -333,38 +303,26 @@ These items have no working production use:
 - Every `build -t exe` computes the runtime digest and target platform twice to validate C-library
   and native-unit imports, even when the program has none ([`cli/src/main.rs`](../../../cli/src/main.rs),
   lines 496–513).
-- `env!("CARGO_MANIFEST_DIR")` paths in the TUI engine, and in the in-progress prelude code,
-  tie an installed binary to the checkout it was built from.
+- `env!("CARGO_MANIFEST_DIR")` paths in the TUI engine and the session's prelude lookup tie an installed binary
+  to the checkout it was built from.
 - The tracked [n-ary product inference](../../todos/compiler-boundaries.md#n-ary-product-inference-refinement)
   discrepancy comes from a two-component refinement
   in [`normalize/inference.rs`](../../../lang/statics/src/normalize/inference.rs),
   which follows the unadopted right-spine binary-products design rather than n-ary products.
 
-The product-inference finding is already tracked in the compiler todos, as is the ZASM panic above;
-the parser-diagnostic, duplicate-digest, and manifest-path items are unrecorded drift and belong there before repair.
+The product-inference finding is already tracked in the compiler todos; the parser-diagnostic, duplicate-digest,
+and manifest-path items are unrecorded drift and belong there before repair.
 
 ## Tooling, tests, and documentation
 
 - **Tests.** The workspace builds 74 integration-test binaries,
   and `lang/tests` alone needs about 1.6 GB per debug build.
-  [`lang/session/src/source/tests.rs`](../../../lang/session/src/source/tests.rs) carries its own backend pipeline
-  for about 40 whole-program tests that belong in `lang/tests`, and source tests can be written six ways.
-- **Test runner.** `xtask test-resume`, about 2,361 lines at the measured revision (committed around 2026-10-20),
-  reimplements a test runner that CI does not use; `flake.nix` already provisions nextest.
-- **Editors.** Three grammar artifacts support the compiler and two editor clients: the LALRPOP parser,
-  tree-sitter (Zed) with about 25,000 committed generated lines, and TextMate (VS Code).
-  `cli/build.rs` also writes 1,250 lines of tracked shell completions into the source tree.
+  Source tests can be written six ways.
 - **Formatter.** The formatter has about 2,900 implementation and 2,850 test lines,
-  a quarter of the surface implementation, and every `@[format]` option except `verbatim` is unused.
+  a quarter of the surface implementation.
 - **Documentation.** The review estimated that about 860 of the 1,014 lines
-  in [DESIGN.md](../../../DESIGN.md) restate the references and have drifted from them.
-  `docs/legacy`, with 2,013 lines, and the earlier tutorial use removed syntax;
-  the OOPSLA README cites files that no longer exist; `docs/ideas` holds 22 near-empty files;
-  and `cli/tests/passes.rs` runs sources stored under `docs/evaluations`.
-  No reference or guide states which SPS calculus each stack IR realizes:
-  the [stack IR guide](../../../lang/stackir/src/README.md) points to a paper correspondence
-  in DESIGN.md's implementation architecture section, which the 2026-09-04 rewrite `7d2e434b` removed,
-  so only code comments name `SPS_l` and the paper's stack-join placement.
+  in [DESIGN.md](../../../DESIGN.md) restate the references and have drifted from them, and `docs/legacy`,
+  with 2,013 lines, uses removed syntax.
 
 ## Retained after review
 
@@ -381,21 +339,18 @@ The reviews judged these parts essential or proportionate:
 - derived identifiers, which keep Salsa replay stable.
 
 The SPS half of the yardstick adds the two IRs that realize the paper's calculi:
-high SPS with its lowering from checked CBPV and its branch-join verifier, and SPSLow with the blocks,
+high SPS with its lowering from checked CBPV and its scheme-fragment verifier, and SPSLow with the blocks,
 jumps, and packages that closure conversion builds.
 
 ## Suggested order
 
 1. Remove the dead code, which changes neither behavior nor reference text.
-2. Remove test-only scaffolding and unconsumed machinery: the pass framework beyond a normalization switch
-   and a dump option, the lint, folder drivers, representation policies, frame experiments, producer queries,
-   and the duplicated test and tooling paths (the session source-test pipeline, `xtask test-resume`,
-   editor-grammar and completion generation, and unused formatter options).
+2. Remove test-only scaffolding and unconsumed machinery: the unused pass combinators, the lint,
+   folder drivers, representation policies, frame experiments, and producer queries.
    Source behavior stays the same, but the compiler reference sections that describe them change,
    which requires approval.
-3. Decide the design findings: the systems-programming thread, one WebAssembly backend,
-   a minimal package system, the monadic extensions, the rare surface forms, the effect-library breadth,
-   and how SPSLow output is checked against `SPS_l`.
+3. Decide the design findings: the systems-programming thread, a minimal package system, the monadic extensions,
+   the rare surface forms, the effect-library breadth, and how SPSLow output is checked against `SPS_l`.
 4. Merge the parallel implementations, and fold documentation into the references that own each rule.
 
 A step that touches `lang/stackir`, ZASM, or the native backend must keep the SPS paper's implementation claim true:
@@ -441,8 +396,7 @@ The reference figures count lines from each numbered `##` heading of `docs/refer
 - Usage counts match regular expressions against comment-stripped sources.
   They count syntax rather than semantic dependence, so a single use may stand for a whole library.
 - Figures that the reproduction does not cover come from the reviews and were checked selectively.
-  Spot checks confirmed, among others, the ZASM `todo!()` path, the always-on SPSLow validators,
-  the single `HighSpsPass` variant, the `#[no_eq]` checker inputs, the 403 caller locations,
+  Spot checks confirmed, among others, the always-on SPSLow validators, the `#[no_eq]` checker inputs,
   the two-component product refinement, the duplicated runtime digest, the seven `triv` definitions,
   and the unused Builtin parameter of `ret.zy`.
 - The record retains the usage script and its printed output; the seven review notes
@@ -459,7 +413,7 @@ The reference figures count lines from each numbered `##` heading of `docs/refer
 A verification pass after the audit re-derived the reproducible figures from a clean extraction of `7e5ee4c1`
 and checked the review-derived ones against the code without a full workspace rebuild.
 It confirmed the area table, the surface-usage output, the standard-library and reference line counts,
-the memory reachability split, the wasm commit split, the defect list, and the spot checks above.
+the memory reachability split, the defect list, and the spot checks above.
 It corrected or qualified these statements in place:
 
 - `--target-os` has two fully implemented values, Linux and macOS, so only `--target-arch` remains a candidate interface
@@ -470,48 +424,23 @@ It corrected or qualified these statements in place:
   `int64` and `uint64` add conversion roles, and the role denominator now names the annotations it counts.
 - The `<|` and `~>` rows of the surface-forms table mixed use and file counts; both rows now state both.
 - The `library(zydeco)` sentence now distinguishes checked-in sources from sources that tests generate.
-- The wasm function counts are the proposal's historical 2026-08-30 measurement, now labeled as such.
 - The `builtin |> ...` total of 44 is standard-library-wide, not the count forced by `ret.zy`;
   the text now separates them.
 - The formatter and Cajun estimates were scope-dependent; measured values are about 2,900 and 270 lines.
   The arena count is 54 source-level implementations, `textual/ugly.rs` is 659 lines,
-  the commented-out graph block is 78 lines, and the ZASM citation now names the todo's first reachable case.
+  and the commented-out graph block is 78 lines.
 - Validator savings now distinguish deleting the protocol extraction from confining validation to tests.
 - The package-relationship and monadic-extension findings now note the tool consumers, merge-key effect,
   and shared nominal machinery that bound the removal estimates.
-- The end-to-end-macro, test-runner timing, editor-grammar, and annotation-validation phrasings were corrected.
-- The suggested order now covers the tooling and test-harness work and the effect-library decision,
-  and the Limits section records the retained-evidence gap.
+- The end-to-end-macro and annotation-validation phrasings were corrected.
+- The suggested order now covers the effect-library decision, and the Limits section records the retained-evidence gap.
 
 Two review counts did not reproduce exactly: about 1,250 dedicated memory compiler lines and 36 memory-IR files.
 Re-derivation brackets them at roughly 1.0k–1.3k lines and 27–41 files depending on module-set definition,
 so they remain review estimates.
 
-After this record was written, the implicit-prelude migration landed as `1cb3ab80` (319 files),
-including the `env!` prelude lookup noted as in progress.
-The measurements and the reproduction still describe `7e5ee4c1`; run the script on the clean extraction,
+The measurements and the reproduction describe `7e5ee4c1`; run the script on the clean extraction,
 because a working tree adds build artifacts and later sources to the scan.
-
-## Dispositions
-
-The repository kept or changed these tooling findings after the verification pass:
-
-- **Test runner.** `cargo test-resume` is retained.
-  It is documented in AGENTS.md and CONTRIBUTING.md, and it provides resume semantics that nextest does not;
-  the finding that CI does not use it stands, but removal was declined.
-- **Generated artifacts and editors.** The tracked shell completions and the tree-sitter parser are retained.
-  The CI workflow now verifies that `cli/completions` matches the CLI definition,
-  and the existing tree-sitter job already verifies its generated parser.
-  Dropping or merging an editor client was not attempted.
-- **Formatter options.** `width`, `indent`, `layout`, and `parentheses` are retained and documented
-  in the compiler reference as reserved options for downstream code; removing them would change approved surface syntax.
-- **Session test pipeline.** Whole-program cases moved to the shared test suites:
-  directive-driven fixtures for the builtin and monadic suites, the existing demo and standard-library suites,
-  and direct checks where a program has no execution contract.
-  Source-graph, loader, overlay, span, and arena assertions remain in the session crate,
-  so the pipeline now serves only crate-internal cases.
-- **Docs-dependent test.** `cli/tests/passes.rs` now reads fixtures under `cli/tests/fixtures/` instead
-  of sources under `docs/evaluations/`, keeping the evaluation record's evidence out of the test path.
 
 ## SPS yardstick revision
 
@@ -521,31 +450,18 @@ This revision compared the paper's SPS and `SPS_l` and its implementation claims
 The compiled-path crates and the compiler reference's C1, C8, and C9 are unchanged from there through `7fe0caed`.
 The revision re-scoped these statements in place:
 
-- The [yardstick](#yardstick) gained an SPS half: SPS realized by high SPS in the branch-join fragment,
-  `SPS_l` realized by SPSLow, and the compiled path that the paper's implementation claim covers.
+- The [yardstick](#yardstick) gained an SPS half: SPS realized by high SPS, `SPS_l` realized by SPSLow,
+  and the compiled path that the paper's implementation claim covers.
 - The [backend translation validators](#backend-translation-validators) became a choice
   about checking `SPS_l` instead of removable scaffolding, and the deletion estimate now notes
   that high lowering takes its destructor tags from the protocol extraction.
-- The [pass-framework finding](#pass-framework-for-one-pass) names the paper's before-and-after evidence
-  as a client of the normalization switch and dump option, and states when the plan catalog would gain clients.
-- The [systems-programming](#systems-programming-thread)
-  and [backend-scope](#backend-scope) findings note how each bears on the two IRs.
+- The [systems-programming finding](#systems-programming-thread) notes how the thread bears on the two IRs.
 - [Where the weight is](#where-the-weight-is) adds measured figures for the paper's executable path
   and for `lang/stackir`.
-- The recurring pattern, the convention, the parallel visitors, the retained list, the suggested order,
+- The recurring pattern, the convention, the retained list, the suggested order,
   and the limits reflect both halves of the yardstick.
-- The documentation findings record that no reference or guide states which calculus each IR realizes.
 
 The other findings concern the front end, the checker, tooling, the standard library,
 and backend mechanisms below `SPS_l` that the paper's claims do not name, such as representation policies
 and frame environments; the revision found no client for them in the paper.
-
-The compiler reference then gained the correspondence in [C8](../../references/compiler.md#correspondence-with-sps)
-and [C9](../../references/compiler.md#correspondence-with-sps_l), and the stack IR guide now points there,
-which resolves the documentation finding.
-The compiler then implemented the paper's duplicating and full schemes beside branch-join,
-selected with `--sps-scheme`, so the scheme exclusion in the [yardstick](#yardstick) describes `7e5ee4c1` only.
-It then implemented the paper's second-class procedures in their non-recursive form:
-the default SPS plan localizes closures that are only called, and closure conversion lowers procedures to labels,
-so the procedure exclusion in the yardstick likewise describes `7e5ee4c1` only.
 

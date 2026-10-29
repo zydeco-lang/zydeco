@@ -23,8 +23,8 @@ under the [documentation rules](../../../AGENTS.md#documentation-structure-and-d
 On 2026-10-29 the record dropped the findings that later commits resolved: the checker's error plumbing
 and parallel construction interfaces, the duplicated support of the two stack IRs, the `--dump-passes` stack overflow,
 the abstract-machine Wasm backend and ZASM interpreter, and the dead code those commits deleted.
-It also dropped the tree-sitter bullet,
-which the audit's [dispositions](../2026-10-21-cleanup-audit/README.md#dispositions) retain,
+The pass framework left the deletions, because procedure localization became its second pass.
+The record also dropped the tree-sitter bullet, because the repository keeps the generated parser,
 and the arena method `rebind` from the dead-code list, because the interpreter's linker calls it.
 The measurements, the reproduction, and the evidence for the remaining findings still describe the measured revision.
 
@@ -319,11 +319,10 @@ Line deltas marked ≈ are review estimates inferred from file sizes; they overl
 ### Deletions without design change
 
 These are the audit's first two steps, restated with the sizes at this revision:
-the remaining [dead code](../2026-10-21-cleanup-audit/README.md#dead-code),
-the pass framework beyond one normalization switch and one dump option, the typed-arena lint
-with a small test helper kept, the recursive folder driver, the representation-policy trait,
+the remaining [dead code](../2026-10-21-cleanup-audit/README.md#dead-code), the unused pass combinators,
+the typed-arena lint with a small test helper kept, the recursive folder driver, the representation-policy trait,
 the compact and moving frame variants, the raw memory kernels, and the test-only parser entry points and ugly printer.
-Together they are ≈6k–8k production lines plus their tests, and they change compiler reference text
+Together they are ≈5k–7k production lines plus their tests, and they change compiler reference text
 but no source behavior.
 
 This review adds dead code that the audit did not list: `Instruction::Clear`, which emitters match
