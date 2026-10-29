@@ -1540,8 +1540,7 @@ Relationships associate packages with tests and other subjects:
 | `of(subject, ...)` under `test(...)` | The packages tested by this test |
 
 Relationship targets follow the shared [package-path rules](#paths-and-package-context).
-The [operation plan](../proposals/package-management.md#validation-and-operation-planning) develops validation scope,
-test selection, and frontend integration.
+Relationship-driven test selection remains an [open idea](../ideas/README.md#project-context-inspection).
 The [execution contract](#selecting-an-execution-backend) governs backend preparation and test results.
 
 ### Package Hierarchy
@@ -1642,8 +1641,7 @@ Registering project B under A's `/vendor/b` substitutes:
 
 B's authored `/std/data` then denotes `ρA/vendor/b/std/data`.
 This substitution supplies the semantics of project registration and renaming.
-The [package-management plan](../proposals/package-management.md#project-registration-configuration)
-develops its configuration syntax.
+Its user-facing configuration syntax remains an [open idea](../ideas/README.md#project-context-inspection).
 
 #### Unnamed Packages Have Opaque Names
 
@@ -1866,8 +1864,8 @@ The host reports an error kind and display message, while the source library con
 Whole-file helpers centralize open/operate/close sequencing and error precedence.
 `io` owns shared streams, `fs` supplies file capabilities, and `stdio` supplies reserved process streams;
 process control is separate.
-A UTF-8 `Path` prevents text/path interchange but cannot represent every native path.
-Growable writers, seeking, and asynchronous protocols remain in the [stream proposal](../proposals/filesystem.md).
+A UTF-8 `Path` prevents text/path interchange but cannot represent every native path. Growable writers, seeking,
+and asynchronous protocols remain [open ideas](../ideas/README.md#growable-byte-builders-and-incremental-streams).
 
 ### Manual Memory
 
@@ -2178,8 +2176,7 @@ Embedding array storage in a record requires only the array's `storage` componen
 [Array construction](../../lib/tests/std/array-memory.zy),
 [storage-only padded stride](../../lib/tests/std/storage-arrays.zy),
 and [runtime selection](../../lib/tests/std/runtime-memory.zy) exercise these choices.
-A typed no-read discard operation remains
-[proposed](../proposals/memory.md#independently-selectable-storage-operations);
+A typed no-read discard operation remains an [open idea](../ideas/README.md#further-storage-boundaries);
 manual address reinterpretation remains available under its existing obligations.
 
 ### Memory Views
@@ -2317,7 +2314,7 @@ Neither repeated finish nor access after close is a checked operation.
 The [builder example](../../lib/tests/std/buffer.zy) covers capacity preflight,
 independent snapshots, spare capacity at publication, and explicit cleanup.
 Growth and integration
-with `Writer` remain [proposed](../proposals/filesystem.md#memory-backed-writer-and-byte-builder).
+with `Writer` remain an [open idea](../ideas/README.md#growable-byte-builders-and-incremental-streams).
 
 ### Stored-Call Interfaces
 
@@ -2609,7 +2606,7 @@ An ordinary layout descriptor is also a typed value; evaluating it during checki
 | --- | --- |
 | `import(source)` | Import an independently checked term (§12); source selection follows [package resolution](#package-hierarchy) |
 | `package(role, ...)` | Define a package's role and relationships (§12); names and package context follow [package resolution](#package-hierarchy) |
-| `discover(include("glob", ...), exclude("glob", ...), ...)` | Declare candidate source files; project integration follows the [package plan](../proposals/package-management.md#shared-project-context) |
+| `discover(include("glob", ...), exclude("glob", ...), ...)` | Declare candidate source files; discovery follows [package resolution](#package-hierarchy) |
 | `intrinsic(role)` | Supply a canonical kind/type (`vtype`, `ctype`, `thk`, `ret`, `unit`, `int`, `uint`, `i8`/`i16`/`i32`, `u8`/`u16`/`u32`, `f32`, `f64`, `char`, `string`) or an integer value function (§8) |
 | `builtin(role)` | Mark a host capability or operation in a typed Builtin interface (§13) |
 | `ffi(c, library("name"), symbol("name"))` | Supply a foreign thunk implementation at a hole (§14) |
@@ -2632,8 +2629,8 @@ and [CONTRIBUTING](../../CONTRIBUTING.md#format-and-lint) gives the workflow.
 ### Source Documentation
 
 `@[doc]` retains an optional adjacent text block on its payload term.
-It leaves the payload's typing and execution unchanged. The retained syntax supports authored explanations;
-no higher-level documentation tooling is implemented.
+It leaves the payload's typing and execution unchanged.
+The retained syntax supports authored explanations; no higher-level documentation tooling is implemented.
 
 #### Attaching Documentation
 

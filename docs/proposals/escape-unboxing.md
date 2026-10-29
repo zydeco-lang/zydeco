@@ -89,7 +89,8 @@ A source meta annotation can express a preference; it cannot establish represent
 
 ## Local CPS continuations (proposed)
 
-The [destination codecs](bytes.md#cps-destination-construction) expose completion as a source thunk.
+The [destination codecs](../references/language.md#immutable-owners-and-source-bytes) expose completion
+as a source thunk.
 Under [closure conversion](../references/compiler.md#c9-closure-conversion-and-first-order-spslow),
 remaining thunks use ordinary closure environments;
 installed return continuations have separate [native lifetime evidence](../references/compiler.md#activation-lifetime).
@@ -308,7 +309,7 @@ Unboxing removes an allocation by representing a value as separate fields.
 Allocation reuse answers another question: can a new value occupy a cell
 whose previous contents are no longer observable?
 This section owns the proposed compiler reuse obligations;
-the [byte-memory application](bytes.md#functional-updates-with-allocation-reuse-proposed) owns how they apply
+the [byte-update idea](../ideas/README.md#functional-byte-updates-with-allocation-reuse) records how they apply
 to retained byte allocations.
 General allocation reuse and immutable byte-owner reuse are not implemented yet.
 

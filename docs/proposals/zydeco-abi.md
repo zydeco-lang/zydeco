@@ -27,7 +27,6 @@ and [native activation rules](../references/compiler.md#activation-lifetime) sup
 Compiled libraries also support a separate
 [scalar C entry profile](../references/language.md#compiled-libraries-and-c-exports).
 Persistent host instances, external root handles, and the binding APIs below require implementation.
-The [Rust host survey](rust-host.md) compares consuming C exports with binding the native Zydeco ABI.
 Structural host bindings and the [compilation-unit extensions](#9-compilation-unit-extensions) can
 proceed independently; richer interfaces are required when a binding exposes their additional types.
 The [workload assessment](#10-workload-and-pitfalls) distinguishes their remaining costs.
@@ -409,7 +408,7 @@ it is not the primitive meaning of every `CType`.
 [UniFFI](https://github.com/mozilla/uniffi-rs) is a candidate for generating bindings when a Swift,
 Kotlin, or Python application calls a Rust component.
 **Rust is the callee at the UniFFI boundary.** That component can then invoke Zydeco
-through one of the [Rust adapters](rust-host.md).
+through a Rust binding of either ABI.
 The application host remains the foreign language:
 
 ```mermaid
@@ -695,8 +694,8 @@ Follow-on work has different costs:
 | Synchronous host embedding and one basic binding | 15–25 | Persistent instances, external roots, value construction/access, returning and returned thunks, close semantics, one host language |
 | General protocol bindings and host-implemented thunks | 10–20 | Checked stack plans, recursive codata, generic/witness relationships in host wrappers, transfer driver, cross-runtime context rooting |
 
-The [Rust host survey](rust-host.md#workload-and-validation) scopes a smaller first binding
-to current structural units and separates runtime ownership/root implementation from the remaining Rust adapter work.
+A smaller first Rust binding can be scoped to current structural units, separating runtime ownership
+and root implementation from the remaining adapter work.
 
 Together these suggest roughly **3–5 engineering months**
 for an initial synchronous native interlanguage platform covering the proposed type interfaces.
@@ -749,7 +748,8 @@ Structural host bindings and richer unit interfaces are independent tracks:
 
 - Start host binding work with the existing structural schema, persistent instances,
   registered roots, and returning-thunk invocation.
-  The [Rust host survey](rust-host.md) defines a first consumer and its tests.
+  A maintained Rust consumer of the existing scalar C export library is the first milestone;
+  the returned-adder example with collection between calls is the first native one.
 - Extend unit interfaces with nominal identities, recursive definitions, and binders as described in section 9.
   Introduce a dependency-environment profile if shared automatic initialization is needed.
 

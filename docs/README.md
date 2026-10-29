@@ -37,7 +37,7 @@ Choose the corresponding reference section or design record below.
 | --- | --- |
 | Attach prose to `@[doc]` | [Source documentation](references/language.md#source-documentation) |
 | Understand annotation and text attachment | [Shared source analysis](references/compiler.md#shared-source-analysis) |
-| Improve completion or generated type/source text | [Completion proposal](proposals/completion.md), [type-layout ideas](ideas/README.md#elaborated-type-layout), [source-generation ideas](ideas/README.md#source-generation-from-elaborated-terms) |
+| Improve completion or generated type/source text | [Completion ideas](ideas/README.md#structural-completion-and-last-successful-state), [type-layout ideas](ideas/README.md#elaborated-type-layout), [source-generation ideas](ideas/README.md#source-generation-from-elaborated-terms) |
 | Review, consolidate, format, and verify repository documentation | [Contribution workflow](../CONTRIBUTING.md#maintain-documentation) |
 | Repair an observed disagreement or duplicated account | [Reference drift](todos/reference-drift.md) |
 

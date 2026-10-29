@@ -197,8 +197,8 @@ The repository supplies preliminary engineering evidence, with each current cont
 | Representation discipline | [Scalar boundaries](../references/compiler.md#scalar-value-boundaries) distinguish ordinary values from raw bits and verify local scalar programs. This is bounded compiler validation, not an interoperability soundness theorem. |
 | Compilation costs | The [typed memory study](../evaluations/2026-09-15-typed-memory/README.md) records reproducible code-site counts. They establish neither general FFI overhead nor runtime speedups. |
 
-The concrete [foreign-interface proposal](../proposals/c-ffi.md), [Zydeco ABI proposal](../proposals/zydeco-abi.md),
-and [Rust host survey](../proposals/rust-host.md) own implementation options and staging.
+The concrete [foreign-interface proposal](../proposals/c-ffi.md)
+and [Zydeco ABI proposal](../proposals/zydeco-abi.md) own implementation options and staging.
 This research proposal asks what general account those directions can support.
 
 ## 6. Evaluation plan

@@ -12,7 +12,7 @@ Remove resolved entries once their repair and durable rationale have reached the
 
 ## Work that needs a new baseline
 
-- Measure [compiler retention and query costs](../proposals/arena-gc.md#next-measurement-pass)
+- Measure [compiler retention and query costs](../ideas/README.md#compiler-memory-retention)
   and [traversal costs](../proposals/traversals.md#performance-validation) before another broad representation rewrite.
   Include repeated edits, root switching, inference-region scans, nested closures, and cold versus warm checks.
 - Measure native preparation separately from lowering.
@@ -31,7 +31,7 @@ Remove resolved entries once their repair and durable rationale have reached the
   and a 20,000-cell value overflowed the host stack; those thresholds were not rerun.
 - Evaluate long-running host-resource retention
   under the current [runtime-instance lifetime](../references/compiler.md#runtime-instances)
-  and [memory extension questions](../proposals/bytes.md#remaining-questions).
+  and [byte ownership questions](../ideas/README.md#functional-byte-updates-with-allocation-reuse).
   Normal native entry teardown now releases its host resources; the older claim
   of permanently leaked `HostString::leak` allocations no longer describes that boundary.
   Any reclamation account must preserve live aliases, host callbacks, and the borrowed buffers

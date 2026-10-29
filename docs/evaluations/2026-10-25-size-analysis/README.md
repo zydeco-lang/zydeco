@@ -171,7 +171,7 @@ Direct allocation expresses the same rule as two arena insertions.
 The producers are marked `no_eq` and `unsafe(non_salsa_values)`, 57 of them in `lang`,
 so their memos cannot survive an edit, and the root `check_source` query keeps a single memo (`lru = 1`),
 so every edit rechecks the whole root.
-The [compiler memory proposal](../../proposals/arena-gc.md) records about 30% end-to-end checking overhead
+The [retention idea](../../ideas/README.md#compiler-memory-retention) records about 30% end-to-end checking overhead
 from the migration, and the layer provides no reuse to offset it.
 The layer also motivates the derived-identifier registry and the statics identity module beside the allocator.
 Replay stability and independent issuers need key-spaced identifiers,

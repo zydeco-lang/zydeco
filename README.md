@@ -77,8 +77,7 @@ Use `-p NAME` (`--pkg` or `--package`) after the command to select a declared pa
 Repeat it to check, build, or test multiple packages; it does not load additional declaration files.
 From this repository's root, `zydeco show` lists declarations and `zydeco check -p /std` checks std.
 Select a test explicitly, for example `zydeco test lib/tests/std/bool.zy`.
-[Suite selection from relationships](docs/proposals/package-management.md#validation-and-operation-planning)
-remains planned.
+[Suite selection from relationships](docs/ideas/README.md#project-context-inspection) remains planned.
 Both `run` and `test` default to the interpreter; `-t` (`--target`) selects a backend.
 Repeat it for a test matrix: `zydeco test lib/tests/std/bool.zy -t interpreter -t wasm-sps`.
 Use `zydeco test lib/tests/std/bool.zy -t all` to include every backend, including native `exe`.

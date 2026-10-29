@@ -110,8 +110,8 @@ Within that project, use `@(import(/std))` or `@(import(/std/memory))`.
 Explicit file imports remain valid without a project.
 Self-contained tests declare `@[package(test(of(/std)))]` on their roots, including tests of optional libraries.
 Discovery exposes tests in that scope to project inspection.
-[Suite selection from relationships](../../docs/proposals/package-management.md#validation-and-operation-planning)
-remains planned; select test files explicitly for execution.
+[Suite selection from relationships](../../docs/ideas/README.md#project-context-inspection) remains planned;
+select test files explicitly for execution.
 
 The package runner defaults to the interpreter and uses empty stdin and arguments on every selected backend.
 Support programs that need supplied arguments, fixtures, or input live under `lib/tests/std/support/`;
@@ -330,7 +330,7 @@ Reader, Writer, Option, State, Exception, and NonDet use the shared
 Their transformer instances package a lift together with the monad and effect operations.
 The [translated example](../tests/effects/effect-monadic.zy) shows their carrier-polymorphic clients,
 and the [composition example](../tests/effects/effect-operations.zy) exercises the transformers together.
-The [remaining library proposal](../../docs/proposals/relative-monad-library.md) covers fair search, control,
+[Further effect libraries](../../docs/ideas/README.md#further-effect-libraries) lists fair search, control,
 parsing, and other unimplemented families.
 
 ### Derived transformers
@@ -537,7 +537,7 @@ The low-level packed value for bytes groups `from_retained`, `with_window`, `cop
 and fixed-size `build` under `bytes/unsafe`.
 Their [caller contracts](../../docs/references/language.md#immutable-owners-and-source-bytes) cover initialized extents,
 retention, immutable aliases, and one completion per fill.
-A future [memory-backed writer](../../docs/proposals/filesystem.md#memory-backed-writer-and-byte-builder)
+A future [memory-backed writer](../../docs/ideas/README.md#growable-byte-builders-and-incremental-streams)
 would provide incremental construction without changing immutable-byte observations.
 
 ## Total operations
@@ -680,7 +680,8 @@ Filesystem contents are bytes by default. Text conveniences explicitly validate 
 and every fallible operation reports `Either IoError A` to its `OS` continuation.
 EOF is represented as `Option` by line reads; it is not conflated with an empty line or an I/O failure.
 The [stream guide](#streams-and-files) gives the operations and lifecycle contract;
-[filesystem design](../../docs/proposals/filesystem.md) retains the rationale and extension questions.
+[stream ideas](../../docs/ideas/README.md#growable-byte-builders-and-incremental-streams)
+retain the extension questions.
 
 The topic files are independently importable terms exposing their factories directly or through `make`.
 `std.zy` is the composition root used by most programs; its public packed value carries the library-defined types
@@ -748,5 +749,6 @@ A zero-byte read also returns empty bytes, so it cannot by itself establish EOF.
 Handles are alias-visible capabilities.
 Closing a file-backed reader or writer closes it for every alias, and subsequent operations report `Closed`.
 Reserved standard streams remain available after ordinary close requests.
-The current streams block. [Capability extensions](../../docs/proposals/filesystem.md) cover buffering,
+The current streams block.
+[Stream ideas](../../docs/ideas/README.md#growable-byte-builders-and-incremental-streams) cover buffering,
 seeking, memory-backed writers, and future asynchronous protocols.

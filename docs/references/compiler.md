@@ -595,8 +595,6 @@ Their current implementation representations are:
 
 `CompilerSession` manages source revisions, snapshots, and cached queries for these abstractions.
 Package instance and analysis identity follow the [package namespace rules](language.md#copy-resolve-merge-analyze).
-The [package implementation plan](../proposals/package-management.md#implementation-representations) integrates
-that model.
 
 ### Source Loading and Package Selection
 
@@ -606,8 +604,7 @@ including editor overlays.
 `Project::with_registration` places another project's root at a package path.
 `CompilerSession::load_package` exposes the resolved graph, and `analyze_package` gives its selected root semantics.
 The CLI, REPL, and editor share these interfaces.
-The [package plan](../proposals/package-management.md#shared-project-context) develops operation policy
-and configuration syntax.
+Operation policy and configuration syntax remain [open ideas](../ideas/README.md#project-context-inspection).
 
 #### Package Resolution Implementation
 
@@ -661,7 +658,6 @@ multiple cycles, and correction through overlays.
 The CLI's [execution runner](../../cli/src/execution.rs) consumes checked `ExecutableProgram` snapshots,
 sharing their immutable arenas across targets and lowering once for compiled backends.
 It prepares temporary artifacts before execution and owns their cleanup.
-The [operation plan](../proposals/package-management.md#validation-and-operation-planning) integrates frontend callers;
 [L15](language.md#selecting-an-execution-backend) owns backend execution policy.
 
 `CompilerSession` is the Salsa database and revision owner.
@@ -756,7 +752,8 @@ Cajun may keep a project's materialization alive while that project is in use.
 The test session pool explicitly triggers eviction between analyses and periodically replaces its database generation.
 Fine-grained judgment memos have a different lifetime from the full arena;
 dropping an analysis alone does not promise reclamation of all database storage.
-[Retention design questions](../proposals/arena-gc.md) concern memo lifetime, compact facts, and parsed-source storage.
+[Retention questions](../ideas/README.md#compiler-memory-retention) concern memo lifetime,
+compact facts, and parsed-source storage.
 [Session tests](../../lang/session/src/source/tests.rs) and query tests check facts after eviction,
 re-materialization, source hygiene, and failed revisions.
 Compiler cache reclamation is independent of program-value collection in C12.
@@ -885,7 +882,8 @@ Recovered nodes remain semantic holes with recorded origins,
 while strict parsing rejects the recovery before elaboration.
 The [recovery tests](../../lang/surface/src/textual/parser/tests/recovery.rs) pair retained contexts
 with strict rejection, including authored holes, Unicode cursors, invalid literals, and abandoned recovery events.
-Further grammar and candidate extensions remain in the [completion proposal](../proposals/completion.md).
+Further grammar
+and candidate extensions remain an [open idea](../ideas/README.md#structural-completion-and-last-successful-state).
 
 ### Desugaring Boundary
 
@@ -1474,8 +1472,8 @@ and packed value elaboration can distribute bindings without one structural encl
 This policy detects unbound anonymous witnesses with existing table entries,
 but does not reconstruct every source non-escape proof.
 The visited-node cache checks a shared node under the first encountered scope only.
-Scope-sensitive traversal, finer export provenance, and use-site derivation evidence remain
-in the [lint proposal](../proposals/tyck-lint.md).
+Scope-sensitive traversal, finer export provenance,
+and use-site derivation evidence remain [open ideas](../ideas/README.md#stronger-typed-arena-verification).
 
 `CommandCompiler::with_lint_types`, exposed as `--lint-types`, runs the verifier
 after a successful check and outside query memoization.
@@ -2691,8 +2689,6 @@ for consumers of its distributed artifacts.
 
 The checked [entry representations](../../lang/session/src/source/query.rs) describe a process program,
 a collection of C exports, or a [native unit initializer](#native-unit-artifacts).
-The [implementation plan](../proposals/package-management.md#implementation-representations) rebuilds their association
-with a selected package as `CompilationUnit`.
 The source roles and legality rules belong to [L14](language.md#compiled-libraries-and-c-exports).
 [Library checking](../../lang/statics/src/check/library.rs) reuses the source judgment query, Builtin domain validator,
 ordinary field resolver, directional foreign classifier, static elaborator, and readiness checker.
@@ -3122,8 +3118,8 @@ Reserved standard-stream capabilities remain open.
 The interpreter backs them with injected streams, while native execution uses the process streams.
 Primitive success/error branches carry a result or an error kind and message;
 [the library](../../lib/std/README.md#streams-and-files) constructs `Either`, `Option`, and typed paths.
-Adapters distinguish EOF, empty data, invalid text, I/O errors, and closed resources.
-[Capability design](../proposals/filesystem.md) owns stream extensions and resource-lifetime choices.
+Adapters distinguish EOF, empty data, invalid text, I/O errors, and closed resources. Stream extensions
+and resource-lifetime choices remain [open ideas](../ideas/README.md#growable-byte-builders-and-incremental-streams).
 
 ### Foreign Calls
 
@@ -3601,8 +3597,8 @@ Directories sort before conventional source files.
 The edit replaces the current path component with source-language escapes,
 preserving quotes, the written directory prefix, and following components.
 Numbered imports, unrelated strings, comments, and unfinished escape sequences receive no path suggestions.
-[Recovering parsing](#recovering-parsing) owns syntax recovery and cursor identity;
-the [completion proposal](../proposals/completion.md) retains further candidate families and stale-state policy.
+[Recovering parsing](#recovering-parsing) owns syntax recovery and cursor identity; further candidate families
+and stale-state policy remain an [open idea](../ideas/README.md#structural-completion-and-last-successful-state).
 
 ### Source Documentation Annotations
 

@@ -122,7 +122,7 @@ explicit materialization, layout identity, and retention of runtime geometry.
 Fixed constructors enforce static operands; a value-function type alone does not prove its captured integers static.
 Geometry remains bounded by nonnegative `Int`.
 A full pointer-width size/offset interface and compiler-supplied target facts remain part
-of the [memory extension](memory.md#additional-control-and-storage-boundaries).
+of the [storage-boundary ideas](../ideas/README.md#further-storage-boundaries).
 The [integer and storage contracts](../references/language.md#storage-and-foreign-transport) determine
 numeric domains independently of temporary boxing costs.
 
@@ -142,10 +142,10 @@ The [header-array fixture](../../lib/tests/std/header-array.zy) selects no array
 A requested logical list remains useful work and must be counted separately in comparisons.
 
 Runtime arrays expose ordinary thunk interfaces and `DynamicStorage`; returning static value-function fields
-through their success continuation would violate static elimination. Runtime record paths still need the
-[checked dynamic field factory](memory.md#additional-control-and-storage-boundaries).
+through their success continuation would violate static elimination.
+Runtime record paths still need the [checked dynamic field factory](../ideas/README.md#further-storage-boundaries).
 Typed unchecked indexing and no-read discard also remain
-in the [memory interface extension](memory.md#independently-selectable-storage-operations).
+among the [storage-boundary ideas](../ideas/README.md#further-storage-boundaries).
 Removing checks from only one benchmark path does not establish zero-cost abstraction.
 
 ## 3. Allocate and change state explicitly
@@ -228,7 +228,7 @@ Redundant accesses or temporary storage may disappear only when the selected con
 chosen layout and encoding, access semantics, observable address identity, allocator effects, and failure behavior.
 In particular, a nonescaping pointer alone does not justify deleting a user-selected allocator call.
 Volatile/atomic access and guaranteed storage placement need their own contracts
-in [the memory extension](memory.md#additional-control-and-storage-boundaries).
+among the [storage-boundary ideas](../ideas/README.md#further-storage-boundaries).
 
 Compare an abstraction with a direct implementation of the same observable behavior on the same target:
 the same bounds and failure behavior, alias obligations, representation, and explicitly selected runtime dispatch.
@@ -407,7 +407,7 @@ Unknown dynamic bounds retain their checks and unknown operation selection retai
 
 ## 5. Extend control without conflating the boundaries
 
-The [memory proposal](memory.md#additional-control-and-storage-boundaries) also records missing capabilities:
+The [storage-boundary ideas](../ideas/README.md#further-storage-boundaries) also record missing capabilities:
 packed and overlapping typed layouts, checked dynamic field paths, target facts, stack/static/arena storage conventions,
 managed-reference storage, pointer operations, atomics, volatile access, and memory ordering.
 These extend what programmers can express; they are distinct from overhead in operations already expressible.
@@ -470,8 +470,9 @@ Treat each successful target as a scoped guarantee before expanding its domain.
 | Raw component transport | Representation analysis, low entry contracts, native preparation, root maps, emitters | Matching entries and adapters; wide scalar extremes; mixed references surviving collection |
 | Cost regression and diagnostics | Paired code-generation fixtures and execution counters | Allocations, copies, retained frames, code size, compilation cost, and scoped strict-contract failures |
 
-The existing [memory-control boundaries](memory.md) keep packed/overlapping layout, dynamic field validation,
-additional allocators, managed references, pointer operations, and synchronization on the agenda.
+The [storage-boundary ideas](../ideas/README.md#further-storage-boundaries) keep packed/overlapping layout,
+dynamic field validation, additional allocators, managed references, pointer operations,
+and synchronization on the agenda.
 Functional byte reuse and FIP-style resource guarantees keep their separate ownership evidence;
 no memory-state alias becomes a uniqueness proof through this proposal.
 
@@ -506,6 +507,6 @@ explains contification from functions to local continuations. Maurer, Downen, Ar
 [*Compiling without Continuations*](https://pauldownen.com/publications/pldi17.pdf) provides GHC join points as an
 implementation precedent for preserving local control-flow identity.
 
-The [escape/reuse proposal](escape-unboxing.md#related-work) retains the CPS, Perceus, and FP² references
-and their distinct guarantees; the [byte proposal](bytes.md#related-work) retains destination-passing
-and bufferization references.
+The [escape/reuse proposal](escape-unboxing.md#related-work) retains the CPS, Perceus,
+and FP² references and their distinct guarantees; destination-passing style and MLIR bufferization are the precedents
+for separating destination placement from ownership evidence.

@@ -590,8 +590,9 @@ The [checker module guide](lang/statics/src/check/README.md) locates local judgm
 [static elaboration](docs/references/compiler.md#static-elimination) records the residual root used
 by both interpreter linking and SPS lowering.
 The optional [typed-arena lint](docs/references/compiler.md#typed-arena-lint) checks the published artifact's integrity.
-The [memory](docs/proposals/arena-gc.md), [pattern](docs/proposals/exhaustiveness.md),
-and [lint](docs/proposals/tyck-lint.md) records retain the remaining design questions.
+The [pattern proposal](docs/proposals/exhaustiveness.md)
+and the [retention](docs/ideas/README.md#compiler-memory-retention)
+and [lint](docs/ideas/README.md#stronger-typed-arena-verification) ideas retain the remaining design questions.
 
 ### Source and Editor Analysis
 
@@ -869,8 +870,8 @@ The library reifies those branches as `Option` for operations such as indexing, 
 and codepoint conversion, or as [`Either`](docs/references/language.md#either-values) for fallible I/O.
 Filesystem contents are bytes; text conveniences explicitly validate or produce UTF-8.
 EOF, an empty line, and an I/O error have distinct results.
-The [text and library contracts](lib/std/README.md#text-model)
-and [filesystem design](docs/proposals/filesystem.md) describe these boundaries independently of runtime storage.
+The [text and library contracts](lib/std/README.md#text-model) describe these boundaries independently
+of runtime storage.
 
 Explicit storage is available through the ordinary [memory library](lib/std/memory/package.zy).
 Its [owning design](docs/references/language.md#manual-memory) specifies manual allocation,
@@ -993,5 +994,5 @@ and `memory`, but the embedding must supply the imports before invoking either f
   Field-projection payload patterns and general same-bindee aliases are restricted to irrefutable forms,
   apart from the supported selective opening of a packed value.
 - Monadic translation follows the [closed-term boundary](docs/references/language.md#closed-translation-boundary).
-  Its [coverage limits and deferred roots](docs/references/language.md#translation-coverage)
-  have separate design records; automatic removal of monad dispatch remains outside the implementation.
+  Its [coverage limits and deferred roots](docs/references/language.md#translation-coverage) have separate
+  design records; automatic removal of monad dispatch remains outside the implementation.

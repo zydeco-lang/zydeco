@@ -8,8 +8,6 @@ The implemented [storage and transport boundary](../references/language.md#stora
 also owns raw pointer obligations and foreign field decoding.
 This proposal contains the next foreign boundaries.
 
-The [Rust host survey](rust-host.md) compares Rust consuming the existing C export ABI with bindings
-for Zydeco's native ABI, including their minimum integration work and validation.
 The [CBPV interoperability research proposal](../ideas/cbpv-universal-ffi.md) investigates how these
 boundaries could participate in a language for composing adapters across multiple ABI profiles.
 

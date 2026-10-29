@@ -195,7 +195,7 @@ physical suffix positions, empty product-shape demands, and `Used` absorption.
 Acceptance should exercise deep facts retained by several environments, last-owner release, short-circuit decisions,
 primitive operand recursion, and nested demands joined and discarded through branches.
 Measure retained memory as well as traversal depth before selecting an arena policy;
-the [compiler memory proposal](arena-gc.md) owns the broader retention questions.
+the [retention idea](../ideas/README.md#compiler-memory-retention) records the broader retention questions.
 
 ### Other execution adapters
 

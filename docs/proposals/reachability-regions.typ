@@ -615,7 +615,7 @@ Perceus [4] and FP² [5] study storage reuse under functional observations.
 They address a different obligation: whether a particular cell can be consumed and reconstructed in place.
 A support bound records lifetime dependencies; it neither counts aliases nor establishes exclusive ownership.
 The proposed #link("escape-unboxing.md#functional-allocation-reuse-proposed")[compiler reuse rules]
-and their #link("bytes.md#functional-updates-with-allocation-reuse-proposed")[byte-memory application]
+and their #link("../ideas/README.md#functional-byte-updates-with-allocation-reuse")[byte-memory application]
 own that additional evidence. Applying such rewrites to this immutable-store calculus requires a separate
 preservation argument for the surviving graph and its support bounds; a retirement argument alone is insufficient.
 

@@ -246,7 +246,7 @@ so it saves only the production portion.
 The producer queries in `lang/statics/src/query/`, about 1,800 lines, read `#[no_eq]` inputs,
 so their memos cannot survive an edit, while `check_source` already memoizes the whole check.
 The checker carries 66 `unreachable!` glue sites for them,
-and the [compiler memory proposal](../../proposals/arena-gc.md) records
+and the [retention idea](../../ideas/README.md#compiler-memory-retention) records
 about 30% end-to-end checking overhead from the migration.
 Direct allocation with the existing derived identifiers would save ≈2.3k–2.8k lines;
 [query ownership](../../references/compiler.md#query-and-checker-ownership) would need amending.
@@ -318,8 +318,7 @@ These items have no working production use:
 - `error_entry_output` and its second copy of the 48 diagnostic message arms in `check/error.rs`;
   the `blame` field that only it reads forces 403 `Location::caller()` arguments (≈400);
 - the ZASM interpreter behind `build -t zasm -x`, which reaches `todo!()` at the `Terminator::Extern` case recorded
-  in the compiler todos at the time
-  and at the `AllocContext` instruction that lowering emits at every jump (≈500);
+  in the compiler todos at the time and at the `AllocContext` instruction that lowering emits at every jump (≈500);
 - `CommandCompiler::interpret` and `BackendProgram::lower`, and the `ProgKont::Dry` result,
   which the only live interpreter call never requests;
 - `StrictParser::term` and `pattern` with their recovering counterparts,

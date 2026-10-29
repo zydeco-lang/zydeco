@@ -74,6 +74,62 @@ their rejected cycles, and the property being established: normalization, repres
 Dependency scheduling is not that proof.
 [L3](../references/language.md#3-bindings-and-scope) owns current recursive component acceptance.
 
+### Further storage boundaries
+
+Checked record composition requires aligned, nonoverlapping fields; packed records, unions, runtime field placement,
+and target-specific pointer facts currently need custom operations or raw access.
+Each would need its own factory, state protocol, and target support: byte packing keeps field offsets
+and accesses with alignment one; overlapping storage needs a statically known or tagged active member;
+runtime placement must validate extent, offset, alignment, and nonoverlap before exposing a dynamic field;
+stack, static, and arena storage need placement, lifetime, and release conventions;
+stored managed references need rooting and scanning rules; pointer comparison and conversion need width
+and provenance rules; and atomics and volatile access need dedicated primitive semantics.
+Two smaller library additions are typed unchecked indexing that states the obligations it transfers
+and a no-read discard transition for initialized storage.
+None of these introduces source lifetimes without a separate decision.
+[L13](../references/language.md#manual-memory) owns the implemented layouts, fields, arrays, and views;
+[memory compilation](../proposals/memory-compilation.md) owns the compiler gaps.
+
+### Functional byte updates with allocation reuse
+
+A functional update of immutable bytes must preserve every retained input and slice.
+A copying implementation can allocate a private destination, apply validated edits,
+and publish one retained result through CPS; reusing the input allocation additionally needs the
+[compiler reuse obligations](../proposals/escape-unboxing.md#functional-allocation-reuse-proposed): exclusive access,
+compatible layout, valid roots, and a control-flow account that the manual `Ptr` state protocol does not provide.
+Start any reuse experiment with a complete, exclusive allocation and a same-length update,
+and keep a copying fallback for shared inputs, slices, and escaped raw pointers.
+Fallible codecs that cannot preflight completely need staging,
+and non-contiguous storage needs a workload that justifies it.
+Destination-passing style, OCaml's tail-modulo-constructor transformation,
+and MLIR bufferization are the precedents for separating destination placement from ownership evidence.
+[Retained bytes](../references/language.md#immutable-owners-and-source-bytes) own the current observations.
+
+### Growable byte builders and incremental streams
+
+Repeated immutable append is quadratic. A memory-backed writer could reuse the capability model
+for amortized pushes and publish one immutable `Bytes` result through CPS destination construction,
+with growth reserving capacity before any observable change and failure preserving committed chunks.
+A chunk-processing driver could pass each read chunk to its consumer and request the next read only on completion,
+distinguishing EOF, read failure, consumer failure, and explicit stop.
+Buffered and seekable streams, asynchronous protocols, and native paths are further extensions,
+each with its own position, cancellation, or aliasing contract.
+[L13](../references/language.md#streams-and-process-arguments) owns the current stream observations;
+the [fixed-capacity buffer](../references/language.md#byte-builders) is the implemented core.
+
+### Further effect libraries
+
+Ret, Reader, Writer, Option, State, Exception, and ordered depth-first NonDet are implemented
+as relative monads with a shared transformer derivation.
+Further families would each need an implementation decision: delimited control,
+fair search and pruning, parsers, free monads, validation accumulators, randomness,
+reader–writer–state bundles, resource management, and asynchronous tasks.
+The admission constraint is that a carrier must compose with ambient computations
+without changing their observable order; eagerly collecting nondeterministic results
+into a list is not an unrestricted relative monad.
+[Elementary effects](../references/language.md#elementary-effect-instances)
+and [derived transformers](../references/language.md#derived-relative-monad-transformers) own the implemented library.
+
 ## Compiler
 
 ### Residual code sharing
@@ -108,7 +164,7 @@ and provenance.
 Compare embedding compact spans in later arenas with following provenance back to the surface map.
 Preserve rejected-program diagnostics and revision ownership in either design.
 [C2](../references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance) owns the implemented model;
-[arena retention](../proposals/arena-gc.md) owns broader session memory questions.
+[compiler memory retention](#compiler-memory-retention) owns broader session memory questions.
 
 ### Macro source provenance
 
@@ -117,6 +173,32 @@ around the compact address-space model.
 This conditional question does not select a macro expansion or hygiene design.
 [C2](../references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance) owns current source coordinates
 and provenance.
+
+### Compiler memory retention
+
+A checked root elaborates into many more nodes than its source, so retaining every typed arena
+in a long-lived session makes memory depend on root history.
+Extending reclamation to interactive sessions needs an account of active projects, overlays,
+and outstanding snapshots, and must keep keyed facts after arena eviction paired with the right revision.
+Measurement targets, none yet measured: judgment-producer query bookkeeping during cold and warm checks,
+inference-region fill scans as local binders grow, repeated root switching against full-arena residency,
+and editor lookups that still route through the session.
+The producer-query migration measured on 2026-08-14 reported about 30% end-to-end checking overhead.
+Open questions are root-aware reclamation versus bounded generations, sharing retained classifier annotations,
+sharing location structure across parsed-source lifetimes, and consumer-driven normalization of closed types.
+[Analysis facts and materialization](../references/compiler.md#analysis-facts-and-materialization)
+owns the current split.
+
+### Stronger typed-arena verification
+
+Parent/child checks, product reconstruction, and definition-reference scope need use-site instantiations
+or equivalent derivation witnesses, whose retention cost must be measured against the retained-fact boundary.
+Checking a shared node under every scope needs a scope-sensitive traversal,
+and a finer skolem policy must distinguish deliberate export from accidental escape.
+Remaining checks to establish before asserting them: that every `Type::Label` payload has kind `VType`,
+the kinded shapes of `ManifestKind` and `SCons`, whether a finished arena may retain `Type::Var`,
+declaration telescopes for orphan `Data` and `CoData` arms, and how the lint should treat deliberate source holes.
+[The typed-arena lint](../references/compiler.md#typed-arena-lint) owns the current checks and limits.
 
 ## Tooling
 
@@ -178,3 +260,23 @@ Expected exit codes and stable desugaring-rejection spellings remain deferred;
 add them only when a concrete case needs those contracts.
 The [fixture guide](../../lang/tests/cases/README.md) owns current directives;
 [C16](../references/compiler.md#source-fixtures-and-runtime-oracles) owns discovery and runtime oracles.
+
+### Structural completion and last-successful state
+
+Visible definitions, metadata, and source paths are implemented.
+Contextual forms, constructors, destructors, and named fields would come from the parser expectation,
+the expected or scrutinee type, and product structure respectively, as type-checker queries rather than name lists;
+each snippet needs a representative parsing test, and raw LALRPOP diagnostic strings must never reach Cajun.
+If last-successful analysis is retained after a failed revision, keep it separate from current-revision state:
+source edits and semantic ranges need current facts, and stale results must not claim exact scope.
+[Recovering parsing](../references/compiler.md#recovering-parsing)
+and [completion](../references/compiler.md#completion) own the implemented behavior.
+
+### Project context inspection
+
+Make the active project context inspectable: selected roots, entry declaration locations,
+discovery origins, namespace substitutions, import routes, and resulting bindings.
+Define refresh responsibilities for directory membership, disk changes, overlays, and root changes,
+a user-facing syntax for project registration, and the scope of relationship validation,
+including which tests a relationship-driven suite selection runs.
+[Source packages](../references/language.md#source-packages) own the implemented resolution model.
