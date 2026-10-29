@@ -17,6 +17,8 @@ On 2026-10-29 the record dropped the findings that later commits resolved: the a
 the ZASM interpreter, the checker's unused renderer and its `blame` field, the parallel constructor interfaces,
 the parallel visitors of the two stack IRs, the session's whole-program test pipeline, the documentation-dependent test,
 and the stale tutorial, OOPSLA links, placeholder ideas, and missing calculus correspondence.
+A later commit removed the unused CLI entry points, graph operations, and assembly dependency graph,
+and made parser diagnostics spell `def`, so the dead-code and defect lists dropped those items.
 The pass framework no longer serves a single pass, because procedure localization became its second,
 so only its test-only combinators remain a finding.
 The record also dropped the tooling removals that the repository declined, namely the resumable test runner,
@@ -173,7 +175,7 @@ The [reproduction script](#reproduction) counted these uses with comments remove
 
 | Form | Uses | Note |
 | --- | --- | --- |
-| `define` | 0 | Diagnostics list `define` rather than `def` among expected tokens |
+| `define` | 0 | Alias of `def` |
 | `comatch p => M end` | 0 | Undocumented alias of `fn` |
 | `sigma` | 4, all compiler cases | Equals `exists` for type binders and `*` for value binders |
 | `<\|` | 7 uses in 6 files: one std module, 2 lib test files, 3 compiler-case files | Costs a precedence level and a formatter case |
@@ -289,17 +291,12 @@ Each of these mechanisms exists more than once:
 
 These items have no working production use:
 
-- `CommandCompiler::interpret` and `BackendProgram::lower`, and the `ProgKont::Dry` result,
-  which the only live interpreter call never requests;
 - `StrictParser::term` and `pattern` with their recovering counterparts,
-  whose test-only grammar entry points enlarge the LALRPOP tables, and the test-only printer `textual/ugly.rs`
-  with 659 lines;
-- `obliviate`, `keep_only`, and 78 commented-out lines in `lang/utils/src/graph.rs`;
-- `AssemblyArena.deps`, read only by a test; retaining it forces every inserted program to be cloned.
+  whose test-only grammar entry points enlarge the LALRPOP tables;
+- the test-only printer `textual/ugly.rs`, with 659 lines.
 
 ## Defects found during the audit
 
-- Parser diagnostics list `define` instead of `def` among expected tokens.
 - Every `build -t exe` computes the runtime digest and target platform twice to validate C-library
   and native-unit imports, even when the program has none ([`cli/src/main.rs`](../../../cli/src/main.rs),
   lines 496–513).
@@ -310,7 +307,7 @@ These items have no working production use:
   in [`normalize/inference.rs`](../../../lang/statics/src/normalize/inference.rs),
   which follows the unadopted right-spine binary-products design rather than n-ary products.
 
-The product-inference finding is already tracked in the compiler todos; the parser-diagnostic, duplicate-digest,
+The product-inference finding is already tracked in the compiler todos; the duplicate-digest
 and manifest-path items are unrecorded drift and belong there before repair.
 
 ## Tooling, tests, and documentation
