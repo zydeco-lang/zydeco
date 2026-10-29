@@ -8,10 +8,7 @@ use std::{
     fs::{File, OpenOptions},
     io::{self, BufRead, BufReader, Read, Write},
 };
-#[cfg(not(feature = "compact-environments"))]
-use zydeco_machine::frames::Frames as NativeFrames;
-#[cfg(feature = "compact-environments")]
-use zydeco_machine::frames::fragments::Fragments as NativeFrames;
+use zydeco_machine::frames::Frames;
 use zydeco_machine::frames::{Action, FrameError, storage::Growable};
 use zydeco_machine::memory::RetainedMemory;
 use zydeco_machine::native::{
@@ -1066,7 +1063,7 @@ fn out_of_frames(error: FrameError) -> ! {
 /// helpers; a suspended caller retains its complete instance while another unit is active.
 struct RuntimeInstance {
     heap: CheneyHeap<HEAP_SPACE_BYTES, HEAP_INDEX_REGIONS>,
-    frames: NativeFrames<Growable>,
+    frames: Frames<Growable>,
     stack_end: *mut Word,
     transfer: HostTransfer<Word>,
     memory: RefCell<RetainedMemory>,
@@ -1096,7 +1093,7 @@ impl RuntimeInstance {
         unsafe { &raw mut (*Self::current()).heap }
     }
 
-    fn frames() -> *mut NativeFrames<Growable> {
+    fn frames() -> *mut Frames<Growable> {
         unsafe { &raw mut (*Self::current()).frames }
     }
 
@@ -1132,7 +1129,7 @@ extern "sysv64" fn entry_begin(stack_end: *mut Word, guard: *const std::sync::at
     }
     let previous = CURRENT_INSTANCE.with(Cell::get);
     let instance = Box::new(RuntimeInstance {
-        heap: CheneyHeap::new(), frames: NativeFrames::EMPTY, stack_end,
+        heap: CheneyHeap::new(), frames: Frames::EMPTY, stack_end,
         transfer: HostTransfer { resume: 0, closure: 0, first: 0, second: 0 },
         memory: RefCell::new(RetainedMemory::default()), io: RefCell::new(HostIoRuntime::new()),
         arguments: Vec::new(), strings: Vec::new(), previous, guard,

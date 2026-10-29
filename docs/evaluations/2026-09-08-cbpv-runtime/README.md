@@ -9,6 +9,8 @@ Retained frames remain the native default; deferred compact environments are a c
 The [native frame proposal](../../proposals/native-frames.md) owns the entry,
 preservation, reclamation, and collection contracts.
 This report owns their evaluation and the priorities for further exploration.
+On 2026-10-29 the repository removed the compact engine and the moving-root adapter; the decisions below record the view
+of 2026-09-08, and the traces that exercise those components run against `0f0f311f` or earlier.
 All measurements below precede the arithmetic normalization in `77ee657f`; they establish historical costs
 and mechanisms, rather than a performance ranking of the current compiler.
 
@@ -75,7 +77,7 @@ Precise root maps exclude dead referents, but do not reduce the frame payload co
 Managed frame allocation also competes with ordinary values for semispace capacity.
 
 A native implementation would need collecting-entry rules and base reloads after potentially collecting operations,
-as specified by the [managed-environment boundary](../../proposals/native-frames.md#experimental-managed-environments).
+as the [removed managed-environment experiment](../../proposals/native-frames.md#removed-experiments) found.
 Copied captures alone do not provide detachable or reusable continuations; those need their own ownership semantics.
 Ordinary escaping closures still own captures independently of the current nested frame tokens.
 
@@ -156,7 +158,8 @@ Build historical compilers in separate source and target directories and use the
 [`runtime-study.py`](runtime-study.py) compares the original capture/root variants;
 [`environment-study.py`](environment-study.py) accepts explicit `--variant NAME COMPILER RUNTIME` pairs,
 with `--fragments` for compact comparisons.
-Enable `compact-environments` in a separate runtime copy's default Cargo features for that variant.
+That variant enables `compact-environments` in a separate runtime copy's default Cargo features;
+only `0f0f311f` and earlier define the feature.
 Both runners expose `--help` and record exact commands and output oracles.
 Run the scripts from the repository root; for their full argument lists:
 
@@ -179,8 +182,9 @@ python3 docs/evaluations/2026-09-08-cbpv-runtime/layout-traces.py \
 
 The output directory must be new.
 Use `--trace environment_fragments` to select one trace, or omit `--release` for a debug build.
-These commands exercise the current model; reproducing the historical measurements requires the recorded revisions
-and toolchains.
+The frame trace exercises the current model; the environment and compact traces need `0f0f311f` or earlier,
+which still contain the moving-root adapter and compact engine.
+Reproducing the historical measurements requires the recorded revisions and toolchains.
 Original evidence retains its recorded paths, commands, and hashes, including the former Cargo example locations.
 Correctness regressions remain in the [machine frame tests](../../../lang/machine/src/frames.rs)
 and [GC integration tests](../../../lang/tests/tests/native_gc.rs).

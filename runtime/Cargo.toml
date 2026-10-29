@@ -9,9 +9,6 @@ build = "build.rs"
 [features]
 default = ["process-entry"]
 process-entry = []
-# Experimental storage engine; generated actions and preservation proofs agree
-# with the default retained-frame engine through the shared Environment contract.
-compact-environments = []
 
 [workspace.dependencies]
 zydeco-machine = { path = "../lang/machine", features = ["runtime"] }

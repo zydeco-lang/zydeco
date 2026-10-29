@@ -2972,7 +2972,6 @@ zeroed capacity does not count as an initialized binding.
 Transitions may allocate Rust metadata but do not collect the managed heap;
 metadata allocation still has the Rust allocator's ordinary failure behavior.
 Root addresses expire at the next attempted environment transition, including a failed reservation.
-They identify values and need not coincide with active-layout offsets in every environment implementation.
 Managed collection may rewrite those values but cannot relocate their published addresses.
 A model declaration generates action headers and serialization order;
 emitted records and target carriers share checked alignment.
@@ -2980,8 +2979,8 @@ A return prologue removes `suspension(F)` while preserving `result :: S`,
 resumes the owner, restores `rbp`, and then binds the result.
 Returning host and C calls enter that same prologue.
 
-The [native environment proposal](../proposals/native-frames.md) retains the compact-storage
-and moving-root experiments; they do not extend the default environment contract described here.
+The [native environment proposal](../proposals/native-frames.md) compares alternative environment representations;
+they do not extend the environment contract described here.
 
 ### Managed Allocation
 

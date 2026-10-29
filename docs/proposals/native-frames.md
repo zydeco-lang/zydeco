@@ -3,8 +3,7 @@
 Retained activation frames are implemented and remain the AMD64 default.
 [C11](../references/compiler.md#activation-lifetime) owns their preparation and lifetime justification;
 [C12](../references/compiler.md#environment-actions-and-roots) owns default environment transitions and roots.
-The compact-storage and moving-root experiments remain here with their remaining integration or evaluation decisions.
-A tested model component does not establish a completed alternative backend or a new default.
+This proposal keeps the alternatives that remain to be compared and the decisions that would precede a new default.
 
 The remaining work compares storage choices and integrates stronger lifetime or relocation mechanisms.
 [Escape analysis](escape-unboxing.md) owns individual value representation selection;
@@ -12,86 +11,18 @@ The remaining work compares storage choices and integrates stronger lifetime or 
 The [runtime study](../evaluations/2026-09-08-cbpv-runtime/README.md) keeps dated evidence and measurement limits.
 No new default or source control restriction follows from these experiments.
 
-## Experimental implementations and integration limits
+## Removed experiments
 
-The following code supports ongoing comparisons. Its existence is evidence about the stated experimental component,
-not adoption of the full storage design into the canonical runtime contract.
-Retained frames remain the reference implementation while these alternatives are evaluated.
-
-### Experimental compact environments
-
-[`frames::fragments::Fragments`](../../lang/machine/src/frames/fragments.rs) implements the same
-`Environment` capability with one reusable active region and a separate contiguous buffer of captured values.
-Suspend records a pending use of active slots. A host operation can consume the resulting suspension ID
-through Resume without moving either its environment or its captures.
-Only Enter, which will reuse the active region, materializes the still-active suspensions as compact fragments.
-The generated transfer has already staged its outgoing arguments before this boundary.
-A saved fragment records the layout, slot map, and suspension ID; Resume copies its current values back
-to those offsets and reestablishes the owner's layout.
-Slots outside that entry's declared captures are unavailable.
-The compiler's preservation analysis remains unchanged, so both engines accept the same generated code.
-
-Saved suspensions form a prefix of the pending-suspension vector, followed by a suffix referring to active slots.
-Entry visits only that suffix. A tail entry with no newly pending active suspensions does not walk the saved prefix.
-Resuming an active suspension performs no capture copy; resuming a saved suspension restores its fields
-and retracts the compact frontier.
-Older snapshots remain saved after an inner resumption.
-This permits a resumed activation to publish new active suspensions above an older saved prefix.
-
-Several active suspensions share their original slots, and their root locations are deduplicated by address.
-After entry, their independent snapshots can contain copies of overlapping captures.
-The collector must update every physical copy of a live pointer.
-Deduplicating equal pointer values would leave some resumption copies stale; only duplicate addresses can be removed.
-Roots combines the ordinary active map with the active suspension maps and every materialized snapshot word.
-Dead active slots are still excluded.
-The root source remains deferred until collection actually needs it.
-
-Both buffers use the selected `Storage` policy and cache capacity independently.
-The snapshot frontier follows suspension nesting; resuming a suspension reclaims its fragment
-without a heap allocation or free operation per continuation.
-Enter first reserves and fills an unpublished snapshot suffix, then reserves the destination active extent,
-and finally publishes the new locations.
-If either reservation fails, logical captures, pending suspensions, and the current active base remain usable.
-Snapshot reservation may already have increased capacity or moved that buffer on a later active-reservation failure;
-previously returned root addresses expire at the attempted transition, and fresh enumeration resolves the new addresses.
-No managed collection occurs during staging or publication.
-
-Enter may grow the active region, and previously reserved scratch extents remain addressable on Resume.
-With a fixed pending continuation set, tail entries remain bounded by the largest active region plus its snapshots.
-The high-water statistic includes the temporary overlap between outgoing active slots and completed snapshots.
-Whole-buffer reservation can exceed that logical bound because capacities retain earlier peaks and geometric slack.
-The separate metadata statistic includes the Rust owner and allocated control-record capacities; word buffers,
-temporary root vectors, and allocator bookkeeping have distinct accounting boundaries.
-
-The standalone runtime's experimental `compact-environments` Cargo feature selects this engine;
-retained frames remain the default.
-Both selections consume the compiler's bundled model and identical descriptors.
-This experiment keeps captures in ordinary Rust storage, not in the moving value heap.
-It therefore isolates capture copying and compact storage without introducing the collecting-entry boundary below.
-It also retains the nested suspension discipline: copied payloads do not make machine continuations detachable
-or duplicable.
-
-### Experimental managed environments
-
-[`frames::moving`](../../lang/machine/src/frames/moving.rs) supplies a collector-integrated experimental contract
-for environments stored as opaque managed cells.
-Each registered live frame has a mutable handle and a slot map covering all its live uses.
-Before collection, `MovingRoots` lifts those values into stable temporary root storage
-and publishes the frame handles alongside them.
-After collection it restores the updated values through the relocated handles.
-Restoration also occurs when the collecting allocation returns an error.
-Dead fields remain untraced, while the collector still copies each retained frame's complete cell.
-
-This capability is outside `Storage`: a managed allocation can move the active environment,
-so generated code would need to reload its base after every potentially collecting operation.
-Entering a managed frame would also require publishing the caller, staged arguments,
-and intermediate results before that entry can allocate.
-The current native Enter action does not provide such a collecting boundary.
-The executable trace and collector regressions exercise the root contract;
-they do not implement a second native backend.
-The explicit handle table covers registered environments, not arbitrary frame references hidden in escaping closures.
-Supporting those references, detached control,
-or shared immutable continuation environments requires its own reachability and ownership account.
+Two storage experiments ran beside retained frames until 2026-10-29 and were removed without becoming defaults.
+Compact suspension fragments reused one active region and, at Enter, copied the captures
+of still-active suspensions into a separate snapshot buffer.
+They consumed the compiler's descriptors unchanged, so both engines ran byte-identical generated code,
+but overlapping snapshots duplicated values and root locations.
+A moving-root adapter stored environments as opaque managed cells and restored their live values
+through relocated handles around collection.
+Generated code would have needed to reload its base after every potentially collecting operation,
+and Enter would have needed a collecting boundary that the native action does not provide.
+The [runtime evaluation](../evaluations/2026-09-08-cbpv-runtime/README.md) keeps their measurements and traces.
 
 ## Alternatives to compare
 

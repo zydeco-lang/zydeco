@@ -6,8 +6,6 @@ use crate::{native::Word, word::RuntimeWord};
 use alloc::vec::Vec;
 
 pub mod storage;
-pub mod moving;
-pub mod fragments;
 use storage::Storage;
 
 mod sealed {

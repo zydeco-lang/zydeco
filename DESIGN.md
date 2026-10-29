@@ -788,13 +788,9 @@ and individual builtin signatures remain outside the model.
 The collector owns its private headers and forwarding algorithm,
 while the model supplies allocation kinds and the immediate tag.
 A future scheme can introduce its own state and transition types in this crate; there is no universal runtime trait.
-Retained frames and experimental compact suspension fragments share the narrower `frames::Environment` capability:
-the same noncollecting actions, nested tokens, declared captures, and mutable roots.
-The [compact environment contract](docs/proposals/native-frames.md#experimental-compact-environments)
-explains how the latter reuses active storage without changing emitted accesses.
-The fixed and growable environment stores now share the narrow `frames::storage::Storage` contract.
-The experimental moving-heap root adapter has its own contract: managed collection can relocate those frames,
-which is outside the entry-only relocation capability of `Storage`.
+Retained frames implement the narrower `frames::Environment` capability: noncollecting actions,
+nested tokens, declared captures, and mutable roots.
+The fixed and growable environment stores share the narrow `frames::storage::Storage` contract.
 
 ### Native Environments and Control Stack
 
