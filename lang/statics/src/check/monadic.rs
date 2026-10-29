@@ -15,9 +15,9 @@ impl<'a> MonadicBasisElaboration<'a> {
         Self { syntax, env }
     }
 
-    fn check_k(&self, tycker: &mut Tycker<'_>) -> Result<MonadicTypeBasis> {
-        let monad = self.definition_k(tycker, self.syntax.monad)?;
-        let algebra = self.definition_k(tycker, self.syntax.algebra)?;
+    fn check(&self, tycker: &mut Tycker<'_>) -> Result<MonadicTypeBasis> {
+        let monad = self.definition(tycker, self.syntax.monad)?;
+        let algebra = self.definition(tycker, self.syntax.algebra)?;
         let vtype = ss::VType.build(tycker, self.env);
         let ctype = ss::CType.build(tycker, self.env);
         let monad_constructor = ss::Arrow(vtype, ctype).build(tycker, self.env);
@@ -25,19 +25,19 @@ impl<'a> MonadicBasisElaboration<'a> {
         let carrier_constructor = ss::Arrow(ctype, ctype).build(tycker, self.env);
         let algebra_kind =
             ss::Arrow(monad_constructor, carrier_constructor).build(tycker, self.env);
-        self.expect_kind_k(tycker, monad, monad_kind)?;
-        self.expect_kind_k(tycker, algebra, algebra_kind)?;
+        self.expect_kind(tycker, monad, monad_kind)?;
+        self.expect_kind(tycker, algebra, algebra_kind)?;
         Ok(MonadicTypeBasis { monad, algebra })
     }
 
-    fn definition_k(&self, tycker: &mut Tycker<'_>, definition: su::TermId) -> Result<ss::TypeId> {
+    fn definition(&self, tycker: &mut Tycker<'_>, definition: su::TermId) -> Result<ss::TypeId> {
         let checked =
-            TyEnvT { info: self.env.clone(), inner: definition }.tyck_k(tycker, Action::syn())?;
+            TyEnvT { info: self.env.clone(), inner: definition }.tyck(tycker, Action::syn())?;
         let (definition, _) = checked.try_as_type(tycker, TyckError::SortMismatch)?;
         Ok(definition)
     }
 
-    fn expect_kind_k(
+    fn expect_kind(
         &self, tycker: &mut Tycker<'_>, ty: ss::TypeId, expected: ss::KindId,
     ) -> Result<()> {
         let actual = tycker.statics.type_kind(ty);
@@ -58,16 +58,16 @@ impl<'a> MonadicBlockElaboration<'a> {
         Self { syntax, environment }
     }
 
-    pub(super) fn check_k(&self, tycker: &mut Tycker<'_>) -> Result<TermAnnId> {
+    pub(super) fn check(&self, tycker: &mut Tycker<'_>) -> Result<TermAnnId> {
         let basis =
-            MonadicBasisElaboration::new(&self.syntax.basis, self.environment).check_k(tycker)?;
+            MonadicBasisElaboration::new(&self.syntax.basis, self.environment).check(tycker)?;
         let body_environment = TyEnv::monadic_new(tycker, self.environment);
-        let body = tycker.synthesize_once_k(self.syntax.body, &body_environment, |tycker| {
+        let body = tycker.synthesize_once(self.syntax.body, &body_environment, |tycker| {
             TyEnvT { info: body_environment.clone(), inner: self.syntax.body }
-                .tyck_k(tycker, Action::syn())
+                .tyck(tycker, Action::syn())
         })?;
         AlgebraicTranslation::new(body, self.syntax.body, body_environment, basis, self.environment)
-            .build_k(tycker)
+            .build(tycker)
     }
 }
 
@@ -90,7 +90,7 @@ impl<'a> AlgebraicTranslation<'a> {
         Self { body, source, body_environment, basis, environment }
     }
 
-    fn build_k(self, tycker: &mut Tycker<'_>) -> Result<TermAnnId> {
+    fn build(self, tycker: &mut Tycker<'_>) -> Result<TermAnnId> {
         let Self { body, source, body_environment, basis, environment } = self;
         let body = match body.root() {
             | TermAnnId::Type(body, _) => CheckedNode::Type(body),

@@ -3,7 +3,7 @@
 use super::*;
 
 impl PatternChecker<'_> {
-    pub(super) fn check_ctor_k<'db>(
+    pub(super) fn check_ctor<'db>(
         &self, tycker: &mut Tycker<'db>, pat: su::Ctor<CtorName, su::PatId>, switch: Switch<AnnId>,
         skolems: PatternSkolems,
     ) -> Result<CheckedPattern> {
@@ -37,7 +37,7 @@ impl PatternChecker<'_> {
                     | Some(ty) => ty,
                     | None => tycker.err(TyckError::UnknownDataConstructor(ctor.clone()))?,
                 };
-                let args_out_ann = self.mk(args).tyck_k(
+                let args_out_ann = self.mk(args).tyck(
                     tycker,
                     PatternAction::ana(arm_ty.to_owned().into()).with_skolems(skolems.clone()),
                 )?;
@@ -59,7 +59,7 @@ impl PatternChecker<'_> {
         })
     }
 
-    pub(super) fn check_lit_k<'db>(
+    pub(super) fn check_lit<'db>(
         &self, tycker: &mut Tycker<'db>, literal: su::Literal, switch: Switch<AnnId>,
     ) -> Result<CheckedPattern> {
         Ok(match switch {
@@ -97,7 +97,7 @@ impl PatternChecker<'_> {
         })
     }
 
-    pub(super) fn check_alias_k<'db>(
+    pub(super) fn check_alias<'db>(
         &self, tycker: &mut Tycker<'db>, patterns: su::ConsN<su::PatId, su::PatId>,
         switch: Switch<AnnId>, skolems: PatternSkolems,
     ) -> Result<CheckedPattern> {
@@ -114,9 +114,9 @@ impl PatternChecker<'_> {
                 let members =
                     ExistentialProjectionPattern::members(tycker, patterns.iter().copied());
                 if let Some(members) = members
-                    && ExistentialProjectionPattern::applies_k(tycker, &self.info, expected)?
+                    && ExistentialProjectionPattern::applies(tycker, &self.info, expected)?
                 {
-                    ExistentialProjectionPattern::check_k(
+                    ExistentialProjectionPattern::check(
                         tycker,
                         &self.info,
                         expected,
@@ -128,7 +128,7 @@ impl PatternChecker<'_> {
                     let (pattern_env, output, opened) = patterns.into_iter().try_fold(
                         initial,
                         |(pattern_env, mut output, mut opened), pattern| -> Result<_> {
-                            let checked = TyEnvT::new(pattern_env, pattern).tyck_k(
+                            let checked = TyEnvT::new(pattern_env, pattern).tyck(
                                 tycker,
                                 PatternAction::ana(expected.into()).with_skolems(skolems.clone()),
                             )?;

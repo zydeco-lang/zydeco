@@ -3,13 +3,13 @@
 use super::*;
 
 impl PatternChecker<'_> {
-    pub(super) fn check_ann_k<'db>(
+    pub(super) fn check_ann<'db>(
         &self, tycker: &mut Tycker<'db>, pat: su::Ann<su::PatId, su::TermId>,
         switch: Switch<AnnId>, skolems: PatternSkolems,
     ) -> Result<CheckedPattern> {
         Ok({
             let su::Ann { tm, ty } = pat;
-            let ty_out_ann = self.mk(ty).tyck_k(tycker, Action::syn())?;
+            let ty_out_ann = self.mk(ty).tyck(tycker, Action::syn())?;
             let ty_tm: AnnId = match ty_out_ann {
                 | TermAnnId::Kind(kd) => kd.into(),
                 | TermAnnId::Type(ty, _) => ty.into(),
@@ -24,18 +24,18 @@ impl PatternChecker<'_> {
             match switch {
                 | Switch::Syn => self
                     .mk(tm)
-                    .tyck_k(tycker, PatternAction::ana(ty_tm).with_skolems(skolems.clone()))?,
+                    .tyck(tycker, PatternAction::ana(ty_tm).with_skolems(skolems.clone()))?,
                 | Switch::Ana(ty_ana) => {
                     let ty = Lub::lub(ty_ana, ty_tm, tycker)?;
 
                     self.mk(tm)
-                        .tyck_k(tycker, PatternAction::ana(ty).with_skolems(skolems.clone()))?
+                        .tyck(tycker, PatternAction::ana(ty).with_skolems(skolems.clone()))?
                 }
             }
         })
     }
 
-    pub(super) fn check_hole_k<'db>(
+    pub(super) fn check_hole<'db>(
         &self, tycker: &mut Tycker<'db>, pat: su::Hole, switch: Switch<AnnId>,
     ) -> Result<CheckedPattern> {
         Ok({
@@ -50,7 +50,7 @@ impl PatternChecker<'_> {
         })
     }
 
-    pub(super) fn check_var_k<'db>(
+    pub(super) fn check_var<'db>(
         &self, tycker: &mut Tycker<'db>, def: su::DefId, switch: Switch<AnnId>,
     ) -> Result<CheckedPattern> {
         Ok({
@@ -81,12 +81,12 @@ impl PatternChecker<'_> {
         })
     }
 
-    pub(super) fn check_view_k<'db>(
+    pub(super) fn check_view<'db>(
         &self, tycker: &mut Tycker<'db>, function: su::TermId, pattern: su::PatId,
         switch: Switch<AnnId>, skolems: PatternSkolems,
     ) -> Result<CheckedPattern> {
         Ok({
-            let function = self.mk(function).tyck_k(tycker, Action::syn())?;
+            let function = self.mk(function).tyck(tycker, Action::syn())?;
             let (function, function_ty) = function.try_as_value(tycker, TyckError::SortMismatch)?;
             let function_kind = tycker.statics.type_kind(function_ty);
             let function_ty = function_ty.normalize(tycker, function_kind)?;
@@ -117,13 +117,11 @@ impl PatternChecker<'_> {
                 | None => (self.info.clone(), codomain, Vec::new()),
                 | Some(witnesses) => {
                     PackageSignature { domain: parameter.domain, witnesses, codomain }
-                        .open_codomain_k(tycker, &self.info)?
+                        .open_codomain(tycker, &self.info)?
                 }
             };
-            let nested = TyEnvT::new(pattern_env, pattern).tyck_k(
-                tycker,
-                PatternAction::ana(codomain.into()).with_skolems(skolems.clone()),
-            )?;
+            let nested = TyEnvT::new(pattern_env, pattern)
+                .tyck(tycker, PatternAction::ana(codomain.into()).with_skolems(skolems.clone()))?;
             let (pattern, _) = nested.annotation.try_as_value(tycker, TyckError::SortMismatch)?;
             opened.extend(nested.inner.opened.iter().copied());
             let view_pattern = Alloc::alloc(
@@ -139,7 +137,7 @@ impl PatternChecker<'_> {
         })
     }
 
-    pub(super) fn check_triv_k<'db>(
+    pub(super) fn check_triv<'db>(
         &self, tycker: &mut Tycker<'db>, switch: Switch<AnnId>,
     ) -> Result<CheckedPattern> {
         Ok(match switch {

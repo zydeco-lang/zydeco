@@ -40,7 +40,7 @@ impl DeferredEnvType {
         Self { root, environment: self.environment.clone(), pending }
     }
 
-    pub(in crate::check) fn materialize_k(&self, tycker: &mut Tycker<'_>) -> Result<ss::TypeId> {
+    pub(in crate::check) fn materialize(&self, tycker: &mut Tycker<'_>) -> Result<ss::TypeId> {
         let Some(operation) = self.pending else { return Ok(self.root) };
         let key = DeferredEnvMaterializationKey::new(self.root, &self.environment, operation);
         if let Some(materialized) = tycker.field_materializations.get(&key) {
@@ -55,7 +55,7 @@ impl DeferredEnvType {
         Ok(materialized)
     }
 
-    pub(super) fn reveal_k(self, tycker: &mut Tycker<'_>) -> Result<DeferredEnvTypeView> {
+    pub(super) fn reveal(self, tycker: &mut Tycker<'_>) -> Result<DeferredEnvTypeView> {
         match tycker.statics.types_pre[&self.root].to_owned() {
             | ss::Fillable::Fill(_) => {
                 let ty = tycker.type_filled(&self.root)?.to_owned();
@@ -66,14 +66,14 @@ impl DeferredEnvType {
             ) => {
                 let needs_search_step =
                     self.pending != Some(DeferredEnvOperation::UnrollThenSubstitute);
-                let mut root = self.materialize_k(tycker)?;
+                let mut root = self.materialize(tycker)?;
                 if needs_search_step {
                     root = Self {
                         root,
                         environment: self.environment.clone(),
                         pending: Some(DeferredEnvOperation::UnrollThenSubstitute),
                     }
-                    .materialize_k(tycker)?;
+                    .materialize(tycker)?;
                 }
                 let ty = tycker.type_filled(&root)?.to_owned();
                 Ok(Self::materialized(root, self.environment).view(ty))
@@ -129,7 +129,7 @@ impl DeferredEnvTypeView {
 }
 
 impl DeferredValueFieldCandidate {
-    pub(super) fn materialize_k(self, tycker: &mut Tycker<'_>) -> Result<ValueFieldCandidate> {
+    pub(super) fn materialize(self, tycker: &mut Tycker<'_>) -> Result<ValueFieldCandidate> {
         let mut current = None;
         let route = self
             .route
@@ -145,7 +145,7 @@ impl DeferredValueFieldCandidate {
                         {
                             candidate
                         }
-                        | _ => whole.materialize_k(tycker)?,
+                        | _ => whole.materialize(tycker)?,
                     };
                     let ss::Type::Label(ss::Label(_, projected)) =
                         tycker.type_filled(&materialized)?.to_owned()
@@ -162,9 +162,9 @@ impl DeferredValueFieldCandidate {
                         {
                             candidate
                         }
-                        | _ => product.materialize_k(tycker)?,
+                        | _ => product.materialize(tycker)?,
                     };
-                    let components = Self::materialized_product_components_k(tycker, materialized)?;
+                    let components = Self::materialized_product_components(tycker, materialized)?;
                     current = Some(components[position]);
                     Ok(ValueFieldStep::Product { product: materialized, components, position })
                 }
@@ -172,12 +172,12 @@ impl DeferredValueFieldCandidate {
             .collect::<Result<Vec<_>>>()?;
         let projected = match current {
             | Some(projected) => projected,
-            | None => self.projected.materialize_k(tycker)?,
+            | None => self.projected.materialize(tycker)?,
         };
         Ok(ValueFieldCandidate { route, projected })
     }
 
-    fn materialized_product_components_k(
+    fn materialized_product_components(
         tycker: &mut Tycker<'_>, product: ss::TypeId,
     ) -> Result<Vec<ss::TypeId>> {
         match tycker.type_filled(&product)? {

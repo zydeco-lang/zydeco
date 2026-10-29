@@ -40,7 +40,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::Binding> {
     type Out = TyEnvT<()>;
     type Action = ();
 
-    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> Result<TyEnvT<()>> {
+    fn tyck_inner(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> Result<TyEnvT<()>> {
         let mut env = self.mk(());
         let su::BindingForm::Definition(su::Definition { binder, bindee }) = self.inner.inner
         else {
@@ -52,12 +52,12 @@ impl<'a> Tyck<'a> for TyEnvT<su::Binding> {
             | None => (bindee, false),
         };
         // synthesize the bindee
-        let out_ann = env.mk(bindee).tyck_k(tycker, Action::syn())?;
+        let out_ann = env.mk(bindee).tyck(tycker, Action::syn())?;
         let env = match out_ann {
             | TermAnnId::Hole(_) | TermAnnId::Kind(_) => unreachable!(),
             | TermAnnId::Type(ty, kd) => {
                 let bindee = ty;
-                let binder = env.mk(binder).tyck_k(tycker, PatternAction::ana(kd.into()))?;
+                let binder = env.mk(binder).tyck(tycker, PatternAction::ana(kd.into()))?;
                 let (binder, _kd) = binder.as_type();
 
                 if let (Some(def), _) = binder.try_destruct_def(tycker) {
@@ -79,7 +79,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::Binding> {
 
                 // add the type into the environment
                 let TyEnvT { info: new_env, inner: () } =
-                    env.mk(Assign(binder, bindee)).tyck_k(tycker, ())?;
+                    env.mk(Assign(binder, bindee)).tyck(tycker, ())?;
                 env.info = new_env;
                 // should also be added to global if it only depends on global definitions
                 match binder.try_destruct_def(tycker) {
@@ -99,8 +99,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::Binding> {
             }
             | TermAnnId::Value(bindee, ty) => {
                 let binder_elaboration =
-                    env.mk(binder).tyck_k(tycker, PatternAction::ana(ty.into()))?;
-                ValuePatternShape::require_binding_k(
+                    env.mk(binder).tyck(tycker, PatternAction::ana(ty.into()))?;
+                ValuePatternShape::require_binding(
                     tycker,
                     binder,
                     binder_elaboration.as_value().0,
@@ -140,7 +140,7 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<Vec<su::Binding>>> {
     type Out = TyEnvT<()>;
     type Action = ();
 
-    fn tyck_inner_k<'f>(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> Result<Self::Out> {
+    fn tyck_inner<'f>(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> Result<Self::Out> {
         let FixPoint(group_under_env) = self;
         let bindings = &group_under_env.inner;
         let mut env = group_under_env.mk(());
@@ -173,13 +173,13 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<Vec<su::Binding>>> {
                 tycker.err(TyckError::InvalidBindingCycle(binder))?;
             }
             // try synthesizing the kind
-            let ann = env.mk(syn_ann).tyck_k(tycker, Action::syn())?;
+            let ann = env.mk(syn_ann).tyck(tycker, Action::syn())?;
             // the binder should be a type; register it before analyzing the bindee
             let kd = ann.try_as_kind(tycker, TyckError::InvalidBindingCycle(binder))?;
             if sealed.is_none() {
                 tycker.err(TyckError::MissingSeal)?;
             }
-            let binder = env.mk(binder).tyck_k(tycker, PatternAction::ana(kd.into()))?;
+            let binder = env.mk(binder).tyck(tycker, PatternAction::ana(kd.into()))?;
             let (binder, _kd) = binder.as_type();
             binder_map.insert(id, binder);
             // register the def with abstract type
@@ -220,7 +220,7 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<Vec<su::Binding>>> {
             // }
             // remove seal
             let Some(bindee) = bindee.syntactically_sealed(tycker) else { unreachable!() };
-            let bindee = env.mk(bindee).tyck_k(tycker, Action::syn())?;
+            let bindee = env.mk(bindee).tyck(tycker, Action::syn())?;
             let (bindee, _kd) = bindee.try_as_type(tycker, TyckError::SortMismatch)?;
             // subst vars in bindee
             let bindee_subst = bindee.subst_env(tycker, &env.info)?;
@@ -238,7 +238,7 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<Vec<su::Binding>>> {
             tycker.store_env(abst_ty, &env.info);
             // add the type into the environment
             let TyEnvT { info: new_env, inner: () } =
-                env.mk(Assign(binder, abst_ty)).tyck_k(tycker, ())?;
+                env.mk(Assign(binder, abst_ty)).tyck(tycker, ())?;
             env.info = new_env;
         }
         Ok(env)
@@ -249,7 +249,7 @@ impl<'a> Tyck<'a> for TyEnvT<Assign<ss::KPatId, ss::KindId>> {
     type Out = TyEnvT<()>;
     type Action = ();
 
-    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> Result<Self::Out> {
+    fn tyck_inner(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> Result<Self::Out> {
         let Assign(assigner, assignee) = self.inner;
         match tycker.statics.kpats[&assigner] {
             | ss::KindPattern::Hole(_) => Ok(self.mk(())),
@@ -266,7 +266,7 @@ impl<'a> Tyck<'a> for TyEnvT<Assign<ss::TPatId, ss::TypeId>> {
     type Out = TyEnvT<()>;
     type Action = ();
 
-    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> Result<Self::Out> {
+    fn tyck_inner(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> Result<Self::Out> {
         use ss::TypePattern as TPat;
         let Assign(assigner, assignee) = self.inner;
         let pat = tycker.statics.tpats[&assigner].to_owned();
@@ -289,7 +289,7 @@ impl<'a> Tyck<'a> for TyEnvT<Assign<ss::TPatId, ss::TypeId>> {
                 let payload_kind = tycker.statics.annotations_tpat[&inner];
                 let payload = assignee.project_named(tycker, &name, payload_kind);
                 let payload = payload?;
-                self.mk(Assign(inner, payload)).tyck_k(tycker, ())
+                self.mk(Assign(inner, payload)).tyck(tycker, ())
             }
         }
     }

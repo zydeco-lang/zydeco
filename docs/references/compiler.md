@@ -1063,7 +1063,7 @@ and retain ordinary runtime-hole rejection, abstract-opening evidence, and the a
 The [source inference rules](language.md#4-classification-and-inference) determine where flexible value types arise.
 `InferenceRegion` in [source.rs](../../lang/statics/src/check/source.rs) records inherited fills at entry;
 closing the region rejects newly introduced pattern fills whose solutions remain incomplete.
-A source closes independently before `CheckedTerm::reconcile_k` compares an import-site expectation.
+A source closes independently before `CheckedTerm::reconcile` compares an import-site expectation.
 
 [Compatibility](../../lang/statics/src/check/lub.rs) combines constraints through `Lub`.
 [Shape refinement](../../lang/statics/src/normalize/inference.rs) creates component fills

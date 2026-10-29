@@ -21,9 +21,8 @@ fn field_substitution_is_independent_of_label_depth() {
         let deep = Alloc::alloc(tycker, ss::Label(wrapper, nested), vtype, &empty);
 
         let shallow =
-            FieldProjectionResolver::value_term_k(tycker, &environment, shallow, &field).unwrap();
-        let deep =
-            FieldProjectionResolver::value_term_k(tycker, &environment, deep, &field).unwrap();
+            FieldProjectionResolver::value_term(tycker, &environment, shallow, &field).unwrap();
+        let deep = FieldProjectionResolver::value_term(tycker, &environment, deep, &field).unwrap();
 
         assert_eq!(shallow.projected, target);
         assert_eq!(deep.projected, target);
@@ -47,9 +46,9 @@ fn field_search_reenters_the_environment_after_unrolling_a_seal() {
         let root = Alloc::alloc(tycker, ss::Label(wrapper.clone(), sealed), vtype, &environment);
 
         let direct =
-            FieldProjectionResolver::value_term_k(tycker, &environment, root, &wrapper).unwrap();
+            FieldProjectionResolver::value_term(tycker, &environment, root, &wrapper).unwrap();
         let nested =
-            FieldProjectionResolver::value_term_k(tycker, &environment, root, &field).unwrap();
+            FieldProjectionResolver::value_term(tycker, &environment, root, &field).unwrap();
 
         assert_eq!(direct.projected, sealed);
         assert_eq!(nested.projected, unit);
@@ -74,10 +73,10 @@ fn repeated_field_search_reuses_materialization_until_inference_changes() {
 
         let before = tycker.statics.types_pre.len();
         let first =
-            FieldProjectionResolver::value_term_k(tycker, &environment, sealed, &field).unwrap();
+            FieldProjectionResolver::value_term(tycker, &environment, sealed, &field).unwrap();
         let after_first = tycker.statics.types_pre.len();
         let second =
-            FieldProjectionResolver::value_term_k(tycker, &environment, sealed, &field).unwrap();
+            FieldProjectionResolver::value_term(tycker, &environment, sealed, &field).unwrap();
         let after_second = tycker.statics.types_pre.len();
 
         assert_eq!(first.projected, unit);
@@ -89,7 +88,7 @@ fn repeated_field_search_reuses_materialization_until_inference_changes() {
         let fill: ss::FillId = Alloc::alloc(tycker, ss::InferenceSite::Term(site), (), &());
         assert!(fill.fill(tycker, unit.into()).is_ok());
         let third =
-            FieldProjectionResolver::value_term_k(tycker, &environment, sealed, &field).unwrap();
+            FieldProjectionResolver::value_term(tycker, &environment, sealed, &field).unwrap();
 
         assert_eq!(third.projected, unit);
         assert!(tycker.statics.types_pre.len() > after_second);
@@ -107,9 +106,9 @@ fn adding_a_seal_invalidates_cached_field_materialization() {
         let sealed = Alloc::alloc(tycker, witness, vtype, &empty);
         let deferred = DeferredEnvType::with_environment(sealed, &empty);
 
-        let before = deferred.materialize_k(tycker).unwrap();
+        let before = deferred.materialize(tycker).unwrap();
         tycker.record_seal(witness, unit);
-        let after = deferred.materialize_k(tycker).unwrap();
+        let after = deferred.materialize(tycker).unwrap();
 
         assert_eq!(before, sealed);
         assert_eq!(after, unit);
@@ -135,7 +134,7 @@ fn deferred_telescope_uses_the_final_environment_once() {
             .with_environment(&first)
             .descend(source)
             .with_environment(&final_environment);
-        let materialized = deferred.materialize_k(tycker).unwrap();
+        let materialized = deferred.materialize(tycker).unwrap();
 
         assert_eq!(materialized, target);
         assert_ne!(materialized, unit);
@@ -157,7 +156,7 @@ fn deferred_telescope_composes_abstract_assignments_in_order() {
         let materialized = DeferredTelescopeType::new(first_ty)
             .with_abstract(first, second_ty)
             .with_abstract(second, unit)
-            .materialize_k(tycker)
+            .materialize(tycker)
             .unwrap();
 
         assert_eq!(materialized, unit);

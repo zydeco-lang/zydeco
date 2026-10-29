@@ -12,10 +12,10 @@ struct ConsScope {
 impl ConsScope {
     /// Check one value component under the scope, then adopt the environment
     /// and witnesses it produces.
-    fn check_value_k(
+    fn check_value(
         &mut self, tycker: &mut Tycker<'_>, item: su::PatId, action: PatternAction,
     ) -> Result<(ss::VPatId, ss::TypeId)> {
-        let checked = TyEnvT::new(self.env.clone(), item).tyck_k(tycker, action)?;
+        let checked = TyEnvT::new(self.env.clone(), item).tyck(tycker, action)?;
         let component = checked.try_as_value(tycker, TyckError::SortMismatch)?;
         self.env = checked.info;
         self.opened.extend(checked.inner.opened);
@@ -24,7 +24,7 @@ impl ConsScope {
 
     /// Check the leading components against their component types, then the
     /// tail against the product of the remaining component types.
-    fn check_value_components_k(
+    fn check_value_components(
         &mut self, tycker: &mut Tycker<'_>, items: &[su::PatId], tail: su::PatId,
         component_tys: &[ss::TypeId], skolems: &PatternSkolems,
     ) -> Result<(Vec<(ss::VPatId, ss::TypeId)>, (ss::VPatId, ss::TypeId))> {
@@ -34,12 +34,12 @@ impl ConsScope {
             .zip(component_tys.iter().copied())
             .map(|(item, item_ty)| {
                 let action = PatternAction::ana(item_ty.into()).with_skolems(skolems.clone());
-                self.check_value_k(tycker, item, action)
+                self.check_value(tycker, item, action)
             })
             .collect::<Result<Vec<_>>>()?;
-        let remaining = tycker.rest_product_k(&component_tys[items.len()..], &self.env)?;
+        let remaining = tycker.rest_product(&component_tys[items.len()..], &self.env)?;
         let action = PatternAction::ana(remaining.into()).with_skolems(skolems.clone());
-        let tail = self.check_value_k(tycker, tail, action)?;
+        let tail = self.check_value(tycker, tail, action)?;
         Ok((components, tail))
     }
 
@@ -47,18 +47,18 @@ impl ConsScope {
     ///
     /// A lone tail component takes the whole body; several components split
     /// the body as a product.
-    fn check_package_body_k(
+    fn check_package_body(
         &mut self, tycker: &mut Tycker<'_>, body_items: &[su::PatId], tail: su::PatId,
         body_ty: ss::TypeId, skolems: &PatternSkolems,
     ) -> Result<ss::VPatId> {
         if body_items.is_empty() {
             let action = PatternAction::ana(body_ty.into()).with_skolems(skolems.clone());
-            let (body, _) = self.check_value_k(tycker, tail, action)?;
+            let (body, _) = self.check_value(tycker, tail, action)?;
             return Ok(body);
         }
-        let ss::Prod(body_component_tys) = body_ty.view_product_k(tycker, &self.env)?;
+        let ss::Prod(body_component_tys) = body_ty.view_product(tycker, &self.env)?;
         let (components, (tail, ann)) =
-            self.check_value_components_k(tycker, body_items, tail, &body_component_tys, skolems)?;
+            self.check_value_components(tycker, body_items, tail, &body_component_tys, skolems)?;
         let vtype = ss::VType.build(tycker, &self.env);
         let (mut components, mut component_tys): (Vec<_>, Vec<_>) = components.into_iter().unzip();
         component_tys.push(ann);
@@ -77,22 +77,21 @@ struct PackageOpening {
 
 impl PackageOpening {
     /// Bind a manifest kind component to its definition.
-    fn open_manifest_kind_k(
+    fn open_manifest_kind(
         &mut self, tycker: &mut Tycker<'_>, item: su::PatId, definition: ss::KindId,
         skolems: &PatternSkolems,
     ) -> Result<()> {
         let checked = TyEnvT::new(self.scope.env.clone(), item)
-            .tyck_k(tycker, PatternAction::ana(AnnId::Set).with_skolems(skolems.clone()))?;
+            .tyck(tycker, PatternAction::ana(AnnId::Set).with_skolems(skolems.clone()))?;
         let pattern = checked.annotation.try_as_kind(tycker, TyckError::SortMismatch)?;
-        self.scope.env = TyEnvT::new(self.scope.env.clone(), Assign(pattern, definition))
-            .tyck_k(tycker, ())?
-            .info;
+        self.scope.env =
+            TyEnvT::new(self.scope.env.clone(), Assign(pattern, definition)).tyck(tycker, ())?.info;
         self.static_patterns.push(pattern.into());
         Ok(())
     }
 
     /// Open an existential component, returning the telescope that remains.
-    fn open_exists_k(
+    fn open_exists(
         &mut self, tycker: &mut Tycker<'_>, item: su::PatId, source_binder: ss::TypeBinder,
         mode: DeferredTelescopeExistsMode, next_ty: DeferredTelescopeType,
         skolems: &PatternSkolems,
@@ -100,7 +99,7 @@ impl PackageOpening {
         let domain_kind = source_binder.domain_kind(tycker);
         let payload_kind = source_binder.payload_kind(tycker);
         let checked = TyEnvT::new(self.scope.env.clone(), item)
-            .tyck_k(tycker, PatternAction::ana(domain_kind.into()).with_skolems(skolems.clone()))?;
+            .tyck(tycker, PatternAction::ana(domain_kind.into()).with_skolems(skolems.clone()))?;
         let (witness, _) = checked.try_as_type(tycker, TyckError::SortMismatch)?;
         self.scope.env = checked.info;
         self.scope.opened.extend(checked.inner.opened);
@@ -108,11 +107,11 @@ impl PackageOpening {
             | DeferredTelescopeExistsMode::Abstract => {
                 let canonical = skolems.get(&item);
                 let witness = OpenedWitness { pattern: witness, source_binder, payload_kind };
-                self.open_abstract_witness_k(tycker, witness, canonical, next_ty)?
+                self.open_abstract_witness(tycker, witness, canonical, next_ty)?
             }
             | DeferredTelescopeExistsMode::Manifest(definition) => {
                 let witness = OpenedWitness { pattern: witness, source_binder, payload_kind };
-                self.open_manifest_witness_k(tycker, witness, definition, next_ty)?
+                self.open_manifest_witness(tycker, witness, definition, next_ty)?
             }
         };
         self.static_patterns.push(witness.into());
@@ -123,7 +122,7 @@ impl PackageOpening {
     ///
     /// Ordinary elimination is fresh. Checking a PackPi introduction instead
     /// reuses the signature's canonical identity for this pattern component.
-    fn open_abstract_witness_k(
+    fn open_abstract_witness(
         &mut self, tycker: &mut Tycker<'_>, witness: OpenedWitness, canonical: Option<AbstId>,
         next_ty: DeferredTelescopeType,
     ) -> Result<DeferredTelescopeType> {
@@ -146,7 +145,7 @@ impl PackageOpening {
         let full_witness = source_binder.pattern.introduce_payload(tycker, abstract_ty);
         let full_witness = full_witness?;
         self.scope.env = TyEnvT::new(self.scope.env.clone(), Assign(pattern, full_witness))
-            .tyck_k(tycker, ())?
+            .tyck(tycker, ())?
             .info;
         self.scope.opened.push(skolem);
         self.boundary_opened += 1;
@@ -154,18 +153,18 @@ impl PackageOpening {
     }
 
     /// Bind a manifest witness to its definition.
-    fn open_manifest_witness_k(
+    fn open_manifest_witness(
         &mut self, tycker: &mut Tycker<'_>, witness: OpenedWitness,
         definition: DeferredTelescopeType, next_ty: DeferredTelescopeType,
     ) -> Result<DeferredTelescopeType> {
         let OpenedWitness { pattern, source_binder, payload_kind } = witness;
-        let definition = definition.materialize_k(tycker)?;
+        let definition = definition.materialize(tycker)?;
         let definition_kind = tycker.statics.type_kind(definition);
         Lub::lub(payload_kind, definition_kind, tycker)?;
         let full_definition = source_binder.pattern.introduce_payload(tycker, definition);
         let full_definition = full_definition?;
         self.scope.env = TyEnvT::new(self.scope.env.clone(), Assign(pattern, full_definition))
-            .tyck_k(tycker, ())?
+            .tyck(tycker, ())?
             .info;
         Ok(next_ty.with_abstract(source_binder.witness, definition))
     }
@@ -179,21 +178,21 @@ struct OpenedWitness {
 }
 
 impl PatternChecker<'_> {
-    pub(super) fn check_cons_k<'db>(
+    pub(super) fn check_cons<'db>(
         &self, tycker: &mut Tycker<'db>, pat: Vec<su::PatId>, switch: Switch<AnnId>,
         skolems: PatternSkolems,
     ) -> Result<CheckedPattern> {
         let mut items = pat;
         let tail = items.pop().expect("a cons pattern carries at least two components");
         match switch {
-            | Switch::Syn => self.check_cons_syn_k(tycker, items, tail, skolems),
+            | Switch::Syn => self.check_cons_syn(tycker, items, tail, skolems),
             | Switch::Ana(AnnId::Type(expected)) => {
-                match expected.reveal_or_refine_product_k(tycker, &self.info)? {
+                match expected.reveal_or_refine_product(tycker, &self.info)? {
                     | ss::Type::Prod(_) => {
-                        self.check_cons_ana_product_k(tycker, items, tail, expected, skolems)
+                        self.check_cons_ana_product(tycker, items, tail, expected, skolems)
                     }
                     | ss::Type::Exists(_) | ss::Type::ManifestKind(_) => {
-                        self.check_cons_ana_package_k(tycker, items, tail, expected, skolems)
+                        self.check_cons_ana_package(tycker, items, tail, expected, skolems)
                     }
                     | _ => tycker.err(TyckError::TypeExpected {
                         expected: "one of `_ * _` or `exists _ . _`".to_string(),
@@ -206,7 +205,7 @@ impl PatternChecker<'_> {
     }
 
     /// Synthesize a product pattern from its components, left to right.
-    fn check_cons_syn_k(
+    fn check_cons_syn(
         &self, tycker: &mut Tycker<'_>, items: Vec<su::PatId>, tail: su::PatId,
         skolems: PatternSkolems,
     ) -> Result<CheckedPattern> {
@@ -215,23 +214,20 @@ impl PatternChecker<'_> {
             .into_iter()
             .map(|item| {
                 let action = PatternAction::syn().with_skolems(skolems.clone());
-                scope.check_value_k(tycker, item, action)
+                scope.check_value(tycker, item, action)
             })
             .collect::<Result<Vec<_>>>()?;
-        let tail = scope.check_value_k(
-            tycker,
-            tail,
-            PatternAction::syn().with_skolems(skolems.clone()),
-        )?;
+        let tail =
+            scope.check_value(tycker, tail, PatternAction::syn().with_skolems(skolems.clone()))?;
         Ok(self.finish_product_pattern(tycker, scope, components, tail))
     }
 
     /// Check a product pattern against a product type with matching components.
-    fn check_cons_ana_product_k(
+    fn check_cons_ana_product(
         &self, tycker: &mut Tycker<'_>, items: Vec<su::PatId>, tail: su::PatId,
         expected: ss::TypeId, skolems: PatternSkolems,
     ) -> Result<CheckedPattern> {
-        let ss::Prod(component_tys) = expected.view_product_k(tycker, &self.info)?;
+        let ss::Prod(component_tys) = expected.view_product(tycker, &self.info)?;
         if component_tys.len() != items.len() + 1 {
             tycker.err(TyckError::TypeExpected {
                 expected: "a product with matching components".to_string(),
@@ -240,7 +236,7 @@ impl PatternChecker<'_> {
         }
         let mut scope = ConsScope { env: self.info.clone(), opened: Vec::new() };
         let (components, tail) =
-            scope.check_value_components_k(tycker, &items, tail, &component_tys, &skolems)?;
+            scope.check_value_components(tycker, &items, tail, &component_tys, &skolems)?;
         Ok(self.finish_product_pattern(tycker, scope, components, tail))
     }
 
@@ -279,7 +275,7 @@ impl PatternChecker<'_> {
     /// Check a package pattern against an existential or manifest-kind
     /// telescope: open its static components in order, then check the
     /// remaining components against the package body.
-    fn check_cons_ana_package_k(
+    fn check_cons_ana_package(
         &self, tycker: &mut Tycker<'_>, items: Vec<su::PatId>, tail: su::PatId,
         expected: ss::TypeId, skolems: PatternSkolems,
     ) -> Result<CheckedPattern> {
@@ -291,13 +287,13 @@ impl PatternChecker<'_> {
         let mut body_ty = DeferredTelescopeType::new(expected);
         let mut body_index = items.len();
         for (index, item) in items.iter().copied().enumerate() {
-            body_ty = match body_ty.with_environment(&opening.scope.env).reveal_k(tycker)? {
+            body_ty = match body_ty.with_environment(&opening.scope.env).reveal(tycker)? {
                 | DeferredTelescopeView::ManifestKind { binder: _, definition, body } => {
-                    opening.open_manifest_kind_k(tycker, item, definition, &skolems)?;
+                    opening.open_manifest_kind(tycker, item, definition, &skolems)?;
                     body
                 }
                 | DeferredTelescopeView::Exists { binder, mode, body } => {
-                    opening.open_exists_k(tycker, item, binder, mode, body, &skolems)?
+                    opening.open_exists(tycker, item, binder, mode, body, &skolems)?
                 }
                 | DeferredTelescopeView::Other(body) => {
                     body_ty = body;
@@ -314,8 +310,8 @@ impl PatternChecker<'_> {
             })?
         }
 
-        let body_ty = body_ty.with_environment(&opening.scope.env).materialize_k(tycker)?;
-        let body = opening.scope.check_package_body_k(
+        let body_ty = body_ty.with_environment(&opening.scope.env).materialize(tycker)?;
+        let body = opening.scope.check_package_body(
             tycker,
             &items[body_index..],
             tail,

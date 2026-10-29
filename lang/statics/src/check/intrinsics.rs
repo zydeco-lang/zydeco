@@ -29,7 +29,7 @@ pub(super) struct ForeignAttachment {
 struct BuiltinTypeResolution(ss::BuiltinTypeRole);
 
 impl BuiltinTypeResolution {
-    fn resolve_k(self, tycker: &mut Tycker<'_>, env: &ss::TyEnv) -> Result<ss::TypeId> {
+    fn resolve(self, tycker: &mut Tycker<'_>, env: &ss::TyEnv) -> Result<ss::TypeId> {
         let mut witnesses = tycker
             .statics
             .builtin_roles
@@ -120,7 +120,7 @@ impl IntrinsicMaterializer<'_, '_> {
 }
 
 impl InternalTerm {
-    pub(super) fn tyck_k(
+    pub(super) fn tyck(
         self, tycker: &mut Tycker<'_>, env: &ss::TyEnv, switch: Switch<AnnId>,
     ) -> Result<TermAnnId> {
         let synthesized = match self.0 {
@@ -184,7 +184,7 @@ impl InternalTerm {
                 }
                 TermAnnId::Value(body, codomain)
             }
-            | su::Internal::OS => self.builtin_type_k(tycker, env, ss::BuiltinTypeRole::OS)?,
+            | su::Internal::OS => self.builtin_type(tycker, env, ss::BuiltinTypeRole::OS)?,
             | su::Internal::Monad | su::Internal::Algebra => {
                 let term = crate::query::InternedTerm::new(tycker.db, self.1);
                 let env_data = crate::query::EnvData::new(tycker.db, env.clone());
@@ -197,15 +197,15 @@ impl InternalTerm {
                 }
             }
         };
-        self.reconcile_k(tycker, synthesized, switch)
+        self.reconcile(tycker, synthesized, switch)
     }
-    fn builtin_type_k(
+    fn builtin_type(
         &self, tycker: &mut Tycker<'_>, env: &ss::TyEnv, role: ss::BuiltinTypeRole,
     ) -> Result<TermAnnId> {
-        let ty = BuiltinTypeResolution(role).resolve_k(tycker, env)?;
+        let ty = BuiltinTypeResolution(role).resolve(tycker, env)?;
         Ok(TermAnnId::Type(ty, tycker.statics.type_kind(ty)))
     }
-    pub(super) fn reconcile_k(
+    pub(super) fn reconcile(
         &self, tycker: &mut Tycker<'_>, synthesized: TermAnnId, switch: Switch<AnnId>,
     ) -> Result<TermAnnId> {
         let annotation = match synthesized {
@@ -234,7 +234,7 @@ impl BuiltinAttachment {
     pub(super) fn new(role: ss::BuiltinRole, term: TermAnnId) -> Self {
         Self { role, term }
     }
-    pub(super) fn register_k(self, tycker: &mut Tycker<'_>, env: &ss::TyEnv) -> Result<()> {
+    pub(super) fn register(self, tycker: &mut Tycker<'_>, env: &ss::TyEnv) -> Result<()> {
         match self.role {
             | ss::BuiltinRole::Type(role) => {
                 let expected = match role.universe() {
@@ -243,7 +243,7 @@ impl BuiltinAttachment {
                         "an abstract existential computation-type entry"
                     }
                 };
-                let (witness, kind) = self.existential_witness_k(tycker, expected)?;
+                let (witness, kind) = self.existential_witness(tycker, expected)?;
                 let expected_kind = match role.universe() {
                     | ss::BuiltinTypeUniverse::Value => ss::VType.build(tycker, env),
                     | ss::BuiltinTypeUniverse::Computation => ss::CType.build(tycker, env),
@@ -280,7 +280,7 @@ impl BuiltinAttachment {
             }
         }
     }
-    fn existential_witness_k(
+    fn existential_witness(
         &self, tycker: &mut Tycker<'_>, expected: &'static str,
     ) -> Result<(ss::AbstId, ss::KindId)> {
         let TermAnnId::Type(entry, _) = self.term else {
@@ -302,7 +302,7 @@ impl ForeignAttachment {
     ) -> Self {
         Self { target, term, implementation }
     }
-    pub(super) fn register_k(self, tycker: &mut Tycker<'_>) -> Result<()> {
+    pub(super) fn register(self, tycker: &mut Tycker<'_>) -> Result<()> {
         let TermAnnId::Value(value, classifier) = self.term else {
             return tycker.err(TyckError::InvalidForeignAttachment);
         };
@@ -357,7 +357,7 @@ impl Tycker<'_> {
             | Err(existing) => self.err(TyckError::ConflictingBuiltinRole { existing, found }),
         }
     }
-    pub(super) fn validate_builtin_signature_k(&mut self, signature: &ss::PackPi) -> Result<()> {
+    pub(super) fn validate_builtin_signature(&mut self, signature: &ss::PackPi) -> Result<()> {
         match BuiltinSignatureValidator::new(&self.statics).validate(signature) {
             | Ok(()) => Ok(()),
             | Err(error) => self.err(TyckError::InvalidBuiltinSignature(error)),

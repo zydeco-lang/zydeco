@@ -93,13 +93,13 @@ mod tests {
 
             assert!(
                 TyEnvT::new(environment.clone(), root)
-                    .tyck_k(tycker, Action::ana(AnnId::Set))
+                    .tyck(tycker, Action::ana(AnnId::Set))
                     .is_err()
             );
             TyEnvT::new(environment.clone(), root)
-                .tyck_k(tycker, Action::ana(AnnId::Kind(vtype)))
+                .tyck(tycker, Action::ana(AnnId::Kind(vtype)))
                 .unwrap();
-            TyEnvT::new(environment, root).tyck_k(tycker, Action::ana(AnnId::Kind(vtype))).unwrap();
+            TyEnvT::new(environment, root).tyck(tycker, Action::ana(AnnId::Kind(vtype))).unwrap();
 
             let candidate =
                 Alloc::alloc(tycker, ss::VarName("candidate".to_owned()), AnnId::Kind(vtype), &());
@@ -121,7 +121,7 @@ mod tests {
                 Alloc::alloc(tycker, ss::VarName("Alias".to_owned()), AnnId::Kind(vtype), &());
             let alias: ss::TypeId = Alloc::alloc(tycker, definition, vtype, &empty);
             let environment = empty + [(definition, AnnId::Type(unit))];
-            TyEnvT::new(environment, root).tyck_k(tycker, Action::ana(alias.into())).unwrap();
+            TyEnvT::new(environment, root).tyck(tycker, Action::ana(alias.into())).unwrap();
 
             assert_eq!(tycker.completion_typing(&[]).unwrap().expectations(), [AnnId::Type(unit)]);
         });
@@ -139,7 +139,7 @@ mod tests {
             let pending: ss::TypeId = Alloc::alloc(tycker, fill, vtype, &environment);
 
             assert!(
-                TyEnvT::new(environment, root).tyck_k(tycker, Action::ana(pending.into())).is_err()
+                TyEnvT::new(environment, root).tyck(tycker, Action::ana(pending.into())).is_err()
             );
             let value =
                 Alloc::alloc(tycker, ss::VarName("value".to_owned()), AnnId::Type(unit), &());

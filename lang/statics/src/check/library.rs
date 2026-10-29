@@ -160,10 +160,8 @@ impl Tycker<'_> {
                 if let ExportSelector::Field(path) = &export.selector {
                     for name in path.to_string().split('/') {
                         let field = FieldName(name.to_owned());
-                        let selected = FieldProjectionResolver::value_term_k(
-                            self, &env, ty, &field,
-                        )
-                        .map_err(|_| LibraryCheckError::Checking(self.error_diagnostics()))?;
+                        let selected = FieldProjectionResolver::value_term(self, &env, ty, &field)
+                            .map_err(|_| LibraryCheckError::Checking(self.error_diagnostics()))?;
                         let target = FieldProjectionResolver::value_target(&selected);
                         ty = selected.projected;
                         value = Alloc::alloc(

@@ -72,7 +72,7 @@ impl From<ss::PackPi> for PackageSignature {
 impl PackageSignature {
     /// Open a value function's package witnesses as fresh skolems while
     /// checking the result pattern of a view pattern.
-    pub(in crate::check) fn open_codomain_k(
+    pub(in crate::check) fn open_codomain(
         &self, tycker: &mut Tycker<'_>, env: &ss::TyEnv,
     ) -> Result<(ss::TyEnv, ss::TypeId, Vec<ss::AbstId>)> {
         self.witnesses.iter().try_fold(
@@ -166,7 +166,7 @@ impl<'a> PackPiPatternAssignments<'a> {
             return Ok(Vec::new());
         }
         let Some((&item, items)) = self.items.split_first() else {
-            return self.mismatch_k(tycker);
+            return self.mismatch(tycker);
         };
         let view = self.domain.unroll(tycker)?.subst_env(tycker, env)?;
         match tycker.type_filled(&view)?.to_owned() {
@@ -211,10 +211,10 @@ impl<'a> PackPiPatternAssignments<'a> {
                     }
                 }
             }
-            | _ => self.mismatch_k(tycker),
+            | _ => self.mismatch(tycker),
         }
     }
-    fn mismatch_k<T>(&self, tycker: &mut Tycker<'_>) -> Result<T> {
+    fn mismatch<T>(&self, tycker: &mut Tycker<'_>) -> Result<T> {
         tycker.err(TyckError::PackageWitnessArityMismatch {
             expected: self.expected,
             found: self.found,
@@ -223,12 +223,12 @@ impl<'a> PackPiPatternAssignments<'a> {
 }
 
 impl PackPiPatternSkolems {
-    fn assignments_k(
+    fn assignments(
         &self, tycker: &mut Tycker<'_>, env: &ss::TyEnv, pattern: su::PatId,
     ) -> Result<Vec<(su::PatId, ss::AbstId)>> {
         match tycker.scoped.pats[&pattern].to_owned() {
-            | su::Pattern::Ann(su::Ann { tm, .. }) => self.assignments_k(tycker, env, tm),
-            | su::Pattern::Named(su::Named(_, inner)) => self.assignments_k(tycker, env, inner),
+            | su::Pattern::Ann(su::Ann { tm, .. }) => self.assignments(tycker, env, tm),
+            | su::Pattern::Named(su::Named(_, inner)) => self.assignments(tycker, env, inner),
             | su::Pattern::Cons(items) => {
                 let witnesses = self.signature.witnesses.iter().copied().collect::<Vec<_>>();
                 PackPiPatternAssignments::new(&items, &witnesses, self.signature.domain)
@@ -259,8 +259,8 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiPatternSkolems> {
     type Out = PatternSkolems;
     type Action = ();
 
-    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> Result<Self::Out> {
-        let patterns = self.inner.assignments_k(tycker, &self.info, self.inner.pattern)?;
+    fn tyck_inner(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> Result<Self::Out> {
+        let patterns = self.inner.assignments(tycker, &self.info, self.inner.pattern)?;
         let canonical = self.inner.signature.witnesses.iter().copied().collect::<Vec<_>>();
         let witnesses = PackPiWitnessSkolems::new(&canonical, self.inner.signature.domain)
             .collect_reported(tycker, &self.info)?;
@@ -269,13 +269,13 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiPatternSkolems> {
 }
 
 impl ValuePiPatternSkolems {
-    fn collect_projection_k(
+    fn collect_projection(
         tycker: &mut Tycker<'_>, env: &ss::TyEnv, pattern: su::PatId, domain: ss::TypeId,
         projection: &ss::PackageWitnessProjection, canonical: &[ss::AbstId], codomain: ss::TypeId,
     ) -> Result<(PatternSkolems, usize)> {
         match tycker.scoped.pats[&pattern].to_owned() {
             | su::Pattern::Ann(su::Ann { tm, .. }) | su::Pattern::Named(su::Named(_, tm)) => {
-                return Self::collect_projection_k(
+                return Self::collect_projection(
                     tycker, env, tm, domain, projection, canonical, codomain,
                 );
             }
@@ -333,7 +333,7 @@ impl ValuePiPatternSkolems {
                 let prefix = if *abstracts == 0 {
                     PatternSkolems::default()
                 } else {
-                    Self::collect_projection_k(
+                    Self::collect_projection(
                         tycker,
                         env,
                         pattern,
@@ -345,7 +345,7 @@ impl ValuePiPatternSkolems {
                     .0
                 };
                 let (tail, consumed) = match tail_patterns.as_slice() {
-                    | [tail] => Self::collect_projection_k(
+                    | [tail] => Self::collect_projection(
                         tycker,
                         env,
                         *tail,
@@ -361,7 +361,7 @@ impl ValuePiPatternSkolems {
                                 found: patterns.len(),
                             });
                         };
-                        Self::collect_product_k(
+                        Self::collect_product(
                             tycker,
                             env,
                             patterns,
@@ -386,7 +386,7 @@ impl ValuePiPatternSkolems {
                 let witnesses = ss::PackTelescope::new(first, rest.iter().copied());
                 let signature = PackageSignature { domain, witnesses, codomain };
                 let helper = PackPiPatternSkolems { pattern, signature: signature.clone() };
-                let patterns = helper.assignments_k(tycker, env, pattern)?;
+                let patterns = helper.assignments(tycker, env, pattern)?;
                 let witnesses =
                     PackPiWitnessSkolems::new(selected, domain).collect_reported(tycker, env)?;
                 Ok((PatternSkolems::new(patterns, witnesses), *abstracts))
@@ -398,7 +398,7 @@ impl ValuePiPatternSkolems {
                         found: 0,
                     });
                 };
-                Self::collect_product_k(
+                Self::collect_product(
                     tycker,
                     env,
                     &patterns,
@@ -411,7 +411,7 @@ impl ValuePiPatternSkolems {
         }
     }
 
-    fn collect_product_k(
+    fn collect_product(
         tycker: &mut Tycker<'_>, env: &ss::TyEnv, patterns: &[su::PatId], domain: ss::TypeId,
         projections: &[ss::PackageWitnessProjection], canonical: &[ss::AbstId],
         codomain: ss::TypeId,
@@ -433,7 +433,7 @@ impl ValuePiPatternSkolems {
             (PatternSkolems::default(), 0usize),
             |(skolems, consumed), ((projection, domain), pattern)| {
                 let remaining = canonical.get(consumed..).unwrap_or_default();
-                let (component, component_consumed) = Self::collect_projection_k(
+                let (component, component_consumed) = Self::collect_projection(
                     tycker, env, pattern, domain, projection, remaining, codomain,
                 )?;
                 Ok((skolems.merge(component), consumed + component_consumed))
@@ -446,9 +446,9 @@ impl<'a> Tyck<'a> for TyEnvT<ValuePiPatternSkolems> {
     type Out = PatternSkolems;
     type Action = ();
 
-    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> Result<Self::Out> {
+    fn tyck_inner(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> Result<Self::Out> {
         let canonical = self.inner.signature.witnesses.iter().copied().collect::<Vec<_>>();
-        let (skolems, consumed) = ValuePiPatternSkolems::collect_projection_k(
+        let (skolems, consumed) = ValuePiPatternSkolems::collect_projection(
             tycker,
             &self.info,
             self.inner.pattern,

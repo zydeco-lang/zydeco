@@ -55,7 +55,7 @@ impl ExistentialProjectionPattern {
             .then_some(members)
     }
 
-    pub(in crate::check) fn applies_k(
+    pub(in crate::check) fn applies(
         tycker: &mut Tycker<'_>, env: &ss::TyEnv, expected: ss::TypeId,
     ) -> Result<bool> {
         let view = expected.unroll(tycker)?.subst_env(tycker, env)?;
@@ -83,7 +83,7 @@ impl ExistentialProjectionPattern {
         }
     }
 
-    fn open_k(
+    fn open(
         tycker: &mut Tycker<'_>, env: &ss::TyEnv, expected: ss::TypeId, skolems: &PatternSkolems,
     ) -> Result<ExistentialProjectionOpening> {
         let mut body = DeferredTelescopeType::new(expected);
@@ -92,11 +92,11 @@ impl ExistentialProjectionPattern {
         let mut opened = Vec::new();
 
         let body = loop {
-            match body.with_environment(&body_env).reveal_k(tycker)? {
+            match body.with_environment(&body_env).reveal(tycker)? {
                 | DeferredTelescopeView::ManifestKind { binder, definition, body: next } => {
                     let field = Self::kind_field_name(tycker, binder);
                     body_env =
-                        TyEnvT::new(body_env, Assign(binder, definition)).tyck_k(tycker, ())?.info;
+                        TyEnvT::new(body_env, Assign(binder, definition)).tyck(tycker, ())?.info;
                     body = next;
                     slots.push(ExistentialProjectionSlot::Kind {
                         field,
@@ -128,7 +128,7 @@ impl ExistentialProjectionPattern {
                             (payload, Some(skolem))
                         }
                         | DeferredTelescopeExistsMode::Manifest(definition) => {
-                            let definition = definition.materialize_k(tycker)?;
+                            let definition = definition.materialize(tycker)?;
                             let definition_kind = tycker.statics.type_kind(definition);
                             Lub::lub(payload_kind, definition_kind, tycker)?;
                             (definition, None)
@@ -137,7 +137,7 @@ impl ExistentialProjectionPattern {
                     let full_payload = binder.pattern.introduce_payload(tycker, payload);
                     let full_payload = full_payload?;
                     body_env = TyEnvT::new(body_env, Assign(binder.pattern, full_payload))
-                        .tyck_k(tycker, ())?
+                        .tyck(tycker, ())?
                         .info;
                     body = next.with_abstract(binder.witness, payload);
                     slots.push(ExistentialProjectionSlot::Type {
@@ -150,7 +150,7 @@ impl ExistentialProjectionPattern {
                         skolem,
                     });
                 }
-                | DeferredTelescopeView::Other(body) => break body.materialize_k(tycker)?,
+                | DeferredTelescopeView::Other(body) => break body.materialize(tycker)?,
             }
         };
 
@@ -171,18 +171,18 @@ impl ExistentialProjectionPattern {
     }
 
     /// Check the payload pattern of a selected telescope entry and adopt its binding.
-    fn select_slot_k(
+    fn select_slot(
         tycker: &mut Tycker<'_>, opening: &mut ExistentialProjectionOpening, slot_index: usize,
         payload: su::PatId, skolems: &PatternSkolems,
     ) -> Result<ss::PatId> {
         let selected = match &opening.slots[slot_index] {
             | ExistentialProjectionSlot::Kind { definition, .. } => {
                 let checked = TyEnvT::new(opening.env.clone(), payload)
-                    .tyck_k(tycker, PatternAction::ana(AnnId::Set).with_skolems(skolems.clone()))?;
+                    .tyck(tycker, PatternAction::ana(AnnId::Set).with_skolems(skolems.clone()))?;
                 let payload_pattern =
                     checked.annotation.try_as_kind(tycker, TyckError::SortMismatch)?;
                 opening.env = TyEnvT::new(checked.info, Assign(payload_pattern, *definition))
-                    .tyck_k(tycker, ())?
+                    .tyck(tycker, ())?
                     .info;
                 ss::StaticPatId::Kind(payload_pattern)
             }
@@ -193,13 +193,13 @@ impl ExistentialProjectionPattern {
                 skolem,
                 ..
             } => {
-                let checked = TyEnvT::new(opening.env.clone(), payload).tyck_k(
+                let checked = TyEnvT::new(opening.env.clone(), payload).tyck(
                     tycker,
                     PatternAction::ana((*payload_kind).into()).with_skolems(skolems.clone()),
                 )?;
                 let (payload_pattern, _) = checked.try_as_type(tycker, TyckError::SortMismatch)?;
                 opening.env = TyEnvT::new(checked.info, Assign(payload_pattern, *slot_payload))
-                    .tyck_k(tycker, ())?
+                    .tyck(tycker, ())?
                     .info;
                 if let (Some(skolem), (Some(definition), _)) =
                     (*skolem, payload_pattern.try_destruct_def(tycker))
@@ -219,11 +219,11 @@ impl ExistentialProjectionPattern {
         })
     }
 
-    pub(in crate::check) fn check_k(
+    pub(in crate::check) fn check(
         tycker: &mut Tycker<'_>, env: &ss::TyEnv, expected: ss::TypeId,
         members: Vec<ExistentialProjectionMember>, skolems: PatternSkolems,
     ) -> Result<CheckedPattern> {
-        let mut opening = Self::open_k(tycker, env, expected, &skolems)?;
+        let mut opening = Self::open(tycker, env, expected, &skolems)?;
         let mut body_patterns = Vec::new();
         let mut whole_patterns = Vec::new();
         let mut package_aliases = Vec::new();
@@ -232,7 +232,7 @@ impl ExistentialProjectionPattern {
         for member in members {
             let ExistentialProjectionMember::Project { source, field, payload } = member else {
                 let ExistentialProjectionMember::Whole(source) = member else { unreachable!() };
-                let checked = TyEnvT::new(opening.env.clone(), source).tyck_k(
+                let checked = TyEnvT::new(opening.env.clone(), source).tyck(
                     tycker,
                     PatternAction::ana(expected.into()).with_skolems(skolems.clone()),
                 )?;
@@ -254,14 +254,14 @@ impl ExistentialProjectionPattern {
                 .enumerate()
                 .filter_map(|(index, slot)| (slot.field() == Some(&field)).then_some(index))
                 .collect::<Vec<_>>();
-            let value_candidates = FieldProjectionResolver::value_candidates_k(
+            let value_candidates = FieldProjectionResolver::value_candidates(
                 tycker,
                 DeferredEnvType::with_environment(opening.body, &opening.env),
                 &field,
                 &[],
                 &mut std::collections::HashSet::new(),
             )?;
-            let package_field_candidates = FieldProjectionResolver::package_candidates_k(
+            let package_field_candidates = FieldProjectionResolver::package_candidates(
                 tycker,
                 DeferredEnvType::with_environment(opening.body, &opening.env),
                 &field,
@@ -281,12 +281,12 @@ impl ExistentialProjectionPattern {
                 }
                 | ([slot_index], [], []) => {
                     let selected =
-                        Self::select_slot_k(tycker, &mut opening, *slot_index, payload, &skolems)?;
+                        Self::select_slot(tycker, &mut opening, *slot_index, payload, &skolems)?;
                     tycker.statics.pats.record(source, selected);
                 }
                 | ([], [candidate], []) => {
-                    let candidate = candidate.clone().materialize_k(tycker)?;
-                    let checked = TyEnvT::new(opening.env.clone(), payload).tyck_k(
+                    let candidate = candidate.clone().materialize(tycker)?;
+                    let checked = TyEnvT::new(opening.env.clone(), payload).tyck(
                         tycker,
                         PatternAction::ana(candidate.projected.into())
                             .with_skolems(skolems.clone()),
@@ -321,7 +321,7 @@ impl ExistentialProjectionPattern {
 
         if !package_selections.is_empty() {
             let deep =
-                Self::package_body_pattern_k(tycker, &mut opening, &package_selections, &skolems)?;
+                Self::package_body_pattern(tycker, &mut opening, &package_selections, &skolems)?;
             for selection in &package_selections {
                 tycker.statics.pats.record(selection.source, deep.into());
             }
@@ -374,13 +374,13 @@ impl ExistentialProjectionPattern {
     ///
     /// Selections through the same nested package occurrence share its opening,
     /// so identities selected at different depths through one package agree.
-    fn package_body_pattern_k(
+    fn package_body_pattern(
         tycker: &mut Tycker<'_>, opening: &mut ExistentialProjectionOpening,
         selections: &[PackageBodySelection], skolems: &PatternSkolems,
     ) -> Result<ss::VPatId> {
         let group = selections.iter().collect::<Vec<_>>();
         let node = opening.body.unroll(tycker)?.subst_env(tycker, &opening.env)?;
-        Self::deep_node_pattern_k(
+        Self::deep_node_pattern(
             tycker,
             &mut opening.env,
             &mut opening.opened,
@@ -395,7 +395,7 @@ impl ExistentialProjectionPattern {
     ///
     /// Every selection in `group` reached this node through the same prefix of
     /// its route, so their next steps agree on the node's structure.
-    fn deep_node_pattern_k(
+    fn deep_node_pattern(
         tycker: &mut Tycker<'_>, env: &mut ss::TyEnv, opened: &mut Vec<ss::AbstId>,
         node: ss::TypeId, group: &[&PackageBodySelection], consumed: usize,
         skolems: &PatternSkolems,
@@ -421,7 +421,7 @@ impl ExistentialProjectionPattern {
                         continue;
                     }
                     let component = component.unroll(tycker)?.subst_env(tycker, env)?;
-                    patterns.push(Self::deep_node_pattern_k(
+                    patterns.push(Self::deep_node_pattern(
                         tycker,
                         env,
                         opened,
@@ -441,7 +441,7 @@ impl ExistentialProjectionPattern {
                 let payload_node = payload_ty.unroll(tycker)?.subst_env(tycker, env)?;
                 let mut members = Vec::new();
                 for selection in terminals {
-                    let checked = TyEnvT::new(env.clone(), selection.payload).tyck_k(
+                    let checked = TyEnvT::new(env.clone(), selection.payload).tyck(
                         tycker,
                         PatternAction::ana(payload_node.into()).with_skolems(skolems.clone()),
                     )?;
@@ -455,7 +455,7 @@ impl ExistentialProjectionPattern {
                     members.push(payload_pattern);
                 }
                 if !passing.is_empty() {
-                    members.push(Self::deep_node_pattern_k(
+                    members.push(Self::deep_node_pattern(
                         tycker,
                         env,
                         opened,
@@ -472,12 +472,12 @@ impl ExistentialProjectionPattern {
                 Ok(Alloc::alloc(tycker, ss::Named(name, inner), node, env))
             }
             | ss::Type::Exists(_) | ss::Type::ManifestKind(_) => {
-                let mut nested = Self::open_k(tycker, env, node, skolems)?;
+                let mut nested = Self::open(tycker, env, node, skolems)?;
                 let mut passing = Vec::new();
                 for selection in group {
                     match &selection.candidate.terminal {
                         | PackageFieldTerminal::Entry { index } => {
-                            Self::select_slot_k(
+                            Self::select_slot(
                                 tycker,
                                 &mut nested,
                                 *index,
@@ -492,7 +492,7 @@ impl ExistentialProjectionPattern {
                     Alloc::alloc(tycker, ss::Hole, nested.body, &nested.env)
                 } else {
                     let body_node = nested.body.unroll(tycker)?.subst_env(tycker, &nested.env)?;
-                    Self::deep_node_pattern_k(
+                    Self::deep_node_pattern(
                         tycker,
                         &mut nested.env,
                         &mut nested.opened,

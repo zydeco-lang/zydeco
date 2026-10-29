@@ -3,7 +3,7 @@
 use super::*;
 
 impl TermChecker<'_> {
-    pub(super) fn check_data_k<'db>(
+    pub(super) fn check_data<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::Data, switch: Switch<AnnId>,
     ) -> Result<TermAnnId> {
         Ok({
@@ -19,7 +19,7 @@ impl TermChecker<'_> {
             let arms = arms
                 .into_iter()
                 .map(|su::DataArm { name, param }| {
-                    let checked = self.mk(param).tyck_k(tycker, Action::ana(vtype.into()))?;
+                    let checked = self.mk(param).tyck(tycker, Action::ana(vtype.into()))?;
                     let TermAnnId::Type(ty, _) = checked else {
                         tycker.err(TyckError::SortMismatch)?
                     };
@@ -46,7 +46,7 @@ impl TermChecker<'_> {
         })
     }
 
-    pub(super) fn check_co_data_k<'db>(
+    pub(super) fn check_co_data<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::CoData, switch: Switch<AnnId>,
     ) -> Result<TermAnnId> {
         Ok({
@@ -62,7 +62,7 @@ impl TermChecker<'_> {
             let arms = arms
                 .into_iter()
                 .map(|su::CoDataArm { name, out }| {
-                    let checked = self.mk(out).tyck_k(tycker, Action::ana(ctype.into()))?;
+                    let checked = self.mk(out).tyck(tycker, Action::ana(ctype.into()))?;
                     let TermAnnId::Type(ty, _) = checked else {
                         tycker.err(TyckError::SortMismatch)?
                     };
@@ -89,7 +89,7 @@ impl TermChecker<'_> {
         })
     }
 
-    pub(super) fn check_ctor_k<'db>(
+    pub(super) fn check_ctor<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::Ctor<CtorName, su::TermId>,
         switch: Switch<AnnId>,
     ) -> Result<TermAnnId> {
@@ -111,7 +111,7 @@ impl TermChecker<'_> {
                 | Some(ty) => ty.to_owned(),
                 | None => tycker.err(TyckError::UnknownDataConstructor(ctor.clone()))?,
             };
-            let arg_out_ann = self.mk(arg).tyck_k(tycker, Action::ana(arg_ty.into()))?;
+            let arg_out_ann = self.mk(arg).tyck(tycker, Action::ana(arg_ty.into()))?;
             let TermAnnId::Value(arg, _arg_ty) = arg_out_ann else { unreachable!() };
             let input = crate::query::InternedCtorInput::new(
                 tycker.db,
@@ -130,13 +130,13 @@ impl TermChecker<'_> {
         })
     }
 
-    pub(super) fn check_match_k<'db>(
+    pub(super) fn check_match<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::Match<su::TermId, su::PatId, su::TermId>,
         switch: Switch<AnnId>,
     ) -> Result<TermAnnId> {
         Ok({
             let su::Match { scrut, arms } = term;
-            let scrut_out_ann = self.mk(scrut).tyck_k(tycker, Action::syn())?;
+            let scrut_out_ann = self.mk(scrut).tyck(tycker, Action::syn())?;
             let (scrut, scrut_ty) = scrut_out_ann.try_as_value(tycker, TyckError::SortMismatch)?;
             let scrut_ty_unroll = scrut_ty.unroll(tycker)?.subst_env(tycker, &self.info)?;
             // hint the scrut to be associated with the data type
@@ -150,23 +150,22 @@ impl TermChecker<'_> {
             let matchers = arms
                 .into_iter()
                 .map(|su::Matcher { binder, tail }| {
-                    let binding = self
-                        .mk(binder)
-                        .tyck_k(tycker, PatternAction::ana(scrut_ty_unroll.into()))?;
+                    let binding =
+                        self.mk(binder).tyck(tycker, PatternAction::ana(scrut_ty_unroll.into()))?;
                     let (binder, _) = binding.try_as_value(tycker, TyckError::SortMismatch)?;
                     let action = match switch {
                         | Switch::Syn => Action::syn(),
                         | Switch::Ana(annotation) => Action::ana(annotation),
                     };
                     let source_tail = tail;
-                    let tail = TyEnvT::new(binding.info.clone(), tail).tyck_k(tycker, action)?;
+                    let tail = TyEnvT::new(binding.info.clone(), tail).tyck(tycker, action)?;
                     let ty = match tail {
                         | TermAnnId::Value(_, ty) | TermAnnId::Compu(_, ty) => ty,
                         | _ => tycker.err(TyckError::SortMismatch)?,
                     };
                     let joined = tycker.guarded(|tycker| {
                         tycker.tasks.push_back_mut(TyckTask::Term(source_tail, switch));
-                        binding.close_scope_k(tycker, ty)?;
+                        binding.close_scope(tycker, ty)?;
                         match result_type {
                             | Some(previous) => Lub::lub(previous, ty, tycker),
                             | None => Ok(ty),
@@ -219,7 +218,7 @@ impl TermChecker<'_> {
         })
     }
 
-    pub(super) fn check_co_match_clauses_k<'db>(
+    pub(super) fn check_co_match_clauses<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::CoMatchClauses, switch: Switch<AnnId>,
     ) -> Result<TermAnnId> {
         Ok({
@@ -231,12 +230,12 @@ impl TermChecker<'_> {
                 }
             };
             let computation = CopatternElaborator::new(self.inner, term, expected, &self.info)
-                .elaborate_k(tycker)?;
+                .elaborate(tycker)?;
             TermAnnId::Compu(computation, expected)
         })
     }
 
-    pub(super) fn check_co_match_k<'db>(
+    pub(super) fn check_co_match<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::CoMatch<DtorName, su::TermId>,
         switch: Switch<AnnId>,
     ) -> Result<TermAnnId> {
@@ -264,7 +263,7 @@ impl TermChecker<'_> {
                         | Some(arm_ty) => arm_ty,
                         | None => tycker.err(TyckError::UnknownCoDataDestructor(dtor.clone()))?,
                     };
-                    let tail_out_ann = self.mk(tail).tyck_k(tycker, Action::ana(arm_ty.into()))?;
+                    let tail_out_ann = self.mk(tail).tyck(tycker, Action::ana(arm_ty.into()))?;
                     let TermAnnId::Compu(tail, _ty) = tail_out_ann else {
                         tycker.err(TyckError::SortMismatch)?
                     };
@@ -289,13 +288,13 @@ impl TermChecker<'_> {
         })
     }
 
-    pub(super) fn check_dtor_k<'db>(
+    pub(super) fn check_dtor<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::Dtor<su::TermId, DtorName>,
         switch: Switch<AnnId>,
     ) -> Result<TermAnnId> {
         Ok({
             let su::Dtor(body, dtor) = term;
-            let body_out_ann = self.mk(body).tyck_k(tycker, Action::syn())?;
+            let body_out_ann = self.mk(body).tyck(tycker, Action::syn())?;
             let TermAnnId::Compu(body, ty_body) = body_out_ann else {
                 tycker.err(TyckError::SortMismatch)?
             };

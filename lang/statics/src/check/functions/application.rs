@@ -16,7 +16,7 @@ impl<'a> PackPiInstantiationState<'a> {
         }
     }
 
-    fn instantiate_k(self, tycker: &mut Tycker<'_>, env: &ss::TyEnv) -> Result<ss::TypeId> {
+    fn instantiate(self, tycker: &mut Tycker<'_>, env: &ss::TyEnv) -> Result<ss::TypeId> {
         if self.canonical.is_empty() {
             return Ok(self.codomain);
         }
@@ -26,7 +26,7 @@ impl<'a> PackPiInstantiationState<'a> {
                 let Some((&ss::StaticTermId::Kind(actual_kind), actual)) =
                     self.actual.split_first()
                 else {
-                    return self.mismatch_k(tycker);
+                    return self.mismatch(tycker);
                 };
                 Lub::lub(definition, actual_kind, tycker)?;
                 Self {
@@ -37,13 +37,13 @@ impl<'a> PackPiInstantiationState<'a> {
                     expected: self.expected,
                     found: self.found,
                 }
-                .instantiate_k(tycker, env)
+                .instantiate(tycker, env)
             }
             | ss::Type::Exists(exists) => {
                 let ss::Exists { binder, mode, body } = *exists;
                 let Some((&ss::StaticTermId::Type(witness), actual)) = self.actual.split_first()
                 else {
-                    return self.mismatch_k(tycker);
+                    return self.mismatch(tycker);
                 };
                 let payload = binder.pattern.bind_argument(tycker, witness)?;
                 match mode {
@@ -64,7 +64,7 @@ impl<'a> PackPiInstantiationState<'a> {
                             expected: self.expected,
                             found: self.found,
                         }
-                        .instantiate_k(tycker, env)
+                        .instantiate(tycker, env)
                     }
                     | ss::ExistsMode::Manifest(definition) => {
                         let payload = Lub::lub(definition, payload, tycker)?;
@@ -77,14 +77,14 @@ impl<'a> PackPiInstantiationState<'a> {
                             expected: self.expected,
                             found: self.found,
                         }
-                        .instantiate_k(tycker, env)
+                        .instantiate(tycker, env)
                     }
                 }
             }
-            | _ => self.mismatch_k(tycker),
+            | _ => self.mismatch(tycker),
         }
     }
-    fn mismatch_k<T>(&self, tycker: &mut Tycker<'_>) -> Result<T> {
+    fn mismatch<T>(&self, tycker: &mut Tycker<'_>) -> Result<T> {
         tycker.err(TyckError::PackageWitnessArityMismatch {
             expected: self.expected,
             found: self.found,
@@ -96,16 +96,16 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiInstantiation> {
     type Out = ss::TypeId;
     type Action = ();
 
-    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> Result<Self::Out> {
+    fn tyck_inner(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> Result<Self::Out> {
         let PackPiInstantiation { signature, witnesses } = &self.inner;
         let canonical = signature.witnesses.iter().copied().collect::<Vec<_>>();
         PackPiInstantiationState::new(signature, &canonical, witnesses)
-            .instantiate_k(tycker, &self.info)
+            .instantiate(tycker, &self.info)
     }
 }
 
 impl ValuePiInstantiation {
-    fn projected_arguments_k(
+    fn projected_arguments(
         env: &ss::TyEnv, tycker: &mut Tycker<'_>, projection: &ss::PackageWitnessProjection,
         domain: ss::TypeId, argument: ss::ValueId,
     ) -> Result<Vec<ProjectedPackageArgument>> {
@@ -113,10 +113,10 @@ impl ValuePiInstantiation {
             return Ok(Vec::new());
         }
         let shape = argument.static_shape(tycker);
-        Self::projected_shape_k(env, tycker, projection, domain, argument, &shape)
+        Self::projected_shape(env, tycker, projection, domain, argument, &shape)
     }
 
-    fn projected_shape_k(
+    fn projected_shape(
         env: &ss::TyEnv, tycker: &mut Tycker<'_>, projection: &ss::PackageWitnessProjection,
         domain: ss::TypeId, argument: ss::ValueId,
         shape: &crate::elaborate::static_values::StaticShape,
@@ -158,7 +158,7 @@ impl ValuePiInstantiation {
                     };
                 }
                 let tail =
-                    Self::projected_shape_k(env, tycker, body, tail_domain, argument, payload)?;
+                    Self::projected_shape(env, tycker, body, tail_domain, argument, payload)?;
                 let prefix = (*abstracts != 0).then(|| ProjectedPackageArgument {
                     domain,
                     witnesses: witnesses.clone(),
@@ -194,7 +194,7 @@ impl ValuePiInstantiation {
                 projections.iter().zip(domains).zip(arguments).try_fold(
                     Vec::new(),
                     |mut projected, ((projection, domain), shape)| {
-                        projected.extend(Self::projected_shape_k(
+                        projected.extend(Self::projected_shape(
                             env, tycker, projection, domain, argument, shape,
                         )?);
                         Ok(projected)
@@ -209,10 +209,10 @@ impl<'a> Tyck<'a> for TyEnvT<ValuePiInstantiation> {
     type Out = ss::TypeId;
     type Action = ();
 
-    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> Result<Self::Out> {
+    fn tyck_inner(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> Result<Self::Out> {
         let ValuePiInstantiation { signature, projection, argument } = &self.inner;
         let canonical = signature.witnesses.iter().copied().collect::<Vec<_>>();
-        let projected = ValuePiInstantiation::projected_arguments_k(
+        let projected = ValuePiInstantiation::projected_arguments(
             &self.info,
             tycker,
             projection,
@@ -247,7 +247,7 @@ impl<'a> Tyck<'a> for TyEnvT<ValuePiInstantiation> {
                     &remaining[..projected.abstracts],
                     &projected.witnesses,
                 )
-                .instantiate_k(tycker, &self.info)?;
+                .instantiate(tycker, &self.info)?;
                 Ok((codomain, consumed + projected.abstracts))
             },
         )?;
@@ -265,26 +265,26 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiIntroduction> {
     type Out = TermAnnId;
     type Action = ();
 
-    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> Result<Self::Out> {
+    fn tyck_inner(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> Result<Self::Out> {
         let PackPiIntroduction { binder, body, signature } = &self.inner;
         let skolems = self
             .mk(PackPiPatternSkolems { pattern: *binder, signature: signature.clone().into() })
-            .tyck_k(tycker, ())?;
+            .tyck(tycker, ())?;
         let binder = self
             .mk(*binder)
-            .tyck_k(tycker, PatternAction::ana(signature.domain.into()).with_skolems(skolems))?;
+            .tyck(tycker, PatternAction::ana(signature.domain.into()).with_skolems(skolems))?;
         let (pattern, domain) = binder.try_as_value(tycker, TyckError::SortMismatch)?;
-        ValuePatternShape::require_binding_k(tycker, self.inner.binder, pattern)?;
+        ValuePatternShape::require_binding(tycker, self.inner.binder, pattern)?;
         Lub::lub(signature.domain, domain, tycker)?;
 
-        let Some(witnesses) = binder.package_telescope_k(tycker)? else {
+        let Some(witnesses) = binder.package_telescope(tycker)? else {
             tycker.err(TyckError::PackageWitnessArityMismatch {
                 expected: signature.witnesses.len(),
                 found: 0,
             })?
         };
         let body = TyEnvT::new(binder.info.clone(), *body)
-            .tyck_k(tycker, Action::ana(signature.codomain.into()))?;
+            .tyck(tycker, Action::ana(signature.codomain.into()))?;
         let (body, codomain) = body.try_as_compu(tycker, TyckError::SortMismatch)?;
 
         let mut iter = witnesses.iter();
@@ -319,18 +319,18 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiElimination> {
     type Out = TermAnnId;
     type Action = Action<AnnId>;
 
-    fn tyck_inner_k(
+    fn tyck_inner(
         &self, tycker: &mut Tycker<'a>, Action { switch, .. }: Self::Action,
     ) -> Result<Self::Out> {
         let PackPiElimination { function, argument, signature } = &self.inner;
-        let argument = self.mk(*argument).tyck_k(tycker, Action::ana(signature.domain.into()))?;
+        let argument = self.mk(*argument).tyck(tycker, Action::ana(signature.domain.into()))?;
         let (argument, _) = argument.try_as_value(tycker, TyckError::SortMismatch)?;
         let Some(witnesses) = argument.package_witnesses(tycker) else {
             tycker.err(TyckError::PackageWitnessesUnavailable { package: argument })?
         };
         let codomain = self
             .mk(PackPiInstantiation { signature: signature.clone().into(), witnesses })
-            .tyck_k(tycker, ())?;
+            .tyck(tycker, ())?;
         codomain.constrain_to_scope(tycker, self.info.skolem_scope())?;
         let codomain = match switch {
             | Switch::Syn => codomain,

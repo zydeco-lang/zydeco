@@ -81,11 +81,11 @@ impl CopatternElaborator {
         Self { source: self.source, expected, clauses, allocation_env: env }
     }
 
-    pub(super) fn elaborate_k(self, tycker: &mut Tycker<'_>) -> Result<ss::CompuId> {
+    pub(super) fn elaborate(self, tycker: &mut Tycker<'_>) -> Result<ss::CompuId> {
         let ended = self.clauses.iter().filter(|clause| clause.items.is_empty()).count();
         if ended != 0 {
             if ended == self.clauses.len() {
-                return self.finish_clauses_k(tycker);
+                return self.finish_clauses(tycker);
             }
             return tycker.err(TyckError::OverlappingCopatternClauses);
         }
@@ -93,14 +93,14 @@ impl CopatternElaborator {
         let expected_view =
             self.expected.unroll(tycker)?.subst_env(tycker, &self.allocation_env)?;
         match tycker.type_filled(&expected_view)?.to_owned() {
-            | ss::Type::CoData(codata) => self.elaborate_codata_k(tycker, codata),
+            | ss::Type::CoData(codata) => self.elaborate_codata(tycker, codata),
             | ss::Type::Arrow(ss::Arrow(domain, codomain)) => {
-                self.elaborate_arrow_k(tycker, domain, codomain)
+                self.elaborate_arrow(tycker, domain, codomain)
             }
             | ss::Type::Forall(ss::Forall(binder, body)) => {
-                self.elaborate_forall_k(tycker, binder, body)
+                self.elaborate_forall(tycker, binder, body)
             }
-            | ss::Type::PackPi(signature) => self.elaborate_pack_pi_k(tycker, *signature),
+            | ss::Type::PackPi(signature) => self.elaborate_pack_pi(tycker, *signature),
             | _ if self.clauses.is_empty() => {
                 tycker.err(TyckError::NonExhaustiveCopattern { expected: self.expected })
             }
@@ -115,7 +115,7 @@ impl CopatternElaborator {
         }
     }
 
-    fn finish_clauses_k(mut self, tycker: &mut Tycker<'_>) -> Result<ss::CompuId> {
+    fn finish_clauses(mut self, tycker: &mut Tycker<'_>) -> Result<ss::CompuId> {
         let clauses = std::mem::take(&mut self.clauses);
         let arity = clauses
             .first()
@@ -130,7 +130,7 @@ impl CopatternElaborator {
             }
             let clause =
                 clauses.into_iter().next().expect("one terminal copattern clause is present");
-            return self.check_body_k(tycker, clause);
+            return self.check_body(tycker, clause);
         }
 
         let first = clauses.first().expect("terminal copattern clauses are nonempty");
@@ -144,7 +144,7 @@ impl CopatternElaborator {
                 .all(|(argument, expected)| argument.value == *expected)
         }));
         let (scrutinee, scrutinee_type) =
-            self.combine_values_k(tycker, values, types, &self.allocation_env);
+            self.combine_values(tycker, values, types, &self.allocation_env);
         let arms = clauses
             .into_iter()
             .map(|clause| -> Result<_> {
@@ -153,7 +153,7 @@ impl CopatternElaborator {
                 let binder =
                     self.combine_patterns(tycker, patterns, scrutinee_type, &self.allocation_env);
                 let checked =
-                    TyEnvT::new(env, body).tyck_k(tycker, Action::ana(self.expected.into()))?;
+                    TyEnvT::new(env, body).tyck(tycker, Action::ana(self.expected.into()))?;
                 let (tail, _) = checked.try_as_compu(tycker, TyckError::SortMismatch)?;
                 Ok(ss::Matcher { binder, tail })
             })
@@ -169,7 +169,7 @@ impl CopatternElaborator {
         Ok(computation)
     }
 
-    fn combine_values_k(
+    fn combine_values(
         &self, tycker: &mut Tycker<'_>, values: Vec<ss::ValueId>, types: Vec<ss::TypeId>,
         env: &ss::TyEnv,
     ) -> (ss::ValueId, ss::TypeId) {
@@ -219,14 +219,14 @@ impl CopatternElaborator {
         }
     }
 
-    fn check_body_k(&self, tycker: &mut Tycker<'_>, clause: ClauseState) -> Result<ss::CompuId> {
-        let checked = TyEnvT::new(clause.env, clause.body)
-            .tyck_k(tycker, Action::ana(self.expected.into()))?;
+    fn check_body(&self, tycker: &mut Tycker<'_>, clause: ClauseState) -> Result<ss::CompuId> {
+        let checked =
+            TyEnvT::new(clause.env, clause.body).tyck(tycker, Action::ana(self.expected.into()))?;
         let (body, _) = checked.try_as_compu(tycker, TyckError::SortMismatch)?;
         Ok(body)
     }
 
-    fn elaborate_codata_k(
+    fn elaborate_codata(
         mut self, tycker: &mut Tycker<'_>, codata: ss::CoDataId,
     ) -> Result<ss::CompuId> {
         let clauses = std::mem::take(&mut self.clauses);
@@ -258,7 +258,7 @@ impl CopatternElaborator {
                 };
                 let tail = self
                     .with_clauses(arm_type, clauses, self.allocation_env.clone())
-                    .elaborate_k(tycker)?;
+                    .elaborate(tycker)?;
                 Ok(ss::CoMatcher { dtor, tail })
             })
             .collect_reported::<Vec<_>>()?;
@@ -269,10 +269,10 @@ impl CopatternElaborator {
         Ok(computation)
     }
 
-    fn elaborate_arrow_k(
+    fn elaborate_arrow(
         mut self, tycker: &mut Tycker<'_>, domain: ss::TypeId, codomain: ss::TypeId,
     ) -> Result<ss::CompuId> {
-        let argument = self.fresh_argument_k(tycker, domain)?;
+        let argument = self.fresh_argument(tycker, domain)?;
         let clauses = std::mem::take(&mut self.clauses);
         if clauses.is_empty() {
             let body = Alloc::alloc(
@@ -305,18 +305,18 @@ impl CopatternElaborator {
                     });
                 };
                 let checked = TyEnvT::new(binding_env.clone(), pattern)
-                    .tyck_k(tycker, PatternAction::ana(domain.into()))?;
+                    .tyck(tycker, PatternAction::ana(domain.into()))?;
                 let (binder, found_domain) =
                     checked.try_as_value(tycker, TyckError::SortMismatch)?;
                 Lub::lub(domain, found_domain, tycker)?;
-                checked.close_scope_k(tycker, codomain)?;
+                checked.close_scope(tycker, codomain)?;
                 clause.env = checked.info + [(argument.definition, domain.into())];
                 clause.pending.push(PendingArgument { binder, value: argument.value, ty: domain });
                 Ok(clause)
             })
             .collect_reported::<Vec<_>>()?;
         let body =
-            self.with_clauses(codomain, clauses, argument.body_env.clone()).elaborate_k(tycker)?;
+            self.with_clauses(codomain, clauses, argument.body_env.clone()).elaborate(tycker)?;
         let abstraction = Alloc::alloc(
             tycker,
             ss::Abs(argument.binder, body),
@@ -327,9 +327,7 @@ impl CopatternElaborator {
         Ok(abstraction)
     }
 
-    fn fresh_argument_k(
-        &self, tycker: &mut Tycker<'_>, domain: ss::TypeId,
-    ) -> Result<FreshArgument> {
+    fn fresh_argument(&self, tycker: &mut Tycker<'_>, domain: ss::TypeId) -> Result<FreshArgument> {
         let definition = Alloc::alloc(
             tycker,
             ss::VarName("$copattern_argument".to_string()),
@@ -346,7 +344,7 @@ impl CopatternElaborator {
         Ok(FreshArgument { definition, binder, value, body_env })
     }
 
-    fn elaborate_forall_k(
+    fn elaborate_forall(
         mut self, tycker: &mut Tycker<'_>, source_binder: ss::TypeBinder, body: ss::TypeId,
     ) -> Result<ss::CompuId> {
         if self.clauses.is_empty() {
@@ -367,24 +365,23 @@ impl CopatternElaborator {
                     });
                 };
                 let checked = TyEnvT::new(clause.env.clone(), pattern)
-                    .tyck_k(tycker, PatternAction::ana(domain_kind.into()))?;
+                    .tyck(tycker, PatternAction::ana(domain_kind.into()))?;
                 let (binder, _) = checked.try_as_type(tycker, TyckError::SortMismatch)?;
                 first_binder.get_or_insert(binder);
-                clause.env =
-                    self.extend_forall_env_k(tycker, &source_binder, binder, &clause.env)?;
+                clause.env = self.extend_forall_env(tycker, &source_binder, binder, &clause.env)?;
                 Ok(clause)
             })
             .collect_reported::<Vec<_>>()?;
         let binder = first_binder.expect("a nonempty forall copattern has a binder");
-        let env = self.extend_forall_env_k(tycker, &source_binder, binder, &self.allocation_env)?;
-        let body = self.with_clauses(body, clauses, env).elaborate_k(tycker)?;
+        let env = self.extend_forall_env(tycker, &source_binder, binder, &self.allocation_env)?;
+        let body = self.with_clauses(body, clauses, env).elaborate(tycker)?;
         let abstraction =
             Alloc::alloc(tycker, ss::Abs(binder, body), self.expected, &self.allocation_env);
         self.record(tycker, abstraction);
         Ok(abstraction)
     }
 
-    fn extend_forall_env_k(
+    fn extend_forall_env(
         &self, tycker: &mut Tycker<'_>, source_binder: &ss::TypeBinder, binder: ss::TPatId,
         env: &ss::TyEnv,
     ) -> Result<ss::TyEnv> {
@@ -392,10 +389,10 @@ impl CopatternElaborator {
         let witness = Alloc::alloc(tycker, source_binder.witness, payload_kind, env);
         let argument = source_binder.pattern.introduce_payload(tycker, witness);
         let argument = argument?;
-        Ok(TyEnvT::new(env.clone(), Assign(binder, argument)).tyck_k(tycker, ())?.info)
+        Ok(TyEnvT::new(env.clone(), Assign(binder, argument)).tyck(tycker, ())?.info)
     }
 
-    fn elaborate_pack_pi_k(
+    fn elaborate_pack_pi(
         mut self, tycker: &mut Tycker<'_>, signature: ss::PackPi,
     ) -> Result<ss::CompuId> {
         if self.clauses.is_empty() {
@@ -417,12 +414,12 @@ impl CopatternElaborator {
             clause.env.clone(),
             PackPiPatternSkolems { pattern, signature: signature.clone().into() },
         )
-        .tyck_k(tycker, ())?;
+        .tyck(tycker, ())?;
         let checked = TyEnvT::new(clause.env.clone(), pattern)
-            .tyck_k(tycker, PatternAction::ana(signature.domain.into()).with_skolems(skolems))?;
+            .tyck(tycker, PatternAction::ana(signature.domain.into()).with_skolems(skolems))?;
         let (binder, found_domain) = checked.try_as_value(tycker, TyckError::SortMismatch)?;
         Lub::lub(signature.domain, found_domain, tycker)?;
-        let Some(witnesses) = checked.package_telescope_k(tycker)? else {
+        let Some(witnesses) = checked.package_telescope(tycker)? else {
             return tycker.err(TyckError::PackageWitnessArityMismatch {
                 expected: signature.witnesses.len(),
                 found: 0,
@@ -436,7 +433,7 @@ impl CopatternElaborator {
         }
         clause.env = checked.info;
         let env = clause.env.clone();
-        let body = self.with_clauses(signature.codomain, vec![clause], env).elaborate_k(tycker)?;
+        let body = self.with_clauses(signature.codomain, vec![clause], env).elaborate(tycker)?;
         let abstraction =
             Alloc::alloc(tycker, ss::Abs(binder, body), self.expected, &self.allocation_env);
         tycker.statics.copattern_pack_pi_binders.insert_new(abstraction, binder);

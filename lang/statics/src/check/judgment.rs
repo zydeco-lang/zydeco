@@ -6,11 +6,11 @@ pub trait Tyck<'a> {
     type Out;
     type Action;
     /// Entry point for type checking with optional administrative wrapping.
-    fn tyck_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> Result<Self::Out> {
-        self.tyck_inner_k(tycker, action)
+    fn tyck(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> Result<Self::Out> {
+        self.tyck_inner(tycker, action)
     }
     /// Core implementation for type checking.
-    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> Result<Self::Out>;
+    fn tyck_inner(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> Result<Self::Out>;
 }
 
 /// Synthesis or analysis mode, optionally with an expected annotation.

@@ -148,7 +148,7 @@ impl ValuePatternShape {
         }
     }
 
-    pub(super) fn require_binding_k(
+    pub(super) fn require_binding(
         tycker: &mut Tycker<'_>, source: su::PatId, pattern: ss::VPatId,
     ) -> Result<()> {
         if !Self::is_irrefutable(tycker, pattern) && !tycker.scoped.allows_partial_binding(source) {
@@ -183,8 +183,8 @@ impl ValuePatternShape {
 
 pub(super) trait CheckedPatternExt {
     fn with_annotation(self, annotation: PatAnnId) -> Self;
-    fn close_scope_k(&self, tycker: &mut Tycker<'_>, result: ss::TypeId) -> Result<()>;
-    fn package_telescope_k(&self, tycker: &mut Tycker<'_>) -> Result<Option<ss::PackTelescope>>;
+    fn close_scope(&self, tycker: &mut Tycker<'_>, result: ss::TypeId) -> Result<()>;
+    fn package_telescope(&self, tycker: &mut Tycker<'_>) -> Result<Option<ss::PackTelescope>>;
 }
 
 impl CheckedPatternExt for CheckedPattern {
@@ -192,14 +192,14 @@ impl CheckedPatternExt for CheckedPattern {
         let TyEnvT { info, inner } = self;
         TyEnvT::new(info, PatternCheck::with_opened(annotation, inner.opened))
     }
-    fn close_scope_k(&self, tycker: &mut Tycker<'_>, result: ss::TypeId) -> Result<()> {
+    fn close_scope(&self, tycker: &mut Tycker<'_>, result: ss::TypeId) -> Result<()> {
         if self.inner.opened.is_empty() {
             return Ok(());
         }
         let outer = self.info.skolem_scope().without(&self.inner.opened);
         result.constrain_to_scope(tycker, &outer)
     }
-    fn package_telescope_k(&self, tycker: &mut Tycker<'_>) -> Result<Option<ss::PackTelescope>> {
+    fn package_telescope(&self, tycker: &mut Tycker<'_>) -> Result<Option<ss::PackTelescope>> {
         let Some((first, rest)) = self.inner.opened.split_first() else {
             return Ok(None);
         };
@@ -292,39 +292,39 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
     type Out = CheckedPattern;
     type Action = PatternAction;
 
-    fn tyck_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> Result<Self::Out> {
+    fn tyck(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> Result<Self::Out> {
         tycker.guarded(|tycker| {
             // administrative
             tycker.tasks.push_back_mut(TyckTask::Pat(self.inner, action.switch));
             tycker.enter_site(su::EntityId::Pat(self.inner));
-            let result = self.tyck_inner_k(tycker, action);
+            let result = self.tyck_inner(tycker, action);
             tycker.allocator.exit();
             result
         })
     }
 
-    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> Result<Self::Out> {
+    fn tyck_inner(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> Result<Self::Out> {
         let PatternAction { switch, skolems } = action;
         use su::Pattern as Pat;
         let checker = PatternChecker { site: self };
         let elaboration = match tycker.scoped.pats[&self.inner].clone() {
-            | Pat::Ann(pat) => checker.check_ann_k(tycker, pat, switch, skolems)?,
-            | Pat::Hole(pat) => checker.check_hole_k(tycker, pat, switch)?,
-            | Pat::Var(def) => checker.check_var_k(tycker, def, switch)?,
-            | Pat::Named(pat) => checker.check_named_k(tycker, pat, switch, skolems)?,
+            | Pat::Ann(pat) => checker.check_ann(tycker, pat, switch, skolems)?,
+            | Pat::Hole(pat) => checker.check_hole(tycker, pat, switch)?,
+            | Pat::Var(def) => checker.check_var(tycker, def, switch)?,
+            | Pat::Named(pat) => checker.check_named(tycker, pat, switch, skolems)?,
             | Pat::Project(su::ProjectionPattern(field, inner)) => {
-                checker.check_project_k(tycker, field, inner, switch, skolems)?
+                checker.check_project(tycker, field, inner, switch, skolems)?
             }
             | Pat::View(su::ViewPattern { function, pattern }) => {
-                checker.check_view_k(tycker, function, pattern, switch, skolems)?
+                checker.check_view(tycker, function, pattern, switch, skolems)?
             }
-            | Pat::Ctor(pat) => checker.check_ctor_k(tycker, pat, switch, skolems)?,
-            | Pat::Lit(literal) => checker.check_lit_k(tycker, literal, switch)?,
+            | Pat::Ctor(pat) => checker.check_ctor(tycker, pat, switch, skolems)?,
+            | Pat::Lit(literal) => checker.check_lit(tycker, literal, switch)?,
             | Pat::Alias(su::Alias(patterns)) => {
-                checker.check_alias_k(tycker, patterns, switch, skolems)?
+                checker.check_alias(tycker, patterns, switch, skolems)?
             }
-            | Pat::Triv(su::Triv) => checker.check_triv_k(tycker, switch)?,
-            | Pat::Cons(pat) => checker.check_cons_k(tycker, pat, switch, skolems)?,
+            | Pat::Triv(su::Triv) => checker.check_triv(tycker, switch)?,
+            | Pat::Cons(pat) => checker.check_cons(tycker, pat, switch, skolems)?,
         };
 
         // maintain back mapping
@@ -337,7 +337,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
 impl Tycker<'_> {
     /// Check a type binder against its payload's inferred kind, preserving the
     /// binder's named wrappers and any explicit payload annotation.
-    pub(in crate::check) fn check_type_payload_pattern_k(
+    pub(in crate::check) fn check_type_payload_pattern(
         &mut self, pattern: TyEnvT<su::PatId>, payload_kind: KindId,
     ) -> Result<CheckedPattern> {
         let action = if self.pattern_has_payload_annotation(pattern.inner) {
@@ -357,7 +357,7 @@ impl Tycker<'_> {
             });
             PatternAction::ana(kind.into())
         };
-        pattern.tyck_k(self, action)
+        pattern.tyck(self, action)
     }
 
     fn pattern_has_payload_annotation(&self, pattern: su::PatId) -> bool {

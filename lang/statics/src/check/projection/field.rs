@@ -3,12 +3,12 @@
 use super::*;
 
 impl FieldProjectionResolver {
-    pub(super) fn value_candidates_k(
+    pub(super) fn value_candidates(
         tycker: &mut Tycker<'_>, current: DeferredEnvType, field: &FieldName,
         route: &[DeferredValueFieldStep],
         active: &mut std::collections::HashSet<DeferredEnvIdentity>,
     ) -> Result<Vec<DeferredValueFieldCandidate>> {
-        let view = current.reveal_k(tycker)?;
+        let view = current.reveal(tycker)?;
         let identity = view.identity();
         if !active.insert(identity) {
             return Ok(Vec::new());
@@ -24,11 +24,11 @@ impl FieldProjectionResolver {
                     route: route.clone(),
                     projected: projected.clone(),
                 });
-                let nested = Self::value_candidates_k(tycker, projected, field, &route, active)?;
+                let nested = Self::value_candidates(tycker, projected, field, &route, active)?;
                 direct.into_iter().chain(nested).collect()
             }
             | DeferredEnvTypeView::Product { whole, .. } => {
-                let components = Self::product_components_k(tycker, whole.clone())?;
+                let components = Self::product_components(tycker, whole.clone())?;
                 let branches = components
                     .iter()
                     .cloned()
@@ -42,7 +42,7 @@ impl FieldProjectionResolver {
                                 position,
                             }])
                             .collect::<Vec<_>>();
-                        Self::value_candidates_k(tycker, component, field, &route, active)
+                        Self::value_candidates(tycker, component, field, &route, active)
                     })
                     .collect::<Result<Vec<_>>>()?;
                 branches.into_iter().flatten().collect()
@@ -53,10 +53,10 @@ impl FieldProjectionResolver {
         Ok(candidates)
     }
 
-    fn product_components_k(
+    fn product_components(
         tycker: &mut Tycker<'_>, product: DeferredEnvType,
     ) -> Result<Vec<DeferredEnvType>> {
-        match product.reveal_k(tycker)? {
+        match product.reveal(tycker)? {
             | DeferredEnvTypeView::Product { components, .. } => Ok(components),
             | view => Ok(vec![view.into_whole()]),
         }
@@ -66,12 +66,12 @@ impl FieldProjectionResolver {
     /// package telescope separates from the root. Direct named and product matches
     /// remain the ordinary value resolver's responsibility, so the two searches never
     /// report the same occurrence.
-    pub(super) fn package_candidates_k(
+    pub(super) fn package_candidates(
         tycker: &mut Tycker<'_>, current: DeferredEnvType, field: &FieldName,
         steps: &[PackageFieldStep], crossed: bool, sealed: bool,
         active: &mut std::collections::HashSet<DeferredEnvIdentity>,
     ) -> Result<Vec<PackageFieldCandidate>> {
-        let view = current.reveal_k(tycker)?;
+        let view = current.reveal(tycker)?;
         let identity = view.identity();
         if !active.insert(identity) {
             return Ok(Vec::new());
@@ -88,13 +88,13 @@ impl FieldProjectionResolver {
                     terminal: PackageFieldTerminal::Label { name: found.clone() },
                     sealed,
                 });
-                let nested = Self::package_candidates_k(
+                let nested = Self::package_candidates(
                     tycker, projected, field, &steps, crossed, sealed, active,
                 )?;
                 direct.into_iter().chain(nested).collect()
             }
             | DeferredEnvTypeView::Product { whole, .. } => {
-                let components = Self::product_components_k(tycker, whole.clone())?;
+                let components = Self::product_components(tycker, whole.clone())?;
                 let branches = components
                     .iter()
                     .cloned()
@@ -105,7 +105,7 @@ impl FieldProjectionResolver {
                             .cloned()
                             .chain([PackageFieldStep::Product { position }])
                             .collect::<Vec<_>>();
-                        Self::package_candidates_k(
+                        Self::package_candidates(
                             tycker, component, field, &steps, crossed, sealed, active,
                         )
                     })
@@ -113,7 +113,7 @@ impl FieldProjectionResolver {
                 branches.into_iter().flatten().collect()
             }
             | DeferredEnvTypeView::Package { whole, .. } => {
-                Self::package_entry_candidates_k(tycker, whole, field, steps, sealed, active)?
+                Self::package_entry_candidates(tycker, whole, field, steps, sealed, active)?
             }
             | DeferredEnvTypeView::Other(_) => Vec::new(),
         };
@@ -127,7 +127,7 @@ impl FieldProjectionResolver {
     /// The walk stays read-only: binder field names do not depend on witness
     /// substitution, and the elaboration re-opens the telescope with fresh or
     /// canonical witnesses once a selection is unique.
-    fn package_entry_candidates_k(
+    fn package_entry_candidates(
         tycker: &mut Tycker<'_>, package: DeferredEnvType, field: &FieldName,
         steps: &[PackageFieldStep], sealed: bool,
         active: &mut std::collections::HashSet<DeferredEnvIdentity>,
@@ -139,7 +139,7 @@ impl FieldProjectionResolver {
         let mut visited = Vec::new();
         let mut index = 0usize;
         loop {
-            let view = current.reveal_k(tycker)?;
+            let view = current.reveal(tycker)?;
             let head = match view {
                 | DeferredEnvTypeView::Package { whole, head } => {
                     if index > 0 {
@@ -154,7 +154,7 @@ impl FieldProjectionResolver {
                     head
                 }
                 | view => {
-                    let body = Self::package_candidates_k(
+                    let body = Self::package_candidates(
                         tycker,
                         view.into_whole(),
                         field,
@@ -219,7 +219,7 @@ impl FieldProjectionResolver {
     /// The route crosses only manifest telescopes, whose disclosed definitions
     /// substitute while descending, so the physical projection stays a chain of
     /// product positions while named wrappers record provenance.
-    fn materialize_package_candidate_k(
+    fn materialize_package_candidate(
         tycker: &mut Tycker<'_>, env: &ss::TyEnv, root: ss::TypeId,
         candidate: &PackageFieldCandidate,
     ) -> Result<ValueFieldCandidate> {
@@ -251,7 +251,7 @@ impl FieldProjectionResolver {
                     current = payload.unroll(tycker)?.subst_env(tycker, &walk_env)?;
                 }
                 | PackageFieldStep::Package => {
-                    current = Self::manifest_telescope_body_k(tycker, &mut walk_env, current)?;
+                    current = Self::manifest_telescope_body(tycker, &mut walk_env, current)?;
                 }
             }
         }
@@ -259,15 +259,15 @@ impl FieldProjectionResolver {
     }
 
     /// Descend through a manifest-only telescope, substituting disclosed definitions.
-    fn manifest_telescope_body_k(
+    fn manifest_telescope_body(
         tycker: &mut Tycker<'_>, walk_env: &mut ss::TyEnv, package: ss::TypeId,
     ) -> Result<ss::TypeId> {
         let mut body = DeferredTelescopeType::new(package);
         loop {
-            match body.clone().with_environment(walk_env).reveal_k(tycker)? {
+            match body.clone().with_environment(walk_env).reveal(tycker)? {
                 | DeferredTelescopeView::ManifestKind { binder, definition, body: next } => {
                     *walk_env = TyEnvT::new(walk_env.clone(), Assign(binder, definition))
-                        .tyck_k(tycker, ())?
+                        .tyck(tycker, ())?
                         .info;
                     body = next;
                 }
@@ -276,14 +276,14 @@ impl FieldProjectionResolver {
                     mode: DeferredTelescopeExistsMode::Manifest(definition),
                     body: next,
                 } => {
-                    let definition = definition.materialize_k(tycker)?;
+                    let definition = definition.materialize(tycker)?;
                     let payload_kind = binder.payload_kind(tycker);
                     let definition_kind = tycker.statics.type_kind(definition);
                     Lub::lub(payload_kind, definition_kind, tycker)?;
                     let full_payload = binder.pattern.introduce_payload(tycker, definition);
                     let full_payload = full_payload?;
                     *walk_env = TyEnvT::new(walk_env.clone(), Assign(binder.pattern, full_payload))
-                        .tyck_k(tycker, ())?
+                        .tyck(tycker, ())?
                         .info;
                     body = next.with_abstract(binder.witness, definition);
                 }
@@ -291,7 +291,7 @@ impl FieldProjectionResolver {
                     mode: DeferredTelescopeExistsMode::Abstract,
                     ..
                 } => unreachable!("a term projection crosses only manifest telescopes"),
-                | DeferredTelescopeView::Other(body) => return body.materialize_k(tycker),
+                | DeferredTelescopeView::Other(body) => return body.materialize(tycker),
             }
         }
     }
@@ -301,17 +301,17 @@ impl FieldProjectionResolver {
     /// Field names behind abstract witnesses count for uniqueness but cannot be
     /// selected by a term, and package telescope entries name witnesses rather
     /// than runtime components; both report why a projection pattern is required.
-    pub(in crate::check) fn value_term_k(
+    pub(in crate::check) fn value_term(
         tycker: &mut Tycker<'_>, env: &ss::TyEnv, root: ss::TypeId, field: &FieldName,
     ) -> Result<ValueFieldCandidate> {
-        let values = Self::value_candidates_k(
+        let values = Self::value_candidates(
             tycker,
             DeferredEnvType::with_environment(root, env),
             field,
             &[],
             &mut std::collections::HashSet::new(),
         )?;
-        let packages = Self::package_candidates_k(
+        let packages = Self::package_candidates(
             tycker,
             DeferredEnvType::with_environment(root, env),
             field,
@@ -324,7 +324,7 @@ impl FieldProjectionResolver {
             | ([], []) => {
                 tycker.err(TyckError::MissingNamedField { field: field.clone(), found: root })
             }
-            | ([candidate], []) => Ok(candidate.clone().materialize_k(tycker)?),
+            | ([candidate], []) => Ok(candidate.clone().materialize(tycker)?),
             | ([], [candidate]) => {
                 if candidate.sealed {
                     return tycker
@@ -334,7 +334,7 @@ impl FieldProjectionResolver {
                     | PackageFieldTerminal::Entry { .. } => tycker
                         .err(TyckError::StaticNamedField { field: field.clone(), found: root }),
                     | PackageFieldTerminal::Label { .. } => {
-                        Self::materialize_package_candidate_k(tycker, env, root, candidate)
+                        Self::materialize_package_candidate(tycker, env, root, candidate)
                     }
                 }
             }
@@ -345,13 +345,8 @@ impl FieldProjectionResolver {
     pub(in crate::check) fn r#type(
         tycker: &mut Tycker<'_>, root: ss::KindId, field: &FieldName,
     ) -> Result<TypeFieldCandidate> {
-        let candidates = Self::type_candidates_k(
-            tycker,
-            root,
-            field,
-            &[],
-            &mut std::collections::HashSet::new(),
-        )?;
+        let candidates =
+            Self::type_candidates(tycker, root, field, &[], &mut std::collections::HashSet::new())?;
         match candidates.as_slice() {
             | [] => {
                 tycker.err(TyckError::MissingNamedTypeField { field: field.clone(), found: root })
@@ -363,7 +358,7 @@ impl FieldProjectionResolver {
         }
     }
 
-    fn type_candidates_k(
+    fn type_candidates(
         tycker: &mut Tycker<'_>, current: ss::KindId, field: &FieldName, path: &[TypeFieldStep],
         active: &mut std::collections::HashSet<ss::KindId>,
     ) -> Result<Vec<TypeFieldCandidate>> {
@@ -379,7 +374,7 @@ impl FieldProjectionResolver {
                     .collect::<Vec<_>>();
                 let direct =
                     (found == *field).then(|| TypeFieldCandidate { path: path.clone(), projected });
-                let nested = Self::type_candidates_k(tycker, projected, field, &path, active)?;
+                let nested = Self::type_candidates(tycker, projected, field, &path, active)?;
                 direct.into_iter().chain(nested).collect()
             }
             | _ => Vec::new(),
@@ -388,7 +383,7 @@ impl FieldProjectionResolver {
         Ok(candidates)
     }
 
-    pub(in crate::check) fn project_type_k(
+    pub(in crate::check) fn project_type(
         tycker: &mut Tycker<'_>, head: ss::TypeId, candidate: TypeFieldCandidate,
         projected: ss::KindId,
     ) -> Result<ss::TypeId> {

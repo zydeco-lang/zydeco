@@ -3,7 +3,7 @@
 use super::*;
 
 impl TermChecker<'_> {
-    pub(super) fn check_hole_k<'db>(
+    pub(super) fn check_hole<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::Hole, switch: Switch<AnnId>,
     ) -> Result<TermAnnId> {
         Ok({
@@ -112,7 +112,7 @@ impl TermChecker<'_> {
         })
     }
 
-    pub(super) fn check_var_k<'db>(
+    pub(super) fn check_var<'db>(
         &self, tycker: &mut Tycker<'db>, def: su::DefId, switch: Switch<AnnId>,
     ) -> Result<TermAnnId> {
         Ok({
@@ -183,7 +183,7 @@ impl TermChecker<'_> {
         })
     }
 
-    pub(super) fn check_triv_k<'db>(
+    pub(super) fn check_triv<'db>(
         &self, tycker: &mut Tycker<'db>, switch: Switch<AnnId>,
     ) -> Result<TermAnnId> {
         Ok(match switch {
@@ -213,7 +213,7 @@ impl TermChecker<'_> {
         })
     }
 
-    pub(super) fn check_lit_k<'db>(
+    pub(super) fn check_lit<'db>(
         &self, tycker: &mut Tycker<'db>, lit: su::Literal, switch: Switch<AnnId>,
     ) -> Result<TermAnnId> {
         Ok(match switch {
@@ -239,7 +239,7 @@ impl TermChecker<'_> {
             }
             | Switch::Ana(annotation) => {
                 let switch = Switch::Ana(annotation);
-                fn literal_type_k(
+                fn literal_type(
                     tycker: &mut Tycker<'_>, env: &ss::TyEnv, switch: Switch<AnnId>,
                     primitive: ss::PrimitiveType,
                 ) -> Result<ss::TypeId> {
@@ -312,12 +312,11 @@ impl TermChecker<'_> {
                     }
                     | Lit::String(s) => {
                         let ty =
-                            literal_type_k(tycker, &self.info, switch, ss::PrimitiveType::String)?;
+                            literal_type(tycker, &self.info, switch, ss::PrimitiveType::String)?;
                         (Lit::String(s), ty)
                     }
                     | Lit::Char(c) => {
-                        let ty =
-                            literal_type_k(tycker, &self.info, switch, ss::PrimitiveType::Char)?;
+                        let ty = literal_type(tycker, &self.info, switch, ss::PrimitiveType::Char)?;
                         (Lit::Char(c), ty)
                     }
                 };

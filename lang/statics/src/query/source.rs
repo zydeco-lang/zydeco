@@ -108,10 +108,10 @@ pub fn check_library<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, contract: zydeco_surface::metadata::LibraryContract,
 ) -> Result<crate::CheckedLibrary, crate::LibraryCheckError> {
     let mut tycker = Tycker::new(db, data, data.spans(db), data.scoped(db));
-    let root = tycker.run_judgments_k(data.root(db));
+    let root = tycker.run_judgments(data.root(db));
     tycker.finish_judgments();
     let root = root
-        .and_then(|root| tycker.finish_check_k().map(|()| root))
+        .and_then(|root| tycker.finish_check().map(|()| root))
         .map_err(|_| crate::LibraryCheckError::Checking(tycker.error_diagnostics()))?;
     let exports = tycker.prepare_library(root, &contract)?;
     tycker.strip_checker_state();
@@ -124,10 +124,10 @@ pub fn check_unit<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>,
 ) -> Result<crate::CheckedUnit, crate::LibraryCheckError> {
     let mut tycker = Tycker::new(db, data, data.spans(db), data.scoped(db));
-    let root = tycker.run_judgments_k(data.root(db));
+    let root = tycker.run_judgments(data.root(db));
     tycker.finish_judgments();
     let root = root
-        .and_then(|root| tycker.finish_check_k().map(|()| root))
+        .and_then(|root| tycker.finish_check().map(|()| root))
         .map_err(|_| crate::LibraryCheckError::Checking(tycker.error_diagnostics()))?;
     let initializer = tycker.prepare_unit(root)?;
     tycker.strip_checker_state();
@@ -159,14 +159,14 @@ impl<'db> SourceCheckRequest<'db> {
         if let Some(completion) = self.completion {
             tycker.set_completion_target(completion.target(db));
         }
-        let root = tycker.run_judgments_k(data.root(db)).ok();
+        let root = tycker.run_judgments(data.root(db)).ok();
         tycker.finish_judgments();
         tycker.resolve_holes_and_collect();
         let result = match root {
             | None => Err(ReportedError),
             | Some(root) => tycker
-                .normalize_and_validate_k()
-                .and_then(|()| tycker.elaborate_static_root_k(root))
+                .normalize_and_validate()
+                .and_then(|()| tycker.elaborate_static_root(root))
                 .map(|()| root),
         };
         let diagnostics = result.is_err().then(|| tycker.error_diagnostics());

@@ -3,18 +3,18 @@
 use super::*;
 
 impl PatternChecker<'_> {
-    pub(super) fn check_named_k<'db>(
+    pub(super) fn check_named<'db>(
         &self, tycker: &mut Tycker<'db>, pat: su::Named<FieldName, su::PatId>,
         switch: Switch<AnnId>, skolems: PatternSkolems,
     ) -> Result<CheckedPattern> {
         let su::Named(name, inner) = pat;
         match switch {
-            | Switch::Syn => self.check_named_syn_k(tycker, name, inner, skolems),
+            | Switch::Syn => self.check_named_syn(tycker, name, inner, skolems),
             | Switch::Ana(AnnId::Kind(expected)) => {
-                self.check_named_ana_kind_k(tycker, name, inner, expected, skolems)
+                self.check_named_ana_kind(tycker, name, inner, expected, skolems)
             }
             | Switch::Ana(AnnId::Type(expected)) => {
-                self.check_named_ana_type_k(tycker, name, inner, expected, skolems)
+                self.check_named_ana_type(tycker, name, inner, expected, skolems)
             }
             | Switch::Ana(AnnId::Set) => {
                 let input = crate::query::InternedPatNamedAna::new(
@@ -32,11 +32,11 @@ impl PatternChecker<'_> {
 
     /// Synthesize a named pattern: a static inner pattern names a type
     /// pattern through the judgment, a value inner pattern a labeled value.
-    fn check_named_syn_k(
+    fn check_named_syn(
         &self, tycker: &mut Tycker<'_>, name: FieldName, inner: su::PatId, skolems: PatternSkolems,
     ) -> Result<CheckedPattern> {
         let checked =
-            self.mk(inner).tyck_k(tycker, PatternAction::syn().with_skolems(skolems.clone()))?;
+            self.mk(inner).tyck(tycker, PatternAction::syn().with_skolems(skolems.clone()))?;
         match checked.annotation {
             | inner_out @ (PatAnnId::Kind(_) | PatAnnId::Type(_, _)) => {
                 let inner_interned = crate::query::InternedPatAnn::new(tycker.db, inner_out);
@@ -65,7 +65,7 @@ impl PatternChecker<'_> {
     }
 
     /// Check a named type pattern against a label kind.
-    fn check_named_ana_kind_k(
+    fn check_named_ana_kind(
         &self, tycker: &mut Tycker<'_>, name: FieldName, inner: su::PatId, expected: ss::KindId,
         skolems: PatternSkolems,
     ) -> Result<CheckedPattern> {
@@ -82,7 +82,7 @@ impl PatternChecker<'_> {
         }
         let checked = self
             .mk(inner)
-            .tyck_k(tycker, PatternAction::ana(inner_kind.into()).with_skolems(skolems.clone()))?;
+            .tyck(tycker, PatternAction::ana(inner_kind.into()).with_skolems(skolems.clone()))?;
         let (inner, _) = checked.try_as_type(tycker, TyckError::SortMismatch)?;
         let input = crate::query::InternedPatNamedAna::new(
             tycker.db,
@@ -99,7 +99,7 @@ impl PatternChecker<'_> {
     }
 
     /// Check a named value pattern against a named value type.
-    fn check_named_ana_type_k(
+    fn check_named_ana_type(
         &self, tycker: &mut Tycker<'_>, name: FieldName, inner: su::PatId, expected: ss::TypeId,
         skolems: PatternSkolems,
     ) -> Result<CheckedPattern> {
@@ -120,7 +120,7 @@ impl PatternChecker<'_> {
         }
         let checked = self
             .mk(inner)
-            .tyck_k(tycker, PatternAction::ana(inner_ty.into()).with_skolems(skolems.clone()))?;
+            .tyck(tycker, PatternAction::ana(inner_ty.into()).with_skolems(skolems.clone()))?;
         let (inner, _) = checked.try_as_value(tycker, TyckError::SortMismatch)?;
         let input = crate::query::InternedPatNamedAna::new(
             tycker.db,
@@ -136,7 +136,7 @@ impl PatternChecker<'_> {
         Ok(checked.with_annotation(PatAnnId::Value(id, ty)))
     }
 
-    pub(super) fn check_project_k<'db>(
+    pub(super) fn check_project<'db>(
         &self, tycker: &mut Tycker<'db>, field: FieldName, inner: su::PatId, switch: Switch<AnnId>,
         skolems: PatternSkolems,
     ) -> Result<CheckedPattern> {
@@ -152,7 +152,7 @@ impl PatternChecker<'_> {
             }
             | Switch::Ana(AnnId::Kind(expected)) => {
                 let candidate = FieldProjectionResolver::r#type(tycker, expected, &field)?;
-                let checked = self.mk(inner).tyck_k(
+                let checked = self.mk(inner).tyck(
                     tycker,
                     PatternAction::ana(candidate.projected.into()).with_skolems(skolems.clone()),
                 )?;
@@ -166,7 +166,7 @@ impl PatternChecker<'_> {
                 let members =
                     ExistentialProjectionPattern::members(tycker, std::iter::once(self.inner))
                         .unwrap();
-                ExistentialProjectionPattern::check_k(
+                ExistentialProjectionPattern::check(
                     tycker,
                     &self.info,
                     expected,

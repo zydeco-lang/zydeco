@@ -3,7 +3,7 @@
 use super::*;
 
 impl TermChecker<'_> {
-    pub(super) fn check_sigma_k<'db>(
+    pub(super) fn check_sigma<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::Sigma, switch: Switch<AnnId>,
     ) -> Result<TermAnnId> {
         Ok({
@@ -11,7 +11,7 @@ impl TermChecker<'_> {
             match switch {
                 | Switch::Syn => {
                     // either a prod or an exists
-                    let binder_out_ann = self.mk(binder).tyck_k(tycker, PatternAction::syn())?;
+                    let binder_out_ann = self.mk(binder).tyck(tycker, PatternAction::syn())?;
                     match binder_out_ann.annotation {
                         | PatAnnId::Kind(_) => {
                             let input = crate::query::InternedSigmaSyn::new(
@@ -36,8 +36,7 @@ impl TermChecker<'_> {
                                 }
                                 subst_vec
                             };
-                            let body =
-                                self.mk_add(subst_vec, body).tyck_k(tycker, Action::syn())?;
+                            let body = self.mk_add(subst_vec, body).tyck(tycker, Action::syn())?;
                             let (body_ty, body_kd) =
                                 body.try_as_type(tycker, TyckError::SortMismatch)?;
                             // body_kd should be of vtype
@@ -62,9 +61,9 @@ impl TermChecker<'_> {
                             let vtype = ss::VType.build(tycker, &self.info);
                             Lub::lub(vtype, kd_1, tycker)?;
                             let ty_2 = TyEnvT::new(binder_out_ann.info.clone(), body)
-                                .tyck_k(tycker, Action::syn())?;
+                                .tyck(tycker, Action::syn())?;
                             let (ty_2, kd_2) = ty_2.try_as_type(tycker, TyckError::SortMismatch)?;
-                            binder_out_ann.close_scope_k(tycker, ty_2)?;
+                            binder_out_ann.close_scope(tycker, ty_2)?;
                             // kd_2 should be of vtype
                             Lub::lub(vtype, kd_2, tycker)?;
                             let input = crate::query::InternedSigmaSyn::new(
@@ -88,7 +87,7 @@ impl TermChecker<'_> {
                         // prod or exists; should be of vtype
                         Lub::lub(vtype, kd, tycker)?;
                         // just synthesize the whole thing
-                        self.tyck_k(tycker, Action::syn())?
+                        self.tyck(tycker, Action::syn())?
                     }
                     | AnnId::Set | AnnId::Type(_) => tycker.err(TyckError::SortMismatch)?,
                 },
@@ -96,23 +95,23 @@ impl TermChecker<'_> {
         })
     }
 
-    pub(super) fn check_manifest_exists_k<'db>(
+    pub(super) fn check_manifest_exists<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::ManifestExists, switch: Switch<AnnId>,
     ) -> Result<TermAnnId> {
         Ok({
             let su::ManifestExists { binder, definition, body } = term;
             match switch {
                 | Switch::Syn => {
-                    let definition = self.mk(definition).tyck_k(tycker, Action::syn())?;
+                    let definition = self.mk(definition).tyck(tycker, Action::syn())?;
                     match definition {
                         | TermAnnId::Kind(definition) => {
                             let binder =
-                                self.mk(binder).tyck_k(tycker, PatternAction::ana(AnnId::Set))?;
+                                self.mk(binder).tyck(tycker, PatternAction::ana(AnnId::Set))?;
                             let pattern =
                                 binder.annotation.try_as_kind(tycker, TyckError::SortMismatch)?;
                             let body_env =
-                                self.mk(Assign(pattern, definition)).tyck_k(tycker, ())?.info;
-                            let body = TyEnvT::new(body_env, body).tyck_k(tycker, Action::syn())?;
+                                self.mk(Assign(pattern, definition)).tyck(tycker, ())?.info;
+                            let body = TyEnvT::new(body_env, body).tyck(tycker, Action::syn())?;
                             let (body, body_kind) =
                                 body.try_as_type(tycker, TyckError::SortMismatch)?;
                             let vtype = ss::VType.build(tycker, &self.info);
@@ -138,7 +137,7 @@ impl TermChecker<'_> {
                         }
                         | TermAnnId::Type(definition, definition_kind) => {
                             let binder = tycker
-                                .check_type_payload_pattern_k(self.mk(binder), definition_kind)?;
+                                .check_type_payload_pattern(self.mk(binder), definition_kind)?;
                             let (pattern, _domain_kind) =
                                 binder.try_as_type(tycker, TyckError::SortMismatch)?;
                             let witness = Alloc::alloc(tycker, pattern, (), &());
@@ -148,8 +147,8 @@ impl TermChecker<'_> {
                             let full_definition = pattern.introduce_payload(tycker, definition);
                             let full_definition = full_definition?;
                             let body_env =
-                                self.mk(Assign(pattern, full_definition)).tyck_k(tycker, ())?.info;
-                            let body = TyEnvT::new(body_env, body).tyck_k(tycker, Action::syn())?;
+                                self.mk(Assign(pattern, full_definition)).tyck(tycker, ())?.info;
+                            let body = TyEnvT::new(body_env, body).tyck(tycker, Action::syn())?;
                             let (body, body_kind) =
                                 body.try_as_type(tycker, TyckError::SortMismatch)?;
                             let vtype = ss::VType.build(tycker, &self.info);
@@ -201,7 +200,7 @@ impl TermChecker<'_> {
                 | Switch::Ana(AnnId::Kind(kind)) => {
                     let vtype = ss::VType.build(tycker, &self.info);
                     Lub::lub(vtype, kind, tycker)?;
-                    self.tyck_k(tycker, Action::syn())?
+                    self.tyck(tycker, Action::syn())?
                 }
                 | Switch::Ana(AnnId::Set | AnnId::Type(_)) => {
                     tycker.err(TyckError::SortMismatch)?
@@ -210,18 +209,18 @@ impl TermChecker<'_> {
         })
     }
 
-    pub(super) fn check_pack_k<'db>(
+    pub(super) fn check_pack<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::Pack, switch: Switch<AnnId>,
     ) -> Result<TermAnnId> {
         Ok({
             let su::Pack { mode, binder, definition: evidence, body } = term;
             match switch {
                 | Switch::Syn => {
-                    let definition = self.mk(evidence).tyck_k(tycker, Action::syn())?;
+                    let definition = self.mk(evidence).tyck(tycker, Action::syn())?;
                     match definition {
                         | TermAnnId::Type(definition, definition_kind) => {
                             let binder = tycker
-                                .check_type_payload_pattern_k(self.mk(binder), definition_kind)?;
+                                .check_type_payload_pattern(self.mk(binder), definition_kind)?;
                             let (pattern, _domain_kind) =
                                 binder.try_as_type(tycker, TyckError::SortMismatch)?;
                             let witness = Alloc::alloc(tycker, pattern, (), &());
@@ -231,7 +230,7 @@ impl TermChecker<'_> {
                             let full_definition = pattern.introduce_payload(tycker, definition);
                             let full_definition = full_definition?;
                             let body_env =
-                                self.mk(Assign(pattern, full_definition)).tyck_k(tycker, ())?.info;
+                                self.mk(Assign(pattern, full_definition)).tyck(tycker, ())?.info;
                             // Sealing replaces the payload's references to the
                             // witness with the abstract binder, so the emitted
                             // existential body stays dependent on the seal while the
@@ -253,7 +252,7 @@ impl TermChecker<'_> {
                                     }
                                 }
                             };
-                            let body = TyEnvT::new(body_env, body).tyck_k(tycker, Action::syn())?;
+                            let body = TyEnvT::new(body_env, body).tyck(tycker, Action::syn())?;
                             match body {
                                 | TermAnnId::Value(body, raw_body_ty) => {
                                     let body_ty = match &seal_absts {
@@ -339,7 +338,7 @@ impl TermChecker<'_> {
                     }
                 }
                 | Switch::Ana(AnnId::Type(expected)) => {
-                    let checked = self.tyck_k(tycker, Action::syn())?;
+                    let checked = self.tyck(tycker, Action::syn())?;
                     let (cons, ty) = checked.try_as_value(tycker, TyckError::SortMismatch)?;
                     let ty = Lub::lub(expected, ty, tycker)?;
                     TermAnnId::Value(cons, ty)

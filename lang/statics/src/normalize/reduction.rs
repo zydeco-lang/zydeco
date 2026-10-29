@@ -233,7 +233,7 @@ impl TypeId {
 
     /// Apply one checked type argument, retaining an application while its result is still a type
     /// function. A saturated result materializes the complete left-associated spine at once.
-    pub(crate) fn apply_type_argument_k(
+    pub(crate) fn apply_type_argument(
         self, tycker: &mut Tycker<'_>, argument: TypeId, result_kind: KindId,
     ) -> Result<TypeId> {
         if matches!(tycker.kind_filled(&result_kind)?, Kind::Arrow(_)) {

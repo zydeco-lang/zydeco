@@ -56,15 +56,15 @@ impl<'a> Tycker<'a> {
     }
 
     /// Check the complete source term without the finish phase.
-    pub fn run_judgments_k(&mut self, root: su::TermId) -> Result<TermAnnId> {
+    pub fn run_judgments(&mut self, root: su::TermId) -> Result<TermAnnId> {
         let checked = self.guarded(|tycker| {
             let env = TyEnvT::new(Default::default(), ());
             let inference = InferenceRegion::enter(tycker);
-            let root = env.mk(root).tyck_k(tycker, Action::syn())?;
+            let root = env.mk(root).tyck(tycker, Action::syn())?;
             if matches!(root, TermAnnId::Hole(_)) {
                 tycker.err(TyckError::SortMismatch)?
             }
-            inference.close_k(tycker)?;
+            inference.close(tycker)?;
             Ok(root)
         });
         if checked.is_err() {
@@ -73,12 +73,12 @@ impl<'a> Tycker<'a> {
         checked
     }
 
-    pub fn run_source_k(&mut self, root: su::TermId) -> Result<TermAnnId> {
-        let root = self.run_judgments_k(root);
+    pub fn run_source(&mut self, root: su::TermId) -> Result<TermAnnId> {
+        let root = self.run_judgments(root);
         self.finish_judgments();
         let root = root?;
-        self.finish_check_k()?;
-        self.elaborate_static_root_k(root)?;
+        self.finish_check()?;
+        self.elaborate_static_root(root)?;
         Ok(root)
     }
 
@@ -129,7 +129,7 @@ impl<'a> Tycker<'a> {
 
     /// Check a source while retaining static facts from a rejected term.
     pub fn check_source_outcome(mut self, root: su::TermId) -> SourceCheckOutcome {
-        match self.run_source_k(root) {
+        match self.run_source(root) {
             | Ok(root) => {
                 self.strip_checker_state();
                 SourceCheckOutcome::Checked(CheckedSource {
@@ -150,12 +150,12 @@ impl<'a> Tycker<'a> {
         }
     }
 
-    pub(crate) fn finish_check_k(&mut self) -> Result<()> {
+    pub(crate) fn finish_check(&mut self) -> Result<()> {
         self.resolve_holes_and_collect();
-        self.normalize_and_validate_k()
+        self.normalize_and_validate()
     }
 
-    pub(crate) fn elaborate_static_root_k(&mut self, root: TermAnnId) -> Result<()> {
+    pub(crate) fn elaborate_static_root(&mut self, root: TermAnnId) -> Result<()> {
         let elaboration = crate::elaborate::static_values::StaticElaborator::run(self, root)?;
         self.statics.static_elaboration = Some(elaboration);
         Ok(())
@@ -171,7 +171,7 @@ impl<'a> Tycker<'a> {
 
     /// Normalize and validate the checked arena, the second half of the finish
     /// phase.
-    pub(crate) fn normalize_and_validate_k(&mut self) -> Result<()> {
+    pub(crate) fn normalize_and_validate(&mut self) -> Result<()> {
         let mut normalizer = crate::normalize::FilledNormalizer::default();
         let kind_ids: Vec<_> = self.statics.kinds_pre.iter().map(|(id, _)| *id).collect();
         let kinds = kind_ids

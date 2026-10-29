@@ -29,7 +29,7 @@ impl PatAnnId {
 
 impl TermAnnId {
     /// Promote an already synthesized classifier to an ordinary static term.
-    pub(super) fn classifier_k(self, tycker: &mut Tycker<'_>) -> Result<Self> {
+    pub(super) fn classifier(self, tycker: &mut Tycker<'_>) -> Result<Self> {
         match self {
             | Self::Type(_, kind) => Ok(Self::Kind(kind)),
             | Self::Value(_, ty) | Self::Compu(_, ty) => {

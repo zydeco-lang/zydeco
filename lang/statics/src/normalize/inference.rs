@@ -55,7 +55,7 @@ impl InferenceRefinement {
 impl TypeId {
     /// Reveal a solved computation type, refining an unresolved metavariable to
     /// a value-to-computation arrow when application requires that shape.
-    pub(crate) fn reveal_or_refine_arrow_k(
+    pub(crate) fn reveal_or_refine_arrow(
         self, tycker: &mut Tycker<'_>, env: &TyEnv,
     ) -> Result<Type> {
         let ctype = Alloc::alloc(tycker, CType, (), &());
@@ -69,7 +69,7 @@ impl TypeId {
 
     /// Reveal a solved value type, refining an unresolved metavariable to one
     /// product layer when tuple syntax requires that shape.
-    pub(crate) fn reveal_or_refine_product_k(
+    pub(crate) fn reveal_or_refine_product(
         self, tycker: &mut Tycker<'_>, env: &TyEnv,
     ) -> Result<Type> {
         let view = match InferenceRefinement::unresolved_type_fill(tycker, self)? {
@@ -90,7 +90,7 @@ impl TypeId {
     /// Direct product structure needs no second recursive substitution. If unrolling exposes a
     /// different representation (for example, through a seal), that newly exposed tree still
     /// receives the environment once.
-    pub(crate) fn reveal_or_refine_prepared_product_k(
+    pub(crate) fn reveal_or_refine_prepared_product(
         self, tycker: &mut Tycker<'_>, env: &TyEnv,
     ) -> Result<Type> {
         let view = match InferenceRefinement::unresolved_type_fill(tycker, self)? {
@@ -108,10 +108,8 @@ impl TypeId {
             | None => tycker.type_filled(&view),
         }
     }
-    pub(crate) fn view_product_k(
-        self, tycker: &mut Tycker<'_>, env: &TyEnv,
-    ) -> Result<Prod<TypeId>> {
-        match self.reveal_or_refine_product_k(tycker, env)? {
+    pub(crate) fn view_product(self, tycker: &mut Tycker<'_>, env: &TyEnv) -> Result<Prod<TypeId>> {
+        match self.reveal_or_refine_product(tycker, env)? {
             | Type::Prod(product) => Ok(product),
             | _ => tycker.err(TyckError::TypeExpected {
                 expected: "a product with enough components".to_string(),
@@ -119,10 +117,10 @@ impl TypeId {
             }),
         }
     }
-    pub(crate) fn view_prepared_product_k(
+    pub(crate) fn view_prepared_product(
         self, tycker: &mut Tycker<'_>, env: &TyEnv,
     ) -> Result<Prod<TypeId>> {
-        match self.reveal_or_refine_prepared_product_k(tycker, env)? {
+        match self.reveal_or_refine_prepared_product(tycker, env)? {
             | Type::Prod(product) => Ok(product),
             | _ => tycker.err(TyckError::TypeExpected {
                 expected: "a product with enough components".to_string(),

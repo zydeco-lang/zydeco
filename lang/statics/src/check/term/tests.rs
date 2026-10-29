@@ -16,14 +16,14 @@ fn prepared_products_substitute_once_and_reenter_after_unrolling() {
 
         let product = Alloc::alloc(tycker, ss::Prod(vec![source, source]), vtype, &empty);
         let prepared = product.subst_env(tycker, &environment).unwrap();
-        let ss::Prod(components) = prepared.view_prepared_product_k(tycker, &environment).unwrap();
+        let ss::Prod(components) = prepared.view_prepared_product(tycker, &environment).unwrap();
         assert_eq!(components.as_slice(), [target, target]);
 
         let definition = Alloc::alloc(tycker, ss::Prod(vec![source, unit]), vtype, &empty);
         let witness: ss::AbstId = Alloc::alloc(tycker, None::<ss::DefId>, vtype, &());
         tycker.record_seal(witness, definition);
         let sealed = Alloc::alloc(tycker, witness, vtype, &empty);
-        let ss::Prod(components) = sealed.view_prepared_product_k(tycker, &environment).unwrap();
+        let ss::Prod(components) = sealed.view_prepared_product(tycker, &environment).unwrap();
         assert_eq!(components.as_slice(), [target, unit]);
         assert!(tycker.errors.is_empty());
     });
@@ -48,7 +48,7 @@ fn prepared_annotations_survive_lexical_environment_extensions() {
         let extended_environment = prepared_environment.clone() + [(inner_def, unit.into())];
         let hole = tycker.data.root(tycker.db);
         let checked = TyEnvT::new(extended_environment, hole)
-            .tyck_k(tycker, Action::ana_prepared(prepared.into(), &prepared_environment))
+            .tyck(tycker, Action::ana_prepared(prepared.into(), &prepared_environment))
             .unwrap();
 
         assert!(matches!(checked, TermAnnId::Value(_, annotation) if annotation == target));
@@ -96,7 +96,7 @@ fn forall_bodies_preserve_prepared_expected_types() {
             let root = tycker.data.root(tycker.db);
 
             let checked = TyEnvT::new(environment.clone(), root)
-                .tyck_k(tycker, Action::ana_prepared(expected.into(), &environment))
+                .tyck(tycker, Action::ana_prepared(expected.into(), &environment))
                 .unwrap();
 
             let TermAnnId::Compu(_, annotation) = checked else {
@@ -142,7 +142,7 @@ fn checked_type_applications_suspend_function_kinded_prefixes() {
         let first_argument = Alloc::alloc(tycker, ss::UnitTy, vtype, &environment);
         let second_argument = Alloc::alloc(tycker, ss::OpaqueTy, vtype, &environment);
 
-        let partial = function.apply_type_argument_k(tycker, first_argument, result_kind).unwrap();
+        let partial = function.apply_type_argument(tycker, first_argument, result_kind).unwrap();
         assert!(matches!(
             tycker.type_filled(&partial).unwrap(),
             ss::Type::App(ss::App(found, argument))
@@ -153,7 +153,7 @@ fn checked_type_applications_suspend_function_kinded_prefixes() {
         normalizer.normalize_type(partial, tycker).unwrap();
         assert!(matches!(tycker.statics.normalized_at(partial), Some(ss::Type::App(_))));
 
-        let saturated = partial.apply_type_argument_k(tycker, second_argument, vtype).unwrap();
+        let saturated = partial.apply_type_argument(tycker, second_argument, vtype).unwrap();
         let ss::Type::Prod(ss::Prod(found_components)) =
             tycker.type_filled(&saturated).unwrap().to_owned()
         else {
@@ -194,7 +194,7 @@ fn synthesized_ascriptions_preserve_current_annotations() {
                 TyEnv::from_iter([(source_def, annotation.into()), (target_def, unit.into())]);
             let root = tycker.data.root(tycker.db);
 
-            let checked = TyEnvT::new(environment, root).tyck_k(tycker, Action::syn()).unwrap();
+            let checked = TyEnvT::new(environment, root).tyck(tycker, Action::syn()).unwrap();
 
             assert!(matches!(
                 checked,

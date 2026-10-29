@@ -123,7 +123,7 @@ impl CheckedTerm {
     pub(super) fn root(self) -> TermAnnId {
         self.0
     }
-    pub(super) fn require_complete_k(
+    pub(super) fn require_complete(
         self, tycker: &mut Tycker<'_>, error: TyckError,
     ) -> Result<Self> {
         match self.0 {
@@ -137,7 +137,7 @@ impl CheckedTerm {
 
     /// Compare a use-site expectation with the term's canonical synthesized
     /// classifier without changing the shared checked term.
-    pub(super) fn reconcile_k(
+    pub(super) fn reconcile(
         self, tycker: &mut Tycker<'_>, switch: Switch<AnnId>,
     ) -> Result<TermAnnId> {
         let expected = match switch {
@@ -205,7 +205,7 @@ impl InferenceRegion {
         Self { inherited }
     }
 
-    pub(super) fn close_k(self, tycker: &mut Tycker<'_>) -> Result<()> {
+    pub(super) fn close(self, tycker: &mut Tycker<'_>) -> Result<()> {
         let candidates = tycker
             .statics
             .fills
@@ -246,14 +246,14 @@ impl Tycker<'_> {
             .expect("resolved source syntax is acyclic");
         for boundary in sources.boundaries {
             if self.check_counts.get(&su::EntityId::Term(boundary)).is_none() {
-                let _ = TyEnvT::new(TyEnv::new(), boundary).tyck_k(self, Action::syn());
+                let _ = TyEnvT::new(TyEnv::new(), boundary).tyck(self, Action::syn());
             }
         }
     }
 
     /// Synthesize one resolved term in its lexical context, retaining the
     /// resulting typed root or recorded failure for every later reference.
-    pub(super) fn synthesize_once_k(
+    pub(super) fn synthesize_once(
         &mut self, term: su::TermId, environment: &TyEnv,
         synthesize: impl FnOnce(&mut Self) -> Result<TermAnnId>,
     ) -> Result<CheckedTerm> {
@@ -291,7 +291,7 @@ mod tests {
         let mut tycker = Tycker::new(&db, data, &spans, &scoped);
         let env = TyEnv::default();
         let expected = Alloc::alloc(&mut tycker, ss::VType, (), &());
-        let checked = TyEnvT::new(env, boundary).tyck_k(&mut tycker, Action::ana(expected.into()));
+        let checked = TyEnvT::new(env, boundary).tyck(&mut tycker, Action::ana(expected.into()));
 
         assert!(checked.is_err());
         let [entry] = tycker.errors.as_slice() else { panic!("expected one type-checking error") };
@@ -322,7 +322,7 @@ mod tests {
         let data = crate::query::intern_pending(&db);
         let mut tycker = Tycker::new(&db, data, &spans, &scoped);
         let result =
-            TyEnvT::new(TyEnv::default(), boundary).tyck_k(&mut tycker, Action::ana(AnnId::Set));
+            TyEnvT::new(TyEnv::default(), boundary).tyck(&mut tycker, Action::ana(AnnId::Set));
 
         assert!(result.is_err());
         let [entry] = tycker.errors.as_slice() else { panic!("expected one type-checking error") };
@@ -351,8 +351,7 @@ mod tests {
             |tycker, (provider, first, second)| {
                 let root = tycker.data.root(tycker.db);
 
-                let checked =
-                    TyEnvT::new(TyEnv::new(), root).tyck_k(tycker, Action::syn()).unwrap();
+                let checked = TyEnvT::new(TyEnv::new(), root).tyck(tycker, Action::syn()).unwrap();
 
                 assert!(matches!(checked, TermAnnId::Value(_, _)));
                 assert_eq!(tycker.check_counts.get(&su::EntityId::Term(provider)), Some(&1),);
@@ -389,12 +388,10 @@ mod tests {
                 let environment = TyEnv::new();
 
                 let checked = tycker
-                    .synthesize_once_k(provider, &environment, |tycker| {
-                        let checked =
-                            tycker.synthesize_once_k(provider, &environment, |tycker| {
-                                TyEnvT::new(environment.clone(), provider)
-                                    .tyck_k(tycker, Action::syn())
-                            })?;
+                    .synthesize_once(provider, &environment, |tycker| {
+                        let checked = tycker.synthesize_once(provider, &environment, |tycker| {
+                            TyEnvT::new(environment.clone(), provider).tyck(tycker, Action::syn())
+                        })?;
                         Ok(checked.root())
                     })
                     .unwrap();
@@ -417,14 +414,14 @@ mod tests {
             },
             |tycker, provider| {
                 let environment = TyEnv::new();
-                let rejected = tycker.synthesize_once_k(provider, &environment, |tycker| {
-                    tycker.synthesize_once_k(provider, &environment, |tycker| {
-                        TyEnvT::new(environment.clone(), provider).tyck_k(tycker, Action::syn())
+                let rejected = tycker.synthesize_once(provider, &environment, |tycker| {
+                    tycker.synthesize_once(provider, &environment, |tycker| {
+                        TyEnvT::new(environment.clone(), provider).tyck(tycker, Action::syn())
                     })?;
                     tycker.err(TyckError::MissingAnnotation)
                 });
                 assert_eq!(rejected, Err(ReportedError));
-                let repeated = tycker.synthesize_once_k(provider, &environment, |_| {
+                let repeated = tycker.synthesize_once(provider, &environment, |_| {
                     panic!("a recorded rejection must not replay synthesis")
                 });
                 assert_eq!(repeated, Err(ReportedError));
@@ -453,7 +450,7 @@ mod tests {
             },
             |tycker, (provider, first, second)| {
                 let root = tycker.data.root(tycker.db);
-                assert!(tycker.run_judgments_k(root).is_err());
+                assert!(tycker.run_judgments(root).is_err());
                 for source in [provider, first, second] {
                     assert_eq!(tycker.check_counts.get(&su::EntityId::Term(source)), Some(&1));
                 }
@@ -476,13 +473,12 @@ mod tests {
             },
             |tycker, (query, operand, definition)| {
                 let original =
-                    TyEnvT::new(TyEnv::new(), query).tyck_k(tycker, Action::syn()).unwrap();
+                    TyEnvT::new(TyEnv::new(), query).tyck(tycker, Action::syn()).unwrap();
                 let TermAnnId::Type(ty, _) = original else {
                     panic!("typeof unit must produce a type")
                 };
                 let environment = TyEnv::new() + [(definition, AnnId::Type(ty))];
-                let repeated =
-                    TyEnvT::new(environment, query).tyck_k(tycker, Action::syn()).unwrap();
+                let repeated = TyEnvT::new(environment, query).tyck(tycker, Action::syn()).unwrap();
                 assert_eq!(original, repeated);
                 assert_eq!(tycker.check_counts.get(&su::EntityId::Term(operand)), Some(&1));
                 assert!(tycker.errors.is_empty());
