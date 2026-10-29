@@ -1444,7 +1444,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
         let stack = self.stack();
         let (stack, spine, demands) = self.consumed(stack);
         let defs = ["__primitive_first__", "__primitive_second__"].map(|name| {
-            let def = self.norm.arena.admin.fresh();
+            let def = self.norm.arena.admin.fresh_def();
             self.norm.arena.admin.insert_def(def, VarName(name.into()));
             def
         });

@@ -1,12 +1,11 @@
-//! Owning arenas and constructors for high Stack IR.
+//! Owning arenas and constructors for lexical SPS.
 
 use super::syntax::*;
 use crate::static_syntax as ss;
 use derive_more::{AsMut, AsRef};
 use zydeco_derive::{AsMutSelf, AsRefSelf};
-use zydeco_surface::scoped::arena::ScopedScope;
 
-/// Allocation scope for high Stack IR nodes and synthetic scoped definitions.
+/// Allocation scope for lexical SPS nodes and the definitions that stack IR lowering introduces.
 #[derive(Debug)]
 pub enum SpsScope {}
 
@@ -15,69 +14,6 @@ impl Allocates<ValueId> for SpsScope {}
 impl Allocates<StackId> for SpsScope {}
 impl Allocates<CompuId> for SpsScope {}
 impl Allocates<DefId> for SpsScope {}
-
-/// Generated definition names and typed-source provenance for high Stack IR.
-#[derive(Debug, AsRef, AsMut, AsRefSelf, AsMutSelf)]
-pub struct AdminArena {
-    /// ID allocator shared by all stack-IR node categories.
-    pub(crate) allocator: IdAllocator<SpsScope>,
-
-    /// Names introduced by Stack IR lowering. Source and typed-elaboration
-    /// names stay in their immutable phase arenas.
-    pub defs: ArenaSparse<ScopedScope, DefId>,
-
-    /// One source pattern may originate multiple generated ZIR patterns; every
-    /// generated pattern has at most one source pattern.
-    pub pats: ArenaForth<ss::PatId, VPatId>,
-    /// One source term may originate multiple generated ZIR nodes; every
-    /// generated node has at most one source term.
-    pub terms: ArenaForth<ss::TermId, TermId>,
-}
-
-impl AdminArena {
-    pub fn new() -> Self {
-        Self {
-            allocator: IdAllocator::new(),
-            defs: ArenaSparse::default(),
-            pats: ArenaForth::new(),
-            terms: ArenaForth::new(),
-        }
-    }
-
-    pub(crate) fn fresh<Id>(&mut self) -> Id
-    where
-        Id: ArenaId,
-        SpsScope: Allocates<Id>,
-    {
-        self.allocator.alloc()
-    }
-
-    pub(crate) fn insert_def(&mut self, id: DefId, name: VarName) {
-        self.defs.insert_new(id, name);
-    }
-
-    /// The typed source term that originated a generated node, if any.
-    pub fn term_site(&self, id: impl Into<TermId>) -> Option<ss::TermId> {
-        self.terms.back(&id.into()).copied()
-    }
-
-    /// The typed source pattern that originated a generated pattern, if any.
-    pub fn pattern_site(&self, id: VPatId) -> Option<ss::PatId> {
-        self.pats.back(&id).copied()
-    }
-}
-
-impl DefinitionNames for AdminArena {
-    fn generated_defs(&self) -> &ArenaSparse<ScopedScope, DefId> {
-        &self.defs
-    }
-}
-
-impl Default for AdminArena {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 impl ArenaSchema<VPatId> for SpsScope {
     type Item = ValuePattern;
@@ -92,21 +28,8 @@ impl ArenaSchema<CompuId> for SpsScope {
     type Item = Computation;
 }
 
-impl Nodes for SpsInnerArena {
-    type Phase = Sps;
-    fn vpats(&self) -> &ArenaSparse<SpsScope, VPatId> {
-        &self.vpats
-    }
-    fn values(&self) -> &ArenaSparse<SpsScope, ValueId> {
-        &self.values
-    }
-    fn stacks(&self) -> &ArenaSparse<SpsScope, StackId> {
-        &self.stacks
-    }
-    fn compus(&self) -> &ArenaSparse<SpsScope, CompuId> {
-        &self.compus
-    }
-}
+/// Generated definition names and typed-source provenance for lexical SPS.
+pub type AdminArena = crate::arena::AdminArena<Sps>;
 
 /// All arenas for the stack-passing style ZIR.
 /// The definitions and patterns are equivalent to the ones in
@@ -142,6 +65,34 @@ pub struct SpsInnerArena {
     pub stacks: ArenaSparse<SpsScope, StackId>,
     /// computation arena
     pub compus: ArenaSparse<SpsScope, CompuId>,
+}
+
+impl Nodes for SpsInnerArena {
+    type Phase = Sps;
+    fn vpats(&self) -> &ArenaSparse<SpsScope, VPatId> {
+        &self.vpats
+    }
+    fn values(&self) -> &ArenaSparse<SpsScope, ValueId> {
+        &self.values
+    }
+    fn stacks(&self) -> &ArenaSparse<SpsScope, StackId> {
+        &self.stacks
+    }
+    fn compus(&self) -> &ArenaSparse<SpsScope, CompuId> {
+        &self.compus
+    }
+    fn vpats_mut(&mut self) -> &mut ArenaSparse<SpsScope, VPatId> {
+        &mut self.vpats
+    }
+    fn values_mut(&mut self) -> &mut ArenaSparse<SpsScope, ValueId> {
+        &mut self.values
+    }
+    fn stacks_mut(&mut self) -> &mut ArenaSparse<SpsScope, StackId> {
+        &mut self.stacks
+    }
+    fn compus_mut(&mut self) -> &mut ArenaSparse<SpsScope, CompuId> {
+        &mut self.compus
+    }
 }
 
 /// A complete Stack IR program with one computation at its top level.
@@ -204,70 +155,4 @@ impl SpsArena {
     }
 }
 
-impl<U, Arena> Construct<ValuePattern, VPatId, Arena> for U
-where
-    Arena: AsMut<SpsArena>,
-    U: Into<ValuePattern>,
-{
-    type Site = ss::PatId;
-    fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> VPatId {
-        let this = &mut *arena.as_mut();
-        let vpat_id = this.admin.fresh();
-        this.inner.vpats.insert_new(vpat_id, self.into());
-        if let Some(site) = site {
-            this.admin.pats.insert_new(site, vpat_id);
-        }
-        vpat_id
-    }
-}
-
-impl<U, Arena> Construct<Value, ValueId, Arena> for U
-where
-    Arena: AsMut<SpsArena>,
-    U: Into<Value>,
-{
-    type Site = ss::TermId;
-    fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> ValueId {
-        let this = &mut *arena.as_mut();
-        let value_id = this.admin.fresh();
-        this.inner.values.insert_new(value_id, self.into());
-        if let Some(site) = site {
-            this.admin.terms.insert_new(site, TermId::Value(value_id));
-        }
-        value_id
-    }
-}
-
-impl<U, Arena> Construct<Stack, StackId, Arena> for U
-where
-    Arena: AsMut<SpsArena>,
-    U: Into<Stack>,
-{
-    type Site = ss::TermId;
-    fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> StackId {
-        let this = &mut *arena.as_mut();
-        let stack_id = this.admin.fresh();
-        this.inner.stacks.insert_new(stack_id, self.into());
-        if let Some(site) = site {
-            this.admin.terms.insert_new(site, TermId::Stack(stack_id));
-        }
-        stack_id
-    }
-}
-
-impl<U, Arena> Construct<Computation, CompuId, Arena> for U
-where
-    Arena: AsMut<SpsArena>,
-    U: Into<Computation>,
-{
-    type Site = ss::TermId;
-    fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> CompuId {
-        let this = &mut *arena.as_mut();
-        let compu_id = this.admin.fresh();
-        this.inner.compus.insert_new(compu_id, self.into());
-        if let Some(site) = site {
-            this.admin.terms.insert_new(site, TermId::Compu(compu_id));
-        }
-        compu_id
-    }
-}
+crate::arena::phase_constructors!(Sps, SpsArena);

@@ -97,7 +97,7 @@ fn deep_argument_stacks_rebuild_on_a_small_stack() {
 fn deep_alias_parameters_preserve_bindings_on_a_small_stack() {
     Depth::small_stack(|| {
         let mut arena = SpsArena::default();
-        let def: DefId = arena.admin.fresh();
+        let def: DefId = arena.admin.fresh_def();
         let mut binder: VPatId = def.build(&mut arena, None);
         for _ in 0..8192 {
             let hole = Hole.build(&mut arena, None);
@@ -119,7 +119,7 @@ fn deep_alias_parameters_preserve_bindings_on_a_small_stack() {
 fn deep_unknown_branches_join_sibling_demands_on_a_small_stack() {
     Depth::small_stack(|| {
         let mut arena = SpsArena::default();
-        let scrutinee: DefId = arena.admin.fresh();
+        let scrutinee: DefId = arena.admin.fresh_def();
         let mut root = Depth::returning(&mut arena);
         for _ in 0..2048 {
             let arms = [root, Depth::returning(&mut arena)]

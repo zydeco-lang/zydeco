@@ -263,3 +263,50 @@ impl<'a, N: Nodes, V: Visitor<N::Phase>> Folder for AnalysisFolder<'a, '_, N, V>
         }
     }
 }
+
+/// Lexical scopes that open at nodes of one phase, for analyses that resolve a name against
+/// the regions around its occurrence. A scope registered for a node opens when the traversal
+/// enters that node and closes when the node exits.
+pub struct Scopes<P: Phase, S> {
+    /// Scopes that open when the traversal reaches the keyed node.
+    openings: FxHashMap<EntityId<P>, S>,
+    /// The open scopes around the current node, innermost last, each with the node that opened it.
+    open: Vec<(EntityId<P>, S)>,
+}
+
+impl<P: Phase, S> Default for Scopes<P, S> {
+    fn default() -> Self {
+        Self { openings: FxHashMap::default(), open: Vec::new() }
+    }
+}
+
+impl<P: Phase, S> Scopes<P, S> {
+    /// Open `scope` when the traversal enters `node`.
+    pub fn open_at(&mut self, node: EntityId<P>, scope: S) {
+        self.openings.insert(node, scope);
+    }
+
+    /// Open the scope registered for the node being entered, if any.
+    pub fn enter(&mut self, node: EntityId<P>) {
+        if let Some(scope) = self.openings.remove(&node) {
+            self.open.push((node, scope));
+        }
+    }
+
+    /// Open `scope` at the node being entered.
+    pub fn push(&mut self, node: EntityId<P>, scope: S) {
+        self.open.push((node, scope));
+    }
+
+    /// Close the scopes that the exiting `node` opened.
+    pub fn exit(&mut self, node: EntityId<P>) {
+        while self.open.last().is_some_and(|(opener, _)| *opener == node) {
+            self.open.pop();
+        }
+    }
+
+    /// The open scopes, innermost first.
+    pub fn innermost_first(&self) -> impl Iterator<Item = &S> {
+        self.open.iter().rev().map(|(_, scope)| scope)
+    }
+}

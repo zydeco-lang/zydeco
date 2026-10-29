@@ -2,10 +2,10 @@
 
 use super::entry::EntryKind;
 use super::syntax::*;
-use super::traverse::{Edge, EntityId, Node, Occurrence, Together, Traversal, Visitor};
+use super::traverse::{Edge, Node, Occurrence, Scopes, Together, Traversal, Visitor};
 use super::variables::Variables;
 use crate::scheme::{FrameShape, PlacementError, SpsScheme, StackConsumer, StackShape};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use zydeco_utils::fold::{Driver, Explicit};
 
 /// A lexical first-order SPS tree that keeps the stack placement of its scheme's fragment.
@@ -108,10 +108,8 @@ struct SpsLowValidator<'a> {
     blocks: Vec<ValueId>,
     /// Closed labels and their bodies, which must read no variable.
     closed_labels: Vec<(DefId, CompuId)>,
-    /// The scopes around the current node, innermost last, each with the node that opened it.
-    scopes: Vec<(EntityId, LabelScope)>,
-    /// Scopes that open when the traversal reaches the keyed node.
-    openings: HashMap<EntityId, LabelScope>,
+    /// The label scopes around the current node.
+    scopes: Scopes<LabelScope>,
 }
 
 /// A region that a label jump resolves through.
@@ -189,8 +187,7 @@ impl<'a> SpsLowValidator<'a> {
             labels: HashSet::new(),
             blocks: Vec::new(),
             closed_labels: Vec::new(),
-            scopes: Vec::new(),
-            openings: HashMap::new(),
+            scopes: Scopes::default(),
         };
         let mut analyses = Together { first: validator, second: Variables::default() };
         Traversal { arena }.run_with_driver::<D>(root.into(), &mut analyses);
@@ -244,9 +241,7 @@ impl<'a> SpsLowValidator<'a> {
                 | Node::Computation(compu, _) => SpsLowValidationError::SharedComputation { compu },
             });
         }
-        if let Some(scope) = self.openings.remove(&node.id()) {
-            self.scopes.push((node.id(), scope));
-        }
+        self.scopes.enter(node.id());
         match node {
             | Node::Pattern(_, _) => {}
             | Node::Value(id, Value::Ext(ValueExt::Block(Block { label, entry, .. }))) => {
@@ -254,7 +249,7 @@ impl<'a> SpsLowValidator<'a> {
                     return Err(SpsLowValidationError::DuplicateBlockLabel { label: *label });
                 }
                 self.blocks.push(id);
-                self.scopes.push((node.id(), LabelScope::Block(entry.kind())));
+                self.scopes.push(node.id(), LabelScope::Block(entry.kind()));
             }
             | Node::Value(_, _) => {}
             | Node::Stack(id, _) => {
@@ -274,7 +269,7 @@ impl<'a> SpsLowValidator<'a> {
                         if *kind == LabelKind::Closed {
                             self.closed_labels.push((*label, *body));
                         }
-                        self.openings.insert((*tail).into(), LabelScope::Bound(*label, *kind));
+                        self.scopes.open_at((*tail).into(), LabelScope::Bound(*label, *kind));
                     }
                     | Computation::Ext(CompuExt::JumpLabel(JumpLabel { label, .. })) => {
                         self.resolve(id, *label)?;
@@ -293,7 +288,7 @@ impl<'a> SpsLowValidator<'a> {
     /// frame, so its jumps stay in that block; no jump leaves a closure block.
     fn resolve(&self, compu: CompuId, label: DefId) -> Result<(), SpsLowValidationError> {
         let mut crossed = false;
-        for (_, scope) in self.scopes.iter().rev() {
+        for scope in self.scopes.innermost_first() {
             match *scope {
                 | LabelScope::Block(EntryKind::Closure) => {
                     return Err(SpsLowValidationError::LabelUnderClosure { compu, label });
@@ -347,9 +342,7 @@ impl Visitor<SpsLow> for SpsLowValidator<'_> {
     }
 
     fn exit(&mut self, node: Node<'_>) {
-        while self.scopes.last().is_some_and(|(opener, _)| *opener == node.id()) {
-            self.scopes.pop();
-        }
+        self.scopes.exit(node.id());
     }
 }
 

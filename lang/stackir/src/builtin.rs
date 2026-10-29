@@ -116,7 +116,7 @@ impl CompareBranch {
             ["__compare_first__", "__compare_second__", "__compare_true__", "__compare_false__"]
                 .map(|name| {
                     let admin = &mut arena.as_mut().admin;
-                    let def = admin.fresh();
+                    let def = admin.fresh_def();
                     admin.insert_def(def, VarName(name.into()));
                     def
                 });
@@ -171,7 +171,7 @@ impl MemoryStep {
         let [address, value, success] =
             ["__memory_address__", "__memory_value__", "__memory_success__"].map(|name| {
                 let admin = &mut arena.as_mut().admin;
-                let def = admin.fresh();
+                let def = admin.fresh_def();
                 admin.insert_def(def, VarName(name.into()));
                 def
             });
@@ -230,7 +230,7 @@ impl AddrOffset {
 
         let [base, displacement] = ["__address_base__", "__byte_displacement__"].map(|name| {
             let admin = &mut arena.as_mut().admin;
-            let def = admin.fresh();
+            let def = admin.fresh_def();
             admin.insert_def(def, VarName(name.into()));
             def
         });

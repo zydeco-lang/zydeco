@@ -147,11 +147,12 @@ impl Snapshot {
         let formatter =
             crate::high::fmt::Formatter::new(&arena.admin, &arena.inner, &scoped, &statics);
         // Keep all raw allocation slots and source identities, normalizing only
-        // the independently allocated output key spaces in generated definitions.
+        // the independently allocated output key spaces of nodes and generated definitions.
         let rendered = program
             .root()
             .ugly(&formatter)
-            .replace(&format!("[{:?}#", program.root().key_space()), "[output#");
+            .replace(&format!("[{:?}#", program.root().key_space()), "[output#")
+            .replace(&format!("[{:?}#", arena.admin.definition_key_space()), "[definition#");
         let mut terms = arena
             .inner
             .values
@@ -201,7 +202,7 @@ fn drivers_preserve_reconstruction_sites_and_protocols() {
     let pattern_site = ss::PatId::Value(origins.alloc());
     let value_site = ss::TermId::Value(origins.alloc());
     let computation_site = ss::TermId::Compu(origins.alloc());
-    let parameter: DefId = arena.admin.fresh();
+    let parameter: DefId = arena.admin.fresh_def();
     arena.admin.insert_def(parameter, VarName("argument".into()));
     let binder = parameter.build(&mut arena, Some(pattern_site));
     arena.inner.pattern_protocols.insert_new(binder, ValueProtocol::Unit);
@@ -211,7 +212,7 @@ fn drivers_preserve_reconstruction_sites_and_protocols() {
     let tail = SReturn { stack, value }.build(&mut arena, None);
     let stack = StackVar.build(&mut arena, None);
     let body = Let { binder: Cons(binder, StackVar), bindee: stack, tail }.build(&mut arena, None);
-    let param: DefId = arena.admin.fresh();
+    let param: DefId = arena.admin.fresh_def();
     arena.admin.insert_def(param, VarName("recursive".into()));
     let stack = StackVar.build(&mut arena, None);
     let root = SFix { param, stack, body }.build(&mut arena, Some(computation_site));

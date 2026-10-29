@@ -1,13 +1,8 @@
 //! Owning arenas and constructors for first-order SPS.
 
 use super::syntax::*;
-use crate::{
-    high::arena::{AdminArena as HighAdminArena, SpsScope},
-    static_syntax as ss,
-};
 use derive_more::{AsMut, AsRef};
 use zydeco_derive::{AsMutSelf, AsRefSelf};
-use zydeco_surface::scoped::arena::ScopedScope;
 
 #[derive(Debug)]
 pub enum SpsLowScope {}
@@ -30,67 +25,8 @@ impl ArenaSchema<CompuId> for SpsLowScope {
     type Item = Computation;
 }
 
-#[derive(Debug, AsRef, AsMut, AsRefSelf, AsMutSelf)]
-pub struct SpsLowAdminArena {
-    node_allocator: IdAllocator<SpsLowScope>,
-    def_allocator: IdAllocator<SpsScope>,
-    /// Names introduced by SPS and SPSLow lowering. Source and typed-
-    /// elaboration names stay in their immutable phase arenas.
-    pub defs: ArenaSparse<ScopedScope, DefId>,
-    pub pats: ArenaForth<ss::PatId, VPatId>,
-    pub terms: ArenaForth<ss::TermId, TermId>,
-}
-
-impl SpsLowAdminArena {
-    pub fn new() -> Self {
-        Self {
-            node_allocator: IdAllocator::new(),
-            def_allocator: IdAllocator::new(),
-            defs: ArenaSparse::default(),
-            pats: ArenaForth::new(),
-            terms: ArenaForth::new(),
-        }
-    }
-
-    pub(crate) fn from_high(admin: HighAdminArena) -> Self {
-        let HighAdminArena { allocator, defs, pats: _, terms: _ } = admin;
-        Self {
-            node_allocator: IdAllocator::new(),
-            def_allocator: allocator,
-            defs,
-            pats: ArenaForth::new(),
-            terms: ArenaForth::new(),
-        }
-    }
-
-    pub(crate) fn fresh_node<Id>(&mut self) -> Id
-    where
-        Id: ArenaId,
-        SpsLowScope: Allocates<Id>,
-    {
-        self.node_allocator.alloc()
-    }
-
-    pub(crate) fn fresh_def(&mut self) -> DefId {
-        self.def_allocator.alloc()
-    }
-
-    pub(crate) fn insert_def(&mut self, id: DefId, name: VarName) {
-        self.defs.insert_new(id, name);
-    }
-}
-
-impl DefinitionNames for SpsLowAdminArena {
-    fn generated_defs(&self) -> &ArenaSparse<ScopedScope, DefId> {
-        &self.defs
-    }
-}
-
-impl Default for SpsLowAdminArena {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+/// Generated definition names and typed-source provenance for first-order SPS.
+pub type SpsLowAdminArena = crate::arena::AdminArena<SpsLow>;
 
 #[derive(Debug, Default, AsRef, AsMut, AsRefSelf, AsMutSelf)]
 pub struct SpsLowInnerArena {
@@ -110,88 +46,6 @@ pub struct SpsLowInnerArena {
     pub compus: ArenaSparse<SpsLowScope, CompuId>,
 }
 
-#[derive(Debug, Default, AsRef, AsMut, AsRefSelf, AsMutSelf)]
-pub struct SpsLowArena {
-    #[as_ref]
-    #[as_mut]
-    pub admin: SpsLowAdminArena,
-    #[as_ref]
-    #[as_mut]
-    pub inner: SpsLowInnerArena,
-}
-
-impl<U, Arena> Construct<ValuePattern, VPatId, Arena> for U
-where
-    Arena: AsMut<SpsLowArena>,
-    U: Into<ValuePattern>,
-{
-    type Site = ss::PatId;
-
-    fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> VPatId {
-        let this = &mut *arena.as_mut();
-        let id = this.admin.fresh_node();
-        this.inner.vpats.insert_new(id, self.into());
-        if let Some(site) = site {
-            this.admin.pats.insert_new(site, id);
-        }
-        id
-    }
-}
-
-impl<U, Arena> Construct<Value, ValueId, Arena> for U
-where
-    Arena: AsMut<SpsLowArena>,
-    U: Into<Value>,
-{
-    type Site = ss::TermId;
-
-    fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> ValueId {
-        let this = &mut *arena.as_mut();
-        let id = this.admin.fresh_node();
-        this.inner.values.insert_new(id, self.into());
-        if let Some(site) = site {
-            this.admin.terms.insert_new(site, TermId::Value(id));
-        }
-        id
-    }
-}
-
-impl<U, Arena> Construct<Stack, StackId, Arena> for U
-where
-    Arena: AsMut<SpsLowArena>,
-    U: Into<Stack>,
-{
-    type Site = ss::TermId;
-
-    fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> StackId {
-        let this = &mut *arena.as_mut();
-        let id = this.admin.fresh_node();
-        this.inner.stacks.insert_new(id, self.into());
-        if let Some(site) = site {
-            this.admin.terms.insert_new(site, TermId::Stack(id));
-        }
-        id
-    }
-}
-
-impl<U, Arena> Construct<Computation, CompuId, Arena> for U
-where
-    Arena: AsMut<SpsLowArena>,
-    U: Into<Computation>,
-{
-    type Site = ss::TermId;
-
-    fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> CompuId {
-        let this = &mut *arena.as_mut();
-        let id = this.admin.fresh_node();
-        this.inner.compus.insert_new(id, self.into());
-        if let Some(site) = site {
-            this.admin.terms.insert_new(site, TermId::Compu(id));
-        }
-        id
-    }
-}
-
 impl Nodes for SpsLowInnerArena {
     type Phase = SpsLow;
     fn vpats(&self) -> &ArenaSparse<SpsLowScope, VPatId> {
@@ -206,4 +60,28 @@ impl Nodes for SpsLowInnerArena {
     fn compus(&self) -> &ArenaSparse<SpsLowScope, CompuId> {
         &self.compus
     }
+    fn vpats_mut(&mut self) -> &mut ArenaSparse<SpsLowScope, VPatId> {
+        &mut self.vpats
+    }
+    fn values_mut(&mut self) -> &mut ArenaSparse<SpsLowScope, ValueId> {
+        &mut self.values
+    }
+    fn stacks_mut(&mut self) -> &mut ArenaSparse<SpsLowScope, StackId> {
+        &mut self.stacks
+    }
+    fn compus_mut(&mut self) -> &mut ArenaSparse<SpsLowScope, CompuId> {
+        &mut self.compus
+    }
 }
+
+#[derive(Debug, Default, AsRef, AsMut, AsRefSelf, AsMutSelf)]
+pub struct SpsLowArena {
+    #[as_ref]
+    #[as_mut]
+    pub admin: SpsLowAdminArena,
+    #[as_ref]
+    #[as_mut]
+    pub inner: SpsLowInnerArena,
+}
+
+crate::arena::phase_constructors!(SpsLow, SpsLowArena);

@@ -420,7 +420,7 @@ impl Normalization {
             .vars(&self.source)
             .into_iter()
             .map(|original| {
-                let fresh = self.arena.admin.fresh();
+                let fresh = self.arena.admin.fresh_def();
                 self.arena.admin.insert_def(fresh, VarName("__memory_read__".into()));
                 (original, fresh)
             })
@@ -519,7 +519,7 @@ mod tests {
 
     impl Fixture {
         fn def(&mut self, name: &str) -> DefId {
-            let def = self.arena.admin.fresh();
+            let def = self.arena.admin.fresh_def();
             self.arena.admin.insert_def(def, VarName(name.into()));
             def
         }

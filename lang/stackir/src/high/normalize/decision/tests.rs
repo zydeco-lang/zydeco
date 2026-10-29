@@ -70,7 +70,7 @@ fn suffix_decisions_borrow_physical_fields_and_preserve_shape_uncertainty() {
 #[test]
 fn false_and_uncertain_prefixes_do_not_inspect_later_children() {
     let mut arena = SpsArena::default();
-    let missing: VPatId = arena.admin.fresh();
+    let missing: VPatId = arena.admin.fresh_node();
     let hole = Hole.build(&mut arena, None);
     let rejected = Ctor(Fixture::other(), hole).build(&mut arena, None);
     let alias = Alias(ConsN::from_vec(vec![rejected, missing]).unwrap()).build(&mut arena, None);

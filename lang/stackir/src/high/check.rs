@@ -4,10 +4,9 @@
 //! additionally exposes the compiling scheme's stack placement as a checked boundary.
 
 use super::syntax::*;
-use super::traverse::{Edge, EntityId, Node, Occurrence, Traversal, Visitor};
+use super::traverse::{Edge, Node, Occurrence, Scopes, Traversal, Visitor};
 use super::variables::FreeVars;
 use crate::scheme::{FrameShape, PlacementError, SpsScheme, StackConsumer, StackShape};
-use std::collections::HashMap;
 use zydeco_statics::{arena::StaticsArena, surface_syntax::ScopedArena};
 use zydeco_surface::diagnostic::Diagnostics;
 
@@ -84,10 +83,8 @@ pub struct FragmentValidator<'a> {
     scheme: SpsScheme,
     arena: &'a SpsInnerArena,
     errors: Vec<FragmentError>,
-    /// The procedure scopes around the current node, innermost last, each with the node that opened it.
-    scopes: Vec<(EntityId, ProcedureScope)>,
-    /// Scopes that open when the traversal reaches the keyed node.
-    openings: HashMap<EntityId, ProcedureScope>,
+    /// The procedure scopes around the current node.
+    scopes: Scopes<ProcedureScope>,
 }
 
 /// A region where procedure calls are resolved.
@@ -101,7 +98,7 @@ enum ProcedureScope {
 
 impl<'a> FragmentValidator<'a> {
     pub fn new(scheme: SpsScheme, arena: &'a SpsInnerArena) -> Self {
-        Self { scheme, arena, errors: Vec::new(), scopes: Vec::new(), openings: HashMap::new() }
+        Self { scheme, arena, errors: Vec::new(), scopes: Scopes::default() }
     }
 
     fn validate(program: &SpsProgram, scheme: SpsScheme) -> Result<(), FragmentErrors> {
@@ -124,28 +121,26 @@ impl<'a> FragmentValidator<'a> {
 
     /// Open the scopes that start at `node` and check the procedure names it uses.
     fn resolve(&mut self, node: Node<'_>) -> Option<FragmentError> {
-        if let Some(scope) = self.openings.remove(&node.id()) {
-            self.scopes.push((node.id(), scope));
-        }
+        self.scopes.enter(node.id());
         match node {
             | Node::Value(_, Value::Ext(ValueExt::Closure(_))) => {
-                self.scopes.push((node.id(), ProcedureScope::Closed));
+                self.scopes.push(node.id(), ProcedureScope::Closed);
                 None
             }
             | Node::Value(value, Value::Var(def)) => self
                 .scopes
-                .iter()
-                .any(|(_, scope)| matches!(scope, ProcedureScope::Bound(bound) if bound == def))
+                .innermost_first()
+                .any(|scope| matches!(scope, ProcedureScope::Bound(bound) if bound == def))
                 .then_some(FragmentError::ProcedureAsValue { value, procedure: *def }),
             | Node::Computation(
                 _,
                 Computation::Ext(CompuExt::LetProc(LetProc { procedure, tail, .. })),
             ) => {
-                self.openings.insert((*tail).into(), ProcedureScope::Bound(*procedure));
+                self.scopes.open_at((*tail).into(), ProcedureScope::Bound(*procedure));
                 None
             }
             | Node::Computation(_, Computation::Ext(CompuExt::Fix(SFix { body, .. }))) => {
-                self.openings.insert((*body).into(), ProcedureScope::Closed);
+                self.scopes.open_at((*body).into(), ProcedureScope::Closed);
                 None
             }
             | Node::Computation(
@@ -153,7 +148,7 @@ impl<'a> FragmentValidator<'a> {
                 Computation::Ext(CompuExt::CallProc(CallProc { procedure, .. })),
             ) => {
                 let mut closed = false;
-                for (_, scope) in self.scopes.iter().rev() {
+                for scope in self.scopes.innermost_first() {
                     match scope {
                         | ProcedureScope::Closed => closed = true,
                         | ProcedureScope::Bound(bound) if bound == procedure => {
@@ -214,9 +209,7 @@ impl Visitor<Sps> for FragmentValidator<'_> {
     }
 
     fn exit(&mut self, node: Node<'_>) {
-        while self.scopes.last().is_some_and(|(opener, _)| *opener == node.id()) {
-            self.scopes.pop();
-        }
+        self.scopes.exit(node.id());
     }
 }
 
@@ -431,7 +424,7 @@ mod tests {
     impl Procedures {
         fn new() -> Self {
             let mut arena = SpsArena::default();
-            let procedure = arena.admin.fresh();
+            let procedure = arena.admin.fresh_def();
             Self { arena, procedure }
         }
 
@@ -506,7 +499,7 @@ mod tests {
 
         let mut procedures = Procedures::new();
         let call = procedures.call();
-        let param = procedures.arena.admin.fresh();
+        let param = procedures.arena.admin.fresh_def();
         let stack = StackVar.build(&mut procedures.arena, None);
         let tail = SFix { param, stack, body: call }.build(&mut procedures.arena, None);
         let body = procedures.returns_unit();

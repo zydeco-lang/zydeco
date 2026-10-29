@@ -89,7 +89,7 @@ impl<'a> ClosureConversion<'a> {
         Traversal { arena: &source.inner }.run(root.into(), &mut variables);
         let procedures = procedures::Placement::analyze(&source.inner, root);
         let arena = low::SpsLowArena {
-            admin: low::SpsLowAdminArena::from_high(target.admin),
+            admin: low::SpsLowAdminArena::continuing(target.admin),
             inner: low::SpsLowInnerArena {
                 protocols: target.inner.protocols,
                 ..Default::default()
@@ -244,7 +244,7 @@ mod tests {
         }
 
         fn def(&mut self, name: &str) -> high::DefId {
-            let def = self.arena.admin.fresh();
+            let def = self.arena.admin.fresh_def();
             self.arena.admin.insert_def(def, VarName(name.into()));
             def
         }

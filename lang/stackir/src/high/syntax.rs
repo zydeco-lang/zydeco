@@ -1,6 +1,6 @@
 //! Lexical SPS: the shared forms with closures and continuations that capture implicitly.
 
-pub use super::arena::*;
+pub use super::arena::{AdminArena, *};
 pub use crate::syntax::*;
 
 use crate::syntax as common;

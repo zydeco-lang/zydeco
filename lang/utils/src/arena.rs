@@ -228,6 +228,10 @@ impl<Scope> IdAllocator<Scope> {
     pub fn new() -> Self {
         Self { key_space: KeySpaceId::fresh(), next: 0, marker: PhantomData }
     }
+    /// The identity domain of every ID this allocator issues.
+    pub fn key_space(&self) -> KeySpaceId {
+        self.key_space
+    }
     pub fn alloc<Id>(&mut self) -> Id
     where
         Id: ArenaId,

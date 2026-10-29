@@ -7,6 +7,7 @@ pub type EntityId = crate::traverse::EntityId<SpsLow>;
 pub type Node<'a> = crate::traverse::Node<'a, SpsLow>;
 pub type Edge = crate::traverse::Edge<SpsLow>;
 pub type Traversal<'a> = crate::traverse::Traversal<'a, SpsLowInnerArena>;
+pub type Scopes<S> = crate::traverse::Scopes<SpsLow, S>;
 
 impl Children<SpsLow> for ValueExt {
     fn child(&self, position: usize) -> Option<EntityId> {

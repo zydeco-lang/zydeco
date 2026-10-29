@@ -24,7 +24,7 @@ impl Visitor<Sps> for Counts {
 #[test]
 fn composed_variables_and_ownership_observe_shared_edges_once_without_reexpanding_children() {
     let mut arena = SpsArena::default();
-    let definition: DefId = arena.admin.fresh();
+    let definition: DefId = arena.admin.fresh_def();
     let value = Value::Var(definition).build(&mut arena, None);
     let pair = VCons::new(vec![value, value], ProductLayout { arity: 2 }).build(&mut arena, None);
     let stack = StackVar.build(&mut arena, None);
@@ -67,8 +67,8 @@ fn composed_variables_and_ownership_observe_shared_edges_once_without_reexpandin
 #[test]
 fn bottom_up_variables_respect_lexical_bindings_and_continuation_scopes() {
     let mut arena = SpsArena::default();
-    let outer: DefId = arena.admin.fresh();
-    let bound: DefId = arena.admin.fresh();
+    let outer: DefId = arena.admin.fresh_def();
+    let bound: DefId = arena.admin.fresh_def();
     let binder = ValuePattern::Var(bound).build(&mut arena, None);
     let bindee = Value::Var(outer).build(&mut arena, None);
     let value = Value::Var(bound).build(&mut arena, None);
@@ -96,7 +96,7 @@ fn bottom_up_variables_respect_lexical_bindings_and_continuation_scopes() {
 #[test]
 fn cyclic_ownership_does_not_prevent_independent_repeated_edges_from_being_reported() {
     let mut arena = SpsArena::default();
-    let cyclic: ValueId = arena.admin.fresh();
+    let cyclic: ValueId = arena.admin.fresh_node();
     arena.inner.values.insert_new(
         cyclic,
         Value::Ctor(Ctor(CtorIdx { idx: 0, name: CtorName("loop".into()) }, cyclic)),

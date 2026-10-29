@@ -30,11 +30,11 @@ impl Fixture {
 #[test]
 fn drivers_preserve_binding_order_origins_layouts_and_protocols() {
     let mut fixture = Fixture::new();
-    let def: DefId = fixture.arena.admin.fresh();
+    let def: DefId = fixture.arena.admin.fresh_def();
     fixture.arena.admin.insert_def(def, VarName("argument".into()));
     let variable = fixture.pattern(def);
     let ctor = fixture.pattern(Ctor(CtorIdx { idx: 1, name: CtorName("+Item".into()) }, variable));
-    let other: DefId = fixture.arena.admin.fresh();
+    let other: DefId = fixture.arena.admin.fresh_def();
     fixture.arena.admin.insert_def(other, VarName("second".into()));
     let second = fixture.pattern(other);
     let alias = fixture.pattern(Alias(ConsN(vec![ctor], second)));
@@ -101,7 +101,7 @@ fn deep_pattern_translation_and_destruction_use_a_small_stack() {
         .stack_size(512 * 1024)
         .spawn(|| {
             let mut fixture = Fixture::new();
-            let def: DefId = fixture.arena.admin.fresh();
+            let def: DefId = fixture.arena.admin.fresh_def();
             fixture.arena.admin.insert_def(def, VarName("argument".into()));
             let mut root = fixture.pattern(def);
             for _ in 0..8192 {

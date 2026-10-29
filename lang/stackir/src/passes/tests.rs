@@ -9,7 +9,7 @@ impl Fixture {
     fn program(open: bool) -> FragmentProgram {
         let mut arena = SpsArena::default();
         let value = if open {
-            let def = arena.admin.fresh();
+            let def = arena.admin.fresh_def();
             arena.admin.insert_def(def, VarName("free".into()));
             def.build(&mut arena, None)
         } else {

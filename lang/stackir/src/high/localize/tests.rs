@@ -30,7 +30,7 @@ impl Fixture {
     }
 
     fn def(&mut self) -> DefId {
-        self.arena.admin.fresh()
+        self.arena.admin.fresh_def()
     }
 
     fn ambient(&mut self) -> StackId {

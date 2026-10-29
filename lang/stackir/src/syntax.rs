@@ -162,7 +162,12 @@ pub trait Phase: Copy + Eq + std::hash::Hash + std::fmt::Debug + 'static {
     type Scope: ArenaSchema<Self::VPatId, Item = ValuePattern<Self::VPatId>>
         + ArenaSchema<Self::ValueId, Item = Value<Self>>
         + ArenaSchema<Self::StackId, Item = Stack<Self>>
-        + ArenaSchema<Self::CompuId, Item = Computation<Self>>;
+        + ArenaSchema<Self::CompuId, Item = Computation<Self>>
+        + Allocates<Self::VPatId>
+        + Allocates<Self::ValueId>
+        + Allocates<Self::StackId>
+        + Allocates<Self::CompuId>
+        + std::fmt::Debug;
     /// The arena that holds this phase's nodes.
     type Nodes: Nodes<Phase = Self>;
     /// The value forms this phase adds to the shared ones.

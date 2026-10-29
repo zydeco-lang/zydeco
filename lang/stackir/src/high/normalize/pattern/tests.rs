@@ -31,7 +31,7 @@ impl Fixture {
 #[test]
 fn drivers_preserve_pattern_children_definitions_layouts_and_evidence() {
     let mut fixture = Fixture { source: SpsArena::default(), origins: IdAllocator::new() };
-    let definition: DefId = fixture.source.admin.fresh();
+    let definition: DefId = fixture.source.admin.fresh_def();
     fixture.source.admin.insert_def(definition, VarName("argument".into()));
     let variable = fixture.pattern(definition);
     let constructor =

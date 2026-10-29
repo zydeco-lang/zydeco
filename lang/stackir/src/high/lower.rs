@@ -221,7 +221,7 @@ impl<'a> Lowerer<'a> {
     }
 
     fn alloc_admin_def(&mut self, role: &str) -> DefId {
-        let def = self.arena.admin.fresh();
+        let def = self.arena.admin.fresh_def();
         self.arena.admin.insert_def(def, VarName(role.to_owned()));
         def
     }

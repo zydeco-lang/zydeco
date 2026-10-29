@@ -71,7 +71,8 @@ impl Fixture {
         let rendered = program
             .root()
             .ugly(&formatter)
-            .replace(&format!("[{:?}#", program.root().key_space()), "[output#");
+            .replace(&format!("[{:?}#", program.root().key_space()), "[output#")
+            .replace(&format!("[{:?}#", arena.admin.definition_key_space()), "[definition#");
         let mut terms = arena
             .inner
             .values
@@ -403,7 +404,10 @@ fn builtin_folder_drivers_preserve_product_order_and_materialization() {
         let formatter =
             super::super::fmt::Formatter::new(&arena.admin, &arena.inner, &scoped, &statics);
         (
-            value.ugly(&formatter).replace(&format!("[{:?}#", value.key_space()), "[output#"),
+            value
+                .ugly(&formatter)
+                .replace(&format!("[{:?}#", value.key_space()), "[output#")
+                .replace(&format!("[{:?}#", arena.admin.definition_key_space()), "[definition#"),
             [
                 arena.inner.vpats.len(),
                 arena.inner.values.len(),

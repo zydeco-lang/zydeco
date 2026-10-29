@@ -26,9 +26,9 @@ Both representations have one computation root rather than a top-level declarati
 
 ## Key components
 
-- `syntax` declares the values, stacks, and computations that both phases share,
-  generic over a `Phase` that supplies its node identifiers and its own forms as extension enums;
-  `arena` holds the shared builder, node-storage, and definition-name lookup traits.
+- `syntax` declares the values, stacks, and computations that both phases share, generic over a `Phase`
+  that supplies its node identifiers and its own forms as extension enums; `arena` holds the administrative arena,
+  the node builders, and the node-storage and definition-name lookup traits that both phases share.
 - `traverse`, `variables`, and `fmt` implement structural traversal, variable summaries,
   and printing once over the shared forms and reach a phase's own forms through its hooks.
 - `scheme` defines where stack-passing compilation names the current stack and the placement rule

@@ -13,7 +13,7 @@
 use super::{
     check::FragmentProgram,
     syntax::*,
-    traverse::{Edge, EntityId, Node, Occurrence, Traversal, Visitor},
+    traverse::{Edge, EntityId, Node, Occurrence, Scopes, Traversal, Visitor},
     variables::Variables,
 };
 use crate::protocol::ValueProtocol;
@@ -244,10 +244,8 @@ struct Call {
 struct Calls<'a> {
     arena: &'a SpsInnerArena,
     bindings: HashMap<CompuId, DefId>,
-    /// Tails that bring a localized binder into scope when the traversal reaches them.
-    openings: HashMap<EntityId, DefId>,
-    /// Localized binders in scope, each with the tail that opened it.
-    scopes: Vec<(EntityId, DefId)>,
+    /// Localized binders in scope, each opened by the tail of its binding.
+    scopes: Scopes<DefId>,
     calls: Vec<Call>,
 }
 
@@ -258,8 +256,7 @@ impl<'a> Calls<'a> {
         let mut calls = Self {
             arena,
             bindings: bindings.iter().copied().collect(),
-            openings: HashMap::new(),
-            scopes: Vec::new(),
+            scopes: Scopes::default(),
             calls: Vec::new(),
         };
         Traversal { arena }.run(root.into(), &mut calls);
@@ -272,13 +269,11 @@ impl Visitor<Sps> for Calls<'_> {
         if occurrence != Occurrence::First {
             return;
         }
-        if let Some(procedure) = self.openings.remove(&node.id()) {
-            self.scopes.push((node.id(), procedure));
-        }
+        self.scopes.enter(node.id());
         match node {
             | Node::Computation(id, Computation::LetValue(Let { tail, .. })) => {
                 if let Some(procedure) = self.bindings.get(&id) {
-                    self.openings.insert((*tail).into(), *procedure);
+                    self.scopes.open_at((*tail).into(), *procedure);
                 }
             }
             | Node::Computation(
@@ -286,7 +281,7 @@ impl Visitor<Sps> for Calls<'_> {
                 Computation::Ext(CompuExt::Force(SForce { thunk, stack })),
             ) => {
                 if let Value::Var(def) = self.arena.values[thunk]
-                    && self.scopes.iter().any(|(_, procedure)| *procedure == def)
+                    && self.scopes.innermost_first().any(|procedure| *procedure == def)
                 {
                     self.calls.push(Call { call, procedure: def, stack: *stack });
                 }
@@ -296,9 +291,7 @@ impl Visitor<Sps> for Calls<'_> {
     }
 
     fn exit(&mut self, node: Node<'_>) {
-        while self.scopes.last().is_some_and(|(opener, _)| *opener == node.id()) {
-            self.scopes.pop();
-        }
+        self.scopes.exit(node.id());
     }
 }
 
