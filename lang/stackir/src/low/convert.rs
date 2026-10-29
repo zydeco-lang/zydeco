@@ -281,18 +281,17 @@ mod tests {
         let arena = program.arena();
         assert_eq!(arena.admin.defs[&captured].plain(), "captured");
         assert!(
-            arena
-                .inner
-                .values
-                .iter()
-                .any(|(_, value)| matches!(value, low::Value::ClosurePackage(_)))
+            arena.inner.values.iter().any(|(_, value)| matches!(
+                value,
+                low::Value::Ext(low::ValueExt::ClosurePackage(_))
+            ))
         );
         let block = arena
             .inner
             .values
             .iter()
             .find_map(|(_, value)| match value {
-                | low::Value::Block(block) => Some(block),
+                | low::Value::Ext(low::ValueExt::Block(block)) => Some(block),
                 | _ => None,
             })
             .unwrap();
@@ -301,14 +300,14 @@ mod tests {
             block.entry.words().map(|(role, _)| role).collect::<Vec<_>>(),
             vec![low::EntryRole::Environment]
         );
-        assert!(matches!(arena.inner.compus[&block.body], low::Computation::OpenContinuation(_)));
-        assert!(
-            arena
-                .inner
-                .compus
-                .iter()
-                .any(|(_, compu)| matches!(compu, low::Computation::OpenClosure(_)))
-        );
+        assert!(matches!(
+            arena.inner.compus[&block.body],
+            low::Computation::Ext(low::CompuExt::OpenContinuation(_))
+        ));
+        assert!(arena.inner.compus.iter().any(|(_, compu)| matches!(
+            compu,
+            low::Computation::Ext(low::CompuExt::OpenClosure(_))
+        )));
     }
 
     #[test]
@@ -324,17 +323,22 @@ mod tests {
         let root = fixture.build(high::SReturn { stack: continuation, value });
 
         let program = fixture.convert(root);
-        let low::Computation::OpenContinuation(low::OpenContinuation { package, .. }) =
-            &program.arena().inner.compus[&program.root()]
+        let low::Computation::Ext(low::CompuExt::OpenContinuation(low::OpenContinuation {
+            package,
+            ..
+        })) = &program.arena().inner.compus[&program.root()]
         else {
             panic!("return must open a continuation package")
         };
-        let low::Stack::ContinuationPackage(low::ContinuationPackage { code, .. }) =
-            program.arena().inner.stacks[package]
+        let low::Stack::Ext(low::StackExt::ContinuationPackage(low::ContinuationPackage {
+            code,
+            ..
+        })) = program.arena().inner.stacks[package]
         else {
             panic!("return must retain its continuation package")
         };
-        let low::Value::Block(block) = &program.arena().inner.values[&code] else {
+        let low::Value::Ext(low::ValueExt::Block(block)) = &program.arena().inner.values[&code]
+        else {
             panic!("continuation must have a block entry")
         };
         assert_eq!(
@@ -343,7 +347,7 @@ mod tests {
         );
         assert!(matches!(
             program.arena().inner.compus[&block.body],
-            low::Computation::OpenContinuation(_)
+            low::Computation::Ext(low::CompuExt::OpenContinuation(_))
         ));
         let package = *package;
         assert!(program.arena().inner.continuations.get(&package).is_some());
@@ -365,19 +369,20 @@ mod tests {
         let root = fixture.build(high::SFix { param: recursive, stack: root_stack, body });
 
         let program = fixture.convert(root);
-        let low::Computation::Jump(low::Jump { target, .. }) =
+        let low::Computation::Ext(low::CompuExt::Jump(low::Jump { target, .. })) =
             &program.arena().inner.compus[&program.root()]
         else {
             panic!("fix must enter a first-order block")
         };
-        assert!(matches!(program.arena().inner.values[target], low::Value::Block(_)));
+        assert!(matches!(
+            program.arena().inner.values[target],
+            low::Value::Ext(low::ValueExt::Block(_))
+        ));
         assert!(
-            program
-                .arena()
-                .inner
-                .values
-                .iter()
-                .any(|(_, value)| matches!(value, low::Value::ClosurePackage(_)))
+            program.arena().inner.values.iter().any(|(_, value)| matches!(
+                value,
+                low::Value::Ext(low::ValueExt::ClosurePackage(_))
+            ))
         );
     }
 
@@ -410,7 +415,9 @@ mod tests {
             .compus
             .iter()
             .filter_map(|(_, compu)| match compu {
-                | low::Computation::LetLabel(low::LetLabel { kind, .. }) => Some(*kind),
+                | low::Computation::Ext(low::CompuExt::LetLabel(low::LetLabel {
+                    kind, ..
+                })) => Some(*kind),
                 | _ => None,
             })
             .collect();
@@ -418,7 +425,9 @@ mod tests {
             .compus
             .iter()
             .filter_map(|(_, compu)| match compu {
-                | low::Computation::JumpLabel(low::JumpLabel { stack, .. }) => Some(*stack),
+                | low::Computation::Ext(low::CompuExt::JumpLabel(low::JumpLabel {
+                    stack, ..
+                })) => Some(*stack),
                 | _ => None,
             })
             .collect();
@@ -439,7 +448,10 @@ mod tests {
         assert_eq!(jumps.len(), 1);
         assert!(matches!(inner.stacks[&jumps[0]], low::Stack::Var(_)));
         assert!(
-            !inner.values.iter().any(|(_, value)| matches!(value, low::Value::ClosurePackage(_)))
+            !inner.values.iter().any(|(_, value)| matches!(
+                value,
+                low::Value::Ext(low::ValueExt::ClosurePackage(_))
+            ))
         );
     }
 
@@ -466,7 +478,10 @@ mod tests {
         let entry = inner.continuations.iter().map(|(_, entry)| entry).next().unwrap();
         assert_eq!(entry.captures.len(), 1);
         assert!(
-            !inner.values.iter().any(|(_, value)| matches!(value, low::Value::ClosurePackage(_)))
+            !inner.values.iter().any(|(_, value)| matches!(
+                value,
+                low::Value::Ext(low::ValueExt::ClosurePackage(_))
+            ))
         );
     }
 

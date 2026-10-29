@@ -246,13 +246,14 @@ fn long_literal_fallthrough_chains_preserve_row_order_on_a_small_stack() {
         let program = fixture.lower(root);
         let program = program.as_program();
         let arena = &program.arena().inner;
-        let Computation::Join(LetJoin::Value(Let { tail: mut current, .. })) =
-            arena.compus[&program.root()]
+        let Computation::LetValue(Let { tail: mut current, .. }) = arena.compus[&program.root()]
         else {
             panic!("match scrutinee binding")
         };
         for index in 0..4096 {
-            let Computation::Force(SForce { mut stack, .. }) = arena.compus[&current] else {
+            let Computation::Ext(CompuExt::Force(SForce { mut stack, .. })) =
+                arena.compus[&current]
+            else {
                 panic!("literal comparison")
             };
             let arguments = (0..4)
@@ -267,16 +268,21 @@ fn long_literal_fallthrough_chains_preserve_row_order_on_a_small_stack() {
             assert!(
                 matches!(arena.values[&arguments[1]], Value::Literal(ss::Literal::Integer(IntegerLiteral::Int(actual))) if actual == index)
             );
-            let Value::Closure(Closure { body, .. }) = arena.values[&arguments[2]] else {
+            let Value::Ext(ValueExt::Closure(Closure { body, .. })) = arena.values[&arguments[2]]
+            else {
                 panic!("success closure")
             };
-            assert!(matches!(arena.compus[&body], Computation::Ret(_)));
-            let Value::Closure(Closure { body, .. }) = arena.values[&arguments[3]] else {
+            assert!(matches!(arena.compus[&body], Computation::Ext(CompuExt::Ret(_))));
+            let Value::Ext(ValueExt::Closure(Closure { body, .. })) = arena.values[&arguments[3]]
+            else {
                 panic!("fallthrough closure")
             };
             current = body;
         }
-        assert!(matches!(arena.compus[&current], Computation::Ret(_)), "final catch-all row");
+        assert!(
+            matches!(arena.compus[&current], Computation::Ext(CompuExt::Ret(_))),
+            "final catch-all row"
+        );
     });
 }
 
@@ -293,7 +299,9 @@ fn shared_typed_children_have_fresh_output_ownership_and_source_protocols() {
     let program = fixture.lower(root);
     let program = program.as_program();
     let arena = program.arena();
-    let Computation::Ret(SReturn { value, .. }) = arena.inner.compus[&program.root()] else {
+    let Computation::Ext(CompuExt::Ret(SReturn { value, .. })) =
+        arena.inner.compus[&program.root()]
+    else {
         panic!("return")
     };
     let Value::VCons(VCons { items, .. }) = &arena.inner.values[&value] else { panic!("product") };
@@ -388,7 +396,7 @@ fn builtin_folder_drivers_preserve_product_order_and_materialization() {
         };
         assert_eq!(layout.arity, 3);
         assert!(matches!(&arena.inner.values[&items[0]], Value::Triv(_)));
-        assert!(matches!(&arena.inner.values[&items[1]], Value::Closure(_)));
+        assert!(matches!(&arena.inner.values[&items[1]], Value::Ext(ValueExt::Closure(_))));
         assert!(
             matches!(&arena.inner.values[&items[2]], Value::VCons(VCons { items, .. }) if items.len() == 2 && items[0] != items[1])
         );

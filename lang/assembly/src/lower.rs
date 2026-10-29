@@ -156,7 +156,7 @@ impl Lowering<'_, '_> {
                     self.emit(Push(atom), context, ContextUpdate::Keep, next)
                 }
             }
-            | Value::Block(sk::Block { label, entry, body }) => {
+            | Value::Ext(sk::ValueExt::Block(sk::Block { label, entry, body })) => {
                 let name = self
                     .lo
                     .sps_low
@@ -175,7 +175,10 @@ impl Lowering<'_, '_> {
                     frame: Frame::Block { symbol, name, context, next },
                 }
             }
-            | Value::ClosurePackage(sk::ClosurePackage { environment, code }) => {
+            | Value::Ext(sk::ValueExt::ClosurePackage(sk::ClosurePackage {
+                environment,
+                code,
+            })) => {
                 let next = if self.lo.unboxing.values.contains(&id) {
                     next
                 } else {
@@ -243,10 +246,15 @@ impl Lowering<'_, '_> {
         if self.lo.native_frames
             && let Some(entry) = self.lo.sps_low.inner.continuations.get(&id).cloned()
         {
-            let sk::Stack::ContinuationPackage(sk::ContinuationPackage { code, .. }) = stack else {
+            let sk::Stack::Ext(sk::StackExt::ContinuationPackage(sk::ContinuationPackage {
+                code,
+                ..
+            })) = stack
+            else {
                 unreachable!()
             };
-            let sk::Value::Block(sk::Block { label, .. }) = self.lo.sps_low.inner.values[&code]
+            let sk::Value::Ext(sk::ValueExt::Block(sk::Block { label, .. })) =
+                self.lo.sps_low.inner.values[&code]
             else {
                 unreachable!()
             };
@@ -285,7 +293,10 @@ impl Lowering<'_, '_> {
                 let next = self.instruction(Push(tag), next);
                 Step::TailCall(Work::Stack(rest, context, next))
             }
-            | sk::Stack::ContinuationPackage(sk::ContinuationPackage { code, residual }) => {
+            | sk::Stack::Ext(sk::StackExt::ContinuationPackage(sk::ContinuationPackage {
+                code,
+                residual,
+            })) => {
                 let next = self.then(Action::Value(code), next);
                 Step::TailCall(Work::Stack(residual, context, next))
             }
@@ -338,38 +349,6 @@ impl Lowering<'_, '_> {
                 let next = self.save(Continuation::End(Abort.into()));
                 Step::TailCall(Work::Stack(stack, context, next))
             }
-            | Compu::LetLabel(sk::LetLabel { label, kind, body, tail }) => {
-                // A local label runs in the binding frame; a closed label starts a fresh one.
-                let entry = match kind {
-                    | sk::LabelKind::Local => context.clone(),
-                    | sk::LabelKind::Closed => Context::new(),
-                };
-                Step::Call {
-                    input: Work::Compu(body, entry),
-                    frame: Frame::Label { label, kind, tail, context },
-                }
-            }
-            | Compu::JumpLabel(sk::JumpLabel { label, stack }) => {
-                let (program, kind) = self.lo.labels[&label];
-                let next = self.save(Continuation::End(Jump(program).into()));
-                let next = match kind {
-                    | sk::LabelKind::Local => next,
-                    // A closed label leaves the current frame, as a block jump does.
-                    | sk::LabelKind::Closed => self.then(
-                        Action::Emit(Alloc(ContextMarker).into(), ContextUpdate::Clear),
-                        next,
-                    ),
-                };
-                Step::TailCall(Work::Stack(stack, context, next))
-            }
-            | Compu::Jump(sk::Jump { target, argument, stack }) => {
-                let next = self.save(Continuation::End(PopJump.into()));
-                let next = self
-                    .then(Action::Emit(Alloc(ContextMarker).into(), ContextUpdate::Clear), next);
-                let next = self.then(Action::Value(target), next);
-                let next = self.then(Action::Value(argument.word().1), next);
-                Step::TailCall(Work::Stack(stack, context, next))
-            }
             | Compu::ProductMatch(sk::SProductMatch { scrut, binder, body })
             | Compu::LetValue(sk::LetValue { binder, bindee: scrut, tail: body }) => {
                 let next = self.save(Continuation::Body(body));
@@ -398,28 +377,7 @@ impl Lowering<'_, '_> {
                 let next = self.save(Continuation::CoCase(arms));
                 Step::TailCall(Work::Stack(scrut, context, next))
             }
-            | Compu::OpenClosure(sk::OpenClosure { package, environment, code, body }) => {
-                let next = self.save(Continuation::Body(body));
-                let next = Closure { environment, code }
-                    .into_words()
-                    .into_iter()
-                    .rev()
-                    .fold(next, |next, pattern| self.then(Action::Pattern(pattern), next));
-                let next = if self.lo.unboxing.values.contains(&package) {
-                    next
-                } else {
-                    self.instruction(
-                        Unpack(ProductLayout::new(Closure::<u64>::WORDS, Closure::<u64>::WORDS)),
-                        next,
-                    )
-                };
-                Step::TailCall(Work::Value(package, context, next))
-            }
-            | Compu::OpenContinuation(sk::OpenContinuation { package, code, body }) => {
-                let next = self.save(Continuation::Body(body));
-                let next = self.then(Action::Pattern(code), next);
-                Step::TailCall(Work::Stack(package, context, next))
-            }
+            | Compu::Ext(form) => self.compu_form(form, context),
             | Compu::ExternCall(sk::ExternCall { function, stack }) => {
                 let external = match function {
                     | sk::ExternalFunction::Host(role) => Extern::Host {
@@ -436,6 +394,66 @@ impl Lowering<'_, '_> {
                 }
                 let next = self.save(Continuation::End(external.into()));
                 Step::TailCall(Work::Stack(stack, context, next))
+            }
+        }
+    }
+
+    /// Lower the computation forms that SPSLow adds to the shared ones.
+    fn compu_form(&mut self, form: sk::CompuExt, context: Context) -> Step<Self> {
+        match form {
+            | sk::CompuExt::LetLabel(sk::LetLabel { label, kind, body, tail }) => {
+                // A local label runs in the binding frame; a closed label starts a fresh one.
+                let entry = match kind {
+                    | sk::LabelKind::Local => context.clone(),
+                    | sk::LabelKind::Closed => Context::new(),
+                };
+                Step::Call {
+                    input: Work::Compu(body, entry),
+                    frame: Frame::Label { label, kind, tail, context },
+                }
+            }
+            | sk::CompuExt::JumpLabel(sk::JumpLabel { label, stack }) => {
+                let (program, kind) = self.lo.labels[&label];
+                let next = self.save(Continuation::End(Jump(program).into()));
+                let next = match kind {
+                    | sk::LabelKind::Local => next,
+                    // A closed label leaves the current frame, as a block jump does.
+                    | sk::LabelKind::Closed => self.then(
+                        Action::Emit(Alloc(ContextMarker).into(), ContextUpdate::Clear),
+                        next,
+                    ),
+                };
+                Step::TailCall(Work::Stack(stack, context, next))
+            }
+            | sk::CompuExt::Jump(sk::Jump { target, argument, stack }) => {
+                let next = self.save(Continuation::End(PopJump.into()));
+                let next = self
+                    .then(Action::Emit(Alloc(ContextMarker).into(), ContextUpdate::Clear), next);
+                let next = self.then(Action::Value(target), next);
+                let next = self.then(Action::Value(argument.word().1), next);
+                Step::TailCall(Work::Stack(stack, context, next))
+            }
+            | sk::CompuExt::OpenClosure(sk::OpenClosure { package, environment, code, body }) => {
+                let next = self.save(Continuation::Body(body));
+                let next = Closure { environment, code }
+                    .into_words()
+                    .into_iter()
+                    .rev()
+                    .fold(next, |next, pattern| self.then(Action::Pattern(pattern), next));
+                let next = if self.lo.unboxing.values.contains(&package) {
+                    next
+                } else {
+                    self.instruction(
+                        Unpack(ProductLayout::new(Closure::<u64>::WORDS, Closure::<u64>::WORDS)),
+                        next,
+                    )
+                };
+                Step::TailCall(Work::Value(package, context, next))
+            }
+            | sk::CompuExt::OpenContinuation(sk::OpenContinuation { package, code, body }) => {
+                let next = self.save(Continuation::Body(body));
+                let next = self.then(Action::Pattern(code), next);
+                Step::TailCall(Work::Stack(package, context, next))
             }
         }
     }

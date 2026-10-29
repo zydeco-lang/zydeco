@@ -1547,29 +1547,36 @@ the full scheme names each frame with a stack let as it is pushed, so every cons
 | `dup` | `SPS_dup`, which has no stack let | extends the stack | each arm consumes its own [copy](../../lang/stackir/src/high/copy.rs) of the stack |
 | `full` | `SPS_full`, whose stack lets each bind one frame and whose consumers receive `•` | `let • = frame :: • in …` | the arms consume `•`, which the lets above the branch name |
 
-One [placement rule](../../lang/stackir/src/scheme.rs) per scheme checks its fragment in SPS and SPSLow.
+One [placement rule](../../lang/stackir/src/scheme.rs) per scheme checks its fragment in SPS and SPSLow;
+the same module classifies each computation's stack use for both phases, asking a phase's own forms
+which stack they consume and which frame shape their stacks have.
+
+SPS and SPSLow share one [syntax](../../lang/stackir/src/syntax.rs): values, stacks, and computations are generic
+over a `Phase` that supplies the node identifiers and the forms it adds, which the shared enums carry under `Ext`.
+The table names a form by the [lexical SPS extension](../../lang/stackir/src/high/syntax.rs) where SPS adds it
+and by the shared enum otherwise.
 
 | SPS form | Syntax node | Printed |
 | --- | --- | --- |
 | Variable `x`, literal `n` | `Value::Var`, `Value::Literal` | `x`, `n` |
-| Closure `λ_c •. M` | `Value::Closure` | `{ • -> M }` |
+| Closure `λ_c •. M` | `ValueExt::Closure` | `{ • -> M }` |
 | Tuple `(V_i)_i` | `Value::Triv`, `Value::VCons` | `()`, `(V, W)` |
 | Injection `σ_c(V)` | `Value::Ctor` | `c(V)` |
 | Stack variable `•` | `Stack::Var` | `•` |
-| Continuation `λ_k x. M` | `Stack::Kont` | `kont p -> M` |
+| Continuation `λ_k x. M` | `StackExt::Kont` | `(kont p -> M)` |
 | Argument push `V :: S` | `Stack::Arg` | `arg(V) :: S` |
 | Tag push `π_d :: S` | `Stack::Tag` | `tag(d) :: S` |
-| Call `V ! S` | `Computation::Force` | `V ! S` |
-| Return `S @ V` | `Computation::Ret` | `S @ V` |
+| Call `V ! S` | `CompuExt::Force` | `V ! S` |
+| Return `S @ V` | `CompuExt::Ret` | `S @ V` |
 | Argument match `match_⊘ S {x :: • => M}` | `Computation::LetArg` | `let arg(p) :: • = S in M` |
 | Tag match `match_⊕ S {π_d :: • => M_d}` | `Computation::CoCase` | `cocase S \| d -> M end` |
-| Value let `let x = V in M` | `LetJoin::Value` | `let p = V in M` |
-| Stack let `let • = S in M` | `LetJoin::Stack` | `let • = S in M` |
+| Value let `let x = V in M` | `Computation::LetValue` | `let p = V in M` |
+| Stack let `let • = S in M` | `Computation::LetStack` | `let • = S in M` |
 | Product match `match_Π V {(x_i)_i => M}` | `Computation::ProductMatch` | `match-product V as p in M` |
 | Coproduct match `match_Σ V {σ_c(x_c) => M_c}` | `Computation::CoprodMatch` | `case V \| c(p) -> M end` |
-| Fixed point `fix (g : Closure B). M` | `Computation::Fix` | `fix g ! S -> M` |
-| Procedure `letproc p • = N in M` | `Computation::LetProc` | `letproc p • = N in M` |
-| Procedure call `p ! S` | `Computation::CallProc` | `p ! S` |
+| Fixed point `fix (g : Closure B). M` | `CompuExt::Fix` | `fix g ! S -> M` |
+| Procedure `letproc p • = N in M` | `CompuExt::LetProc` | `letproc p • = N in M` |
+| Procedure call `p ! S` | `CompuExt::CallProc` | `p ! S` |
 
 The implementation departs from SPS where Zydeco's source language or its backends need more:
 
@@ -1653,7 +1660,10 @@ and subsequent conversion have their own traversal contracts.
 ### SPS Analysis Traversal
 
 Lexical ownership, branch-join placement, and free variables all depend on the same SPS structure.
-The [shared traversal](../../lang/stackir/src/high/traverse.rs) owns its exhaustive child enumeration.
+The [shared traversal](../../lang/stackir/src/traverse.rs) enumerates the children of the forms
+that SPS and SPSLow share once; each phase enumerates the children of its own forms through `Children`,
+so the [lexical SPS instance](../../lang/stackir/src/high/traverse.rs) adds only closures,
+continuations, fixed points, and procedures.
 It exposes borrowed pattern, value, stack, and computation nodes; definitions remain leaves.
 An entry event identifies the immediate incoming edge and whether the occurrence is first, shared, or cyclic.
 A stack-let tail carries the ID of its owning stack let so placement checks do not need their own recursive descent.
@@ -1666,7 +1676,8 @@ it applies the placement rule of the program's scheme.
 `FragmentProgram` is constructed only when its complete `FragmentErrors` collection is empty.
 This preserves lexical-tree ownership even though the structural driver can safely inspect a malformed graph.
 
-`Variables` computes bound and free variable summaries at exit, reading completed child facts.
+The shared [`Variables`](../../lang/stackir/src/variables.rs) analysis computes bound and free variable summaries
+at exit, reading completed child facts; a phase's own forms contribute their rules through `FreeVariables`.
 Pattern binders remove names only from their lexical bodies; recursive binders,
 continuations, and match arms retain their existing scope rules.
 A cyclic graph has no free-variable result. The public `Vars` and `FreeVars` operations use this analyzer,
@@ -2050,14 +2061,14 @@ and a continuation becomes a stack package of type `Ko_A = ∃•Y. Label(A ⊘ 
 
 | `SPS_l` form | SPSLow node | Printed |
 | --- | --- | --- |
-| Block `λ[l](• : B). M` | `Value::Block` | `block [l](environment: p) • -> M` |
-| Jump `V !! S` | `Computation::Jump` | `jump V(environment: E) ! S` |
-| Closure package of type `Cl_B` | `Value::ClosurePackage` | `pack-closure(E, V)` |
-| Opening a closure package | `Computation::OpenClosure` | `open-closure V as (p, q) in M` |
-| Continuation package of type `Ko_A` | `Stack::ContinuationPackage` | `pack-continuation(V, S)` |
-| Opening a continuation package | `Computation::OpenContinuation` | `open-continuation S as q :: • in M` |
-| Label of a procedure | `Computation::LetLabel` | `label p • -> N in M` or `closed label p • -> N in M` |
-| Jump to a label | `Computation::JumpLabel` | `jump p ! S` |
+| Block `λ[l](• : B). M` | `ValueExt::Block` | `block [l](environment: p) • -> M` |
+| Jump `V !! S` | `CompuExt::Jump` | `jump V(environment: E) ! S` |
+| Closure package of type `Cl_B` | `ValueExt::ClosurePackage` | `pack-closure(E, V)` |
+| Opening a closure package | `CompuExt::OpenClosure` | `open-closure V as (p, q) in M` |
+| Continuation package of type `Ko_A` | `StackExt::ContinuationPackage` | `pack-continuation(V, S)` |
+| Opening a continuation package | `CompuExt::OpenContinuation` | `open-continuation S as q :: • in M` |
+| Label of a procedure | `CompuExt::LetLabel` | `label p • -> N in M` or `closed label p • -> N in M` |
+| Jump to a label | `CompuExt::JumpLabel` | `jump p ! S` |
 
 Continuation blocks list `result: p` before their environment, and returns jump with `result: V`.
 Label jumps carry no word: they supply only a stack.
@@ -2133,7 +2144,9 @@ explicit conversion does not establish an end-to-end depth guarantee.
 
 ### SPSLow Traversal and Analyzers
 
-The [SPSLow traversal](../../lang/stackir/src/low/traverse.rs) describes executable children once.
+The [SPSLow instance](../../lang/stackir/src/low/traverse.rs)
+of the [shared traversal](#sps-analysis-traversal) describes the executable children
+of blocks, packages, jumps, labels, and openings once.
 Its resumable folder retains a borrowed node and the next child position.
 Each child selection takes constant time, including wide products and branch vectors; frames do not copy those vectors.
 `Traversal::run_with_driver::<D>` selects the shared execution driver, with `Explicit` as the default.
@@ -2145,7 +2158,8 @@ the tail of a stack let carries its immediate branch-join owner.
 Continuation metadata and provenance refer to existing syntax and add no executable edges.
 `Together` sends the same events to independent observers.
 
-[Variable analysis](../../lang/stackir/src/low/variables.rs) computes bound patterns and free terms at exit.
+The [SPSLow variable rules](../../lang/stackir/src/low/variables.rs) extend the shared summaries,
+which compute bound patterns and free terms at exit.
 Block labels and entry words bind only their body; record openings and local bindings likewise remove definitions
 from their dependent body rather than from the record or bindee.
 A cyclic traversal exposes no usable variable summaries.

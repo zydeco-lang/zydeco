@@ -1,264 +1,62 @@
-//! Shared structural traversal for first-order SPS analyses.
+//! First-order SPSLow instances of the shared structural traversal.
 
 use super::syntax::*;
-use rustc_hash::FxHashMap;
-use zydeco_utils::fold::{Driver, Explicit, Folder, Step};
+pub use crate::traverse::{Children, Occurrence, Together, Visitor};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, derive_more::From)]
-pub enum EntityId {
-    Pattern(VPatId),
-    Value(ValueId),
-    Stack(StackId),
-    Computation(CompuId),
-}
+pub type EntityId = crate::traverse::EntityId<SpsLow>;
+pub type Node<'a> = crate::traverse::Node<'a, SpsLow>;
+pub type Edge = crate::traverse::Edge<SpsLow>;
+pub type Traversal<'a> = crate::traverse::Traversal<'a, SpsLowInnerArena>;
 
-#[derive(Clone, Copy, Debug)]
-pub enum Node<'a> {
-    Pattern(VPatId, &'a ValuePattern),
-    Value(ValueId, &'a Value),
-    Stack(StackId, &'a Stack),
-    Computation(CompuId, &'a Computation),
-}
-
-impl EntityId {
-    pub fn node(self, arena: &SpsLowInnerArena) -> Node<'_> {
+impl Children<SpsLow> for ValueExt {
+    fn child(&self, position: usize) -> Option<EntityId> {
         match self {
-            | Self::Pattern(id) => Node::Pattern(id, &arena.vpats[&id]),
-            | Self::Value(id) => Node::Value(id, &arena.values[&id]),
-            | Self::Stack(id) => Node::Stack(id, &arena.stacks[&id]),
-            | Self::Computation(id) => Node::Computation(id, &arena.compus[&id]),
+            | Self::Block(Block { entry, body, .. }) => {
+                if let Some((_, pattern)) = entry.words().nth(position) {
+                    Some(pattern.into())
+                } else if position == entry.words().count() {
+                    Some((*body).into())
+                } else {
+                    None
+                }
+            }
+            | Self::ClosurePackage(ClosurePackage { environment, code }) => {
+                [(*environment).into(), (*code).into()].get(position).copied()
+            }
         }
     }
 }
 
-impl Node<'_> {
-    pub fn id(self) -> EntityId {
+impl Children<SpsLow> for StackExt {
+    fn child(&self, position: usize) -> Option<EntityId> {
         match self {
-            | Self::Pattern(id, _) => id.into(),
-            | Self::Value(id, _) => id.into(),
-            | Self::Stack(id, _) => id.into(),
-            | Self::Computation(id, _) => id.into(),
+            | Self::ContinuationPackage(ContinuationPackage { code, residual }) => {
+                [(*code).into(), (*residual).into()].get(position).copied()
+            }
         }
     }
-
-    /// Select one child in constant time, without retaining a node's child vector in a frame.
-    /// Provenance and continuation metadata describe syntax; they add no executable edges.
-    pub fn child(self, position: usize) -> Option<(EntityId, Edge)> {
-        let child = match self {
-            | Self::Pattern(_, pattern) => match pattern {
-                | ValuePattern::Hole(_) | ValuePattern::Var(_) | ValuePattern::Triv(_) => None,
-                | ValuePattern::Ctor(Ctor(_, body)) => [(*body).into()].get(position).copied(),
-                | ValuePattern::Alias(Alias(ConsN(head, tail))) => {
-                    if position == head.len() { Some(tail) } else { head.get(position) }
-                        .map(|id| (*id).into())
-                }
-                | ValuePattern::VCons(VCons { items, .. }) => {
-                    items.get(position).map(|id| (*id).into())
-                }
-            },
-            | Self::Value(_, value) => match value {
-                | Value::Hole(_) | Value::Var(_) | Value::Triv(_) | Value::Literal(_) => None,
-                | Value::Block(Block { entry, body, .. }) => {
-                    if let Some((_, pattern)) = entry.words().nth(position) {
-                        Some(pattern.into())
-                    } else if position == entry.words().count() {
-                        Some((*body).into())
-                    } else {
-                        None
-                    }
-                }
-                | Value::ClosurePackage(ClosurePackage { environment, code }) => {
-                    [(*environment).into(), (*code).into()].get(position).copied()
-                }
-                | Value::Ctor(Ctor(_, body)) => [(*body).into()].get(position).copied(),
-                | Value::VCons(VCons { items, .. }) => items.get(position).map(|id| (*id).into()),
-                | Value::Primitive(Primitive { operands, .. }) => {
-                    operands.get(position).map(|id| (*id).into())
-                }
-                | Value::AddrOffset(AddrOffset { base, displacement }) => {
-                    [(*base).into(), (*displacement).into()].get(position).copied()
-                }
-            },
-            | Self::Stack(_, stack) => match stack {
-                | Stack::Var(_) => None,
-                | Stack::Arg(Cons(value, stack)) => {
-                    [(*value).into(), (*stack).into()].get(position).copied()
-                }
-                | Stack::Tag(Cons(_, stack)) => [(*stack).into()].get(position).copied(),
-                | Stack::ContinuationPackage(ContinuationPackage { code, residual }) => {
-                    [(*code).into(), (*residual).into()].get(position).copied()
-                }
-            },
-            | Self::Computation(id, computation) => match computation {
-                | Computation::Memory(MemoryStep::Load { address, result, next, .. }) => {
-                    [(*address).into(), (*result).into(), (*next).into()].get(position).copied()
-                }
-                | Computation::Memory(MemoryStep::Store { address, value, next, .. }) => {
-                    [(*address).into(), (*value).into(), (*next).into()].get(position).copied()
-                }
-                | Computation::Hole(SHole(stack))
-                | Computation::ExternCall(ExternCall { stack, .. }) => {
-                    [(*stack).into()].get(position).copied()
-                }
-                | Computation::Jump(Jump { target, argument, stack }) => {
-                    [(*target).into(), argument.word().1.into(), (*stack).into()]
-                        .get(position)
-                        .copied()
-                }
-                | Computation::LetLabel(LetLabel { body, tail, .. }) => {
-                    [(*body).into(), (*tail).into()].get(position).copied()
-                }
-                | Computation::JumpLabel(JumpLabel { stack, .. }) => {
-                    [(*stack).into()].get(position).copied()
-                }
-                | Computation::ProductMatch(SProductMatch { scrut, binder, body }) => {
-                    [(*scrut).into(), (*binder).into(), (*body).into()].get(position).copied()
-                }
-                | Computation::Compare(CompareBranch {
-                    operands, when_true, when_false, ..
-                }) => [
-                    operands[0].into(),
-                    operands[1].into(),
-                    (*when_true).into(),
-                    (*when_false).into(),
-                ]
-                .get(position)
-                .copied(),
-                | Computation::CoprodMatch(SCoprodMatch { scrut, arms }) => {
-                    if position == 0 {
-                        Some((*scrut).into())
-                    } else {
-                        arms.get((position - 1) / 2).map(|arm| {
-                            if position % 2 == 1 { arm.binder.into() } else { arm.tail.into() }
-                        })
-                    }
-                }
-                | Computation::LetValue(LetValue { binder, bindee, tail }) => {
-                    [(*bindee).into(), (*binder).into(), (*tail).into()].get(position).copied()
-                }
-                | Computation::LetStack(LetStack { bindee, tail, .. }) => {
-                    return match position {
-                        | 0 => Some(((*bindee).into(), Edge::Child)),
-                        | 1 => Some(((*tail).into(), Edge::StackLetTail(id))),
-                        | _ => None,
-                    };
-                }
-                | Computation::LetArg(LetArg { binder: Cons(binder, _), bindee, tail }) => {
-                    [(*bindee).into(), (*binder).into(), (*tail).into()].get(position).copied()
-                }
-                | Computation::CoCase(SCoMatch { scrut, arms }) => {
-                    if position == 0 {
-                        Some((*scrut).into())
-                    } else {
-                        arms.get(position - 1).map(|arm| arm.tail.into())
-                    }
-                }
-                | Computation::OpenClosure(OpenClosure { package, environment, code, body }) => {
-                    [(*package).into(), (*environment).into(), (*code).into(), (*body).into()]
-                        .get(position)
-                        .copied()
-                }
-                | Computation::OpenContinuation(OpenContinuation { package, code, body }) => {
-                    [(*package).into(), (*code).into(), (*body).into()].get(position).copied()
-                }
-            },
-        };
-        child.map(|id| (id, Edge::Child))
-    }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Edge {
-    Root,
-    Child,
-    StackLetTail(CompuId),
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Occurrence {
-    First,
-    Shared,
-    Cyclic,
-}
-
-/// Observe every incoming edge, expanding each node and delivering its exit only once.
-/// Repeated or cyclic edges do not expand children or deliver another exit.
-pub trait Visitor {
-    fn enter(&mut self, _node: Node<'_>, _edge: Edge, _occurrence: Occurrence) {}
-    fn exit(&mut self, _node: Node<'_>) {}
-}
-
-pub struct Together<A, B> {
-    pub first: A,
-    pub second: B,
-}
-
-impl<A: Visitor, B: Visitor> Visitor for Together<A, B> {
-    fn enter(&mut self, node: Node<'_>, edge: Edge, occurrence: Occurrence) {
-        self.first.enter(node, edge, occurrence);
-        self.second.enter(node, edge, occurrence);
-    }
-    fn exit(&mut self, node: Node<'_>) {
-        self.first.exit(node);
-        self.second.exit(node);
-    }
-}
-
-pub struct Traversal<'a> {
-    pub arena: &'a SpsLowInnerArena,
-}
-
-impl Traversal<'_> {
-    pub fn run(&self, root: EntityId, visitor: &mut impl Visitor) {
-        self.run_with_driver::<Explicit>(root, visitor);
-    }
-
-    pub fn run_with_driver<D: Driver>(&self, root: EntityId, visitor: &mut impl Visitor) {
-        D::run(
-            &mut AnalysisFolder { arena: self.arena, visitor, states: FxHashMap::default() },
-            (root, Edge::Root),
-        );
-    }
-}
-
-enum VisitState {
-    Active,
-    Complete,
-}
-
-struct AnalysisFolder<'a, 'visitor, V> {
-    arena: &'a SpsLowInnerArena,
-    visitor: &'visitor mut V,
-    states: FxHashMap<EntityId, VisitState>,
-}
-
-impl<'a, V: Visitor> Folder for AnalysisFolder<'a, '_, V> {
-    type Input = (EntityId, Edge);
-    type Output = ();
-    type Frame = (Node<'a>, usize);
-
-    fn enter(&mut self, (id, edge): Self::Input) -> Step<Self> {
-        let occurrence = match self.states.get(&id) {
-            | None => Occurrence::First,
-            | Some(VisitState::Active) => Occurrence::Cyclic,
-            | Some(VisitState::Complete) => Occurrence::Shared,
-        };
-        let node = id.node(self.arena);
-        self.visitor.enter(node, edge, occurrence);
-        if occurrence != Occurrence::First {
-            return Step::Return(());
-        }
-        self.states.insert(id, VisitState::Active);
-        self.resume((node, 0), ())
-    }
-
-    fn resume(&mut self, (node, position): Self::Frame, (): ()) -> Step<Self> {
-        if let Some(input) = node.child(position) {
-            Step::Call { input, frame: (node, position + 1) }
-        } else {
-            self.states.insert(node.id(), VisitState::Complete);
-            self.visitor.exit(node);
-            Step::Return(())
+impl Children<SpsLow> for CompuExt {
+    fn child(&self, position: usize) -> Option<EntityId> {
+        match self {
+            | Self::Jump(Jump { target, argument, stack }) => {
+                [(*target).into(), argument.word().1.into(), (*stack).into()].get(position).copied()
+            }
+            | Self::LetLabel(LetLabel { body, tail, .. }) => {
+                [(*body).into(), (*tail).into()].get(position).copied()
+            }
+            | Self::JumpLabel(JumpLabel { stack, .. }) => {
+                (position == 0).then_some((*stack).into())
+            }
+            | Self::OpenClosure(OpenClosure { package, environment, code, body }) => {
+                [(*package).into(), (*environment).into(), (*code).into(), (*body).into()]
+                    .get(position)
+                    .copied()
+            }
+            | Self::OpenContinuation(OpenContinuation { package, code, body }) => {
+                [(*package).into(), (*code).into(), (*body).into()].get(position).copied()
+            }
         }
     }
 }

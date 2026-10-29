@@ -71,9 +71,10 @@ impl Fixture {
         let inner = &self.arena.inner;
         let Stack::Arg(Cons(_, tagged)) = inner.stacks[&stack] else { panic!("argument frame") };
         let Stack::Tag(Cons(_, kont)) = &inner.stacks[&tagged] else { panic!("tag frame") };
-        let Stack::Kont(Kont { body, .. }) = inner.stacks[kont] else { panic!("continuation") };
-        let Computation::Join(LetJoin::Value(Let { binder, bindee, .. })) = inner.compus[&body]
-        else {
+        let Stack::Ext(StackExt::Kont(Kont { body, .. })) = inner.stacks[kont] else {
+            panic!("continuation")
+        };
+        let Computation::LetValue(Let { binder, bindee, .. }) = inner.compus[&body] else {
             panic!("value let")
         };
         Evidence { closure: bindee, binder, body }

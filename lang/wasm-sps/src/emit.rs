@@ -248,7 +248,7 @@ impl ModulePlan {
             .values
             .iter()
             .filter_map(|(_, value)| match value {
-                | sps::Value::Block(block) => Some(block.clone()),
+                | sps::Value::Ext(sps::ValueExt::Block(block)) => Some(block.clone()),
                 | _ => None,
             })
             .collect::<Vec<_>>();
@@ -260,12 +260,12 @@ impl ModulePlan {
             .compus
             .iter()
             .filter_map(|(_, compu)| match compu {
-                | Computation::LetLabel(sps::LetLabel {
+                | Computation::Ext(sps::CompuExt::LetLabel(sps::LetLabel {
                     label,
                     kind: sps::LabelKind::Closed,
                     body,
                     ..
-                }) => Some((*label, *body)),
+                })) => Some((*label, *body)),
                 | _ => None,
             })
             .collect::<Vec<_>>();
@@ -635,7 +635,12 @@ impl<'a> CaseEncoder<'a> {
                     self.function.instruction(&WasmInstruction::Unreachable);
                     break;
                 }
-                | Computation::LetLabel(sps::LetLabel { label, kind, body, tail }) => match kind {
+                | Computation::Ext(sps::CompuExt::LetLabel(sps::LetLabel {
+                    label,
+                    kind,
+                    body,
+                    tail,
+                })) => match kind {
                     // A local label's tail runs inside a `block`; a jump branches out of it into
                     // the label body that follows, keeping this function's locals as its frame.
                     | sps::LabelKind::Local => {
@@ -647,7 +652,7 @@ impl<'a> CaseEncoder<'a> {
                     }
                     | sps::LabelKind::Closed => id = tail,
                 },
-                | Computation::JumpLabel(sps::JumpLabel { label, stack }) => {
+                | Computation::Ext(sps::CompuExt::JumpLabel(sps::JumpLabel { label, stack })) => {
                     self.emit_stack(stack)?;
                     if let Some(depth) = self.local_labels.get(&label) {
                         self.function.instruction(&WasmInstruction::LocalSet(0));
@@ -664,7 +669,7 @@ impl<'a> CaseEncoder<'a> {
                     }
                     break;
                 }
-                | Computation::Jump(sps::Jump { target, argument, stack }) => {
+                | Computation::Ext(sps::CompuExt::Jump(sps::Jump { target, argument, stack })) => {
                     self.emit_value(argument.word().1)?;
                     self.emit_stack(stack)?;
                     self.function.instruction(&WasmInstruction::Call(self.plan.pair_function()));
@@ -754,12 +759,12 @@ impl<'a> CaseEncoder<'a> {
                     self.function.instruction(&WasmInstruction::Unreachable);
                     break;
                 }
-                | Computation::OpenClosure(sps::OpenClosure {
+                | Computation::Ext(sps::CompuExt::OpenClosure(sps::OpenClosure {
                     package,
                     environment,
                     code,
                     body,
-                }) => {
+                })) => {
                     self.emit_value(package)?;
                     self.function
                         .instruction(&WasmInstruction::LocalSet(self.plan.locals.scratch_word));
@@ -769,7 +774,11 @@ impl<'a> CaseEncoder<'a> {
                     self.emit_pattern(code)?;
                     id = body;
                 }
-                | Computation::OpenContinuation(sps::OpenContinuation { package, code, body }) => {
+                | Computation::Ext(sps::CompuExt::OpenContinuation(sps::OpenContinuation {
+                    package,
+                    code,
+                    body,
+                })) => {
                     self.emit_stack(package)?;
                     self.function
                         .instruction(&WasmInstruction::LocalSet(self.plan.locals.scratch_stack));
@@ -855,12 +864,15 @@ impl<'a> CaseEncoder<'a> {
                         .instruction(&WasmInstruction::LocalGet(self.plan.locals.variable(def)?));
                 }
             }
-            | sps::Value::Block(Block { label, .. }) => {
+            | sps::Value::Ext(sps::ValueExt::Block(Block { label, .. })) => {
                 self.function.instruction(&WasmInstruction::I64Const(RuntimeWord::code(
                     self.plan.label(label)?,
                 ) as i64));
             }
-            | sps::Value::ClosurePackage(sps::ClosurePackage { environment, code }) => {
+            | sps::Value::Ext(sps::ValueExt::ClosurePackage(sps::ClosurePackage {
+                environment,
+                code,
+            })) => {
                 self.emit_value(environment)?;
                 self.emit_value(code)?;
                 self.function.instruction(&WasmInstruction::Call(self.plan.pair_function()));
@@ -982,7 +994,10 @@ impl<'a> CaseEncoder<'a> {
                 self.emit_stack(stack)?;
                 self.function.instruction(&WasmInstruction::Call(self.plan.pair_function()));
             }
-            | sps::Stack::ContinuationPackage(sps::ContinuationPackage { code, residual }) => {
+            | sps::Stack::Ext(sps::StackExt::ContinuationPackage(sps::ContinuationPackage {
+                code,
+                residual,
+            })) => {
                 self.emit_value(code)?;
                 self.emit_stack(residual)?;
                 self.function.instruction(&WasmInstruction::Call(self.plan.pair_function()));

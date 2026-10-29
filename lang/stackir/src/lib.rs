@@ -4,6 +4,12 @@ use zydeco_statics::syntax as static_syntax;
 
 /// Syntax shared by SPS and SPSLow.
 pub mod syntax;
+/// Structural traversal shared by the phases.
+pub mod traverse;
+/// Bound- and free-variable summaries shared by the phases.
+pub mod variables;
+/// Printing shared by the phases.
+pub mod fmt;
 /// Partial source value and stack protocols, independent of physical frame extent.
 pub mod protocol;
 /// Shared builders and definition-name lookup for Stack IR.

@@ -1,94 +1,53 @@
-//! Formatters for the Zydeco Intermediate Representation (ZIR).
+//! Printing for lexical SPS: its identifiers, its own forms, and its program.
 
 use super::syntax::*;
-use zydeco_statics::arena::StaticsArena;
-use zydeco_surface::scoped::syntax::ScopedArena;
-
-/* -------------------------------- Formatter ------------------------------- */
-
-pub use zydeco_syntax::Pretty;
-/// Formatter for stack IR using scoped and statics naming.
-pub struct Formatter<'arena> {
-    admin: &'arena AdminArena,
-    inner: &'arena SpsInnerArena,
-    scoped: &'arena ScopedArena,
-    statics: &'arena StaticsArena,
-    pub indent: isize,
-}
-impl<'arena> Formatter<'arena> {
-    pub fn new(
-        admin: &'arena AdminArena, inner: &'arena SpsInnerArena, scoped: &'arena ScopedArena,
-        statics: &'arena StaticsArena,
-    ) -> Self {
-        Formatter { admin, inner, scoped, statics, indent: 2 }
-    }
-}
-
-/* --------------------------------- Pretty --------------------------------- */
-
 use pretty::RcDoc;
+
+pub use crate::fmt::Pretty;
+
+pub type Formatter<'a> = crate::fmt::Formatter<'a, Sps>;
 
 impl<'a> Pretty<'a, Formatter<'a>> for DefId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let name = f.admin.def_name(f.scoped, f.statics, self);
-        let statics_fmt = zydeco_statics::fmt::Formatter::new(f.scoped, f.statics);
-        RcDoc::text(format!("{}{}", name.ugly(&statics_fmt), self.concise()))
+        RcDoc::text(format!("{}{}", name.ugly(&f.statics_formatter()), self.concise()))
     }
 }
 
 impl<'a> Pretty<'a, Formatter<'a>> for VPatId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let vpat = &f.inner.vpats[self];
-        use super::syntax::{Ctor, ValuePattern as VPat};
-        match vpat {
-            | VPat::Hole(_) => RcDoc::text("_"),
-            | VPat::Var(def) => def.pretty(f),
-            | VPat::Ctor(Ctor(ctor, tail)) => {
-                use zydeco_syntax::CtorName;
-                let CtorName(name_str) = &ctor.name;
-                RcDoc::concat([
-                    RcDoc::text(name_str.clone()),
-                    RcDoc::text("("),
-                    tail.pretty(f),
-                    RcDoc::text(")"),
-                ])
-            }
-            | VPat::Alias(Alias(patterns)) => RcDoc::concat([
-                RcDoc::text("("),
-                RcDoc::intersperse(
-                    patterns.iter().map(|pattern| pattern.pretty(f)),
-                    RcDoc::text("; "),
-                ),
-                RcDoc::text(")"),
-            ]),
-            | VPat::Triv(_) => RcDoc::text("()"),
-            | VPat::VCons(VCons { items, layout: _ }) => RcDoc::concat([
-                RcDoc::text("("),
-                RcDoc::intersperse(items.iter().map(|item| item.pretty(f)), RcDoc::text(", ")),
-                RcDoc::text(")"),
-            ]),
-        }
+        f.inner.vpats[self].pretty(f)
     }
 }
 
 impl<'a> Pretty<'a, Formatter<'a>> for ValueId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        if let Some(value) = f.inner.values.get(self) {
-            value.pretty(f)
-        } else {
-            RcDoc::text(format!("<value:{}>", self.concise()))
+        match f.inner.values.get(self) {
+            | Some(value) => value.pretty(f),
+            | None => RcDoc::text(format!("<value:{}>", self.concise())),
         }
-        // let value = &f.inner.values[self];
-        // value.pretty(f)
     }
 }
 
-impl<'a> Pretty<'a, Formatter<'a>> for Value {
+impl<'a> Pretty<'a, Formatter<'a>> for StackId {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        f.inner.stacks[self].pretty(f)
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for CompuId {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        match f.inner.compus.get(self) {
+            | Some(compu) => compu.pretty(f),
+            | None => RcDoc::text(format!("<compu:{}>", self.concise())),
+        }
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for ValueExt {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         match self {
-            | Value::Hole(Hole) => RcDoc::text("_"),
-            | Value::Var(def) => def.pretty(f),
-            | Value::Closure(Closure { stack, body }) => RcDoc::concat([
+            | Self::Closure(Closure { stack, body }) => RcDoc::concat([
                 RcDoc::text("{"),
                 RcDoc::space(),
                 stack.pretty(f),
@@ -99,129 +58,30 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
                 RcDoc::text("}"),
             ])
             .group(),
-            | Value::Ctor(Ctor(ctor, val)) => {
-                let statics_fmt = zydeco_statics::fmt::Formatter::new(f.scoped, f.statics);
-                RcDoc::concat([
-                    RcDoc::text(ctor.name.ugly(&statics_fmt)),
-                    RcDoc::text("("),
-                    val.pretty(f),
-                    RcDoc::text(")"),
-                ])
-            }
-            | Value::Triv(Triv) => RcDoc::text("()"),
-            | Value::VCons(VCons { items, layout: _ }) => RcDoc::concat([
-                RcDoc::text("("),
-                RcDoc::intersperse(items.iter().map(|item| item.pretty(f)), RcDoc::text(", ")),
-                RcDoc::text(")"),
-            ]),
-            | Value::Literal(lit) => {
-                let statics_fmt = zydeco_statics::fmt::Formatter::new(f.scoped, f.statics);
-                RcDoc::text(lit.ugly(&statics_fmt))
-            }
-            | Value::AddrOffset(AddrOffset { base, displacement }) => RcDoc::concat([
-                RcDoc::text("addr.offset("),
-                base.pretty(f),
-                RcDoc::text(", "),
-                displacement.pretty(f),
-                RcDoc::text(")"),
-            ]),
-            | Value::Primitive(Primitive { operation, operands }) => {
-                let op_str = format!("<primitive:{}>", operation);
-                let ops_doc = RcDoc::concat(
-                    operands
-                        .iter()
-                        .map(|op| op.pretty(f))
-                        .enumerate()
-                        .flat_map(
-                            |(i, d)| {
-                                if i == 0 { vec![d] } else { vec![RcDoc::text(", "), d] }
-                            },
-                        )
-                        .collect::<Vec<_>>(),
-                );
-                RcDoc::concat([RcDoc::text(op_str), RcDoc::text("("), ops_doc, RcDoc::text(")")])
-            }
         }
     }
 }
 
-impl<'a> Pretty<'a, Formatter<'a>> for StackId {
-    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let stack = &f.inner.stacks[self];
-        stack.pretty(f)
-    }
-}
-
-impl<'a> Pretty<'a, Formatter<'a>> for Stack {
+impl<'a> Pretty<'a, Formatter<'a>> for StackExt {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         match self {
-            | Stack::Kont(s) => RcDoc::concat([RcDoc::text("("), s.pretty(f), RcDoc::text(")")]),
-            | Stack::Var(s) => s.pretty(f),
-            | Stack::Arg(Cons(val, stack)) => RcDoc::concat([
-                RcDoc::text("arg("),
-                val.pretty(f),
+            | Self::Kont(Kont { binder, body }) => RcDoc::concat([
+                RcDoc::text("(kont"),
+                RcDoc::space(),
+                binder.pretty(f),
+                RcDoc::space(),
+                RcDoc::text("->"),
+                RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
                 RcDoc::text(")"),
-                RcDoc::space(),
-                RcDoc::text("::"),
-                RcDoc::space(),
-                stack.pretty(f),
             ]),
-            | Stack::Tag(Cons(dtor, stack)) => {
-                let statics_fmt = zydeco_statics::fmt::Formatter::new(f.scoped, f.statics);
-                RcDoc::concat([
-                    RcDoc::text("tag("),
-                    RcDoc::text(dtor.name.ugly(&statics_fmt)),
-                    RcDoc::text(")"),
-                    RcDoc::space(),
-                    RcDoc::text("::"),
-                    RcDoc::space(),
-                    stack.pretty(f),
-                ])
-            }
         }
     }
 }
 
-impl<'a> Pretty<'a, Formatter<'a>> for StackVar {
-    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
-        RcDoc::text("•")
-    }
-}
-
-impl<'a> Pretty<'a, Formatter<'a>> for Kont {
-    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        RcDoc::concat([
-            RcDoc::text("kont"),
-            RcDoc::space(),
-            self.binder.pretty(f),
-            RcDoc::space(),
-            RcDoc::text("->"),
-            RcDoc::concat([RcDoc::line(), self.body.pretty(f)]).nest(f.indent).group(),
-        ])
-    }
-}
-
-impl<'a> Pretty<'a, Formatter<'a>> for CompuId {
-    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        if let Some(compu) = f.inner.compus.get(self) {
-            compu.pretty(f)
-        } else {
-            RcDoc::text(format!("<compu:{}>", self.concise()))
-        }
-        // let compu = &f.inner.compus[self];
-        // compu.pretty(f)
-    }
-}
-
-impl<'a> Pretty<'a, Formatter<'a>> for Computation<LetJoin> {
-    // One arm per computation form is the clearest shape for this printer.
-    #[allow(clippy::too_many_lines)]
+impl<'a> Pretty<'a, Formatter<'a>> for CompuExt {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         match self {
-            | Computation::Hole(SHole(tail)) => {
-                RcDoc::concat([RcDoc::text("_"), RcDoc::space(), tail.pretty(f)])
-            }
-            | Computation::Fix(SFix { param, stack, body }) => RcDoc::concat([
+            | Self::Fix(SFix { param, stack, body }) => RcDoc::concat([
                 RcDoc::text("fix"),
                 RcDoc::space(),
                 param.pretty(f),
@@ -233,99 +93,21 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation<LetJoin> {
                 RcDoc::text("->"),
                 RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
             ]),
-            | Computation::Force(SForce { thunk, stack }) => RcDoc::concat([
+            | Self::Force(SForce { thunk, stack }) => RcDoc::concat([
                 thunk.pretty(f),
                 RcDoc::space(),
                 RcDoc::text("!"),
                 RcDoc::space(),
                 stack.pretty(f),
             ]),
-            | Computation::Ret(SReturn { stack, value }) => RcDoc::concat([
+            | Self::Ret(SReturn { stack, value }) => RcDoc::concat([
                 stack.pretty(f),
                 RcDoc::space(),
                 RcDoc::text("@"),
                 RcDoc::space(),
                 value.pretty(f),
             ]),
-            | Computation::ProductMatch(SProductMatch { scrut, binder, body }) => RcDoc::concat([
-                RcDoc::text("match-product"),
-                RcDoc::space(),
-                scrut.pretty(f),
-                RcDoc::space(),
-                RcDoc::text("as"),
-                RcDoc::space(),
-                binder.pretty(f),
-                RcDoc::space(),
-                RcDoc::text("in"),
-                RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
-            ]),
-            | Computation::Compare(CompareBranch {
-                operation,
-                operands,
-                when_true,
-                when_false,
-            }) => RcDoc::concat([
-                RcDoc::text(format!("compare {operation}(")),
-                operands[0].pretty(f),
-                RcDoc::text(", "),
-                operands[1].pretty(f),
-                RcDoc::text(")"),
-                RcDoc::line(),
-                RcDoc::text("| true ->"),
-                RcDoc::concat([RcDoc::line(), when_true.pretty(f)]).nest(f.indent),
-                RcDoc::line(),
-                RcDoc::text("| false ->"),
-                RcDoc::concat([RcDoc::line(), when_false.pretty(f)]).nest(f.indent),
-                RcDoc::line(),
-                RcDoc::text("end"),
-            ]),
-            | Computation::CoprodMatch(SCoprodMatch { scrut, arms }) => RcDoc::concat([
-                RcDoc::text("case"),
-                RcDoc::space(),
-                scrut.pretty(f),
-                RcDoc::concat(arms.iter().map(|Matcher { binder, tail }| {
-                    RcDoc::concat([
-                        RcDoc::line(),
-                        RcDoc::text("|"),
-                        RcDoc::space(),
-                        binder.pretty(f),
-                        RcDoc::space(),
-                        RcDoc::text("->"),
-                        RcDoc::concat([RcDoc::line(), tail.pretty(f)]).nest(f.indent),
-                    ])
-                })),
-                RcDoc::line(),
-                RcDoc::text("end"),
-            ]),
-            | Computation::Join(LetJoin::Value(Let { binder, bindee, tail })) => RcDoc::concat([
-                RcDoc::text("let"),
-                RcDoc::space(),
-                binder.pretty(f),
-                RcDoc::space(),
-                RcDoc::text("="),
-                RcDoc::concat([
-                    RcDoc::concat([RcDoc::line(), bindee.pretty(f)]).nest(f.indent),
-                    RcDoc::line(),
-                    RcDoc::text("in"),
-                ])
-                .group(),
-                RcDoc::concat([RcDoc::line(), tail.pretty(f)]).group(),
-            ]),
-            | Computation::Join(LetJoin::Stack(Let { binder, bindee, tail })) => RcDoc::concat([
-                RcDoc::text("let"),
-                RcDoc::space(),
-                binder.pretty(f),
-                RcDoc::space(),
-                RcDoc::text("="),
-                RcDoc::concat([
-                    RcDoc::concat([RcDoc::line(), bindee.pretty(f)]).nest(f.indent),
-                    RcDoc::line(),
-                    RcDoc::text("in"),
-                ])
-                .group(),
-                RcDoc::concat([RcDoc::line(), tail.pretty(f)]).group(),
-            ]),
-            | Computation::LetProc(LetProc { procedure, stack, body, tail }) => RcDoc::concat([
+            | Self::LetProc(LetProc { procedure, stack, body, tail }) => RcDoc::concat([
                 RcDoc::text("letproc"),
                 RcDoc::space(),
                 procedure.pretty(f),
@@ -341,101 +123,13 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation<LetJoin> {
                 .group(),
                 RcDoc::concat([RcDoc::line(), tail.pretty(f)]).group(),
             ]),
-            | Computation::CallProc(CallProc { procedure, stack }) => RcDoc::concat([
+            | Self::CallProc(CallProc { procedure, stack }) => RcDoc::concat([
                 procedure.pretty(f),
                 RcDoc::space(),
                 RcDoc::text("!"),
                 RcDoc::space(),
                 stack.pretty(f),
             ]),
-            | Computation::LetArg(Let { binder, bindee, tail }) => {
-                let Cons(param, StackVar) = binder;
-                RcDoc::concat([
-                    RcDoc::text("let"),
-                    RcDoc::space(),
-                    RcDoc::text("arg("),
-                    param.pretty(f),
-                    RcDoc::text(")"),
-                    RcDoc::space(),
-                    RcDoc::text("::"),
-                    RcDoc::space(),
-                    StackVar.pretty(f),
-                    RcDoc::space(),
-                    RcDoc::text("="),
-                    RcDoc::concat([
-                        RcDoc::concat([RcDoc::line(), bindee.pretty(f)]).nest(f.indent),
-                        RcDoc::line(),
-                        RcDoc::text("in"),
-                    ])
-                    .group(),
-                    RcDoc::concat([RcDoc::line(), tail.pretty(f)]).group(),
-                ])
-            }
-            | Computation::CoCase(SCoMatch { scrut, arms }) => {
-                let statics_fmt = zydeco_statics::fmt::Formatter::new(f.scoped, f.statics);
-                RcDoc::concat([
-                    RcDoc::text("cocase"),
-                    RcDoc::space(),
-                    scrut.pretty(f),
-                    RcDoc::concat(arms.iter().map(|CoMatcher { dtor, tail }| {
-                        let Cons(dtor, StackVar) = dtor;
-                        RcDoc::concat([
-                            RcDoc::line(),
-                            RcDoc::text("|"),
-                            RcDoc::space(),
-                            RcDoc::text(dtor.name.ugly(&statics_fmt)),
-                            RcDoc::space(),
-                            RcDoc::text("->"),
-                            RcDoc::concat([RcDoc::line(), tail.pretty(f)]).nest(f.indent),
-                        ])
-                    })),
-                    RcDoc::line(),
-                    RcDoc::text("end"),
-                ])
-            }
-            | Computation::Memory(MemoryStep::Load { scalar, address, result, next }) => {
-                RcDoc::concat([
-                    RcDoc::text(format!("load {scalar:?} ")),
-                    address.pretty(f),
-                    RcDoc::text(" as "),
-                    result.pretty(f),
-                    RcDoc::text(";"),
-                    RcDoc::line(),
-                    next.pretty(f),
-                ])
-            }
-            | Computation::Memory(MemoryStep::Store { scalar, address, value, next }) => {
-                RcDoc::concat([
-                    RcDoc::text(format!("store {scalar:?} ")),
-                    address.pretty(f),
-                    RcDoc::text(", "),
-                    value.pretty(f),
-                    RcDoc::text(";"),
-                    RcDoc::line(),
-                    next.pretty(f),
-                ])
-            }
-            | Computation::ExternCall(ExternCall { function, stack }) => {
-                let (name, arity) = match function {
-                    | ExternalFunction::Host(function) => (function.host_name(), function.arity()),
-                    | ExternalFunction::Foreign(import) => {
-                        (import.target.symbol.to_string(), import.signature.parameters().len())
-                    }
-                    | ExternalFunction::Unit(import) => (import.target.symbol.to_string(), 0),
-                };
-                let fun_str = format!("<extern:{name}/{arity}>");
-                RcDoc::concat([RcDoc::text(fun_str), RcDoc::space(), stack.pretty(f)])
-            }
-        }
-    }
-}
-
-impl<'a> Pretty<'a, Formatter<'a>> for TermId {
-    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        match self {
-            | TermId::Value(v) => v.pretty(f),
-            | TermId::Compu(c) => c.pretty(f),
-            | TermId::Stack(s) => s.pretty(f),
         }
     }
 }

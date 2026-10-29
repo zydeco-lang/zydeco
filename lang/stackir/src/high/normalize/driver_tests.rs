@@ -97,7 +97,9 @@ fn drivers_fold_comparisons_and_preserve_unknown_operands_and_movement_barriers(
         let inner = &output.arena().inner;
         match case {
             | Case::True | Case::False => {
-                let Computation::Ret(SReturn { value, .. }) = inner.compus[&output.root()] else {
+                let Computation::Ext(CompuExt::Ret(SReturn { value, .. })) =
+                    inner.compus[&output.root()]
+                else {
                     panic!("selected successor expected")
                 };
                 let expected = if matches!(case, Case::True) { 11 } else { 22 };

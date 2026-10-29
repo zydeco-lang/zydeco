@@ -12,7 +12,7 @@ struct Counts {
     entries: usize,
     exits: usize,
 }
-impl Visitor for Counts {
+impl Visitor<Sps> for Counts {
     fn enter(&mut self, _: Node<'_>, _: Edge, _: Occurrence) {
         self.entries += 1;
     }

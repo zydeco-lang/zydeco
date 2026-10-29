@@ -130,32 +130,33 @@ mod tests {
 
         fn assert_no_call_wrappers(program: &SpsLowProgram) {
             let arena = &program.arena().inner;
-            assert!(
-                !arena
-                    .values
-                    .iter()
-                    .any(|(_, value)| matches!(value, low::Value::ClosurePackage(_)))
-            );
+            assert!(!arena.values.iter().any(|(_, value)| matches!(
+                value,
+                low::Value::Ext(low::ValueExt::ClosurePackage(_))
+            )));
             assert!(!arena.compus.iter().any(|(_, compu)| matches!(
                 compu,
-                low::Computation::OpenClosure(_) | low::Computation::ExternCall(_)
+                low::Computation::Ext(low::CompuExt::OpenClosure(_))
+                    | low::Computation::ExternCall(_)
             )));
-            assert!(
-                !arena
-                    .stacks
-                    .iter()
-                    .any(|(_, stack)| matches!(stack, low::Stack::ContinuationPackage(_)))
-            );
+            assert!(!arena.stacks.iter().any(|(_, stack)| matches!(
+                stack,
+                low::Stack::Ext(low::StackExt::ContinuationPackage(_))
+            )));
         }
 
         fn assert_returned_literal(program: &SpsLowProgram, expected: Literal) {
             let arena = &program.arena().inner;
-            let low::Computation::OpenContinuation(low::OpenContinuation { body, .. }) =
-                arena.compus[&program.root()]
+            let low::Computation::Ext(low::CompuExt::OpenContinuation(low::OpenContinuation {
+                body,
+                ..
+            })) = arena.compus[&program.root()]
             else {
                 panic!("the folded result must return to the ambient continuation")
             };
-            let low::Computation::Jump(low::Jump { argument, .. }) = arena.compus[&body] else {
+            let low::Computation::Ext(low::CompuExt::Jump(low::Jump { argument, .. })) =
+                arena.compus[&body]
+            else {
                 panic!("return must resume the ambient continuation")
             };
             let low::EntryArgument::Continuation { result: value } = argument else {
@@ -359,7 +360,10 @@ mod tests {
             arena
                 .values
                 .iter()
-                .filter(|(_, value)| matches!(value, low::Value::ClosurePackage(_)))
+                .filter(|(_, value)| matches!(
+                    value,
+                    low::Value::Ext(low::ValueExt::ClosurePackage(_))
+                ))
                 .count(),
             1
         );
@@ -373,14 +377,12 @@ mod tests {
         );
         assert!(!arena.compus.iter().any(|(_, compu)| matches!(
             compu,
-            low::Computation::ExternCall(_) | low::Computation::OpenClosure(_)
+            low::Computation::ExternCall(_) | low::Computation::Ext(low::CompuExt::OpenClosure(_))
         )));
-        assert!(
-            !arena
-                .stacks
-                .iter()
-                .any(|(_, stack)| matches!(stack, low::Stack::ContinuationPackage(_)))
-        );
+        assert!(!arena.stacks.iter().any(|(_, stack)| matches!(
+            stack,
+            low::Stack::Ext(low::StackExt::ContinuationPackage(_))
+        )));
         assert!(arena.values.iter().any(|(_, value)| matches!(
             value,
             low::Value::Literal(Literal::Integer(IntegerLiteral::Int(23)))
@@ -455,7 +457,10 @@ mod tests {
             arena
                 .compus
                 .iter()
-                .filter(|(_, compu)| matches!(compu, low::Computation::OpenClosure(_)))
+                .filter(|(_, compu)| matches!(
+                    compu,
+                    low::Computation::Ext(low::CompuExt::OpenClosure(_))
+                ))
                 .count(),
             1
         );

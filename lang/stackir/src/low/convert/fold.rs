@@ -339,7 +339,7 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
             }
             | high::Value::Triv(_) => self.finish_value(source, low::Triv),
             | high::Value::Literal(literal) => self.finish_value(source, literal),
-            | high::Value::Closure(high::Closure { body, .. }) => {
+            | high::Value::Ext(high::ValueExt::Closure(high::Closure { body, .. })) => {
                 let captures = self.captures(body, Context::new(), env);
                 let env = self.conversion.extend_env(env, captures.bindings.iter().copied());
                 return Step::Call {
@@ -473,7 +473,7 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
                     frame: Work::FinishTag { source, tag },
                 };
             }
-            | high::Stack::Kont(high::Kont { binder: result, body }) => {
+            | high::Stack::Ext(high::StackExt::Kont(high::Kont { binder: result, body })) => {
                 let excluded = self
                     .conversion
                     .variables
@@ -591,10 +591,12 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
                 input: Work::Stack(stack, env),
                 frame: Work::FinishExternCall { source, function },
             },
-            | high::Computation::Force(high::SForce { thunk, stack }) => Step::Call {
-                input: Work::Value(thunk, env),
-                frame: Work::ForceStack { source, env, stack },
-            },
+            | high::Computation::Ext(high::CompuExt::Force(high::SForce { thunk, stack })) => {
+                Step::Call {
+                    input: Work::Value(thunk, env),
+                    frame: Work::ForceStack { source, env, stack },
+                }
+            }
             | high::Computation::ProductMatch(high::SProductMatch { scrut, binder, body }) => {
                 Step::Call {
                     input: Work::Value(scrut, env),
@@ -605,26 +607,26 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
                 input: Work::Value(scrut, env),
                 frame: Work::MatchArms { source, env, position: 0, arms: Vec::new() },
             },
-            | high::Computation::Join(high::LetJoin::Value(high::Let { binder, bindee, tail })) => {
+            | high::Computation::LetValue(high::Let { binder, bindee, tail }) => Step::Call {
+                input: Work::Value(bindee, env),
+                frame: Work::LetValueTail { source, env, binder, tail },
+            },
+            | high::Computation::Ext(high::CompuExt::Ret(high::SReturn { stack, value })) => {
                 Step::Call {
-                    input: Work::Value(bindee, env),
-                    frame: Work::LetValueTail { source, env, binder, tail },
+                    input: Work::Stack(stack, env),
+                    frame: Work::ReturnValue { source, env, value },
                 }
             }
-            | high::Computation::Ret(high::SReturn { stack, value }) => Step::Call {
-                input: Work::Stack(stack, env),
-                frame: Work::ReturnValue { source, env, value },
-            },
-            | high::Computation::Fix(high::SFix { param, stack, body }) => Step::Call {
-                input: Work::Stack(stack, env),
-                frame: Work::FixBody { source, env, param, body },
-            },
-            | high::Computation::Join(high::LetJoin::Stack(high::Let { bindee, tail, .. })) => {
+            | high::Computation::Ext(high::CompuExt::Fix(high::SFix { param, stack, body })) => {
                 Step::Call {
-                    input: Work::Stack(bindee, env),
-                    frame: Work::LetStackTail { source, env, tail },
+                    input: Work::Stack(stack, env),
+                    frame: Work::FixBody { source, env, param, body },
                 }
             }
+            | high::Computation::LetStack(high::Let { bindee, tail, .. }) => Step::Call {
+                input: Work::Stack(bindee, env),
+                frame: Work::LetStackTail { source, env, tail },
+            },
             | high::Computation::LetArg(high::Let {
                 binder: high::Cons(binder, _),
                 bindee,
@@ -637,7 +639,12 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
                 input: Work::Stack(scrut, env),
                 frame: Work::CoCaseArms { source, env, position: 0, dtors: Vec::new() },
             },
-            | high::Computation::LetProc(high::LetProc { procedure, body, tail, .. }) => {
+            | high::Computation::Ext(high::CompuExt::LetProc(high::LetProc {
+                procedure,
+                body,
+                tail,
+                ..
+            })) => {
                 let Some(kind) = self.conversion.procedures[&source] else {
                     // No call reaches the procedure, so its body is dead.
                     return Step::TailCall(Work::Computation(tail, env));
@@ -669,7 +676,10 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
                     },
                 }
             }
-            | high::Computation::CallProc(high::CallProc { procedure, stack }) => Step::Call {
+            | high::Computation::Ext(high::CompuExt::CallProc(high::CallProc {
+                procedure,
+                stack,
+            })) => Step::Call {
                 input: Work::Stack(stack, env),
                 frame: Work::FinishCall { source, env, procedure },
             },

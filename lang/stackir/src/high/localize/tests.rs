@@ -13,12 +13,12 @@ struct Forms {
     forces: usize,
 }
 
-impl Visitor for Forms {
+impl Visitor<Sps> for Forms {
     fn enter(&mut self, node: Node<'_>, _: Edge, _: Occurrence) {
         match node {
-            | Node::Computation(_, Computation::LetProc(_)) => self.procedures += 1,
-            | Node::Computation(_, Computation::CallProc(_)) => self.calls += 1,
-            | Node::Computation(_, Computation::Force(_)) => self.forces += 1,
+            | Node::Computation(_, Computation::Ext(CompuExt::LetProc(_))) => self.procedures += 1,
+            | Node::Computation(_, Computation::Ext(CompuExt::CallProc(_))) => self.calls += 1,
+            | Node::Computation(_, Computation::Ext(CompuExt::Force(_))) => self.forces += 1,
             | _ => {}
         }
     }

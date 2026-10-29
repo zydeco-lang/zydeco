@@ -299,7 +299,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
 
     /// Finish a rebuilt computation at its source site, naming `spine` above it.
     fn finish_computation(
-        &mut self, source: CompuId, compu: impl Into<Computation<LetJoin>>, spine: Vec<StackId>,
+        &mut self, source: CompuId, compu: impl Into<Computation>, spine: Vec<StackId>,
         demands: Demands,
     ) {
         let site = self.norm.source.admin.term_site(source);
@@ -333,8 +333,8 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
                 };
                 self.build_value(id, value, demands, protocol);
             }
-            | Value::Closure(Closure { body, .. }) => {
-                if let Computation::Force(SForce { thunk, stack }) =
+            | Value::Ext(ValueExt::Closure(Closure { body, .. })) => {
+                if let Computation::Ext(CompuExt::Force(SForce { thunk, stack })) =
                     self.norm.source.inner.compus[&body]
                     && matches!(self.norm.source.inner.stacks[&stack], Stack::Var(StackVar))
                     && matches!(self.norm.source.inner.values[&thunk], Value::Var(_))
@@ -427,9 +427,9 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
                     frame: Work::FinishStack { source: id, parent: StackParent::Tag(tag) },
                 };
             }
-            | Stack::Kont(Kont { binder, body }) => {
+            | Stack::Ext(StackExt::Kont(Kont { binder, body })) => {
                 if let ValuePattern::Var(def) = self.norm.source.inner.vpats[&binder]
-                    && let Computation::Ret(SReturn { value, stack }) =
+                    && let Computation::Ext(CompuExt::Ret(SReturn { value, stack })) =
                         self.norm.source.inner.compus[&body]
                     && matches!(self.norm.source.inner.values[&value], Value::Var(returned) if returned == def)
                     && matches!(self.norm.source.inner.stacks[&stack], Stack::Var(StackVar))
@@ -473,7 +473,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
                 input: Work::Stack(ScopedStack { node: stack, scope }),
                 frame: Work::FinishComputation { source: id, parent: ComputationParent::Hole },
             },
-            | Computation::Force(SForce { thunk, stack }) => {
+            | Computation::Ext(CompuExt::Force(SForce { thunk, stack })) => {
                 let known = self.norm.known(thunk, scope.values);
                 let stack = ScopedStack { node: stack, scope: scope.clone() };
                 if let KnownValue::External(function) = known.as_ref() {
@@ -484,7 +484,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
                     let stack = Some(self.norm.delay_stack(stack));
                     Step::TailCall(Work::Computation(*body, Scope { values: scope.values, stack }))
                 } else if self.norm.movable_stack(stack.node)
-                    && let Value::Closure(Closure { body, .. }) =
+                    && let Value::Ext(ValueExt::Closure(Closure { body, .. })) =
                         self.norm.source.inner.values[&thunk]
                 {
                     let stack = Some(self.norm.delay_stack(stack));
@@ -505,10 +505,10 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
                     }
                 }
             }
-            | Computation::Ret(SReturn { stack, value }) => {
+            | Computation::Ext(CompuExt::Ret(SReturn { stack, value })) => {
                 let stack =
                     self.norm.resolve_stack(ScopedStack { node: stack, scope: scope.clone() });
-                if let Stack::Kont(Kont { binder, body }) =
+                if let Stack::Ext(StackExt::Kont(Kont { binder, body })) =
                     self.norm.source.inner.stacks[&stack.node]
                 {
                     Step::TailCall(Work::Binding {
@@ -529,11 +529,11 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
                     }
                 }
             }
-            | Computation::Fix(SFix { param, stack, body }) => Step::Call {
+            | Computation::Ext(CompuExt::Fix(SFix { param, stack, body })) => Step::Call {
                 input: Work::Stack(ScopedStack { node: stack, scope: scope.clone() }),
                 frame: Work::FixBody { source: id, param, body, scope },
             },
-            | Computation::LetProc(LetProc { procedure, body, tail, .. }) => {
+            | Computation::Ext(CompuExt::LetProc(LetProc { procedure, body, tail, .. })) => {
                 let env = scope.values;
                 let fact = self.norm.procedure_fact(procedure, body, env);
                 let values = self.norm.extend(env, [(procedure, fact)]);
@@ -542,7 +542,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
                     frame: Work::ProcedureBody { source: id, procedure, body, env },
                 }
             }
-            | Computation::CallProc(CallProc { procedure, stack }) => {
+            | Computation::Ext(CompuExt::CallProc(CallProc { procedure, stack })) => {
                 let known = self.norm.lookup(scope.values, procedure);
                 let stack = ScopedStack { node: stack, scope };
                 if self.norm.movable_stack(stack.node)
@@ -561,7 +561,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
                 }
             }
             | Computation::ProductMatch(SProductMatch { scrut: bindee, binder, body: tail })
-            | Computation::Join(LetJoin::Value(Let { binder, bindee, tail })) => {
+            | Computation::LetValue(Let { binder, bindee, tail }) => {
                 Step::TailCall(Work::Binding {
                     binder,
                     bindee: ScopedValue { node: bindee, env: scope.values },
@@ -570,7 +570,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
                     site,
                 })
             }
-            | Computation::Join(LetJoin::Stack(Let { bindee, tail, .. })) => {
+            | Computation::LetStack(Let { bindee, tail, .. }) => {
                 if self.norm.scheme.names_frames() {
                     self.stack_let(bindee, tail, scope, site)
                 } else {
@@ -774,7 +774,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
             && let Some(operation) = PrimitiveOp::from_builtin(*role)
         {
             if let Some((operands, rest)) = self.norm.primitive_arguments(stack.clone()) {
-                if let Stack::Kont(Kont { binder, body }) =
+                if let Stack::Ext(StackExt::Kont(Kont { binder, body })) =
                     self.norm.source.inner.stacks[&rest.node]
                 {
                     let folded = self.norm.fold_primitive(operation, operands);

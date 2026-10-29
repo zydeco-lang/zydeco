@@ -191,3 +191,19 @@ where
         id
     }
 }
+
+impl Nodes for SpsLowInnerArena {
+    type Phase = SpsLow;
+    fn vpats(&self) -> &ArenaSparse<SpsLowScope, VPatId> {
+        &self.vpats
+    }
+    fn values(&self) -> &ArenaSparse<SpsLowScope, ValueId> {
+        &self.values
+    }
+    fn stacks(&self) -> &ArenaSparse<SpsLowScope, StackId> {
+        &self.stacks
+    }
+    fn compus(&self) -> &ArenaSparse<SpsLowScope, CompuId> {
+        &self.compus
+    }
+}

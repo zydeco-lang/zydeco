@@ -89,7 +89,23 @@ impl ArenaSchema<StackId> for SpsScope {
     type Item = Stack;
 }
 impl ArenaSchema<CompuId> for SpsScope {
-    type Item = Computation<LetJoin>;
+    type Item = Computation;
+}
+
+impl Nodes for SpsInnerArena {
+    type Phase = Sps;
+    fn vpats(&self) -> &ArenaSparse<SpsScope, VPatId> {
+        &self.vpats
+    }
+    fn values(&self) -> &ArenaSparse<SpsScope, ValueId> {
+        &self.values
+    }
+    fn stacks(&self) -> &ArenaSparse<SpsScope, StackId> {
+        &self.stacks
+    }
+    fn compus(&self) -> &ArenaSparse<SpsScope, CompuId> {
+        &self.compus
+    }
 }
 
 /// All arenas for the stack-passing style ZIR.
@@ -239,10 +255,10 @@ where
     }
 }
 
-impl<U, Arena> Construct<Computation<LetJoin>, CompuId, Arena> for U
+impl<U, Arena> Construct<Computation, CompuId, Arena> for U
 where
     Arena: AsMut<SpsArena>,
-    U: Into<Computation<LetJoin>>,
+    U: Into<Computation>,
 {
     type Site = ss::TermId;
     fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> CompuId {

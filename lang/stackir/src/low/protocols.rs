@@ -187,7 +187,7 @@ impl<'a> ProtocolValidator<'a> {
     fn value(&self, id: ValueId, context: &Context) -> Result<ValueFact, ProtocolError> {
         let mut fact = match &self.arena.values[&id] {
             | Value::Var(def) => context.values.get(def).cloned().unwrap_or_default(),
-            | Value::Block(Block { label, entry, body }) => {
+            | Value::Ext(ValueExt::Block(Block { label, entry, body })) => {
                 let protocol = self.entry(id, *entry)?;
                 let mut local = Context::default();
                 local.values.insert(*label, ValueFact::with_code(protocol.clone()));
@@ -205,7 +205,7 @@ impl<'a> ProtocolValidator<'a> {
                 self.compu(*body, local)?;
                 ValueFact::with_code(protocol)
             }
-            | Value::ClosurePackage(ClosurePackage { environment, code }) => {
+            | Value::Ext(ValueExt::ClosurePackage(ClosurePackage { environment, code })) => {
                 self.value(*environment, context)?;
                 let code = self.value(*code, context)?;
                 let stack = match code.code {
@@ -272,7 +272,7 @@ impl<'a> ProtocolValidator<'a> {
             | Value::Hole(_) => ValueFact::default(),
         };
         if let Some(protocol) = self.arena.value_protocols.get(&id) {
-            if matches!(self.arena.values[&id], Value::ClosurePackage(_)) {
+            if matches!(self.arena.values[&id], Value::Ext(ValueExt::ClosurePackage(_))) {
                 self.check_value(id, protocol, &fact.protocol)?;
             }
             fact.protocol = fact.protocol.with_evidence(protocol);
@@ -293,7 +293,7 @@ impl<'a> ProtocolValidator<'a> {
             | Stack::Tag(Cons(tag, rest)) => {
                 StackProtocol::Tag(tag.clone(), Box::new(self.stack(*rest, context)?))
             }
-            | Stack::ContinuationPackage(ContinuationPackage { code, residual }) => {
+            | Stack::Ext(StackExt::ContinuationPackage(ContinuationPackage { code, residual })) => {
                 let code = self.value(*code, context)?;
                 self.stack(*residual, context)?;
                 let value = match code.code {
@@ -382,7 +382,7 @@ impl<'a> ProtocolValidator<'a> {
                     self.stack(*stack, &context)?;
                     return Ok(());
                 }
-                | Computation::Jump(Jump { target, argument, stack }) => {
+                | Computation::Ext(CompuExt::Jump(Jump { target, argument, stack })) => {
                     let code = self
                         .value(*target, &context)?
                         .code
@@ -400,12 +400,12 @@ impl<'a> ProtocolValidator<'a> {
                     return Ok(());
                 }
                 // A label body runs on the stack each jump supplies, over the variables in scope.
-                | Computation::LetLabel(LetLabel { label, body, tail, .. }) => {
+                | Computation::Ext(CompuExt::LetLabel(LetLabel { label, body, tail, .. })) => {
                     let stack = self.arena.label_protocols.get(label).cloned().unwrap_or_default();
                     self.compu(*body, Context { stack, ..context.clone() })?;
                     id = *tail;
                 }
-                | Computation::JumpLabel(JumpLabel { label, stack }) => {
+                | Computation::Ext(CompuExt::JumpLabel(JumpLabel { label, stack })) => {
                     let found = self.stack(*stack, &context)?;
                     if let Some(expected) = self.arena.label_protocols.get(label) {
                         self.check_stack(id, expected, &found)?;
@@ -465,7 +465,12 @@ impl<'a> ProtocolValidator<'a> {
                     id = *tail;
                 }
                 | Computation::CoCase(case) => return self.case(id, case, context),
-                | Computation::OpenClosure(OpenClosure { package, environment, code, body }) => {
+                | Computation::Ext(CompuExt::OpenClosure(OpenClosure {
+                    package,
+                    environment,
+                    code,
+                    body,
+                })) => {
                     let value = self.value(*package, &context)?.protocol;
                     self.check_value(*package, &ValueProtocol::Thunk(Box::default()), &value)?;
                     let protocol = match value {
@@ -480,7 +485,11 @@ impl<'a> ProtocolValidator<'a> {
                     );
                     id = *body;
                 }
-                | Computation::OpenContinuation(OpenContinuation { package, code, body }) => {
+                | Computation::Ext(CompuExt::OpenContinuation(OpenContinuation {
+                    package,
+                    code,
+                    body,
+                })) => {
                     let stack = self.stack(*package, &context)?;
                     self.check_stack(id, &StackProtocol::Continuation(Box::default()), &stack)?;
                     let value = match stack {

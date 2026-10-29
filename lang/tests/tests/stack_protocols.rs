@@ -84,7 +84,7 @@ impl Fixture {
             .compus
             .iter()
             .find_map(|(id, computation)| {
-                let Computation::Jump(Jump { stack, .. }) = computation else {
+                let Computation::Ext(CompuExt::Jump(Jump { stack, .. })) = computation else {
                     return None;
                 };
                 let mut stack = *stack;
@@ -149,7 +149,7 @@ fn an_instantiated_recursive_transfer_checks_arguments_after_the_first_observati
         .compus
         .iter()
         .find_map(|(id, compu)| {
-            let Computation::Jump(Jump { stack, .. }) = compu else { return None };
+            let Computation::Ext(CompuExt::Jump(Jump { stack, .. })) = compu else { return None };
             let Stack::Tag(Cons(first, argument)) = &arena.inner.stacks[stack] else { return None };
             let Stack::Arg(Cons(_, rest)) = &arena.inner.stacks[argument] else { return None };
             let Stack::Tag(Cons(second, argument)) = &arena.inner.stacks[rest] else { return None };
@@ -228,8 +228,8 @@ fn erased_polymorphic_calls_check_repeated_value_parameters_together() {
         .iter()
         .find_map(|(id, compu)| {
             // The default plan localizes the relay, so its calls are label jumps.
-            let (Computation::Jump(Jump { stack, .. })
-            | Computation::JumpLabel(JumpLabel { stack, .. })) = compu
+            let (Computation::Ext(CompuExt::Jump(Jump { stack, .. }))
+            | Computation::Ext(CompuExt::JumpLabel(JumpLabel { stack, .. }))) = compu
             else {
                 return None;
             };
@@ -510,9 +510,10 @@ fn a_known_result_must_match_the_installed_continuation() {
         .compus
         .iter()
         .find_map(|(_, compu)| {
-            let Computation::Jump(Jump {
-                argument: EntryArgument::Continuation { result }, ..
-            }) = compu
+            let Computation::Ext(CompuExt::Jump(Jump {
+                argument: EntryArgument::Continuation { result },
+                ..
+            })) = compu
             else {
                 return None;
             };
@@ -542,8 +543,10 @@ fn entry_protocols_agree_with_their_roles_and_result_parameters() {
                 (*protocol == EntryProtocol::Continuation(Fixture::integer())).then_some(*id)
             })
             .unwrap();
-        let Value::Block(Block { entry: EntryParameters::Continuation { result, .. }, .. }) =
-            arena.inner.values[&block]
+        let Value::Ext(ValueExt::Block(Block {
+            entry: EntryParameters::Continuation { result, .. },
+            ..
+        })) = arena.inner.values[&block]
         else {
             unreachable!()
         };
@@ -576,18 +579,21 @@ fn an_indirect_worker_rejects_an_incompatible_argument_prefix() {
         .compus
         .iter()
         .find_map(|(_, compu)| {
-            let Computation::OpenClosure(OpenClosure { package, body, .. }) = compu else {
+            let Computation::Ext(CompuExt::OpenClosure(OpenClosure { package, body, .. })) = compu
+            else {
                 return None;
             };
             (arena.inner.value_protocols.get(package) == Some(&expected_value)).then_some(*body)
         })
         .unwrap();
-    let Computation::Jump(Jump { stack, .. }) = arena.inner.compus[&jump] else {
+    let Computation::Ext(CompuExt::Jump(Jump { stack, .. })) = arena.inner.compus[&jump] else {
         panic!("opening must transfer to the worker")
     };
     let wrong: ValueId = Literal::Char('x').build(&mut arena, None);
     let stack = Cons(wrong, stack).build(&mut arena, None);
-    let Computation::Jump(transfer) = &mut arena.inner.compus[&jump] else { unreachable!() };
+    let Computation::Ext(CompuExt::Jump(transfer)) = &mut arena.inner.compus[&jump] else {
+        unreachable!()
+    };
     transfer.stack = stack;
     let SpsLowValidationError::Protocol(ProtocolError::Stack { compu, expected, found }) =
         SpsLowProgram::try_new(arena, root, SpsScheme::BranchJoin).unwrap_err()

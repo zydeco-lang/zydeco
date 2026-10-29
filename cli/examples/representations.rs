@@ -48,7 +48,9 @@ impl Measurement {
                 matches!(
                     program.arena().inner.values[id],
                     zydeco_stackir::low::syntax::Value::VCons(_)
-                        | zydeco_stackir::low::syntax::Value::ClosurePackage(_)
+                        | zydeco_stackir::low::syntax::Value::Ext(
+                            zydeco_stackir::low::syntax::ValueExt::ClosurePackage(_)
+                        )
                 )
             })
             .count();

@@ -25,3 +25,18 @@ pub trait Construct<S, T, Arena>: Sized + Into<S> {
     /// Allocate the node in the arena, recording a typed-site mapping if provided.
     fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> T;
 }
+
+/// The node tables of one phase.
+pub trait Nodes: Sized {
+    type Phase: Phase<Nodes = Self>;
+    fn vpats(&self) -> &ArenaSparse<<Self::Phase as Phase>::Scope, <Self::Phase as Phase>::VPatId>;
+    fn values(
+        &self,
+    ) -> &ArenaSparse<<Self::Phase as Phase>::Scope, <Self::Phase as Phase>::ValueId>;
+    fn stacks(
+        &self,
+    ) -> &ArenaSparse<<Self::Phase as Phase>::Scope, <Self::Phase as Phase>::StackId>;
+    fn compus(
+        &self,
+    ) -> &ArenaSparse<<Self::Phase as Phase>::Scope, <Self::Phase as Phase>::CompuId>;
+}

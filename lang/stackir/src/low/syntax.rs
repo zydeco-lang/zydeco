@@ -14,14 +14,27 @@ zydeco_utils::new_key_type! {
     pub struct CompuId;
 }
 
-#[derive(From, Clone, Debug, Eq, Hash, PartialEq)]
-pub enum TermId {
-    Value(ValueId),
-    Compu(CompuId),
-    Stack(StackId),
+/// The first-order SPSLow phase.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct SpsLow;
+
+impl Phase for SpsLow {
+    type VPatId = VPatId;
+    type ValueId = ValueId;
+    type StackId = StackId;
+    type CompuId = CompuId;
+    type Scope = SpsLowScope;
+    type Nodes = SpsLowInnerArena;
+    type ValueExt = ValueExt;
+    type StackExt = StackExt;
+    type CompuExt = CompuExt;
 }
 
+pub type TermId = common::TermId<SpsLow>;
 pub type ValuePattern = common::ValuePattern<VPatId>;
+pub type Value = common::Value<SpsLow>;
+pub type Stack = common::Stack<SpsLow>;
+pub type Computation = common::Computation<SpsLow>;
 pub type Primitive = common::Primitive<ValueId>;
 pub type CompareBranch = common::CompareBranch<ValueId, CompuId>;
 pub type AddrOffset = common::AddrOffset<ValueId>;
@@ -51,18 +64,11 @@ pub struct ClosurePackage {
     pub code: ValueId,
 }
 
-#[derive(From, Clone, Debug)]
-pub enum Value {
-    Hole(Hole),
-    Var(DefId),
+/// The value forms of first-order SPSLow.
+#[derive(Clone, Debug, From)]
+pub enum ValueExt {
     Block(Block),
     ClosurePackage(ClosurePackage),
-    Ctor(Ctor<CtorIdx, ValueId>),
-    Triv(Triv),
-    VCons(VCons<ValueId>),
-    Literal(Literal),
-    Primitive(Primitive),
-    AddrOffset(AddrOffset),
 }
 
 /* ---------------------------------- Stacks -------------------------------- */
@@ -89,11 +95,9 @@ pub struct CaptureBinding {
     pub binding: DefId,
 }
 
-#[derive(From, Clone, Debug)]
-pub enum Stack {
-    Var(StackVar),
-    Arg(Cons<ValueId, StackId>),
-    Tag(Cons<DtorIdx, StackId>),
+/// The stack forms of first-order SPSLow.
+#[derive(Clone, Debug, From)]
+pub enum StackExt {
     ContinuationPackage(ContinuationPackage),
 }
 
@@ -153,27 +157,14 @@ pub struct JumpLabel {
     pub stack: StackId,
 }
 
-#[derive(From, Clone, Debug)]
-pub enum Computation {
-    Hole(SHole<StackId>),
+/// The computation forms of first-order SPSLow.
+#[derive(Clone, Debug, From)]
+pub enum CompuExt {
     Jump(Jump),
     LetLabel(LetLabel),
     JumpLabel(JumpLabel),
-    ProductMatch(SProductMatch),
-    CoprodMatch(SCoprodMatch),
-    Compare(CompareBranch),
-    LetValue(LetValue),
-    LetStack(LetStack),
-    LetArg(LetArg),
-    CoCase(SCoMatch),
     OpenClosure(OpenClosure),
     OpenContinuation(OpenContinuation),
-    ExternCall(ExternCall),
-    Memory(MemoryStep),
 }
 
-impl Computation {
-    pub fn is_branch(&self) -> bool {
-        matches!(self, Self::CoprodMatch(_) | Self::Compare(_))
-    }
-}
+common::phase_conversions!(SpsLow);

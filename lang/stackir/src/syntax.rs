@@ -10,7 +10,12 @@ pub use zydeco_utils::{
     context::{CoContext, Context},
 };
 
-use crate::static_syntax as ss;
+use crate::{
+    scheme::{StackConsumer, StackShape},
+    static_syntax as ss,
+    traverse::Children,
+    variables::FreeVariables,
+};
 use derive_more::From;
 
 pub type DefId = ss::DefId;
@@ -139,3 +144,203 @@ pub enum ExternalFunction {
     Foreign(ForeignImport),
     Unit(UnitImport),
 }
+
+/* ---------------------------------- Phases -------------------------------- */
+
+/// One level of the stack IR: lexical SPS or first-order SPSLow.
+///
+/// A phase owns its node identifiers and the forms it adds to the shared values, stacks,
+/// and computations. Structural traversal, variable summaries, printing, and stack-use
+/// classification are written once over the shared forms and reach a phase's own forms
+/// through the hooks that its extension types implement.
+pub trait Phase: Copy + Eq + std::hash::Hash + std::fmt::Debug + 'static {
+    type VPatId: ArenaId + std::fmt::Debug;
+    type ValueId: ArenaId + std::fmt::Debug;
+    type StackId: ArenaId + std::fmt::Debug;
+    type CompuId: ArenaId + std::fmt::Debug;
+    /// The allocation scope whose schema stores this phase's nodes.
+    type Scope: ArenaSchema<Self::VPatId, Item = ValuePattern<Self::VPatId>>
+        + ArenaSchema<Self::ValueId, Item = Value<Self>>
+        + ArenaSchema<Self::StackId, Item = Stack<Self>>
+        + ArenaSchema<Self::CompuId, Item = Computation<Self>>;
+    /// The arena that holds this phase's nodes.
+    type Nodes: Nodes<Phase = Self>;
+    /// The value forms this phase adds to the shared ones.
+    type ValueExt: Clone + std::fmt::Debug + Children<Self> + FreeVariables<Self>;
+    /// The stack forms this phase adds to the shared ones.
+    type StackExt: Clone + std::fmt::Debug + Children<Self> + FreeVariables<Self> + StackShape<Self>;
+    /// The computation forms this phase adds to the shared ones.
+    type CompuExt: Clone
+        + std::fmt::Debug
+        + Children<Self>
+        + FreeVariables<Self>
+        + StackConsumer<Self>;
+}
+
+/// A value of one phase: the shared forms and the phase's own.
+#[derive(Clone, Debug, From)]
+pub enum Value<P: Phase> {
+    Hole(Hole),
+    Var(DefId),
+    Ctor(Ctor<CtorIdx, P::ValueId>),
+    Triv(Triv),
+    VCons(VCons<P::ValueId>),
+    Literal(Literal),
+    Primitive(Primitive<P::ValueId>),
+    AddrOffset(AddrOffset<P::ValueId>),
+    #[from(ignore)]
+    Ext(P::ValueExt),
+}
+
+/// A stack of one phase: the shared frames and the phase's own.
+#[derive(Clone, Debug, From)]
+pub enum Stack<P: Phase> {
+    Var(StackVar),
+    #[from(ignore)]
+    Arg(Cons<P::ValueId, P::StackId>),
+    #[from(ignore)]
+    Tag(Cons<DtorIdx, P::StackId>),
+    #[from(ignore)]
+    Ext(P::StackExt),
+}
+
+/// A computation of one phase: the shared forms and the phase's own.
+#[derive(Clone, Debug, From)]
+pub enum Computation<P: Phase> {
+    Hole(SHole<P::StackId>),
+    ProductMatch(SProductMatch<P::ValueId, P::VPatId, P::CompuId>),
+    CoprodMatch(SCoprodMatch<P::ValueId, P::VPatId, P::CompuId>),
+    Compare(CompareBranch<P::ValueId, P::CompuId>),
+    #[from(ignore)]
+    LetValue(Let<P::VPatId, P::ValueId, P::CompuId>),
+    #[from(ignore)]
+    LetStack(Let<StackVar, P::StackId, P::CompuId>),
+    #[from(ignore)]
+    LetArg(Let<Cons<P::VPatId, StackVar>, P::StackId, P::CompuId>),
+    CoCase(SCoMatch<P::StackId, Cons<DtorIdx, StackVar>, P::CompuId>),
+    ExternCall(ExternCall<P::StackId>),
+    Memory(MemoryStep<P::ValueId, P::VPatId, P::CompuId>),
+    #[from(ignore)]
+    Ext(P::CompuExt),
+}
+
+impl<P: Phase> Computation<P> {
+    pub fn is_branch(&self) -> bool {
+        matches!(self, Self::CoprodMatch(_) | Self::Compare(_))
+    }
+}
+
+/// Dispatcher over the terms of one phase.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum TermId<P: Phase> {
+    Value(P::ValueId),
+    Compu(P::CompuId),
+    Stack(P::StackId),
+}
+
+/// The conversions of one phase into the shared enums: the shared forms whose generic `From`
+/// impls would overlap, the phase's own forms, and the dispatchers over its identifiers.
+/// Invoke it where the phase's `VPatId`, `ValueId`, `StackId`, `CompuId`, `ValueExt`,
+/// `StackExt`, and `CompuExt` are in scope.
+macro_rules! phase_conversions {
+    ($phase:ty) => {
+        impl From<$crate::syntax::Cons<ValueId, StackId>> for $crate::syntax::Stack<$phase> {
+            fn from(frame: $crate::syntax::Cons<ValueId, StackId>) -> Self {
+                Self::Arg(frame)
+            }
+        }
+        impl From<$crate::syntax::Cons<$crate::syntax::DtorIdx, StackId>>
+            for $crate::syntax::Stack<$phase>
+        {
+            fn from(frame: $crate::syntax::Cons<$crate::syntax::DtorIdx, StackId>) -> Self {
+                Self::Tag(frame)
+            }
+        }
+        impl<T: Into<StackExt>> From<T> for $crate::syntax::Stack<$phase> {
+            fn from(form: T) -> Self {
+                Self::Ext(form.into())
+            }
+        }
+        impl<T: Into<ValueExt>> From<T> for $crate::syntax::Value<$phase> {
+            fn from(form: T) -> Self {
+                Self::Ext(form.into())
+            }
+        }
+        impl From<$crate::syntax::Let<VPatId, ValueId, CompuId>>
+            for $crate::syntax::Computation<$phase>
+        {
+            fn from(binding: $crate::syntax::Let<VPatId, ValueId, CompuId>) -> Self {
+                Self::LetValue(binding)
+            }
+        }
+        impl From<$crate::syntax::Let<$crate::syntax::StackVar, StackId, CompuId>>
+            for $crate::syntax::Computation<$phase>
+        {
+            fn from(
+                binding: $crate::syntax::Let<$crate::syntax::StackVar, StackId, CompuId>,
+            ) -> Self {
+                Self::LetStack(binding)
+            }
+        }
+        impl
+            From<
+                $crate::syntax::Let<
+                    $crate::syntax::Cons<VPatId, $crate::syntax::StackVar>,
+                    StackId,
+                    CompuId,
+                >,
+            > for $crate::syntax::Computation<$phase>
+        {
+            fn from(
+                binding: $crate::syntax::Let<
+                    $crate::syntax::Cons<VPatId, $crate::syntax::StackVar>,
+                    StackId,
+                    CompuId,
+                >,
+            ) -> Self {
+                Self::LetArg(binding)
+            }
+        }
+        impl<T: Into<CompuExt>> From<T> for $crate::syntax::Computation<$phase> {
+            fn from(form: T) -> Self {
+                Self::Ext(form.into())
+            }
+        }
+        impl From<ValueId> for $crate::syntax::TermId<$phase> {
+            fn from(id: ValueId) -> Self {
+                Self::Value(id)
+            }
+        }
+        impl From<CompuId> for $crate::syntax::TermId<$phase> {
+            fn from(id: CompuId) -> Self {
+                Self::Compu(id)
+            }
+        }
+        impl From<StackId> for $crate::syntax::TermId<$phase> {
+            fn from(id: StackId) -> Self {
+                Self::Stack(id)
+            }
+        }
+        impl From<VPatId> for $crate::traverse::EntityId<$phase> {
+            fn from(id: VPatId) -> Self {
+                Self::Pattern(id)
+            }
+        }
+        impl From<ValueId> for $crate::traverse::EntityId<$phase> {
+            fn from(id: ValueId) -> Self {
+                Self::Value(id)
+            }
+        }
+        impl From<StackId> for $crate::traverse::EntityId<$phase> {
+            fn from(id: StackId) -> Self {
+                Self::Stack(id)
+            }
+        }
+        impl From<CompuId> for $crate::traverse::EntityId<$phase> {
+            fn from(id: CompuId) -> Self {
+                Self::Computation(id)
+            }
+        }
+    };
+}
+pub(crate) use phase_conversions;

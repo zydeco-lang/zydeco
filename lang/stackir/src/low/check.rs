@@ -4,7 +4,7 @@ use super::entry::EntryKind;
 use super::syntax::*;
 use super::traverse::{Edge, EntityId, Node, Occurrence, Together, Traversal, Visitor};
 use super::variables::Variables;
-use crate::scheme::{FrameShape, PlacementError, SpsScheme, StackUse};
+use crate::scheme::{FrameShape, PlacementError, SpsScheme, StackConsumer, StackShape};
 use std::collections::{HashMap, HashSet};
 use zydeco_utils::fold::{Driver, Explicit};
 
@@ -127,12 +127,14 @@ impl ContinuationEntry {
     fn matches_package(
         &self, arena: &SpsLowInnerArena, stack: StackId, variables: &Variables,
     ) -> bool {
-        let Some(Stack::ContinuationPackage(ContinuationPackage { code, residual })) =
+        let Some(Stack::Ext(StackExt::ContinuationPackage(ContinuationPackage { code, residual }))) =
             arena.stacks.get(&stack)
         else {
             return false;
         };
-        let Some(Value::Block(Block { label, entry, body })) = arena.values.get(code) else {
+        let Some(Value::Ext(ValueExt::Block(Block { label, entry, body }))) =
+            arena.values.get(code)
+        else {
             return false;
         };
         let EntryParameters::Continuation { result, environment } = *entry else { return false };
@@ -197,7 +199,9 @@ impl<'a> SpsLowValidator<'a> {
             return Err(error);
         }
         for block in validator.blocks {
-            let Value::Block(Block { label, .. }) = arena.values[&block] else { unreachable!() };
+            let Value::Ext(ValueExt::Block(Block { label, .. })) = arena.values[&block] else {
+                unreachable!()
+            };
             let captures = variables
                 .free_variables(block.into())
                 .expect("validated block")
@@ -245,7 +249,7 @@ impl<'a> SpsLowValidator<'a> {
         }
         match node {
             | Node::Pattern(_, _) => {}
-            | Node::Value(id, Value::Block(Block { label, entry, .. })) => {
+            | Node::Value(id, Value::Ext(ValueExt::Block(Block { label, entry, .. }))) => {
                 if !self.labels.insert(*label) {
                     return Err(SpsLowValidationError::DuplicateBlockLabel { label: *label });
                 }
@@ -258,7 +262,12 @@ impl<'a> SpsLowValidator<'a> {
             }
             | Node::Computation(id, computation) => {
                 match computation {
-                    | Computation::LetLabel(LetLabel { label, kind, body, tail }) => {
+                    | Computation::Ext(CompuExt::LetLabel(LetLabel {
+                        label,
+                        kind,
+                        body,
+                        tail,
+                    })) => {
                         if !self.labels.insert(*label) {
                             return Err(SpsLowValidationError::DuplicateLabel { label: *label });
                         }
@@ -267,12 +276,12 @@ impl<'a> SpsLowValidator<'a> {
                         }
                         self.openings.insert((*tail).into(), LabelScope::Bound(*label, *kind));
                     }
-                    | Computation::JumpLabel(JumpLabel { label, .. }) => {
+                    | Computation::Ext(CompuExt::JumpLabel(JumpLabel { label, .. })) => {
                         self.resolve(id, *label)?;
                     }
                     | _ => {}
                 }
-                if let Some(error) = self.scheme.check(self.usage(computation, edge)) {
+                if let Some(error) = self.scheme.check(computation.stack_use(edge, self.arena)) {
                     return Err(SpsLowValidationError::Placement { compu: id, error });
                 }
             }
@@ -302,45 +311,35 @@ impl<'a> SpsLowValidator<'a> {
         }
         Err(SpsLowValidationError::UnboundLabel { compu, label })
     }
+}
 
-    fn usage(&self, computation: &Computation, edge: Edge) -> StackUse {
-        match computation {
-            | Computation::LetStack(LetStack { bindee, tail, .. }) => StackUse::Let {
-                bindee: self.shape(*bindee),
-                tail_branch: self.arena.compus[tail].is_branch(),
-            },
-            | computation if computation.is_branch() => {
-                StackUse::Branch { guarded: matches!(edge, Edge::StackLetTail(_)) }
-            }
-            | Computation::Hole(SHole(stack))
-            | Computation::ExternCall(ExternCall { stack, .. })
-            | Computation::Jump(Jump { stack, .. })
-            | Computation::JumpLabel(JumpLabel { stack, .. })
-            | Computation::OpenContinuation(OpenContinuation { package: stack, .. })
-            | Computation::LetArg(LetArg { bindee: stack, .. })
-            | Computation::CoCase(SCoMatch { scrut: stack, .. }) => {
-                StackUse::Consumer(self.shape(*stack))
-            }
-            | _ => StackUse::Other,
-        }
-    }
-
-    fn shape(&self, stack: StackId) -> FrameShape {
-        let ambient = |stack: &StackId| matches!(self.arena.stacks[stack], Stack::Var(_));
-        match &self.arena.stacks[&stack] {
-            | Stack::Var(_) => FrameShape::Ambient,
-            | Stack::Arg(Cons(_, rest)) | Stack::Tag(Cons(_, rest)) if ambient(rest) => {
-                FrameShape::Frame
-            }
-            | Stack::ContinuationPackage(ContinuationPackage { residual, .. }) if matches!(&self.arena.stacks[residual], Stack::Arg(Cons(_, rest)) if ambient(rest)) => {
-                FrameShape::Frame
-            }
-            | Stack::Arg(_) | Stack::Tag(_) | Stack::ContinuationPackage(_) => FrameShape::Compound,
+impl StackConsumer<SpsLow> for CompuExt {
+    fn consumed_stack(&self) -> Option<StackId> {
+        match self {
+            | Self::Jump(Jump { stack, .. })
+            | Self::JumpLabel(JumpLabel { stack, .. })
+            | Self::OpenContinuation(OpenContinuation { package: stack, .. }) => Some(*stack),
+            | Self::LetLabel(_) | Self::OpenClosure(_) => None,
         }
     }
 }
 
-impl Visitor for SpsLowValidator<'_> {
+impl StackShape<SpsLow> for StackExt {
+    fn shape(&self, nodes: &SpsLowInnerArena) -> FrameShape {
+        match self {
+            | Self::ContinuationPackage(ContinuationPackage { residual, .. }) => {
+                match &nodes.stacks[residual] {
+                    | Stack::Arg(Cons(_, rest)) if matches!(nodes.stacks[rest], Stack::Var(_)) => {
+                        FrameShape::Frame
+                    }
+                    | _ => FrameShape::Compound,
+                }
+            }
+        }
+    }
+}
+
+impl Visitor<SpsLow> for SpsLowValidator<'_> {
     fn enter(&mut self, node: Node<'_>, edge: Edge, occurrence: Occurrence) {
         if self.error.is_none() {
             self.error = self.check(node, edge, occurrence).err();

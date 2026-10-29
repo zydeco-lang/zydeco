@@ -1,6 +1,6 @@
 use super::*;
 use crate::low::variables::Variables;
-use zydeco_utils::fold::Recursive;
+use zydeco_utils::fold::{Explicit, Recursive};
 
 #[derive(Debug, PartialEq, Eq)]
 enum Event {
@@ -11,7 +11,7 @@ enum Event {
 #[derive(Default)]
 struct Trace(Vec<Event>);
 
-impl Visitor for Trace {
+impl Visitor<SpsLow> for Trace {
     fn enter(&mut self, node: Node<'_>, edge: Edge, occurrence: Occurrence) {
         self.0.push(Event::Enter(node.id(), edge, occurrence));
     }
@@ -50,7 +50,7 @@ impl Fixture {
                         assert_eq!(
                             explicit
                                 .first
-                                .free_variables(term.clone())
+                                .free_variables(term)
                                 .map(|vars| vars.iter().collect::<Vec<_>>()),
                             recursive
                                 .first

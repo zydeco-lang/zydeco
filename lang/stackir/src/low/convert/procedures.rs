@@ -59,31 +59,38 @@ impl Placement {
     }
 
     fn children(&mut self, node: Node<'_>) -> Calls {
-        let mut children = Vec::new();
-        node.children(|child, _| children.push(child));
-        children.into_iter().fold(Calls::default(), |calls, child| calls.join(self.take(child)))
+        (0..)
+            .map_while(|position| node.child(position))
+            .fold(Calls::default(), |calls, (child, _)| calls.join(self.take(child)))
     }
 }
 
-impl Visitor for Placement {
+impl Visitor<high::Sps> for Placement {
     fn exit(&mut self, node: Node<'_>) {
         use high::{Computation as Compu, Value};
         let calls = match node {
             | Node::Pattern(..) => return,
             // Continuation, closure, and fixed-point bodies run in frames of their own.
-            | Node::Stack(_, high::Stack::Kont(_)) | Node::Value(_, Value::Closure(_)) => {
+            | Node::Stack(_, high::Stack::Ext(high::StackExt::Kont(_)))
+            | Node::Value(_, Value::Ext(high::ValueExt::Closure(_))) => {
                 self.children(node).enclosed()
             }
-            | Node::Computation(_, Compu::Fix(high::SFix { stack, body, .. })) => {
-                self.take(*stack).join(self.take(*body).enclosed())
-            }
-            | Node::Computation(_, Compu::CallProc(high::CallProc { procedure, stack })) => {
+            | Node::Computation(
+                _,
+                Compu::Ext(high::CompuExt::Fix(high::SFix { stack, body, .. })),
+            ) => self.take(*stack).join(self.take(*body).enclosed()),
+            | Node::Computation(
+                _,
+                Compu::Ext(high::CompuExt::CallProc(high::CallProc { procedure, stack })),
+            ) => {
                 let call = Calls { local: CoContext::singleton(*procedure), ..Calls::default() };
                 self.take(*stack).join(call)
             }
             | Node::Computation(
                 id,
-                Compu::LetProc(high::LetProc { procedure, body, tail, .. }),
+                Compu::Ext(high::CompuExt::LetProc(high::LetProc {
+                    procedure, body, tail, ..
+                })),
             ) => {
                 let tail = self.take(*tail);
                 let body = self.take(*body);

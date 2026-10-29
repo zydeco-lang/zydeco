@@ -26,19 +26,24 @@ Both representations have one computation root rather than a top-level declarati
 
 ## Key components
 
-- `syntax` holds the shared node forms, parameterized by phase-specific IDs,
-  and `arena` holds shared builder and definition-name lookup traits.
-  Each phase adds its own control-flow forms to the common syntax.
+- `syntax` declares the values, stacks, and computations that both phases share,
+  generic over a `Phase` that supplies its node identifiers and its own forms as extension enums;
+  `arena` holds the shared builder, node-storage, and definition-name lookup traits.
+- `traverse`, `variables`, and `fmt` implement structural traversal, variable summaries,
+  and printing once over the shared forms and reach a phase's own forms through its hooks.
 - `scheme` defines where stack-passing compilation names the current stack and the placement rule
-  of each scheme's fragment, which `high::check` and `low::check` both apply.
+  of each scheme's fragment, which `high::check` and `low::check` both apply;
+  it also classifies each computation's stack use for both phases.
 - `high::syntax` and `high::arena` define lexical SPS; `high::lower` constructs a validated `FragmentProgram` directly
   from checked syntax.
 - `high::copy` deep-copies a stack so that every arm of a duplicating branch owns its consumer.
-- `high::variables` provides free-variable analysis, and `high::check` validates closed roots, lexical ownership,
+- `high::traverse`, `high::variables`, and `high::fmt` instantiate the shared traversal,
+  summaries, and printer for lexical SPS; `high::check` validates closed roots, lexical ownership,
   and placement in the scheme's fragment.
 - `high::normalize` rebuilds SPS using local reductions and the consumer demands defined by `high::demand`.
 - `high::localize` turns a let-bound closure whose every use is a call outside closures into a procedure.
-- `low::syntax` and `low::arena` define first-order SPS with typed package forms.
+- `low::syntax` and `low::arena` define first-order SPS with typed package forms; `low::traverse`,
+  `low::variables`, and `low::fmt` instantiate the shared analyses and printer for it.
 - `low::entry` defines the explicit environment/result word roles consumed by block entries and supplied by jumps.
 - `protocol` extracts partial source value/stack protocols.
   A shared graph retains recursive codata observations and owns their canonical tag numbering.

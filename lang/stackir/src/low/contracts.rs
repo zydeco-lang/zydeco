@@ -193,7 +193,7 @@ impl<'a> EntryValidator<'a> {
     fn value(&self, id: ValueId, context: &Context) -> Result<ValueEvidence, EntryContractError> {
         Ok(match &self.arena.values[&id] {
             | Value::Var(def) => context.values.get(def).cloned().unwrap_or_default(),
-            | Value::Block(Block { label, entry, body }) => {
+            | Value::Ext(ValueExt::Block(Block { label, entry, body })) => {
                 let evidence = ValueEvidence::Code(CodeEvidence::Block(*entry));
                 let mut local = Context::default();
                 local.values.insert(*label, evidence.clone());
@@ -203,7 +203,7 @@ impl<'a> EntryValidator<'a> {
                 self.compu(*body, local)?;
                 evidence
             }
-            | Value::ClosurePackage(ClosurePackage { environment, code }) => {
+            | Value::Ext(ValueExt::ClosurePackage(ClosurePackage { environment, code })) => {
                 let env = self.value(*environment, context)?;
                 let evidence = self.value(*code, context)?;
                 let site = EntrySite::Closure(id);
@@ -249,7 +249,7 @@ impl<'a> EntryValidator<'a> {
             | Stack::Tag(Cons(_, rest)) => {
                 StackEvidence::Tag(Box::new(self.stack(*rest, context)?))
             }
-            | Stack::ContinuationPackage(ContinuationPackage { code, residual }) => {
+            | Stack::Ext(StackExt::ContinuationPackage(ContinuationPackage { code, residual })) => {
                 let evidence = self.value(*code, context)?;
                 let site = EntrySite::Continuation(id);
                 let code = self.code(*code, evidence, EntryKind::Continuation, site)?;
@@ -278,7 +278,7 @@ impl<'a> EntryValidator<'a> {
                     self.stack(*stack, &context)?;
                     return Ok(());
                 }
-                | Computation::Jump(Jump { target, argument, stack }) => {
+                | Computation::Ext(CompuExt::Jump(Jump { target, argument, stack })) => {
                     let evidence = self.value(*target, &context)?;
                     let site = EntrySite::Jump(id);
                     let code = self.code(*target, evidence, argument.kind(), site)?;
@@ -293,12 +293,12 @@ impl<'a> EntryValidator<'a> {
                     return Ok(());
                 }
                 // A label body runs on the stack each jump supplies, over the variables in scope.
-                | Computation::LetLabel(LetLabel { body, tail, .. }) => {
+                | Computation::Ext(CompuExt::LetLabel(LetLabel { body, tail, .. })) => {
                     let entry = Context { stack: StackEvidence::default(), ..context.clone() };
                     self.compu(*body, entry)?;
                     id = *tail;
                 }
-                | Computation::JumpLabel(JumpLabel { stack, .. }) => {
+                | Computation::Ext(CompuExt::JumpLabel(JumpLabel { stack, .. })) => {
                     self.stack(*stack, &context)?;
                     return Ok(());
                 }
@@ -352,7 +352,12 @@ impl<'a> EntryValidator<'a> {
                     }
                     return Ok(());
                 }
-                | Computation::OpenClosure(OpenClosure { package, environment, code, body }) => {
+                | Computation::Ext(CompuExt::OpenClosure(OpenClosure {
+                    package,
+                    environment,
+                    code,
+                    body,
+                })) => {
                     self.value(*package, &context)?;
                     self.bind(*environment, ValueEvidence::Environment(id), &mut context);
                     self.bind(
@@ -362,7 +367,11 @@ impl<'a> EntryValidator<'a> {
                     );
                     id = *body;
                 }
-                | Computation::OpenContinuation(OpenContinuation { package, code, body }) => {
+                | Computation::Ext(CompuExt::OpenContinuation(OpenContinuation {
+                    package,
+                    code,
+                    body,
+                })) => {
                     self.stack(*package, &context)?;
                     self.bind(
                         *code,

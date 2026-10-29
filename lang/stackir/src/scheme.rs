@@ -3,6 +3,7 @@
 //! A scheme decides where compilation names the current stack. Its output lies in the scheme's
 //! fragment, which SPS and SPSLow validation both check through [`SpsScheme::check`].
 
+use crate::{syntax::*, traverse::Edge};
 use std::fmt;
 
 /// Where stack-passing compilation names the current stack.
@@ -107,7 +108,7 @@ pub enum PlacementError {
 
 /// What the placement rules observe about one computation.
 #[derive(Clone, Copy, Debug)]
-pub(crate) enum StackUse {
+pub enum StackUse {
     /// A stack let-binding, recording the shape it binds and whether its tail is a branch.
     Let { bindee: FrameShape, tail_branch: bool },
     /// A value case split or scalar comparison, recording whether a stack let-binding owns it.
@@ -120,11 +121,63 @@ pub(crate) enum StackUse {
 
 /// How much of a stack the placement rules observe.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum FrameShape {
+pub enum FrameShape {
     /// The ambient stack `•` itself.
     Ambient,
     /// One frame: a continuation, or an argument or tag pushed onto `•`.
     Frame,
     /// Several frames.
     Compound,
+}
+
+/// How a phase's own computation forms consume their stack.
+pub trait StackConsumer<P: Phase> {
+    /// The stack this computation consumes, when it is a consumer.
+    fn consumed_stack(&self) -> Option<P::StackId>;
+}
+
+/// The frame shapes of a phase's own stack forms.
+pub trait StackShape<P: Phase> {
+    fn shape(&self, nodes: &P::Nodes) -> FrameShape;
+}
+
+impl<P: Phase> Stack<P> {
+    /// How much of the stack `id` the placement rules observe.
+    pub(crate) fn shape(nodes: &P::Nodes, id: P::StackId) -> FrameShape {
+        let ambient = |id: &P::StackId| matches!(nodes.stacks()[id], Stack::Var(_));
+        match &nodes.stacks()[&id] {
+            | Stack::Var(_) => FrameShape::Ambient,
+            | Stack::Arg(Cons(_, rest)) | Stack::Tag(Cons(_, rest)) if ambient(rest) => {
+                FrameShape::Frame
+            }
+            | Stack::Arg(_) | Stack::Tag(_) => FrameShape::Compound,
+            | Stack::Ext(form) => form.shape(nodes),
+        }
+    }
+}
+
+impl<P: Phase> Computation<P> {
+    /// What the placement rules observe about this computation, reached through `edge`.
+    pub(crate) fn stack_use(&self, edge: Edge<P>, nodes: &P::Nodes) -> StackUse {
+        match self {
+            | Self::LetStack(Let { bindee, tail, .. }) => StackUse::Let {
+                bindee: Stack::<P>::shape(nodes, *bindee),
+                tail_branch: nodes.compus()[tail].is_branch(),
+            },
+            | computation if computation.is_branch() => {
+                StackUse::Branch { guarded: matches!(edge, Edge::StackLetTail(_)) }
+            }
+            | Self::Hole(SHole(stack))
+            | Self::ExternCall(ExternCall { stack, .. })
+            | Self::LetArg(Let { bindee: stack, .. })
+            | Self::CoCase(SCoMatch { scrut: stack, .. }) => {
+                StackUse::Consumer(Stack::<P>::shape(nodes, *stack))
+            }
+            | Self::Ext(form) => match form.consumed_stack() {
+                | Some(stack) => StackUse::Consumer(Stack::<P>::shape(nodes, stack)),
+                | None => StackUse::Other,
+            },
+            | _ => StackUse::Other,
+        }
+    }
 }

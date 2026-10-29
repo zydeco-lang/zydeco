@@ -36,12 +36,12 @@ impl CompilerPass<FragmentProgram> for Localizer {
         let bindings = Escapes::analyze(&arena.inner, root);
         let calls = Calls::collect(&arena.inner, root, &bindings);
         for (binding, procedure) in bindings {
-            let Computation::Join(LetJoin::Value(Let { bindee, tail, .. })) =
-                arena.inner.compus[&binding]
+            let Computation::LetValue(Let { bindee, tail, .. }) = arena.inner.compus[&binding]
             else {
                 unreachable!("an eligible binding is a value let")
             };
-            let Value::Closure(Closure { body, .. }) = arena.inner.values[&bindee] else {
+            let Value::Ext(ValueExt::Closure(Closure { body, .. })) = arena.inner.values[&bindee]
+            else {
                 unreachable!("an eligible binding binds a closure")
             };
             // The procedure's body expects the stack its closure did.
@@ -111,7 +111,7 @@ impl<'a> Escapes<'a> {
     fn value(&mut self, id: ValueId, value: &Value) -> CoContext<DefId> {
         match value {
             | Value::Var(def) => CoContext::singleton(*def),
-            | Value::Closure(Closure { body, .. }) => {
+            | Value::Ext(ValueExt::Closure(Closure { body, .. })) => {
                 let body_escapes = self.take(*body);
                 self.bodies.insert(id, body_escapes);
                 self.free(*body)
@@ -132,19 +132,21 @@ impl<'a> Escapes<'a> {
 
     fn stack(&mut self, stack: &Stack) -> CoContext<DefId> {
         match stack {
-            | Stack::Kont(Kont { binder, body }) => self.take(*body) - self.bound(*binder),
+            | Stack::Ext(StackExt::Kont(Kont { binder, body })) => {
+                self.take(*body) - self.bound(*binder)
+            }
             | Stack::Var(_) => CoContext::new(),
             | Stack::Arg(Cons(value, rest)) => self.take(*value) + self.take(*rest),
             | Stack::Tag(Cons(_, rest)) => self.take(*rest),
         }
     }
 
-    fn computation(&mut self, id: CompuId, computation: &Computation<LetJoin>) -> CoContext<DefId> {
+    fn computation(&mut self, id: CompuId, computation: &Computation) -> CoContext<DefId> {
         match computation {
             | Computation::Hole(SHole(stack))
             | Computation::ExternCall(ExternCall { stack, .. })
-            | Computation::CallProc(CallProc { stack, .. }) => self.take(*stack),
-            | Computation::Force(SForce { thunk, stack }) => {
+            | Computation::Ext(CompuExt::CallProc(CallProc { stack, .. })) => self.take(*stack),
+            | Computation::Ext(CompuExt::Force(SForce { thunk, stack })) => {
                 let thunk_escapes = self.take(*thunk);
                 let stack_escapes = self.take(*stack);
                 if matches!(self.arena.values[thunk], Value::Var(_)) {
@@ -153,8 +155,10 @@ impl<'a> Escapes<'a> {
                     thunk_escapes + stack_escapes
                 }
             }
-            | Computation::Ret(SReturn { stack, value }) => self.take(*stack) + self.take(*value),
-            | Computation::Fix(SFix { param, stack, body }) => {
+            | Computation::Ext(CompuExt::Ret(SReturn { stack, value })) => {
+                self.take(*stack) + self.take(*value)
+            }
+            | Computation::Ext(CompuExt::Fix(SFix { param, stack, body })) => {
                 self.take(*body);
                 self.take(*stack) + (self.free(*body) - param)
             }
@@ -172,7 +176,7 @@ impl<'a> Escapes<'a> {
                     acc + (self.take(*tail) - self.bound(*binder))
                 })
             }
-            | Computation::Join(LetJoin::Value(Let { binder, bindee, tail })) => {
+            | Computation::LetValue(Let { binder, bindee, tail }) => {
                 let body = self.bodies.remove(bindee);
                 let bindee_escapes = self.take(*bindee);
                 let tail_escapes = self.take(*tail);
@@ -195,10 +199,10 @@ impl<'a> Escapes<'a> {
                     | _ => bindee_escapes + rest,
                 }
             }
-            | Computation::Join(LetJoin::Stack(Let { bindee, tail, .. })) => {
+            | Computation::LetStack(Let { bindee, tail, .. }) => {
                 self.take(*bindee) + self.take(*tail)
             }
-            | Computation::LetProc(LetProc { body, tail, .. }) => {
+            | Computation::Ext(CompuExt::LetProc(LetProc { body, tail, .. })) => {
                 self.take(*body) + self.take(*tail)
             }
             | Computation::LetArg(Let { binder: Cons(binder, _), bindee, tail }) => {
@@ -217,7 +221,7 @@ impl<'a> Escapes<'a> {
     }
 }
 
-impl Visitor for Escapes<'_> {
+impl Visitor<Sps> for Escapes<'_> {
     fn exit(&mut self, node: Node<'_>) {
         let summary = match node {
             | Node::Pattern(_, _) => return,
@@ -263,7 +267,7 @@ impl<'a> Calls<'a> {
     }
 }
 
-impl Visitor for Calls<'_> {
+impl Visitor<Sps> for Calls<'_> {
     fn enter(&mut self, node: Node<'_>, _: Edge, occurrence: Occurrence) {
         if occurrence != Occurrence::First {
             return;
@@ -272,12 +276,15 @@ impl Visitor for Calls<'_> {
             self.scopes.push((node.id(), procedure));
         }
         match node {
-            | Node::Computation(id, Computation::Join(LetJoin::Value(Let { tail, .. }))) => {
+            | Node::Computation(id, Computation::LetValue(Let { tail, .. })) => {
                 if let Some(procedure) = self.bindings.get(&id) {
                     self.openings.insert((*tail).into(), *procedure);
                 }
             }
-            | Node::Computation(call, Computation::Force(SForce { thunk, stack })) => {
+            | Node::Computation(
+                call,
+                Computation::Ext(CompuExt::Force(SForce { thunk, stack })),
+            ) => {
                 if let Value::Var(def) = self.arena.values[thunk]
                     && self.scopes.iter().any(|(_, procedure)| *procedure == def)
                 {

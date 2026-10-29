@@ -55,7 +55,7 @@ struct Collector<'a, P: ?Sized, D> {
     driver: PhantomData<D>,
 }
 
-impl<P: RepresentationPolicy + ?Sized, D: Driver> Visitor for Collector<'_, P, D> {
+impl<P: RepresentationPolicy + ?Sized, D: Driver> Visitor<sk::SpsLow> for Collector<'_, P, D> {
     fn enter(&mut self, node: Node<'_>, _edge: Edge, occurrence: Occurrence) {
         debug_assert_eq!(occurrence, Occurrence::First, "validated SPSLow ownership");
         match node {
@@ -74,7 +74,11 @@ impl<P: RepresentationPolicy + ?Sized, D: Driver> Visitor for Collector<'_, P, D
             }
             | Node::Computation(
                 _,
-                sk::Computation::OpenClosure(sk::OpenClosure { package, environment, .. }),
+                sk::Computation::Ext(sk::CompuExt::OpenClosure(sk::OpenClosure {
+                    package,
+                    environment,
+                    ..
+                })),
             ) => {
                 self.mark_closure(*package, *environment);
             }
@@ -100,8 +104,10 @@ impl<P: RepresentationPolicy + ?Sized, D: Driver> Collector<'_, P, D> {
     }
 
     fn mark_closure(&mut self, package: sk::ValueId, environment: sk::VPatId) {
-        let sk::Value::ClosurePackage(sk::ClosurePackage { environment: env_value, code: _ }) =
-            &self.arena.inner.values[&package]
+        let sk::Value::Ext(sk::ValueExt::ClosurePackage(sk::ClosurePackage {
+            environment: env_value,
+            code: _,
+        })) = &self.arena.inner.values[&package]
         else {
             return;
         };
@@ -134,7 +140,7 @@ impl<P: RepresentationPolicy + ?Sized, D: Driver> Collector<'_, P, D> {
                 items.len(),
                 UnboxingReason::ProjectedVariable,
             ),
-            | sk::Value::ClosurePackage(_) => (
+            | sk::Value::Ext(sk::ValueExt::ClosurePackage(_)) => (
                 VariableShape::Closure,
                 zydeco_machine::closure::Closure::<u64>::WORDS,
                 UnboxingReason::SharedClosure,
@@ -240,7 +246,8 @@ impl<'a> Folder for VariableUsesFolder<'a> {
             | Use::Node(id) => {
                 let node = id.node(self.arena);
                 match node {
-                    | Node::Pattern(_, _) | Node::Value(_, sk::Value::Block(_)) => {}
+                    | Node::Pattern(_, _)
+                    | Node::Value(_, sk::Value::Ext(sk::ValueExt::Block(_))) => {}
                     | Node::Value(_, sk::Value::Var(def)) if *def == self.def => self.escape(),
                     | _ => return self.resume((node, 0), ()),
                 }
@@ -290,7 +297,13 @@ impl<'a> Folder for VariableUsesFolder<'a> {
             ) => Use::Projection { value: *bindee, pattern: *binder },
             | (
                 0,
-                Node::Computation(_, sk::Computation::OpenClosure(sk::OpenClosure { package, .. })),
+                Node::Computation(
+                    _,
+                    sk::Computation::Ext(sk::CompuExt::OpenClosure(sk::OpenClosure {
+                        package,
+                        ..
+                    })),
+                ),
             ) => Use::ClosureOpening(*package),
             | _ => Use::Node(child),
         };

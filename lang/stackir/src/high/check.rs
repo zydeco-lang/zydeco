@@ -6,7 +6,7 @@
 use super::syntax::*;
 use super::traverse::{Edge, EntityId, Node, Occurrence, Traversal, Visitor};
 use super::variables::FreeVars;
-use crate::scheme::{FrameShape, PlacementError, SpsScheme, StackUse};
+use crate::scheme::{FrameShape, PlacementError, SpsScheme, StackConsumer, StackShape};
 use std::collections::HashMap;
 use zydeco_statics::{arena::StaticsArena, surface_syntax::ScopedArena};
 use zydeco_surface::diagnostic::Diagnostics;
@@ -122,49 +122,13 @@ impl<'a> FragmentValidator<'a> {
         }
     }
 
-    fn usage(&self, computation: &Computation<LetJoin>, edge: Edge) -> StackUse {
-        match computation {
-            | Computation::Join(LetJoin::Stack(Let { bindee, tail, .. })) => StackUse::Let {
-                bindee: self.shape(*bindee),
-                tail_branch: self.arena.compus[tail].is_branch(),
-            },
-            | computation if computation.is_branch() => {
-                StackUse::Branch { guarded: matches!(edge, Edge::StackLetTail(_)) }
-            }
-            | Computation::Hole(SHole(stack))
-            | Computation::ExternCall(ExternCall { stack, .. })
-            | Computation::Force(SForce { stack, .. })
-            | Computation::CallProc(CallProc { stack, .. })
-            | Computation::Ret(SReturn { stack, .. })
-            | Computation::Fix(SFix { stack, .. })
-            | Computation::LetArg(Let { bindee: stack, .. })
-            | Computation::CoCase(SCoMatch { scrut: stack, .. }) => {
-                StackUse::Consumer(self.shape(*stack))
-            }
-            | _ => StackUse::Other,
-        }
-    }
-
-    fn shape(&self, stack: StackId) -> FrameShape {
-        match &self.arena.stacks[&stack] {
-            | Stack::Var(_) => FrameShape::Ambient,
-            | Stack::Kont(_) => FrameShape::Frame,
-            | Stack::Arg(Cons(_, rest)) | Stack::Tag(Cons(_, rest))
-                if matches!(self.arena.stacks[rest], Stack::Var(_)) =>
-            {
-                FrameShape::Frame
-            }
-            | Stack::Arg(_) | Stack::Tag(_) => FrameShape::Compound,
-        }
-    }
-
     /// Open the scopes that start at `node` and check the procedure names it uses.
     fn resolve(&mut self, node: Node<'_>) -> Option<FragmentError> {
         if let Some(scope) = self.openings.remove(&node.id()) {
             self.scopes.push((node.id(), scope));
         }
         match node {
-            | Node::Value(_, Value::Closure(_)) => {
+            | Node::Value(_, Value::Ext(ValueExt::Closure(_))) => {
                 self.scopes.push((node.id(), ProcedureScope::Closed));
                 None
             }
@@ -173,15 +137,21 @@ impl<'a> FragmentValidator<'a> {
                 .iter()
                 .any(|(_, scope)| matches!(scope, ProcedureScope::Bound(bound) if bound == def))
                 .then_some(FragmentError::ProcedureAsValue { value, procedure: *def }),
-            | Node::Computation(_, Computation::LetProc(LetProc { procedure, tail, .. })) => {
+            | Node::Computation(
+                _,
+                Computation::Ext(CompuExt::LetProc(LetProc { procedure, tail, .. })),
+            ) => {
                 self.openings.insert((*tail).into(), ProcedureScope::Bound(*procedure));
                 None
             }
-            | Node::Computation(_, Computation::Fix(SFix { body, .. })) => {
+            | Node::Computation(_, Computation::Ext(CompuExt::Fix(SFix { body, .. }))) => {
                 self.openings.insert((*body).into(), ProcedureScope::Closed);
                 None
             }
-            | Node::Computation(compu, Computation::CallProc(CallProc { procedure, .. })) => {
+            | Node::Computation(
+                compu,
+                Computation::Ext(CompuExt::CallProc(CallProc { procedure, .. })),
+            ) => {
                 let mut closed = false;
                 for (_, scope) in self.scopes.iter().rev() {
                     match scope {
@@ -202,7 +172,27 @@ impl<'a> FragmentValidator<'a> {
     }
 }
 
-impl Visitor for FragmentValidator<'_> {
+impl StackConsumer<Sps> for CompuExt {
+    fn consumed_stack(&self) -> Option<StackId> {
+        match self {
+            | Self::Force(SForce { stack, .. })
+            | Self::Ret(SReturn { stack, .. })
+            | Self::Fix(SFix { stack, .. })
+            | Self::CallProc(CallProc { stack, .. }) => Some(*stack),
+            | Self::LetProc(_) => None,
+        }
+    }
+}
+
+impl StackShape<Sps> for StackExt {
+    fn shape(&self, _: &SpsInnerArena) -> FrameShape {
+        match self {
+            | Self::Kont(_) => FrameShape::Frame,
+        }
+    }
+}
+
+impl Visitor<Sps> for FragmentValidator<'_> {
     fn enter(&mut self, node: Node<'_>, edge: Edge, occurrence: Occurrence) {
         if occurrence != Occurrence::First {
             self.errors.push(match node {
@@ -217,7 +207,7 @@ impl Visitor for FragmentValidator<'_> {
             self.errors.push(error);
         }
         if let Node::Computation(compu, computation) = node
-            && let Some(error) = self.scheme.check(self.usage(computation, edge))
+            && let Some(error) = self.scheme.check(computation.stack_use(edge, self.arena))
         {
             self.errors.push(FragmentError::Placement { compu, error });
         }

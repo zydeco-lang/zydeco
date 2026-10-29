@@ -146,7 +146,7 @@ impl Normalization {
                 counts
             });
         let calls = source.inner.compus.iter().fold(HashMap::new(), |mut counts, (_, compu)| {
-            if let Computation::CallProc(CallProc { procedure, .. }) = compu {
+            if let Computation::Ext(CompuExt::CallProc(CallProc { procedure, .. })) = compu {
                 *counts.entry(*procedure).or_default() += 1;
             }
             counts
@@ -251,25 +251,27 @@ impl Normalization {
                     known
                 }
             }
-            | Value::Closure(Closure { body, .. })
+            | Value::Ext(ValueExt::Closure(Closure { body, .. }))
                 if self.source.inner.builtin_functions.get(&id).is_some() =>
             {
                 Rc::new(KnownValue::BuiltinBody(*body))
             }
-            | Value::Closure(Closure { body, .. }) => match &self.source.inner.compus[body] {
-                | Computation::ExternCall(ExternCall { function, stack })
-                    if matches!(self.source.inner.stacks[stack], Stack::Var(StackVar)) =>
-                {
-                    Rc::new(KnownValue::External(function.clone()))
+            | Value::Ext(ValueExt::Closure(Closure { body, .. })) => {
+                match &self.source.inner.compus[body] {
+                    | Computation::ExternCall(ExternCall { function, stack })
+                        if matches!(self.source.inner.stacks[stack], Stack::Var(StackVar)) =>
+                    {
+                        Rc::new(KnownValue::External(function.clone()))
+                    }
+                    | Computation::Ext(CompuExt::Force(SForce { thunk, stack }))
+                        if matches!(self.source.inner.stacks[stack], Stack::Var(StackVar))
+                            && matches!(self.source.inner.values[thunk], Value::Var(_)) =>
+                    {
+                        self.known(*thunk, env)
+                    }
+                    | _ => Rc::default(),
                 }
-                | Computation::Force(SForce { thunk, stack })
-                    if matches!(self.source.inner.stacks[stack], Stack::Var(StackVar))
-                        && matches!(self.source.inner.values[thunk], Value::Var(_)) =>
-                {
-                    self.known(*thunk, env)
-                }
-                | _ => Rc::default(),
-            },
+            }
             | Value::VCons(VCons { items, layout }) => {
                 let fields = items.iter().map(|item| self.shared(*item, env)).collect::<Vec<_>>();
                 let fields = if fields.len() < layout.arity {
@@ -311,7 +313,8 @@ impl Normalization {
             if self.occurrences.get(&def) == Some(&1));
         if single {
             if matches!(known.as_ref(), KnownValue::Unknown)
-                && let Value::Closure(Closure { body, .. }) = self.source.inner.values[&value.node]
+                && let Value::Ext(ValueExt::Closure(Closure { body, .. })) =
+                    self.source.inner.values[&value.node]
             {
                 return Rc::new(KnownValue::Closure { body, env: value.env });
             }
@@ -366,7 +369,10 @@ impl Normalization {
         let mut pending = vec![id];
         while let Some(id) = pending.pop() {
             match &self.source.inner.values[&id] {
-                | Value::Var(_) | Value::Triv(_) | Value::Literal(_) | Value::Closure(_) => {}
+                | Value::Var(_)
+                | Value::Triv(_)
+                | Value::Literal(_)
+                | Value::Ext(ValueExt::Closure(_)) => {}
                 | Value::Ctor(Ctor(_, body)) => pending.push(*body),
                 | Value::VCons(VCons { items, .. }) => pending.extend(items.iter().rev().copied()),
                 | Value::Primitive(Primitive { operation, operands }) => {
@@ -390,7 +396,7 @@ impl Normalization {
     fn movable_stack(&self, mut id: StackId) -> bool {
         loop {
             match &self.source.inner.stacks[&id] {
-                | Stack::Var(_) | Stack::Kont(_) => return true,
+                | Stack::Var(_) | Stack::Ext(StackExt::Kont(_)) => return true,
                 | Stack::Arg(Cons(value, rest)) => {
                     if !self.discardable(*value) {
                         return false;
@@ -677,7 +683,7 @@ mod tests {
         let Computation::LetArg(Let { tail, .. }) = arena.compus[&tail] else {
             panic!("the primitive must pop its second argument")
         };
-        let Computation::Ret(SReturn { value, .. }) = arena.compus[&tail] else {
+        let Computation::Ext(CompuExt::Ret(SReturn { value, .. })) = arena.compus[&tail] else {
             panic!("the primitive must return its inline result")
         };
         assert!(matches!(arena.values[&value], Value::Primitive(_)));
@@ -692,12 +698,12 @@ mod tests {
         let root = fixture.ret(thunk);
 
         let program = fixture.normalize(root);
-        let Computation::Ret(SReturn { value, .. }) =
+        let Computation::Ext(CompuExt::Ret(SReturn { value, .. })) =
             &program.arena().inner.compus[&program.root()]
         else {
             panic!("returning a primitive must not invoke it")
         };
-        assert!(matches!(program.arena().inner.values[value], Value::Closure(_)));
+        assert!(matches!(program.arena().inner.values[value], Value::Ext(ValueExt::Closure(_))));
     }
 
     #[test]
@@ -742,13 +748,11 @@ mod tests {
                 panic!("the preceding effect must remain first")
             };
             assert_eq!(*name, BuiltinValueRole::WriteStr);
-            let Stack::Kont(Kont { body, .. }) = arena.stacks[stack] else {
+            let Stack::Ext(StackExt::Kont(Kont { body, .. })) = arena.stacks[stack] else {
                 panic!("the effect must resume its consumer")
             };
             let body = if retained {
-                let Computation::Join(LetJoin::Value(Let { bindee, tail, .. })) =
-                    arena.compus[&body]
-                else {
+                let Computation::LetValue(Let { bindee, tail, .. }) = arena.compus[&body] else {
                     panic!("trapping arithmetic must remain bound before the following effect")
                 };
                 assert!(matches!(arena.values[&bindee], Value::Primitive(_)));
@@ -787,7 +791,7 @@ mod tests {
                     .inner
                     .compus
                     .iter()
-                    .any(|(_, node)| matches!(node, Computation::Force(_)))
+                    .any(|(_, node)| matches!(node, Computation::Ext(CompuExt::Force(_))))
             );
             assert!(
                 !program
@@ -798,8 +802,10 @@ mod tests {
                     .any(|(_, node)| matches!(node, Computation::ExternCall(_)))
             );
             assert!(
-                matches!(program.arena().inner.compus[&program.root()], Computation::Fix(_))
-                    == recursive
+                matches!(
+                    program.arena().inner.compus[&program.root()],
+                    Computation::Ext(CompuExt::Fix(_))
+                ) == recursive
             );
         }
     }
@@ -842,10 +848,7 @@ mod tests {
         let root = fixture.build(SReturn { stack, value });
 
         let program = fixture.normalize(root);
-        assert!(matches!(
-            program.arena().inner.compus[&program.root()],
-            Computation::Join(LetJoin::Value(_))
-        ));
+        assert!(matches!(program.arena().inner.compus[&program.root()], Computation::LetValue(_)));
         assert_eq!(
             program
                 .arena()
@@ -867,7 +870,12 @@ mod tests {
             2
         );
         assert!(
-            !program.arena().inner.stacks.iter().any(|(_, stack)| matches!(stack, Stack::Kont(_)))
+            !program
+                .arena()
+                .inner
+                .stacks
+                .iter()
+                .any(|(_, stack)| matches!(stack, Stack::Ext(StackExt::Kont(_))))
         );
     }
 
@@ -886,10 +894,7 @@ mod tests {
         let root = fixture.build(Let { binder, bindee, tail });
 
         let program = fixture.normalize(root);
-        assert!(matches!(
-            program.arena().inner.compus[&program.root()],
-            Computation::Join(LetJoin::Value(_))
-        ));
+        assert!(matches!(program.arena().inner.compus[&program.root()], Computation::LetValue(_)));
         assert!(
             program
                 .arena()
@@ -937,7 +942,10 @@ mod tests {
                     2
                 );
                 assert_eq!(
-                    values.iter().filter(|(_, value)| matches!(value, Value::Closure(_))).count(),
+                    values
+                        .iter()
+                        .filter(|(_, value)| matches!(value, Value::Ext(ValueExt::Closure(_))))
+                        .count(),
                     if escape { 3 } else { 1 }
                 );
             }
@@ -959,9 +967,7 @@ mod tests {
         let arena = program.arena();
         let mut node = program.root();
         for expected in ["left", "right"] {
-            let Computation::Join(LetJoin::Value(Let { bindee, tail, .. })) =
-                arena.inner.compus[&node]
-            else {
+            let Computation::LetValue(Let { bindee, tail, .. }) = arena.inner.compus[&node] else {
                 panic!("each trapping value must keep its evaluation")
             };
             assert!(
@@ -1006,7 +1012,7 @@ mod tests {
                     .inner
                     .values
                     .iter()
-                    .filter(|(_, value)| matches!(value, Value::Closure(_)))
+                    .filter(|(_, value)| matches!(value, Value::Ext(ValueExt::Closure(_))))
                     .count(),
                 usize::from(shared)
             );
@@ -1016,7 +1022,7 @@ mod tests {
                     .inner
                     .compus
                     .iter()
-                    .filter(|(_, node)| matches!(node, Computation::Force(_)))
+                    .filter(|(_, node)| matches!(node, Computation::Ext(CompuExt::Force(_))))
                     .count(),
                 if shared { 2 } else { 0 }
             );
@@ -1055,7 +1061,7 @@ mod tests {
                 .inner
                 .stacks
                 .iter()
-                .filter(|(_, stack)| matches!(stack, Stack::Kont(_)))
+                .filter(|(_, stack)| matches!(stack, Stack::Ext(StackExt::Kont(_))))
                 .count(),
             1
         );
@@ -1075,7 +1081,7 @@ mod tests {
                 .inner
                 .values
                 .iter()
-                .any(|(_, value)| matches!(value, Value::Closure(_)))
+                .any(|(_, value)| matches!(value, Value::Ext(ValueExt::Closure(_))))
         );
     }
 
@@ -1113,14 +1119,16 @@ mod tests {
                 .count(),
             2
         );
-        assert!(!inner.stacks.iter().any(|(_, stack)| matches!(stack, Stack::Kont(_))));
+        assert!(
+            !inner.stacks.iter().any(|(_, stack)| matches!(stack, Stack::Ext(StackExt::Kont(_))))
+        );
+        assert!(!inner.compus.iter().any(|(_, node)| matches!(node, Computation::LetStack(_))));
         assert!(
             !inner
-                .compus
+                .values
                 .iter()
-                .any(|(_, node)| matches!(node, Computation::Join(LetJoin::Stack(_))))
+                .any(|(_, value)| matches!(value, Value::Ext(ValueExt::Closure(_))))
         );
-        assert!(!inner.values.iter().any(|(_, value)| matches!(value, Value::Closure(_))));
     }
 
     #[test]
@@ -1142,13 +1150,8 @@ mod tests {
         let root = fixture.build(Let { binder: StackVar, bindee, tail: call });
         let program = fixture.normalize(root);
         let inner = &program.arena().inner;
-        assert!(matches!(inner.compus[&program.root()], Computation::Ret(_)));
-        assert!(
-            !inner
-                .compus
-                .iter()
-                .any(|(_, node)| matches!(node, Computation::Join(LetJoin::Stack(_))))
-        );
+        assert!(matches!(inner.compus[&program.root()], Computation::Ext(CompuExt::Ret(_))));
+        assert!(!inner.compus.iter().any(|(_, node)| matches!(node, Computation::LetStack(_))));
     }
 
     #[test]
@@ -1170,12 +1173,13 @@ mod tests {
         let Computation::LetArg(Let { tail, .. }) = inner.compus[&program.root()] else {
             panic!("the argument pop survives")
         };
-        let Computation::Join(LetJoin::Stack(Let { bindee, tail, .. })) = inner.compus[&tail]
-        else {
+        let Computation::LetStack(Let { bindee, tail, .. }) = inner.compus[&tail] else {
             panic!("the trapping frame keeps its stack let")
         };
         assert!(matches!(inner.stacks[&bindee], Stack::Arg(_)));
-        let Computation::Force(SForce { stack, .. }) = inner.compus[&tail] else { panic!("call") };
+        let Computation::Ext(CompuExt::Force(SForce { stack, .. })) = inner.compus[&tail] else {
+            panic!("call")
+        };
         assert!(matches!(inner.stacks[&stack], Stack::Var(_)));
     }
 
@@ -1204,14 +1208,18 @@ mod tests {
         let root = fixture.build(Let { binder: Cons(binder, StackVar), bindee: ambient, tail });
         let program = fixture.normalize(root);
         let inner = &program.arena().inner;
-        let count = |matches: fn(&Computation<LetJoin>) -> bool| {
+        let count = |matches: fn(&Computation) -> bool| {
             inner.compus.iter().filter(|(_, node)| matches(node)).count()
         };
         assert_eq!(
-            inner.stacks.iter().filter(|(_, stack)| matches!(stack, Stack::Kont(_))).count(),
+            inner
+                .stacks
+                .iter()
+                .filter(|(_, stack)| matches!(stack, Stack::Ext(StackExt::Kont(_))))
+                .count(),
             1
         );
-        assert_eq!(count(|node| matches!(node, Computation::Join(LetJoin::Stack(_)))), 1);
+        assert_eq!(count(|node| matches!(node, Computation::LetStack(_))), 1);
         assert_eq!(count(|node| matches!(node, Computation::ExternCall(_))), 1);
     }
 
@@ -1246,7 +1254,7 @@ mod tests {
         );
         assert!(!program.arena().inner.compus.iter().any(|(_, node)| matches!(
             node,
-            Computation::CoprodMatch(_) | Computation::Join(LetJoin::Stack(_))
+            Computation::CoprodMatch(_) | Computation::LetStack(_)
         )));
         let calls = program
             .arena()
@@ -1306,7 +1314,7 @@ mod tests {
         };
         assert_eq!(branch.arms.len(), 2, "retain the complete constructor table");
         assert!(arena.compus.iter().all(|(_, node)| match node {
-            | Computation::Join(LetJoin::Value(Let { binder, .. })) => {
+            | Computation::LetValue(Let { binder, .. }) => {
                 !matches!(arena.vpats[binder], ValuePattern::Ctor(_))
             }
             | _ => true,
@@ -1341,7 +1349,10 @@ mod tests {
             let root = fixture.build(SCoMatch { scrut, arms });
             let program = fixture.normalize(root);
             assert_eq!(
-                matches!(program.arena().inner.compus[&program.root()], Computation::Ret(_)),
+                matches!(
+                    program.arena().inner.compus[&program.root()],
+                    Computation::Ext(CompuExt::Ret(_))
+                ),
                 known
             );
             assert_eq!(
@@ -1379,7 +1390,7 @@ mod tests {
                     .inner
                     .values
                     .iter()
-                    .any(|(_, value)| matches!(value, Value::Closure(_)))
+                    .any(|(_, value)| matches!(value, Value::Ext(ValueExt::Closure(_))))
             );
             assert!(
                 !program
@@ -1387,7 +1398,7 @@ mod tests {
                     .inner
                     .stacks
                     .iter()
-                    .any(|(_, stack)| matches!(stack, Stack::Kont(_)))
+                    .any(|(_, stack)| matches!(stack, Stack::Ext(StackExt::Kont(_))))
             );
             assert_eq!(
                 program
@@ -1395,7 +1406,7 @@ mod tests {
                     .inner
                     .compus
                     .iter()
-                    .filter(|(_, node)| matches!(node, Computation::Force(_)))
+                    .filter(|(_, node)| matches!(node, Computation::Ext(CompuExt::Force(_))))
                     .count(),
                 usize::from(!returned)
             );
@@ -1448,10 +1459,10 @@ mod tests {
             let program = fixture.normalize(root);
             let node = &program.arena().inner.compus[&program.root()];
             assert!(match consumer {
-                | Consumer::Closure => matches!(node, Computation::Force(_)),
+                | Consumer::Closure => matches!(node, Computation::Ext(CompuExt::Force(_))),
                 | Consumer::Argument => matches!(node, Computation::LetArg(_)),
                 | Consumer::Destructor => matches!(node, Computation::CoCase(_)),
-                | Consumer::Branch => matches!(node, Computation::Join(LetJoin::Stack(_))),
+                | Consumer::Branch => matches!(node, Computation::LetStack(_)),
             });
             assert_eq!(
                 program
@@ -1471,11 +1482,11 @@ mod tests {
         use crate::high::traverse::{Edge, Node, Occurrence, Traversal, Visitor};
         #[derive(Default)]
         struct Forms(usize, usize);
-        impl Visitor for Forms {
+        impl Visitor<Sps> for Forms {
             fn enter(&mut self, node: Node<'_>, _: Edge, _: Occurrence) {
                 match node {
-                    | Node::Computation(_, Computation::LetProc(_)) => self.0 += 1,
-                    | Node::Computation(_, Computation::CallProc(_)) => self.1 += 1,
+                    | Node::Computation(_, Computation::Ext(CompuExt::LetProc(_))) => self.0 += 1,
+                    | Node::Computation(_, Computation::Ext(CompuExt::CallProc(_))) => self.1 += 1,
                     | _ => {}
                 }
             }
@@ -1528,7 +1539,10 @@ mod tests {
             fixture.call_procedure(procedure, ambient)
         });
         let program = fixture.normalize(root);
-        assert!(matches!(program.arena().inner.compus[&program.root()], Computation::Ret(_)));
+        assert!(matches!(
+            program.arena().inner.compus[&program.root()],
+            Computation::Ext(CompuExt::Ret(_))
+        ));
         assert_eq!(procedure_forms(&program), (0, 0));
     }
 
@@ -1552,7 +1566,10 @@ mod tests {
             fixture.ret(value)
         });
         let program = fixture.normalize(root);
-        assert!(matches!(program.arena().inner.compus[&program.root()], Computation::Ret(_)));
+        assert!(matches!(
+            program.arena().inner.compus[&program.root()],
+            Computation::Ext(CompuExt::Ret(_))
+        ));
         assert_eq!(procedure_forms(&program), (0, 0));
     }
 

@@ -34,7 +34,7 @@ enum Layer {
     Pattern(ValuePattern),
     Value(Value),
     Stack(Stack),
-    Computation(Computation<LetJoin>),
+    Computation(Computation),
 }
 
 /// A child slot of an owned layer, read before its subtree is copied and overwritten after.
@@ -87,7 +87,7 @@ impl Layer {
             },
             | Self::Value(value) => match value {
                 | Value::Hole(_) | Value::Var(_) | Value::Triv(_) | Value::Literal(_) => None,
-                | Value::Closure(Closure { body, .. }) => {
+                | Value::Ext(ValueExt::Closure(Closure { body, .. })) => {
                     (position == 0).then_some(S::Computation(body))
                 }
                 | Value::Ctor(Ctor(_, body)) => (position == 0).then_some(S::Value(body)),
@@ -103,7 +103,7 @@ impl Layer {
             },
             | Self::Stack(stack) => match stack {
                 | Stack::Var(_) => None,
-                | Stack::Kont(Kont { binder, body }) => match position {
+                | Stack::Ext(StackExt::Kont(Kont { binder, body })) => match position {
                     | 0 => Some(S::Pattern(binder)),
                     | 1 => Some(S::Computation(body)),
                     | _ => None,
@@ -119,9 +119,7 @@ impl Layer {
         }
     }
 
-    fn computation_slot(
-        computation: &mut Computation<LetJoin>, position: usize,
-    ) -> Option<Slot<'_>> {
+    fn computation_slot(computation: &mut Computation, position: usize) -> Option<Slot<'_>> {
         use Slot as S;
         match computation {
             | Computation::Memory(MemoryStep::Load { address, result, next, .. }) => match position
@@ -142,17 +140,17 @@ impl Layer {
             | Computation::ExternCall(ExternCall { stack, .. }) => {
                 (position == 0).then_some(S::Stack(stack))
             }
-            | Computation::Force(SForce { thunk, stack }) => match position {
+            | Computation::Ext(CompuExt::Force(SForce { thunk, stack })) => match position {
                 | 0 => Some(S::Value(thunk)),
                 | 1 => Some(S::Stack(stack)),
                 | _ => None,
             },
-            | Computation::Ret(SReturn { stack, value }) => match position {
+            | Computation::Ext(CompuExt::Ret(SReturn { stack, value })) => match position {
                 | 0 => Some(S::Stack(stack)),
                 | 1 => Some(S::Value(value)),
                 | _ => None,
             },
-            | Computation::Fix(SFix { stack, body, .. }) => match position {
+            | Computation::Ext(CompuExt::Fix(SFix { stack, body, .. })) => match position {
                 | 0 => Some(S::Stack(stack)),
                 | 1 => Some(S::Computation(body)),
                 | _ => None,
@@ -177,7 +175,7 @@ impl Layer {
                     if position % 2 == 1 { S::Pattern(binder) } else { S::Computation(tail) }
                 }),
             },
-            | Computation::Join(LetJoin::Value(Let { binder, bindee, tail })) => match position {
+            | Computation::LetValue(Let { binder, bindee, tail }) => match position {
                 | 0 => Some(S::Value(bindee)),
                 | 1 => Some(S::Pattern(binder)),
                 | 2 => Some(S::Computation(tail)),
@@ -191,17 +189,17 @@ impl Layer {
                     | _ => None,
                 }
             }
-            | Computation::Join(LetJoin::Stack(Let { bindee, tail, .. })) => match position {
+            | Computation::LetStack(Let { bindee, tail, .. }) => match position {
                 | 0 => Some(S::Stack(bindee)),
                 | 1 => Some(S::Computation(tail)),
                 | _ => None,
             },
-            | Computation::LetProc(LetProc { body, tail, .. }) => match position {
+            | Computation::Ext(CompuExt::LetProc(LetProc { body, tail, .. })) => match position {
                 | 0 => Some(S::Computation(body)),
                 | 1 => Some(S::Computation(tail)),
                 | _ => None,
             },
-            | Computation::CallProc(CallProc { stack, .. }) => {
+            | Computation::Ext(CompuExt::CallProc(CallProc { stack, .. })) => {
                 (position == 0).then_some(S::Stack(stack))
             }
             | Computation::CoCase(SCoMatch { scrut, arms }) => match position {

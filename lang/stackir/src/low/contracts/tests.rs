@@ -97,7 +97,9 @@ fn direct_entries_require_the_matching_transfer_kind() {
         let root = f.build(Jump { target, argument, stack });
         let program = f.check(root).unwrap();
         let (mut arena, root) = program.into_parts();
-        let Computation::Jump(jump) = &mut arena.inner.compus[&root] else { unreachable!() };
+        let Computation::Ext(CompuExt::Jump(jump)) = &mut arena.inner.compus[&root] else {
+            unreachable!()
+        };
         jump.argument = match argument {
             | EntryArgument::Closure { environment } => {
                 EntryArgument::Continuation { result: environment }

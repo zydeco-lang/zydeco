@@ -1,4 +1,4 @@
-//! Lexical high Stack IR with implicit closure and continuation captures.
+//! Lexical SPS: the shared forms with closures and continuations that capture implicitly.
 
 pub use super::arena::*;
 pub use crate::syntax::*;
@@ -13,15 +13,27 @@ zydeco_utils::new_key_type! {
     pub struct StackId;
 }
 
-/// Dispatcher for high Stack IR terms.
-#[derive(From, Clone, Debug, Eq, Hash, PartialEq)]
-pub enum TermId {
-    Value(ValueId),
-    Compu(CompuId),
-    Stack(StackId),
+/// The lexical SPS phase.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct Sps;
+
+impl Phase for Sps {
+    type VPatId = VPatId;
+    type ValueId = ValueId;
+    type StackId = StackId;
+    type CompuId = CompuId;
+    type Scope = SpsScope;
+    type Nodes = SpsInnerArena;
+    type ValueExt = ValueExt;
+    type StackExt = StackExt;
+    type CompuExt = CompuExt;
 }
 
+pub type TermId = common::TermId<Sps>;
 pub type ValuePattern = common::ValuePattern<VPatId>;
+pub type Value = common::Value<Sps>;
+pub type Stack = common::Stack<Sps>;
+pub type Computation = common::Computation<Sps>;
 pub type Primitive = common::Primitive<ValueId>;
 pub type CompareBranch = common::CompareBranch<ValueId, CompuId>;
 pub type AddrOffset = common::AddrOffset<ValueId>;
@@ -30,6 +42,9 @@ pub type SProductMatch = common::SProductMatch<ValueId, VPatId, CompuId>;
 pub type SCoprodMatch = common::SCoprodMatch<ValueId, VPatId, CompuId>;
 pub type SCoMatch = common::SCoMatch<StackId, Cons<DtorIdx, StackVar>, CompuId>;
 pub type ExternCall = common::ExternCall<StackId>;
+pub type LetValue = Let<VPatId, ValueId, CompuId>;
+pub type LetStack = Let<StackVar, StackId, CompuId>;
+pub type LetArg = Let<Cons<VPatId, StackVar>, StackId, CompuId>;
 
 /* ---------------------------------- Values -------------------------------- */
 
@@ -40,34 +55,25 @@ pub struct Closure {
     pub body: CompuId,
 }
 
-#[derive(From, Clone, Debug)]
-pub enum Value {
-    Hole(Hole),
-    Var(DefId),
+/// The value forms of lexical SPS.
+#[derive(Clone, Debug, From)]
+pub enum ValueExt {
     Closure(Closure),
-    Ctor(Ctor<CtorIdx, ValueId>),
-    Triv(Triv),
-    VCons(VCons<ValueId>),
-    Literal(Literal),
-    Primitive(Primitive),
-    AddrOffset(AddrOffset),
 }
 
 /* ---------------------------------- Stacks -------------------------------- */
 
 /// A continuation that waits for a value and resumes the computation.
-#[derive(From, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct Kont {
     pub binder: VPatId,
     pub body: CompuId,
 }
 
-#[derive(From, Clone, Debug)]
-pub enum Stack {
+/// The stack forms of lexical SPS.
+#[derive(Clone, Debug, From)]
+pub enum StackExt {
     Kont(Kont),
-    Var(StackVar),
-    Arg(Cons<ValueId, StackId>),
-    Tag(Cons<DtorIdx, StackId>),
 }
 
 /* ------------------------------- Computations ----------------------------- */
@@ -91,12 +97,6 @@ pub struct SFix {
     pub body: CompuId,
 }
 
-#[derive(From, Clone, Debug)]
-pub enum LetJoin {
-    Value(Let<VPatId, ValueId, CompuId>),
-    Stack(Let<StackVar, StackId, CompuId>),
-}
-
 /// A second-class procedure: `body` runs on the stack that each call supplies, bound to its own `•`.
 /// The procedure is in scope in `tail` only, where it can be called and nothing else.
 #[derive(Clone, Debug)]
@@ -114,36 +114,14 @@ pub struct CallProc {
     pub stack: StackId,
 }
 
-#[derive(From, Clone, Debug)]
-pub enum Computation<Join> {
-    Hole(SHole<StackId>),
+/// The computation forms of lexical SPS.
+#[derive(Clone, Debug, From)]
+pub enum CompuExt {
     Force(SForce),
     Ret(SReturn),
     Fix(SFix),
-    ProductMatch(SProductMatch),
-    CoprodMatch(SCoprodMatch),
-    Compare(CompareBranch),
-    #[from(ignore)]
-    Join(Join),
     LetProc(LetProc),
     CallProc(CallProc),
-    LetArg(Let<Cons<VPatId, StackVar>, StackId, CompuId>),
-    CoCase(SCoMatch),
-    ExternCall(ExternCall),
-    Memory(MemoryStep),
 }
 
-impl<T> From<T> for Computation<LetJoin>
-where
-    T: Into<LetJoin>,
-{
-    fn from(j: T) -> Self {
-        Computation::Join(j.into())
-    }
-}
-
-impl<Join> Computation<Join> {
-    pub fn is_branch(&self) -> bool {
-        matches!(self, Self::CoprodMatch(_) | Self::Compare(_))
-    }
-}
+common::phase_conversions!(Sps);
