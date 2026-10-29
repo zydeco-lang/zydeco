@@ -13,8 +13,6 @@ use zydeco_machine::frames::{Action, STEP_SYMBOL};
 use zydeco_machine::native::{
     AllocationKind, ENTRY_SYMBOL, EXPORT_ENTRY_SYMBOL, TransferField, WORD_BYTES,
 };
-use zydeco_statics::arena::StaticsArena;
-use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
 use zydeco_syntax::*;
 
 pub const ENV_REG: Reg = Reg::Rbp;
@@ -76,9 +74,6 @@ pub trait Emit<'a> {
 
 #[derive(AsRef, AsMut)]
 pub struct Emitter<'e> {
-    pub spans: &'e SpanArena,
-    pub scoped: &'e ScopedArena,
-    pub statics: &'e StaticsArena,
     pub assembly: &'e AssemblyArena,
     pub root: ProgId,
     pub frames: &'e FramePlan,
@@ -98,10 +93,7 @@ pub struct Emitter<'e> {
 }
 
 impl<'e> Emitter<'e> {
-    pub fn new(
-        spans: &'e SpanArena, scoped: &'e ScopedArena, statics: &'e StaticsArena,
-        native: &'e NativeProgram, target_format: TargetFormat,
-    ) -> Self {
+    pub fn new(native: &'e NativeProgram, target_format: TargetFormat) -> Self {
         let assembly = native.assembly();
         let arena = assembly.arena();
         let root = assembly.root();
@@ -109,9 +101,6 @@ impl<'e> Emitter<'e> {
             Self::compute_entry_parities(arena, root, native.frames(), StackParity::Misaligned);
         let dynamic_entries = Self::compute_dynamic_entries(arena);
         Self {
-            spans,
-            scoped,
-            statics,
             assembly: arena,
             frames: native.frames(),
             frame_data: BTreeMap::new(),
@@ -246,9 +235,7 @@ impl<'e> Emitter<'e> {
             | Instruction::RetainFrame(_) => true,
             | Instruction::Scalar(region) => region.region().inputs.len() % 2 == 0,
             | Instruction::MemoryKernel(kernel) => kernel.stack_inputs() % 2 != 0,
-            | Instruction::AllocContext(_) | Instruction::Clear(_) | Instruction::Memory(_) => {
-                false
-            }
+            | Instruction::AllocContext(_) | Instruction::Memory(_) => false,
         }
     }
 
@@ -1169,10 +1156,6 @@ impl<'a> Emit<'a> for Instruction {
             }
             | Instruction::Memory(access) => access.emit(id, em),
             | Instruction::MemoryKernel(kernel) => kernel.emit(id, em),
-            | Instruction::Clear(_) => {
-                // Slot maps exclude dead bindings from collection. A pending continuation
-                // may still retain the same physical slot, so do not overwrite it here.
-            }
         }
     }
 }

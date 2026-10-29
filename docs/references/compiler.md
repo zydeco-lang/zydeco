@@ -1506,7 +1506,7 @@ The interpreter uses Rust representations for values and host resources rather t
 Its allocation behavior therefore does not predict native or Wasm costs.
 The runtime borrows its input, output, error, and argument interfaces from the caller;
 CLI runs use process streams, while tests and the REPL supply captured streams.
-`ProgKont` distinguishes continuation outcomes, exit status, dry execution, and runtime errors.
+`ProgKont` distinguishes continuation outcomes, exit status, and runtime errors.
 An executable failure is reported at this boundary rather than silently retried on another target.
 
 The [dynamics guide](../../lang/dynamics/src/README.md) maps runtime modules.

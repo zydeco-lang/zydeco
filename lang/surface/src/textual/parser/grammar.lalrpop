@@ -360,7 +360,6 @@ GenBind<T>: GenBind<T> = {
     },
 };
 GenBindTerm: GenBind<TermId> = GenBind<("=" <TermId>)>;
-GenBindNull: GenBind<()> = GenBind<()>;
 
 Placement: Placement = {
     "in" => Placement::In,

@@ -93,9 +93,6 @@ impl FramePlan {
                     variables.insert(*var);
                 }
                 | Instruction::AllocContext(_) => variables.clear(),
-                | Instruction::Clear(cleared) => {
-                    variables.retain(|var| !cleared.iter().any(|v| v == var))
-                }
                 | _ => {}
             }
         }

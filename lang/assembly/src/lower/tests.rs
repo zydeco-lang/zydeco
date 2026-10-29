@@ -303,7 +303,6 @@ impl Fixture {
         Lowerer {
             allocator: IdAllocator::new(),
             arena: AssemblyArena::default(),
-            spans: &SpanArena::default(),
             scoped: &ScopedArena::default(),
             statics: &StaticsArena::default(),
             sps_low: &self.arena,
@@ -320,10 +319,9 @@ impl Fixture {
     fn lower<D: Driver>(
         program: &SpsLowProgram, native: bool, policy: RepresentationStrategy,
     ) -> AssemblyBuild {
-        let spans = SpanArena::default();
         let scoped = ScopedArena::default();
         let statics = StaticsArena::default();
-        let mut lowerer = Lowerer::with_policy(&spans, &scoped, &statics, program, &policy);
+        let mut lowerer = Lowerer::with_policy(&scoped, &statics, program, &policy);
         lowerer.native_frames = native;
         lowerer.run_with_driver::<D>()
     }
@@ -357,10 +355,7 @@ impl Fixture {
         let mut programs = arena.programs.iter().collect::<Vec<_>>();
         programs.sort_by_key(|(id, _)| *id);
         for (id, program) in programs {
-            let mut deps = arena.deps.query(id);
-            deps.sort_unstable();
-            writeln!(text, "{id:?}: {program:?}; context {:?}; deps {deps:?}", arena.contexts[id])
-                .unwrap();
+            writeln!(text, "{id:?}: {program:?}; context {:?}", arena.contexts[id]).unwrap();
         }
         let mut variables = arena.variables.iter().collect::<Vec<_>>();
         variables.sort_by_key(|(id, _)| *id);
@@ -397,16 +392,12 @@ impl Fixture {
         program: &SpsLowProgram, policy: RepresentationStrategy,
     ) -> crate::frames::NativeProgram {
         use zydeco_utils::pass::CompilerPass as _;
-        crate::LoweringPipeline::new(
-            &SpanArena::default(),
-            &ScopedArena::default(),
-            &StaticsArena::default(),
-        )
-        .with_driver::<D>()
-        .with_representation(policy)
-        .with_native_frames()
-        .run(program)
-        .unwrap()
+        crate::LoweringPipeline::new(&ScopedArena::default(), &StaticsArena::default())
+            .with_driver::<D>()
+            .with_representation(policy)
+            .with_native_frames()
+            .run(program)
+            .unwrap()
     }
 
     fn frame_snapshot(plan: &crate::frames::FramePlan) -> String {

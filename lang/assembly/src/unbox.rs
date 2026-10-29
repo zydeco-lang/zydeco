@@ -526,7 +526,7 @@ mod tests {
             syntax::{Instruction, Program},
         };
         use zydeco_statics::arena::StaticsArena;
-        use zydeco_surface::{scoped::arena::ScopedArena, textual::syntax::SpanArena};
+        use zydeco_surface::scoped::arena::ScopedArena;
         use zydeco_utils::pass::CompilerPass;
 
         for (program, reason) in [
@@ -534,13 +534,10 @@ mod tests {
             (Fixture::closure(ClosureUse::Open).0, UnboxingReason::SharedClosure),
         ] {
             for &strategy in RepresentationStrategy::ALL {
-                let assembly = LoweringPipeline::new(
-                    &SpanArena::default(),
-                    &ScopedArena::default(),
-                    &StaticsArena::default(),
-                )
-                .with_representation(strategy)
-                .run_infallible(&program);
+                let assembly =
+                    LoweringPipeline::new(&ScopedArena::default(), &StaticsArena::default())
+                        .with_representation(strategy)
+                        .run_infallible(&program);
                 let allocations = assembly
                     .arena()
                     .programs

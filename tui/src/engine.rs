@@ -223,7 +223,6 @@ impl ReplEngine {
             }
             | ProgKont::ExitCode(code) => format!("Program exited with code {code}"),
             | ProgKont::Error(error) => format!("Runtime error: {error}"),
-            | ProgKont::Dry => unreachable!("the REPL never asks the runtime for a dry run"),
         };
         let mut output = String::from_utf8_lossy(&output).into_owned();
         if !stderr.is_empty() {

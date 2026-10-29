@@ -225,15 +225,6 @@ impl<'a> StackMeasure<'a> for ProgId {
                         });
                         si.push_control(&mut layout, Slot::Unknown);
                     }
-                    | Instruction::Clear(context) => {
-                        let context = std::collections::HashSet::<_>::from_iter(context);
-                        layout.context = layout
-                            .context
-                            .iter()
-                            .filter(|(var, _)| !context.contains(var))
-                            .cloned()
-                            .collect();
-                    }
                 },
             }
             layout
@@ -280,7 +271,6 @@ impl<'a> StackInline<'a> for ProgId {
                     | Instruction::AddrOffset
                     | Instruction::Memory(_)
                     | Instruction::MemoryKernel(_)
-                    | Instruction::Clear(_)
                     | Instruction::RetainFrame(_),
                     _,
                 ) => {}

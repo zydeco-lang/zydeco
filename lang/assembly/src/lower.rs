@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use zydeco_machine::closure::Closure;
 use zydeco_stackir::{SpsLowProgram, arena::DefinitionNames as _, low::syntax as sk};
 use zydeco_statics::arena::StaticsArena;
-use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
+use zydeco_surface::scoped::arena::ScopedArena;
 use zydeco_utils::fold::{Driver, Step};
 
 mod folder;
@@ -29,7 +29,6 @@ pub struct Lowerer<'a> {
     #[as_ref]
     #[as_mut]
     pub arena: AssemblyArena,
-    pub spans: &'a SpanArena,
     pub scoped: &'a ScopedArena,
     pub statics: &'a StaticsArena,
     pub sps_low: &'a sk::SpsLowArena,
@@ -43,23 +42,14 @@ pub struct Lowerer<'a> {
 }
 
 impl<'a> Lowerer<'a> {
-    pub fn new(
-        spans: &'a SpanArena, scoped: &'a ScopedArena, statics: &'a StaticsArena,
-        sps_low: &'a SpsLowProgram,
-    ) -> Self {
-        Self::with_policy(spans, scoped, statics, sps_low, &crate::representation::Local)
-    }
-
     pub fn with_policy<P: crate::representation::RepresentationPolicy + ?Sized>(
-        spans: &'a SpanArena, scoped: &'a ScopedArena, statics: &'a StaticsArena,
-        sps_low: &'a SpsLowProgram, policy: &P,
+        scoped: &'a ScopedArena, statics: &'a StaticsArena, sps_low: &'a SpsLowProgram, policy: &P,
     ) -> Self {
         let arena = AssemblyArena::default();
         let unboxing = crate::unbox::LocalUnboxing::with_policy(sps_low, policy);
         Self {
             allocator: IdAllocator::new(),
             arena,
-            spans,
             scoped,
             statics,
             sps_low: sps_low.arena(),

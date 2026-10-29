@@ -50,7 +50,6 @@ impl Measurement {
         P: CompilerPass<FragmentProgram, Output = FragmentProgram, Error = Infallible>,
     {
         let mut lower = BuiltinRootLowerer {
-            spans: &checked.spans,
             scoped: &checked.scoped,
             statics: &checked.statics,
             signature: checked.signature.clone(),

@@ -159,7 +159,6 @@ pub struct Lowerer<'a> {
     #[as_ref]
     #[as_mut]
     pub arena: SpsArena,
-    pub spans: &'a SpanArena,
     pub scoped: &'a ScopedArena,
     pub statics: &'a StaticsArena,
     /// Internal residual invariant failures collected during lowering.
@@ -171,7 +170,6 @@ pub struct Lowerer<'a> {
 
 /// Lowering pass for one checked computation root.
 pub struct RootLowerer<'a> {
-    pub spans: &'a SpanArena,
     pub scoped: &'a ScopedArena,
     pub statics: &'a StaticsArena,
     pub scheme: SpsScheme,
@@ -179,7 +177,6 @@ pub struct RootLowerer<'a> {
 
 /// Lowering pass for a package-dependent root applied to the host Builtin package.
 pub struct BuiltinRootLowerer<'a> {
-    pub spans: &'a SpanArena,
     pub scoped: &'a ScopedArena,
     pub statics: &'a StaticsArena,
     pub signature: ss::PackPi,
@@ -188,14 +185,11 @@ pub struct BuiltinRootLowerer<'a> {
 
 impl<'a> Lowerer<'a> {
     /// Create a structural lowerer with fresh stack arenas.
-    pub fn new(
-        spans: &'a SpanArena, scoped: &'a ScopedArena, statics: &'a StaticsArena, scheme: SpsScheme,
-    ) -> Self {
+    pub fn new(scoped: &'a ScopedArena, statics: &'a StaticsArena, scheme: SpsScheme) -> Self {
         let arena = SpsArena::default();
         let lower_errors = Vec::new();
         Self {
             arena,
-            spans,
             scoped,
             statics,
             lower_errors,
@@ -391,7 +385,7 @@ impl RootLowerer<'_> {
     pub fn run_with_driver<D: Driver>(
         &mut self, root: ss::CompuId, builtin: Option<BuiltinPackagePlan>,
     ) -> Result<FragmentProgram, Vec<SpsLoweringError>> {
-        let mut lowerer = Lowerer::new(self.spans, self.scoped, self.statics, self.scheme);
+        let mut lowerer = Lowerer::new(self.scoped, self.statics, self.scheme);
         let root = self.statics.execution_compu(root);
         let mut stack = StackVar.build(&mut lowerer, None);
         let mut named = Vec::new();
@@ -412,8 +406,8 @@ impl CompilerPass<ss::CompuId> for BuiltinRootLowerer<'_> {
 
     fn run(&mut self, root: ss::CompuId) -> Result<FragmentProgram, Self::Error> {
         let plan = BuiltinPackagePlan::for_executable(self.statics, &self.signature)?;
-        let Self { spans, scoped, statics, scheme, .. } = *self;
-        RootLowerer { spans, scoped, statics, scheme }
+        let Self { scoped, statics, scheme, .. } = *self;
+        RootLowerer { scoped, statics, scheme }
             .run_with_builtin(root, Some(plan))
             .map_err(BuiltinRootLowerError::Sps)
     }

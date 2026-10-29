@@ -56,12 +56,11 @@ fn assembly_pipelines_compose_and_reuse_the_same_borrowed_program() {
 
     let backend = CommandCompiler::default().lower(&Fixture::source()).unwrap();
     let mut portable = pipeline![
-        LoweringPipeline::new(&backend.spans, &backend.scoped, &backend.statics),
+        LoweringPipeline::new(&backend.scoped, &backend.statics),
         |assembly: AssemblyProgram| Ok(assembly.arena().programs.len()),
     ];
     let mut native = pipeline![
-        LoweringPipeline::new(&backend.spans, &backend.scoped, &backend.statics)
-            .with_native_frames(),
+        LoweringPipeline::new(&backend.scoped, &backend.statics).with_native_frames(),
         |native: NativeProgram| Ok(native.assembly().arena().programs.len()),
     ];
 

@@ -111,7 +111,7 @@ impl Experiment {
     }
 
     fn measure_static<const MAX: usize>(source: &std::path::Path, backend: &BackendProgram) {
-        let assembly = LoweringPipeline::new(&backend.spans, &backend.scoped, &backend.statics)
+        let assembly = LoweringPipeline::new(&backend.scoped, &backend.statics)
             .with_representation(FieldLimit::<_, MAX>(Shared))
             .run_infallible(&backend.sps_low);
         let unboxing = LocalUnboxing::with_policy(&backend.sps_low, &FieldLimit::<_, MAX>(Shared));

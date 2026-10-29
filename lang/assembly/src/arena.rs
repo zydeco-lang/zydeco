@@ -1,7 +1,6 @@
 use super::syntax::*;
 use zydeco_derive::{AsMutSelf, AsRefSelf};
 use zydeco_stackir::low::syntax as sk;
-use zydeco_utils::graph::DepGraph;
 
 /// Allocation and owning storage scope for assembly nodes.
 #[derive(Debug)]
@@ -38,10 +37,6 @@ pub struct AssemblyArena {
 
     /// All programs have a context that they depend on.
     pub contexts: ArenaAssoc<ProgId, Context>,
-    /// Dependencies of programs; LHS depends on all RHSs.
-    ///
-    /// In our case, a program depends on all the programs that jumps to it.
-    pub deps: DepGraph<ProgId>,
     /// Programs are (optionally) labeled.
     pub labels: ArenaAssoc<ProgId, SymId>,
     /// Externs that are variables.
@@ -99,26 +94,8 @@ impl AssemblyArena {
     pub(crate) fn insert_program(&mut self, id: ProgId, program: Program, context: Context) {
         #[cfg(test)]
         self.publication_order.push(id);
-        self.programs.insert_new(id, program.clone());
+        self.programs.insert_new(id, program);
         self.contexts.insert_new(id, context);
-
-        match program {
-            | Program::Instruction(_, next) => self.deps.add(next, [id]),
-            | Program::Terminator(terminator) => match terminator {
-                | Terminator::Jump(Jump(target)) => self.deps.add(id, [target]),
-                | Terminator::PopJump(PopJump)
-                | Terminator::Extern(
-                    Extern::Host { .. } | Extern::Foreign(_) | Extern::Unit(_),
-                )
-                | Terminator::Abort(Abort) => {}
-                | Terminator::Compare(CompareBranch { when_true, when_false, .. }) => {
-                    self.deps.add(id, [when_true, when_false]);
-                }
-                | Terminator::PopBranch(PopBranch(branches)) => {
-                    self.deps.add(id, branches.into_iter().map(|(_, target)| target));
-                }
-            },
-        }
     }
 }
 

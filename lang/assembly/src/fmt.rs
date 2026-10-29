@@ -190,7 +190,6 @@ impl<'a> Pretty<'a, Formatter<'a>> for Instruction {
             | Instruction::Memory(access) => {
                 RcDoc::text(format!("memory {:?} {:?}", access.kind, access.scalar))
             }
-            | Instruction::Clear(context) => context.pretty(f),
             | Instruction::RetainFrame(retain) => {
                 RcDoc::text(format!("retain-frame {:?}", retain.captures))
             }
@@ -345,28 +344,6 @@ impl<'a> Pretty<'a, Formatter<'a>> for Extern {
             )),
             | Self::Unit(import) => RcDoc::text(format!("<unit:{}>", import.target.symbol)),
         }
-    }
-}
-
-impl<'a> Pretty<'a, Formatter<'a>> for Context {
-    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let vars: Vec<_> = self.0.iter().map(|var| var.pretty(f)).collect();
-        RcDoc::concat([
-            RcDoc::text("{"),
-            RcDoc::concat(
-                vars.iter()
-                    .enumerate()
-                    .flat_map(|(i, doc)| {
-                        if i == 0 {
-                            vec![doc.clone()]
-                        } else {
-                            vec![RcDoc::text(", "), doc.clone()]
-                        }
-                    })
-                    .collect::<Vec<_>>(),
-            ),
-            RcDoc::text("}"),
-        ])
     }
 }
 

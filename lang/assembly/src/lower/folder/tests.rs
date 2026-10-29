@@ -16,7 +16,6 @@ impl Storage {
         let mut lo = Lowerer {
             allocator: IdAllocator::new(),
             arena: AssemblyArena::default(),
-            spans: &SpanArena::default(),
             scoped: &ScopedArena::default(),
             statics: &StaticsArena::default(),
             sps_low: &arena,

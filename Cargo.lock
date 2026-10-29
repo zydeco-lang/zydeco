@@ -2565,8 +2565,6 @@ dependencies = [
  "zydeco-assembly",
  "zydeco-machine",
  "zydeco-stackir",
- "zydeco-statics",
- "zydeco-surface",
  "zydeco-syntax",
  "zydeco-utils",
 ]

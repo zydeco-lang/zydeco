@@ -8,14 +8,12 @@ struct SourceDynamics {
 }
 
 struct SourceStack {
-    spans: Arc<zydeco_surface::textual::syntax::SpanArena>,
     scoped: Arc<zydeco_surface::scoped::arena::ScopedArena>,
     statics: Arc<zydeco_statics::arena::StaticsArena>,
     stackir: zydeco_stackir::FragmentProgram,
 }
 
 struct SourceSpsLow {
-    spans: Arc<zydeco_surface::textual::syntax::SpanArena>,
     scoped: Arc<zydeco_surface::scoped::arena::ScopedArena>,
     statics: Arc<zydeco_statics::arena::StaticsArena>,
     sps_low: zydeco_stackir::SpsLowProgram,
@@ -149,9 +147,8 @@ impl CheckedProgram {
                 found: self.root.into(),
             }));
         };
-        let Self { spans, scoped, statics, root: _ } = self;
+        let Self { scoped, statics, .. } = self;
         let stackir = zydeco_stackir::RootLowerer {
-            spans: &spans,
             scoped: &scoped,
             statics: &statics,
             scheme: zydeco_stackir::SpsScheme::BranchJoin,
@@ -160,7 +157,7 @@ impl CheckedProgram {
         .map_err(|errors| {
             TestPipelineError::Stack(zydeco_stackir::BuiltinRootLowerError::Sps(errors))
         })?;
-        Ok(SourceStack { spans, scoped, statics, stackir })
+        Ok(SourceStack { scoped, statics, stackir })
     }
 
     fn sps_with_builtin(self) -> Result<SourceStack, TestPipelineError> {
@@ -178,9 +175,8 @@ impl CheckedProgram {
                 ty,
             )));
         };
-        let Self { spans, scoped, statics, root: _ } = self;
+        let Self { scoped, statics, .. } = self;
         let stackir = zydeco_stackir::BuiltinRootLowerer {
-            spans: &spans,
             scoped: &scoped,
             statics: &statics,
             signature: *signature,
@@ -188,24 +184,24 @@ impl CheckedProgram {
         }
         .run(root)
         .map_err(TestPipelineError::Stack)?;
-        Ok(SourceStack { spans, scoped, statics, stackir })
+        Ok(SourceStack { scoped, statics, stackir })
     }
 }
 
 impl SourceStack {
     fn convert(self) -> SourceSpsLow {
-        let Self { spans, scoped, statics, stackir } = self;
+        let Self { scoped, statics, stackir } = self;
         let sps_low = zydeco_stackir::SpsLowPipeline { scoped: &scoped, statics: &statics }
             .run_infallible(stackir);
-        SourceSpsLow { spans, scoped, statics, sps_low }
+        SourceSpsLow { scoped, statics, sps_low }
     }
 }
 
 impl SourceSpsLow {
     fn assemble(self) -> SourceAssembly {
-        let Self { spans, scoped, statics, sps_low } = self;
-        let assembly = zydeco_assembly::LoweringPipeline::new(&spans, &scoped, &statics)
-            .run_infallible(&sps_low);
+        let Self { scoped, statics, sps_low } = self;
+        let assembly =
+            zydeco_assembly::LoweringPipeline::new(&scoped, &statics).run_infallible(&sps_low);
         SourceAssembly { sps_low, assembly }
     }
 }
@@ -279,28 +275,16 @@ impl TestPipeline {
         let path = path.as_ref();
         let name = path.file_stem().and_then(|stem| stem.to_str()).unwrap().to_owned();
         let lowered = checked.sps_with_builtin()?.convert();
-        let native = zydeco_assembly::LoweringPipeline::new(
-            &lowered.spans,
-            &lowered.scoped,
-            &lowered.statics,
-        )
-        .with_native_frames()
-        .run(&lowered.sps_low)
-        .map_err(TestPipelineError::Frame)?;
+        let native = zydeco_assembly::LoweringPipeline::new(&lowered.scoped, &lowered.statics)
+            .with_native_frames()
+            .run(&lowered.sps_low)
+            .map_err(TestPipelineError::Frame)?;
         let target = if cfg!(target_os = "macos") {
             zydeco_amd64::TargetFormat::MachO
         } else {
             zydeco_amd64::TargetFormat::Elf
         };
-        let assembly = zydeco_amd64::Emitter::new(
-            &lowered.spans,
-            &lowered.scoped,
-            &lowered.statics,
-            &native,
-            target,
-        )
-        .run()
-        .to_string();
+        let assembly = zydeco_amd64::Emitter::new(&native, target).run().to_string();
         Ok(NativePackage { name, assembly })
     }
 

@@ -199,9 +199,7 @@ impl PreparedExecution {
     pub fn run(self, arguments: &[String]) -> Result<i32, ExecutionError> {
         match self.program {
             | ExecutionProgram::Interpreter { executable, libraries } => {
-                match CommandCompiler::interpret_with_libraries(
-                    executable, arguments, false, libraries,
-                )? {
+                match CommandCompiler::interpret_with_libraries(executable, arguments, libraries)? {
                     | ProgKont::ExitCode(code) => Ok(code),
                     | _ => unreachable!("an executable program exits or reports a runtime error"),
                 }

@@ -196,28 +196,13 @@ impl CommandCompiler {
         self.executable_program(&analysis)
     }
 
-    pub fn interpret(
-        &self, path: &Path, arguments: &[String], dry: bool,
-    ) -> Result<ProgKont, CompileError> {
-        Self::interpret_program(self.executable(path)?, arguments, dry)
-    }
-
-    pub fn interpret_program(
-        executable: ExecutableProgram, arguments: &[String], dry: bool,
-    ) -> Result<ProgKont, CompileError> {
-        Self::interpret_with_libraries(executable, arguments, dry, Default::default())
-    }
-
     pub fn interpret_with_libraries(
-        executable: ExecutableProgram, arguments: &[String], dry: bool,
+        executable: ExecutableProgram, arguments: &[String],
         libraries: std::collections::BTreeMap<
             zydeco_syntax::ForeignLibraryName,
             std::path::PathBuf,
         >,
     ) -> Result<ProgKont, CompileError> {
-        if dry {
-            return Ok(ProgKont::Dry);
-        }
         let dynamics = BuiltinRootLinker {
             scoped: executable.scoped,
             statics: executable.statics,
@@ -320,7 +305,6 @@ impl CommandCompiler {
 
 /// Frozen backend input retaining the provenance needed by renderers and emitters.
 pub struct BackendProgram {
-    pub spans: Arc<SpanArena>,
     pub scoped: Arc<ScopedArena>,
     pub statics: Arc<StaticsArena>,
     pub sps_low: SpsLowProgram,
@@ -371,10 +355,6 @@ enum BackendLowerError {
 }
 
 impl BackendProgram {
-    pub fn lower(executable: ExecutableProgram) -> Result<Self, CompileError> {
-        Self::lower_with_selection(executable, &SpsSelection::default(), SpsInspection::default())
-    }
-
     /// Lower and freeze an executable under the selected scheme and pass plan.
     pub fn lower_with_selection(
         executable: ExecutableProgram, selection: &SpsSelection, inspection: SpsInspection,
@@ -412,14 +392,9 @@ impl BackendProgram {
             }
         };
         let lowered = pipeline![
-            |root| RootLowerer {
-                spans: &spans,
-                scoped: &scoped,
-                statics: &statics,
-                scheme: *scheme
-            }
-            .run_with_builtin(root, builtin.clone())
-            .map_err(|errors| BackendLowerError::Root(BuiltinRootLowerError::Sps(errors))),
+            |root| RootLowerer { scoped: &scoped, statics: &statics, scheme: *scheme }
+                .run_with_builtin(root, builtin.clone())
+                .map_err(|errors| BackendLowerError::Root(BuiltinRootLowerError::Sps(errors))),
             lower_sps,
         ]
         .run(root);
@@ -439,7 +414,6 @@ impl BackendProgram {
             | Err(BackendLowerError::Pass(error)) => return Err(CompileError::SpsPass(error)),
         };
         Ok(Self {
-            spans,
             scoped,
             statics,
             sps_low,
@@ -510,7 +484,7 @@ impl BackendProgram {
     fn emit_native(
         &self, operating_system: TargetOs, entry: zydeco_amd64::emit::NativeEntry,
     ) -> Amd64Artifact {
-        let native = LoweringPipeline::new(&self.spans, &self.scoped, &self.statics)
+        let native = LoweringPipeline::new(&self.scoped, &self.statics)
             .with_representation(self.representation)
             .with_native_frames()
             .run(&self.sps_low)
@@ -519,8 +493,7 @@ impl BackendProgram {
             | TargetOs::Linux => zydeco_amd64::TargetFormat::Elf,
             | TargetOs::Macos => zydeco_amd64::TargetFormat::MachO,
         };
-        let emitter =
-            zydeco_amd64::Emitter::new(&self.spans, &self.scoped, &self.statics, &native, format);
+        let emitter = zydeco_amd64::Emitter::new(&native, format);
         let emitter = emitter.with_entry(entry);
         let assembly = emitter.run().to_string();
         let foreign_libraries = native
@@ -578,7 +551,7 @@ impl BackendProgram {
     /// The immutable assembly product selected by this program's representation policy.
     pub fn assembly(&self) -> &AssemblyProgram {
         self.assembly.get_or_init(|| {
-            LoweringPipeline::new(&self.spans, &self.scoped, &self.statics)
+            LoweringPipeline::new(&self.scoped, &self.statics)
                 .with_representation(self.representation)
                 .run_infallible(&self.sps_low)
         })

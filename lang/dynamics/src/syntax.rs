@@ -160,7 +160,6 @@ pub struct Runtime<'rt> {
 /// Program-level continuation produced by evaluation.
 #[derive(Clone, Debug)]
 pub enum ProgKont {
-    Dry,
     Ret(SemValue),
     ExitCode(i32),
     Error(RuntimeError),
