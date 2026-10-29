@@ -123,8 +123,6 @@ impl CheckedTerm {
     pub(super) fn root(self) -> TermAnnId {
         self.0
     }
-
-    #[track_caller]
     pub(super) fn require_complete_k(
         self, tycker: &mut Tycker<'_>, error: TyckError,
     ) -> ResultKont<Self> {
@@ -139,7 +137,6 @@ impl CheckedTerm {
 
     /// Compare a use-site expectation with the term's canonical synthesized
     /// classifier without changing the shared checked term.
-    #[track_caller]
     pub(super) fn reconcile_k(
         self, tycker: &mut Tycker<'_>, switch: Switch<AnnId>,
     ) -> ResultKont<TermAnnId> {

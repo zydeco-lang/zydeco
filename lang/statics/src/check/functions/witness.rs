@@ -214,8 +214,6 @@ impl<'a> PackPiPatternAssignments<'a> {
             | _ => self.mismatch_k(tycker),
         }
     }
-
-    #[track_caller]
     fn mismatch_k<T>(&self, tycker: &mut Tycker<'_>) -> ResultKont<T> {
         tycker.err_k(TyckError::PackageWitnessArityMismatch {
             expected: self.expected,

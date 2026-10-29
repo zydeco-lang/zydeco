@@ -103,7 +103,6 @@ impl TermChecker<'_> {
     }
 
     /// Reject a named term whose label differs from the one its classifier expects.
-    #[track_caller]
     fn check_named_label_k(
         tycker: &mut Tycker<'_>, expected: FieldName, found: &FieldName,
     ) -> ResultKont<()> {

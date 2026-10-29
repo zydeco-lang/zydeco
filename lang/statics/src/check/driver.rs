@@ -190,12 +190,10 @@ impl<'a> Tycker<'a> {
         // editor facts can answer without the occurrence payload.
         self.statics.retain_normalized_annotations();
         if self.errors.is_empty() {
-            let blame = std::panic::Location::caller();
             let coverage = CoverageChecker::new(&self.statics).validate();
             self.statics.coverage_errors = coverage.clone();
             self.errors.extend(coverage.into_iter().map(|error| TyckErrorEntry {
                 error: TyckError::Coverage(error),
-                blame,
                 stack: rpds::VectorSync::new_sync(),
             }));
         }
@@ -267,7 +265,6 @@ impl<'a> Tycker<'a> {
             (!fills.is_empty()).then(|| {
                 self.error_entry_diagnostic(TyckErrorEntry {
                     error: TyckError::MissingSolution(fills),
-                    blame: entry.blame,
                     stack: entry.stack.clone(),
                 })
             })
@@ -354,19 +351,15 @@ mod impl_tycker {
 
         /// Throw a pure error.
         #[inline]
-        #[track_caller]
         fn err<T>(&self, error: TyckError) -> Result<T> {
-            let blame = std::panic::Location::caller();
             let stack = self.tasks.clone();
-            Err(Box::new(TyckErrorEntry { error, blame, stack }))
+            Err(Box::new(TyckErrorEntry { error, stack }))
         }
         /// Throw a continuation error.
         #[inline]
-        #[track_caller]
         fn err_k<T>(&mut self, error: TyckError) -> ResultKont<T> {
-            let blame = std::panic::Location::caller();
             let stack = self.tasks.clone();
-            self.push_err_entry_k(TyckErrorEntry { error, blame, stack })
+            self.push_err_entry_k(TyckErrorEntry { error, stack })
         }
         /// Convert a pure result into a continuation result.
         #[inline]

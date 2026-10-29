@@ -14,7 +14,6 @@ pub(super) struct PendingForeignImport {
     pub(super) value: ss::ValueId,
     pub(super) classifier: ss::TypeId,
     pub(super) target: ss::ForeignTarget,
-    pub(super) blame: &'static std::panic::Location<'static>,
     pub(super) stack: rpds::VectorSync<TyckTask>,
 }
 
@@ -30,7 +29,6 @@ pub(super) struct ForeignAttachment {
 struct BuiltinTypeResolution(ss::BuiltinTypeRole);
 
 impl BuiltinTypeResolution {
-    #[track_caller]
     fn resolve_k(self, tycker: &mut Tycker<'_>, env: &ss::TyEnv) -> ResultKont<ss::TypeId> {
         let mut witnesses = tycker
             .statics
@@ -122,7 +120,6 @@ impl IntrinsicMaterializer<'_, '_> {
 }
 
 impl InternalTerm {
-    #[track_caller]
     pub(super) fn tyck_k(
         self, tycker: &mut Tycker<'_>, env: &ss::TyEnv, switch: Switch<AnnId>,
     ) -> ResultKont<TermAnnId> {
@@ -202,16 +199,12 @@ impl InternalTerm {
         };
         self.reconcile_k(tycker, synthesized, switch)
     }
-
-    #[track_caller]
     fn builtin_type_k(
         &self, tycker: &mut Tycker<'_>, env: &ss::TyEnv, role: ss::BuiltinTypeRole,
     ) -> ResultKont<TermAnnId> {
         let ty = BuiltinTypeResolution(role).resolve_k(tycker, env)?;
         Ok(TermAnnId::Type(ty, tycker.statics.type_kind(ty)))
     }
-
-    #[track_caller]
     pub(super) fn reconcile_k(
         &self, tycker: &mut Tycker<'_>, synthesized: TermAnnId, switch: Switch<AnnId>,
     ) -> ResultKont<TermAnnId> {
@@ -241,8 +234,6 @@ impl BuiltinAttachment {
     pub(super) fn new(role: ss::BuiltinRole, term: TermAnnId) -> Self {
         Self { role, term }
     }
-
-    #[track_caller]
     pub(super) fn register_k(self, tycker: &mut Tycker<'_>, env: &ss::TyEnv) -> ResultKont<()> {
         match self.role {
             | ss::BuiltinRole::Type(role) => {
@@ -261,7 +252,6 @@ impl BuiltinAttachment {
                 tycker.statics.builtin_roles.attach_type(witness, role).map_err(|existing| {
                     tycker.errors.push(TyckErrorEntry {
                         error: TyckError::ConflictingBuiltinRole { existing, found: self.role },
-                        blame: std::panic::Location::caller(),
                         stack: tycker.tasks.clone(),
                     });
                     KontFailure
@@ -287,7 +277,6 @@ impl BuiltinAttachment {
                                 existing: ss::BuiltinRole::Value(existing),
                                 found: self.role,
                             },
-                            blame: std::panic::Location::caller(),
                             stack: tycker.tasks.clone(),
                         });
                         KontFailure
@@ -299,8 +288,6 @@ impl BuiltinAttachment {
             }
         }
     }
-
-    #[track_caller]
     fn existential_witness_k(
         &self, tycker: &mut Tycker<'_>, expected: &'static str,
     ) -> ResultKont<(ss::AbstId, ss::KindId)> {
@@ -323,8 +310,6 @@ impl ForeignAttachment {
     ) -> Self {
         Self { target, term, implementation }
     }
-
-    #[track_caller]
     pub(super) fn register_k(self, tycker: &mut Tycker<'_>) -> ResultKont<()> {
         let TermAnnId::Value(value, classifier) = self.term else {
             return tycker.err_k(TyckError::InvalidForeignAttachment);
@@ -333,7 +318,6 @@ impl ForeignAttachment {
             value,
             classifier,
             target: self.target,
-            blame: std::panic::Location::caller(),
             stack: tycker.tasks.clone(),
         });
         tycker
@@ -370,8 +354,6 @@ impl Tycker<'_> {
             | ss::Fillable::Done(_) => None,
         }
     }
-
-    #[track_caller]
     pub(crate) fn transfer_builtin_role(
         &mut self, source: ss::AbstId, target: ss::AbstId,
     ) -> Result<()> {
@@ -383,16 +365,12 @@ impl Tycker<'_> {
             | Err(existing) => self.err(TyckError::ConflictingBuiltinRole { existing, found }),
         }
     }
-
-    #[track_caller]
     pub(super) fn transfer_builtin_role_k(
         &mut self, source: ss::AbstId, target: ss::AbstId,
     ) -> ResultKont<()> {
         let result = self.transfer_builtin_role(source, target);
         self.err_p_to_k(result)
     }
-
-    #[track_caller]
     pub(super) fn validate_builtin_signature_k(
         &mut self, signature: &ss::PackPi,
     ) -> ResultKont<()> {
@@ -404,7 +382,7 @@ impl Tycker<'_> {
 
     pub(super) fn validate_foreign_imports(&mut self) {
         let pending = std::mem::take(&mut self.pending_foreign_imports);
-        for PendingForeignImport { value, classifier, target, blame, stack } in pending {
+        for PendingForeignImport { value, classifier, target, stack } in pending {
             let import = match target.abi {
                 | ss::ForeignAbi::C => ForeignClassifier::new(&self.statics)
                     .validate(target, classifier)
@@ -425,14 +403,12 @@ impl Tycker<'_> {
                                 existing: existing.target().clone(),
                                 found: import.target().clone(),
                             },
-                            blame,
                             stack,
                         });
                     }
                 }
                 | Err(error) => self.errors.push(TyckErrorEntry {
                     error: TyckError::InvalidForeignClassifier(error),
-                    blame,
                     stack,
                 }),
             }

@@ -15,7 +15,6 @@ impl TypeId {
     /// Unsolved inference holes inherit the requirement by narrowing the
     /// witnesses their eventual solutions may mention. Solved holes are
     /// checked immediately under that narrowed scope.
-    #[track_caller]
     pub fn constrain_to_scope(&self, tycker: &mut Tycker<'_>, scope: &SkolemScope) -> Result<()> {
         let support = TypeSupport::of(*self, tycker)?;
         let mut witnesses = support
@@ -47,8 +46,6 @@ impl TypeId {
         });
         Ok(())
     }
-
-    #[track_caller]
     pub fn constrain_to_scope_k(
         &self, tycker: &mut Tycker<'_>, scope: &SkolemScope,
     ) -> ResultKont<()> {

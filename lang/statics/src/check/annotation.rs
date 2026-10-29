@@ -3,15 +3,12 @@
 use crate::*;
 
 impl PatAnnId {
-    #[track_caller]
     pub fn try_as_kind(self, tycker: &mut Tycker<'_>, error: TyckError) -> ResultKont<KPatId> {
         match self {
             | Self::Kind(pattern) => Ok(pattern),
             | Self::Type(_, _) | Self::Value(_, _) => tycker.err_k(error),
         }
     }
-
-    #[track_caller]
     pub fn try_as_type(
         self, tycker: &mut Tycker<'_>, error: TyckError,
     ) -> ResultKont<(TPatId, KindId)> {
@@ -20,8 +17,6 @@ impl PatAnnId {
             | Self::Kind(_) | Self::Value(_, _) => tycker.err_k(error),
         }
     }
-
-    #[track_caller]
     pub fn try_as_value(
         self, tycker: &mut Tycker<'_>, error: TyckError,
     ) -> ResultKont<(VPatId, TypeId)> {
@@ -44,8 +39,6 @@ impl TermAnnId {
             | Self::Hole(_) => tycker.err_k(TyckError::MissingAnnotation),
         }
     }
-
-    #[track_caller]
     pub fn try_as_kind(self, tycker: &mut Tycker<'_>, error: TyckError) -> ResultKont<KindId> {
         match self {
             | Self::Kind(kind) => Ok(kind),
@@ -54,8 +47,6 @@ impl TermAnnId {
             }
         }
     }
-
-    #[track_caller]
     pub fn try_as_type(
         self, tycker: &mut Tycker<'_>, error: TyckError,
     ) -> ResultKont<(TypeId, KindId)> {
@@ -66,8 +57,6 @@ impl TermAnnId {
             }
         }
     }
-
-    #[track_caller]
     pub fn try_as_value(
         self, tycker: &mut Tycker<'_>, error: TyckError,
     ) -> ResultKont<(ValueId, TypeId)> {
@@ -78,8 +67,6 @@ impl TermAnnId {
             }
         }
     }
-
-    #[track_caller]
     pub fn try_as_compu(
         self, tycker: &mut Tycker<'_>, error: TyckError,
     ) -> ResultKont<(CompuId, TypeId)> {

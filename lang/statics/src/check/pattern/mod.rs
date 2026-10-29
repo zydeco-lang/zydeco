@@ -193,8 +193,6 @@ impl CheckedPatternExt for CheckedPattern {
         let TyEnvT { info, inner } = self;
         TyEnvT::new(info, PatternCheck::with_opened(annotation, inner.opened))
     }
-
-    #[track_caller]
     fn close_scope_k(&self, tycker: &mut Tycker<'_>, result: ss::TypeId) -> ResultKont<()> {
         if self.inner.opened.is_empty() {
             return Ok(());
@@ -202,8 +200,6 @@ impl CheckedPatternExt for CheckedPattern {
         let outer = self.info.skolem_scope().without(&self.inner.opened);
         result.constrain_to_scope_k(tycker, &outer)
     }
-
-    #[track_caller]
     fn package_telescope_k(
         &self, tycker: &mut Tycker<'_>,
     ) -> ResultKont<Option<ss::PackTelescope>> {

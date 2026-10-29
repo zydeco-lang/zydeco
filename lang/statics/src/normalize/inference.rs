@@ -55,7 +55,6 @@ impl InferenceRefinement {
 impl TypeId {
     /// Reveal a solved computation type, refining an unresolved metavariable to
     /// a value-to-computation arrow when application requires that shape.
-    #[track_caller]
     pub(crate) fn reveal_or_refine_arrow_k(
         self, tycker: &mut Tycker<'_>, env: &TyEnv,
     ) -> ResultKont<Type> {
@@ -73,7 +72,6 @@ impl TypeId {
 
     /// Reveal a solved value type, refining an unresolved metavariable to one
     /// product layer when tuple syntax requires that shape.
-    #[track_caller]
     pub(crate) fn reveal_or_refine_product_k(
         self, tycker: &mut Tycker<'_>, env: &TyEnv,
     ) -> ResultKont<Type> {
@@ -98,7 +96,6 @@ impl TypeId {
     /// Direct product structure needs no second recursive substitution. If unrolling exposes a
     /// different representation (for example, through a seal), that newly exposed tree still
     /// receives the environment once.
-    #[track_caller]
     pub(crate) fn reveal_or_refine_prepared_product_k(
         self, tycker: &mut Tycker<'_>, env: &TyEnv,
     ) -> ResultKont<Type> {
@@ -120,8 +117,6 @@ impl TypeId {
         })();
         tycker.err_p_to_k(result)
     }
-
-    #[track_caller]
     pub(crate) fn view_product_k(
         self, tycker: &mut Tycker<'_>, env: &TyEnv,
     ) -> ResultKont<Prod<TypeId>> {
@@ -133,8 +128,6 @@ impl TypeId {
             }),
         }
     }
-
-    #[track_caller]
     pub(crate) fn view_prepared_product_k(
         self, tycker: &mut Tycker<'_>, env: &TyEnv,
     ) -> ResultKont<Prod<TypeId>> {

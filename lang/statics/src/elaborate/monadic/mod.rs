@@ -451,8 +451,6 @@ impl<'a> PackPiWitnessLayoutState<'a> {
             | _ => self.mismatch(tycker),
         }
     }
-
-    #[track_caller]
     fn mismatch<T>(&self, tycker: &mut Tycker<'_>) -> Result<T> {
         tycker.err(TyckError::PackageWitnessArityMismatch {
             expected: self.expected,
@@ -554,8 +552,6 @@ impl<'a> PackPiPatternLayoutState<'a> {
             | (_, _) => Ok(Vec::new()),
         }
     }
-
-    #[track_caller]
     fn mismatch<T>(&self, tycker: &mut Tycker<'_>) -> Result<T> {
         tycker.err(TyckError::PackageWitnessArityMismatch {
             expected: self.expected,
