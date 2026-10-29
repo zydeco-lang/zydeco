@@ -49,13 +49,13 @@ impl CompilerPass<FragmentProgram> for Localizer {
                 let stack = (**stack).clone();
                 arena.inner.compu_protocols.insert_new(binding, stack);
             }
-            arena
-                .inner
-                .compus
-                .replace_existing_with(binding, LetProc { procedure, stack: StackVar, body, tail });
+            arena.inner.compus.replace_existing(
+                binding,
+                LetProc { procedure, stack: StackVar, body, tail }.into(),
+            );
         }
         for Call { call, procedure, stack } in calls {
-            arena.inner.compus.replace_existing_with(call, CallProc { procedure, stack });
+            arena.inner.compus.replace_existing(call, CallProc { procedure, stack }.into());
         }
         Ok(FragmentProgram::try_new(SpsProgram::new(arena, root), scheme)
             .expect("localization preserves lexical ownership and its scheme's fragment"))

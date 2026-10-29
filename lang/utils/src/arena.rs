@@ -327,16 +327,6 @@ impl<A> std::ops::Deref for FrozenArena<A> {
     }
 }
 
-// pub trait ArenaBidirectional<'t, P, Q> {
-//     type RightView<'a: 't>;
-//     type LeftView<'b: 't>;
-//     fn forth(&self, p: &P) -> Self::RightView<'t>;
-//     fn back(&self, q: &Q) -> Self::LeftView<'t>;
-// }
-
-pub struct Forth<'a, T>(pub &'a T);
-pub struct Back<'a, T>(pub &'a T);
-
 /// Dense owning storage whose raw indices are issued by `la-arena` itself.
 /// It retains an identity tag, but no separate sequential [`IdAllocator`].
 #[derive(Debug)]
@@ -783,14 +773,6 @@ mod impls {
             let Self { map, marker: _ } = self;
             ArenaSparse { map, marker: PhantomData }
         }
-        pub fn map_id<Target>(self, f: impl Fn(Id) -> Target::Item) -> ArenaSparse<Target, Id>
-        where
-            Target: ArenaSchema<Id>,
-        {
-            let Self { map, marker: _ } = self;
-            let map = map.into_keys().map(|id| (id, f(id))).collect();
-            ArenaSparse { map, marker: PhantomData }
-        }
         pub fn map_value<Target>(
             self, f: impl Fn(Scope::Item) -> Target::Item,
         ) -> ArenaSparse<Target, Id>
@@ -809,36 +791,6 @@ mod impls {
         {
             let Self { map, marker: _ } = self;
             let map = map.into_iter().map(|(id, val)| (id, f(id, val))).collect();
-            ArenaSparse { map, marker: PhantomData }
-        }
-        pub fn filter_map_id<Target>(
-            self, f: impl Fn(Id) -> Option<Target::Item>,
-        ) -> ArenaSparse<Target, Id>
-        where
-            Target: ArenaSchema<Id>,
-        {
-            let Self { map, marker: _ } = self;
-            let map = map.into_keys().filter_map(|id| f(id).map(|val| (id, val))).collect();
-            ArenaSparse { map, marker: PhantomData }
-        }
-        pub fn filter_map_id_mut<Target>(
-            self, mut f: impl FnMut(Id) -> Option<Target::Item>,
-        ) -> ArenaSparse<Target, Id>
-        where
-            Target: ArenaSchema<Id>,
-        {
-            let Self { map, marker: _ } = self;
-            let map = map.into_keys().filter_map(|id| f(id).map(|val| (id, val))).collect();
-            ArenaSparse { map, marker: PhantomData }
-        }
-        pub fn filter_map_value<Target>(
-            self, f: impl Fn(Scope::Item) -> Option<Target::Item>,
-        ) -> ArenaSparse<Target, Id>
-        where
-            Target: ArenaSchema<Id>,
-        {
-            let Self { map, marker: _ } = self;
-            let map = map.into_iter().filter_map(|(id, val)| f(val).map(|val| (id, val))).collect();
             ArenaSparse { map, marker: PhantomData }
         }
         pub fn filter_map<Target>(
@@ -864,10 +816,6 @@ mod impls {
                 }
                 | Entry::Vacant(_) => panic!("key not found"),
             }
-        }
-        /// Convert and replace an existing owned item.
-        pub fn replace_existing_with(&mut self, id: Id, val: impl Into<Scope::Item>) {
-            self.replace_existing(id, val.into())
         }
     }
 
@@ -1101,35 +1049,12 @@ mod impls {
                 | Entry::Vacant(_) => panic!("key not found"),
             }
         }
-        /// Replace the value at the given id with the given value. Returns the old value.
-        pub fn replace_existing_with(&mut self, id: Id, val: impl Into<T>) -> T {
-            use std::collections::hash_map::Entry;
-            match self.map.entry(id) {
-                | Entry::Occupied(mut entry) => entry.insert(val.into()),
-                | Entry::Vacant(_) => panic!("key not found"),
-            }
-        }
         pub fn entry(&mut self, id: Id) -> std::collections::hash_map::Entry<'_, Id, T> {
             self.map.entry(id)
         }
         #[must_use]
         pub fn upsert(&mut self, id: Id, val: T) -> Option<T> {
             self.map.insert(id, val)
-        }
-        /// Insert a value, or verify that the existing value is identical.
-        pub fn insert_or_same(&mut self, id: Id, val: T)
-        where
-            T: PartialEq,
-        {
-            use std::collections::hash_map::Entry;
-            match self.map.entry(id) {
-                | Entry::Vacant(entry) => {
-                    entry.insert(val);
-                }
-                | Entry::Occupied(entry) => {
-                    assert!(entry.get() == &val, "conflicting value in associative arena");
-                }
-            }
         }
         pub fn remove(&mut self, id: &Id) -> Option<T> {
             self.map.remove(id)
@@ -1268,28 +1193,6 @@ mod impls {
         }
     }
 
-    impl<P, Q> Index<&P> for Forth<'_, ArenaForth<P, Q>>
-    where
-        P: Eq + Hash + Clone,
-    {
-        type Output = [Q];
-        fn index(&self, p: &P) -> &Self::Output {
-            let Forth(arena) = self;
-            arena.forth(p)
-        }
-    }
-
-    impl<P, Q> Index<&Q> for Back<'_, ArenaForth<P, Q>>
-    where
-        Q: Eq + Hash + Clone,
-    {
-        type Output = P;
-        fn index(&self, q: &Q) -> &Self::Output {
-            let Back(arena) = self;
-            arena.back(q).unwrap()
-        }
-    }
-
     impl<P, Q> ArenaForth<P, Q>
     where
         P: Eq + Hash + Clone,
@@ -1304,9 +1207,6 @@ mod impls {
         Q: Eq + Hash + Clone,
     {
         pub fn back(&self, q: &Q) -> Option<&P> {
-            self.backward.get(q)
-        }
-        pub fn try_back(&self, q: &Q) -> Option<&P> {
             self.backward.get(q)
         }
     }
@@ -1389,28 +1289,6 @@ mod impls {
         }
     }
 
-    impl<P, Q> Index<&P> for Forth<'_, ArenaBijective<P, Q>>
-    where
-        P: Eq + Hash + Clone,
-    {
-        type Output = Q;
-        fn index(&self, p: &P) -> &Self::Output {
-            let Forth(arena) = self;
-            arena.forth(p)
-        }
-    }
-
-    impl<P, Q> Index<&Q> for Back<'_, ArenaBijective<P, Q>>
-    where
-        Q: Eq + Hash + Clone,
-    {
-        type Output = P;
-        fn index(&self, q: &Q) -> &Self::Output {
-            let Back(arena) = self;
-            arena.back(q).unwrap()
-        }
-    }
-
     impl<P, Q> ArenaBijective<P, Q>
     where
         P: Eq + Hash + Clone,
@@ -1428,9 +1306,6 @@ mod impls {
         Q: Eq + Hash + Clone,
     {
         pub fn back(&self, q: &Q) -> Option<&P> {
-            self.backward.get(q)
-        }
-        pub fn try_back(&self, q: &Q) -> Option<&P> {
             self.backward.get(q)
         }
     }
@@ -1764,7 +1639,7 @@ mod tests {
         let conflict = catch_unwind(AssertUnwindSafe(|| relation.insert_new("other", 1)));
         assert!(conflict.is_err());
         assert_eq!(relation.try_forth(&"other"), None);
-        assert_eq!(relation.try_back(&1), Some(&"left"));
+        assert_eq!(relation.back(&1), Some(&"left"));
     }
 }
 

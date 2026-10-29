@@ -259,7 +259,7 @@ impl<'a> StackInline<'a> for ProgId {
                     {
                         si.arena
                             .programs
-                            .replace_existing_with(program_id, Terminator::Jump(Jump(target)));
+                            .replace_existing(program_id, Terminator::Jump(Jump(target)).into());
                     }
                 }
                 | Program::Instruction(Instruction::PushArg(Push(_)), next) => {
