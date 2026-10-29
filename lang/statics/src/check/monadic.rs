@@ -136,7 +136,7 @@ impl<'a> AlgebraicTranslation<'a> {
         let monad_binder = ss::TypeBinder { pattern: monad_ty_tpat, witness: abst };
         if let CheckedNode::Type(body) = body {
             // Type translation needs the carrier and nominal families, not runtime algebras.
-            let (_, body) = cs::TypeLift { ty: body }.mbuild_k(tycker, menv)?;
+            let (_, body) = cs::TypeLift { ty: body }.construct_k(tycker, menv)?;
             let kind =
                 ss::Arrow(monad_ty_kd, tycker.statics.type_kind(body)).build(tycker, environment);
             let body = Alloc::alloc(
@@ -154,7 +154,7 @@ impl<'a> AlgebraicTranslation<'a> {
             Alloc::alloc(tycker, monad_impl_var, monad_impl_ty, environment);
         let body = match body {
             | CheckedNode::Value(body) => {
-                let (_, mut body) = cs::TermLift { tm: body }.mbuild_k(tycker, menv)?;
+                let (_, mut body) = cs::TermLift { tm: body }.construct_k(tycker, menv)?;
                 let body_ty = tycker.statics.annotations_value[&body];
                 if let Some((binder, bindee)) = dictionary {
                     body = Alloc::alloc(
@@ -203,7 +203,7 @@ impl<'a> AlgebraicTranslation<'a> {
                 unreachable!("type roots returned above; patterns are not monadic operands")
             }
         };
-        let (_, mut body_lift) = cs::TermLift { tm: body }.mbuild_k(tycker, menv)?;
+        let (_, mut body_lift) = cs::TermLift { tm: body }.construct_k(tycker, menv)?;
         if let Some((binder, bindee)) = dictionary {
             let ty = tycker.statics.annotations_compu[&body_lift];
             body_lift =

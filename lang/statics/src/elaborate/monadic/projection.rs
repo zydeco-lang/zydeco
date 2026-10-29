@@ -10,9 +10,9 @@ pub(super) struct ValueProjectionTranslation {
 
 impl ValueProjectionTranslation {
     pub fn translate(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, ValueId)> {
-        let (env, mut source) = cs::TypeOf(self.head).mbuild(tycker, env)?;
-        let (env, head) = cs::TermLift { tm: self.head }.mbuild(tycker, env)?;
-        let (env, mut target) = cs::TypeOf(head).mbuild(tycker, env)?;
+        let (env, mut source) = cs::TypeOf(self.head).construct(tycker, env)?;
+        let (env, head) = cs::TermLift { tm: self.head }.construct(tycker, env)?;
+        let (env, mut target) = cs::TypeOf(head).construct(tycker, env)?;
         let mut source_steps = self.field.target.products.into_iter();
         let mut products = Vec::new();
 

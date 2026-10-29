@@ -1,29 +1,44 @@
-//! Constructors for patterns, types, and terms in [`StaticsArena`].
+//! One HOAS-style builder for patterns, types, and terms in [`StaticsArena`],
+//! parameterized by the environment it constructs in.
 //!
-//! This module provides the [`Construct`] trait, which describes a convenient DSL for
-//! writing Zydeco programs in Rust. If you're familiar with HOAS (High Order Abstract Syntax),
-//! we're trying to achieve exactly the same in this trait.
-//! [`Construct`] has the following semantics:
+//! [`Construct`] describes a convenient DSL for writing Zydeco syntax in Rust.
+//! `impl` [`Construct<E, T>`] for `S` means that `S` constructs a `T` in an environment `E`.
+//! As in HOAS (higher-order abstract syntax), a binder is a Rust closure that receives
+//! the identifiers its construction introduces.
 //!
-//! `impl` [`Construct<Arena, T>`] for `S` means that `S` can be used to construct `T`
+//!
+//! ## Environments
+//!
+//! A construction threads its environment through its subterms and returns the environment
+//! after the bindings it made. It fails with a checker error when a subterm does not have
+//! the shape the construction requires. [`ConstructEnv`] states what every construction reads
+//! from its environment:
+//!
+//! + A plain [`TyEnv`] constructs nodes in place. The checker builds well-formed shapes,
+//!   such as intrinsic kinds and types, through [`Build::build`], which cannot fail.
+//! + [`MonEnv`] is the environment of the monadic translation, which copies a closed term.
+//!   It renames the definitions and abstract types of the copied term and knows the monad and
+//!   algebra types that the translation targets.
+//!
+//! Constructions that copy binders or need the monad basis exist only for [`MonEnv`], in
+//! [`crate::elaborate::monadic::construct`]. Computation abstraction and application over types
+//! are defined there as well: they share [`Abs`] and [`App`] with the value forms that every
+//! environment uses and are told apart by [`cs::Ty`], and only the translation builds them.
 //!
 //!
 //! ## Comparison with [`Alloc`]
 //!
-//! The [`Construct`] API is an improvement based on [`Alloc`] in that unlike `Alloc`
-//! which requires feeding annotations manually, it tries to infer the annotations
-//! (types and kinds) of the constructed terms automatically, which brings two benefits:
+//! [`Alloc`] allocates one node with an explicit annotation. [`Construct`] builds on it and infers
+//! the annotations (types and kinds) of the nodes it constructs, which brings two benefits:
 //! + It's more convenient, because much less boilerplate annotations are needed.
 //! + It's less error-prone, as the inferred types are constructed from the known context
 //!   of the compiler. Manually constructed types are not guaranteed to match the terms
 //!   that they are supposed to annotate.
 //!
-//! In conclusion, it's recommended to use `Construct` instead of `Alloc` for constructing
-//! Zydeco programs in Rust. Example use cases are wrapped as legacy methods in [`Tycker`],
-//! as well as static tests in `<sort>_test` modules.
+//! [`cs::Ann`] passes an explicit annotation through to [`Alloc`] where inference is not wanted.
 //!
 //!
-//! ## Advice on writing Zydeco programs in [`Construct`] style
+//! ## Advice on writing constructions
 //!
 //! [`Construct`] works very similar to how monadic expressions work (e.g. in Haskell).
 //! That is, you should think of them as a thin piece of syntax or "recipe" for
@@ -36,9 +51,8 @@
 //!
 //! ## Advice on compile-time debugging
 //!
-//! When your Zydeco program written in [`Construct`] fails to compile, it's likely
-//! that you're not constructing the term correctly; if not, that's a bug in this module,
-//! which is sad. (>_<)
+//! When your construction fails to compile, it's likely that you're not constructing
+//! the term correctly; if not, that's a bug in this module, which is sad. (>_<)
 //!
 //! To find out what's happening, you should first try to break down the term that's been
 //! constructed into smaller pieces, and see if you can find the problem.
@@ -46,7 +60,7 @@
 //! + Insert small and trivial terms like [`cs::TopTy`] for type, [`cs::Top`] for computation,
 //!   and [`Triv`] for value, and see if the program can partially compile.
 //! + Break subterms into let bindings `let small = ...;`, and see if the small bindees
-//!   can compile by calling `small.build(tycker, env)`.
+//!   can compile by calling `small.construct(tycker, env)`.
 //!
 //! Finally, a word of caution:
 //! + If you're having issues regarding lifetime, make sure to put `move` on the closure,
@@ -56,27 +70,126 @@
 
 use crate::*;
 
+/// What every construction reads from the environment it constructs in.
+pub trait ConstructEnv: Clone {
+    /// The typing environment of the constructed nodes.
+    fn ty(&self) -> &TyEnv;
+    /// The definition that `def` stands for in the constructed program.
+    fn def(&self, def: DefId) -> DefId;
+    /// The abstract type that `abst` stands for in the constructed program.
+    fn abst(&self, abst: AbstId) -> AbstId;
+}
+
+/// A plain typing environment constructs nodes in place.
+impl ConstructEnv for TyEnv {
+    fn ty(&self) -> &TyEnv {
+        self
+    }
+    fn def(&self, def: DefId) -> DefId {
+        def
+    }
+    fn abst(&self, abst: AbstId) -> AbstId {
+        abst
+    }
+}
+
+/// The monadic translation renames the definitions and abstract types of the term it copies.
+impl ConstructEnv for MonEnv {
+    fn ty(&self) -> &TyEnv {
+        &self.ty
+    }
+    fn def(&self, def: DefId) -> DefId {
+        self.subst.get(&def).copied().unwrap_or(def)
+    }
+    fn abst(&self, abst: AbstId) -> AbstId {
+        self.subst_abst.get(&abst).copied().unwrap_or(abst)
+    }
+}
+
 /// Trait for constructing entities in [`Tycker`] with more type inference available.
 ///
-/// The only method provided is [`Construct::build`], which takes `&mut` [`Tycker`]
-/// and the environment of the type checked program, and returns the constructed value.
-///
-/// The trait is different from [`Alloc`] in that it does not require feeding annotations
-/// manually, but instead infers them from the context.
-pub trait Construct<Arena, T>: Sized {
-    /// Build the term with the given type checker and environment.
+/// The only required method is [`Construct::construct`], which takes `&mut` [`Tycker`]
+/// and the environment `E` of the constructed program, and returns the environment after
+/// the construction's bindings together with the constructed entity.
+pub trait Construct<E, T>: Sized {
+    /// Construct the entity in `env`.
     ///
     /// See [`Construct`] level documentation for more details.
-    fn build(self, arena: &mut Arena, env: &TyEnv) -> T;
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, T)>;
+
+    /// Turn the result of [`Construct::construct`] into a [`ResultKont`].
+    /// Easier to use under a `_k` context.
+    fn construct_k(self, tycker: &mut Tycker<'_>, env: E) -> ResultKont<(E, T)> {
+        let res = self.construct(tycker, env);
+        tycker.err_p_to_k(res)
+    }
+}
+
+/// Builds a shape in a plain typing environment, where the checker's constructions cannot fail.
+pub trait Build<T> {
+    fn build(self, tycker: &mut Tycker<'_>, env: &TyEnv) -> T;
+}
+
+impl<S, T> Build<T> for S
+where
+    S: Construct<TyEnv, T>,
+{
+    fn build(self, tycker: &mut Tycker<'_>, env: &TyEnv) -> T {
+        let Ok((_, built)) = self.construct(tycker, env.clone()) else {
+            unreachable!("the checker builds only well-formed shapes in a plain typing environment")
+        };
+        built
+    }
+}
+
+/// A name that a construction gives to the binder, constructor, or destructor it introduces.
+pub trait IntoName<N> {
+    fn into_name(self) -> N;
+}
+
+impl IntoName<VarName> for VarName {
+    fn into_name(self) -> VarName {
+        self
+    }
+}
+impl IntoName<VarName> for String {
+    fn into_name(self) -> VarName {
+        VarName(self)
+    }
+}
+impl IntoName<VarName> for &str {
+    fn into_name(self) -> VarName {
+        VarName(self.to_owned())
+    }
+}
+impl IntoName<CtorName> for CtorName {
+    fn into_name(self) -> CtorName {
+        self
+    }
+}
+impl IntoName<CtorName> for &str {
+    fn into_name(self) -> CtorName {
+        CtorName(self.to_owned())
+    }
+}
+impl IntoName<DtorName> for DtorName {
+    fn into_name(self) -> DtorName {
+        self
+    }
+}
+impl IntoName<DtorName> for &str {
+    fn into_name(self) -> DtorName {
+        DtorName(self.to_owned())
+    }
 }
 
 /// Syntax used by [`Construct`]. They work together as part of the HOAS
 /// (High Order Abstract Syntax) for Zydeco in Rust. Specifically,
 ///
 /// + Structures that carry semantic actions, such as `Ann`, `Pat`, `Ty`, `TypeOf`,
-///   `Fresh`, and other structures related to the algebra translation.
+///   and other structures related to the algebra translation.
 /// + Some structures that are not defined as part of the common syntax of Zydeco,
-///   such as `Monad` and `Algebra`.
+///   such as `Algebra`.
 /// + Some existing structures that may take a more convenient syntax,
 ///   such as `Ann`, `Ctor`, and `Dtor`.
 pub mod syntax {
@@ -112,9 +225,6 @@ pub mod syntax {
     /// Construct to value immediately
     #[derive(Clone, Copy)]
     pub struct Value<T>(pub T);
-    /// Construct to computation immediately
-    #[derive(Clone, Copy)]
-    pub struct Compu<T>(pub T);
 
     /// `Thk B`
     pub struct Thk<B>(pub B);
@@ -122,11 +232,6 @@ pub mod syntax {
     pub struct Ret<A>(pub A);
     /// `codata end`
     pub struct TopTy;
-    /// `Monad M : (VType -> CType) -> CType`
-    pub struct MonadTy;
-    /// generates `Monad M` where:
-    /// 1. M is `monad_ty` of kind `VType -> CType`
-    pub struct Monad<M>(pub M);
     /// `Algebra M R : (VType -> CType) -> CType -> CType`
     pub struct AlgebraTy;
     /// generates `Algebra M R` where:
@@ -143,17 +248,11 @@ pub mod syntax {
     /// `T` here should only be CoDataId
     pub struct CoData<T, F>(pub T, pub F);
 
-    /// `exists X. ...`
-    pub struct Exists<Param, FBody>(pub Param, pub FBody);
     /// `forall X. ...`
     pub struct Forall<Param, FBody>(pub Param, pub FBody);
 
     /// `+Ctor(<tail>)`
     pub struct Ctor<Tag, Tail>(pub Tag, pub Tail);
-    /// `match_ty <t> | <f> ... end`
-    ///
-    /// `Ty` here should be DataId
-    pub struct Match<T, F>(pub T, pub F);
     /// `comatch_ty | <f> ... end`
     ///
     /// `Ty` here should be CoDataId
@@ -163,1014 +262,807 @@ pub mod syntax {
     /// `comatch end`
     pub struct Top;
 
-    /// SCons
-    pub struct SCons<T, F>(pub T, pub F);
-
     pub use crate::elaborate::monadic::syntax::*;
 }
 
-/// Trivial [`Construct`] construction
-macro_rules! impl_construct_trivial {
-    ($($ty:ty),*) => {
-        $(
-            impl<'a> Construct<Tycker<'a>, $ty> for $ty {
-                fn build(self, _tycker: &mut Tycker<'a>, _env: &TyEnv) -> $ty {
-                    self
-                }
-            }
-        )*
-    }
-}
-
-/// [`Construct`] implementation for all [`Alloc`] implementors.
-impl<'a, S, T, A, U> Construct<Tycker<'a>, T> for cs::Ann<S, U>
+/// [`Construct`] for every typed [`Alloc`] whose annotation is built in the same environment.
+impl<E, S, T, A, U> Construct<E, T> for cs::Ann<S, U>
 where
-    U: Construct<Tycker<'a>, A>,
-    S: Alloc<Tycker<'a>, T, Ann = A, Env = TyEnv>,
+    E: ConstructEnv,
+    U: Construct<E, A>,
+    for<'a> S: Alloc<Tycker<'a>, T, Ann = A, Env = TyEnv>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> T {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, T)> {
         let cs::Ann(tm, ty) = self;
-        let ty = ty.build(tycker, env);
-        Alloc::alloc(tycker, tm, ty, env)
+        let (env, ty) = ty.construct(tycker, env)?;
+        let tm = Alloc::alloc(tycker, tm, ty, env.ty());
+        Ok((env, tm))
     }
 }
 
 /* --------------------------------- Monadic -------------------------------- */
 
-impl<'a, T, F, I, O, R> Construct<Tycker<'a>, R> for cs::CBind<T, I, F>
+impl<E, T, F, I, O, R> Construct<E, R> for cs::CBind<T, I, F>
 where
-    T: Construct<Tycker<'a>, I>,
+    E: ConstructEnv,
+    T: Construct<E, I>,
     F: FnOnce(I) -> O,
-    O: Construct<Tycker<'a>, R>,
+    O: Construct<E, R>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> R {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, R)> {
         let cs::CBind(input, _, f) = self;
-        let input = input.build(tycker, env);
-        f(input).build(tycker, env)
+        let (env, input) = input.construct(tycker, env)?;
+        f(input).construct(tycker, env)
     }
 }
 
 /* ------------------------------- Identifier ------------------------------- */
 
-impl_construct_trivial!(
-    Option<DefId>,
-    DefId,
-    KindId,
-    AbstId,
-    TPatId,
-    TypeId,
-    VPatId,
-    ValueId,
-    CompuId
-);
-
-/* ------------------------------- Definition ------------------------------- */
-
-impl_construct_trivial!(VarName, CtorName, DtorName);
-
-// VarName
-impl<'a> Construct<Tycker<'a>, VarName> for String {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> VarName {
-        VarName(self).build(tycker, env)
-    }
+/// Identifiers that construct themselves.
+macro_rules! identity_constructions {
+    ($($ty:ty),* $(,)?) => {
+        $(
+            impl<E: ConstructEnv> Construct<E, $ty> for $ty {
+                fn construct(self, _tycker: &mut Tycker<'_>, env: E) -> Result<(E, $ty)> {
+                    Ok((env, self))
+                }
+            }
+        )*
+    };
 }
-impl<'a> Construct<Tycker<'a>, VarName> for &str {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> VarName {
-        self.to_string().build(tycker, env)
+
+identity_constructions!(Option<DefId>, KindId, TPatId, TypeId, VPatId, ValueId, CompuId);
+
+impl<E: ConstructEnv> Construct<E, AbstId> for AbstId {
+    fn construct(self, _tycker: &mut Tycker<'_>, env: E) -> Result<(E, AbstId)> {
+        let abst = env.abst(self);
+        Ok((env, abst))
     }
 }
 
-// CtorName
-impl<'a> Construct<Tycker<'a>, CtorName> for &str {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> CtorName {
-        CtorName(self.to_string()).build(tycker, env)
-    }
-}
-
-// DtorName
-impl<'a> Construct<Tycker<'a>, DtorName> for &str {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> DtorName {
-        DtorName(self.to_string()).build(tycker, env)
+/// A list constructs its items in order, threading the environment through them.
+impl<E, S, T> Construct<E, Vec<T>> for Vec<S>
+where
+    E: ConstructEnv,
+    S: Construct<E, T>,
+{
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, Vec<T>)> {
+        let capacity = self.len();
+        self.into_iter().try_fold((env, Vec::with_capacity(capacity)), |(env, mut built), item| {
+            let (env, item) = item.construct(tycker, env)?;
+            built.push(item);
+            Ok((env, built))
+        })
     }
 }
 
 /* -------------------------------- Abstract -------------------------------- */
 
-impl<'a, K> Construct<Tycker<'a>, AbstId> for cs::Ann<VarName, K>
+impl<E, K> Construct<E, AbstId> for cs::Ann<VarName, K>
 where
-    K: Construct<Tycker<'a>, KindId>,
+    E: ConstructEnv,
+    K: Construct<E, KindId>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, _env: &TyEnv) -> AbstId {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, AbstId)> {
         let cs::Ann(var, kd) = self;
-        let kd = kd.build(tycker, _env);
+        let (env, kd) = kd.construct(tycker, env)?;
         let def = Alloc::alloc(tycker, var, kd.into(), &());
-        Alloc::alloc(tycker, def, kd, &())
+        Ok((env, Alloc::alloc(tycker, def, kd, &())))
     }
 }
-impl<'a, K> Construct<Tycker<'a>, AbstId> for cs::Ann<String, K>
+impl<E, K> Construct<E, AbstId> for cs::Ann<String, K>
 where
-    K: Construct<Tycker<'a>, KindId>,
+    E: ConstructEnv,
+    K: Construct<E, KindId>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, _env: &TyEnv) -> AbstId {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, AbstId)> {
         let cs::Ann(tm, kd) = self;
-        cs::Ann(VarName(tm), kd).build(tycker, _env)
+        cs::Ann(VarName(tm), kd).construct(tycker, env)
     }
 }
-impl<'a, K> Construct<Tycker<'a>, AbstId> for cs::Ann<&str, K>
+impl<E, K> Construct<E, AbstId> for cs::Ann<&str, K>
 where
-    K: Construct<Tycker<'a>, KindId>,
+    E: ConstructEnv,
+    K: Construct<E, KindId>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, _env: &TyEnv) -> AbstId {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, AbstId)> {
         let cs::Ann(tm, kd) = self;
-        cs::Ann(tm.to_string(), kd).build(tycker, _env)
+        cs::Ann(tm.to_owned(), kd).construct(tycker, env)
+    }
+}
+impl<E, K> Construct<E, AbstId> for cs::Ann<Option<DefId>, K>
+where
+    E: ConstructEnv,
+    K: Construct<E, KindId>,
+{
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, AbstId)> {
+        let cs::Ann(def, kd) = self;
+        let (env, kd) = kd.construct(tycker, env)?;
+        let abst = Alloc::alloc(tycker, def, kd, &());
+        Ok((env, abst))
     }
 }
 
 /* ---------------------------------- Kind ---------------------------------- */
 
-impl<'a> Construct<Tycker<'a>, KindId> for cs::TypeOf<TPatId> {
-    fn build(self, tycker: &mut Tycker<'a>, _env: &TyEnv) -> KindId {
-        let cs::TypeOf(ty) = self;
-        tycker.statics.annotations_tpat[&ty]
+impl<E: ConstructEnv> Construct<E, KindId> for cs::TypeOf<TPatId> {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, KindId)> {
+        let cs::TypeOf(tpat) = self;
+        Ok((env, tycker.statics.annotations_tpat[&tpat]))
     }
 }
-impl<'a> Construct<Tycker<'a>, KindId> for cs::TypeOf<TypeId> {
-    fn build(self, tycker: &mut Tycker<'a>, _env: &TyEnv) -> KindId {
+impl<E: ConstructEnv> Construct<E, KindId> for cs::TypeOf<TypeId> {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, KindId)> {
         let cs::TypeOf(ty) = self;
-        tycker.statics.type_kind(ty)
+        Ok((env, tycker.statics.type_kind(ty)))
     }
 }
-impl<'a> Construct<Tycker<'a>, KindId> for cs::TypeOf<AbstId> {
-    fn build(self, tycker: &mut Tycker<'a>, _env: &TyEnv) -> KindId {
+impl<E: ConstructEnv> Construct<E, KindId> for cs::TypeOf<AbstId> {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, KindId)> {
         let cs::TypeOf(abst) = self;
-        tycker.statics.annotations_abst[&abst]
+        Ok((env, tycker.statics.annotations_abst[&abst]))
     }
 }
-impl<'a> Construct<Tycker<'a>, KindId> for VType {
-    fn build(self, tycker: &mut Tycker<'a>, _env: &TyEnv) -> KindId {
-        tycker.intrinsics.vtype
+impl<E: ConstructEnv> Construct<E, KindId> for VType {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, KindId)> {
+        Ok((env, tycker.intrinsics.vtype))
     }
 }
-impl<'a> Construct<Tycker<'a>, KindId> for CType {
-    fn build(self, tycker: &mut Tycker<'a>, _env: &TyEnv) -> KindId {
-        tycker.intrinsics.ctype
+impl<E: ConstructEnv> Construct<E, KindId> for CType {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, KindId)> {
+        Ok((env, tycker.intrinsics.ctype))
     }
 }
-impl<'a, S, T> Construct<Tycker<'a>, KindId> for Arrow<S, T>
+impl<E, S, T> Construct<E, KindId> for Arrow<S, T>
 where
-    S: Construct<Tycker<'a>, KindId>,
-    T: Construct<Tycker<'a>, KindId>,
+    E: ConstructEnv,
+    S: Construct<E, KindId>,
+    T: Construct<E, KindId>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> KindId {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, KindId)> {
         let Arrow(k1, k2) = self;
-        let k1 = k1.build(tycker, env);
-        let k2 = k2.build(tycker, env);
-        Alloc::alloc(tycker, Arrow(k1, k2), (), &())
+        let (env, k1) = k1.construct(tycker, env)?;
+        let (env, k2) = k2.construct(tycker, env)?;
+        Ok((env, Alloc::alloc(tycker, Arrow(k1, k2), (), &())))
     }
 }
 
 /* ------------------------------- TypePattern ------------------------------ */
 
-impl<'a> Construct<Tycker<'a>, TPatId> for cs::Ann<Option<DefId>, KindId> {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TPatId {
-        let cs::Ann(tm, ty) = self;
-        match tm {
-            | Some(def) => cs::Ann(def, ty).build(tycker, env),
-            | None => cs::Ann(Hole, ty).build(tycker, env),
-        }
+impl<E, K> Construct<E, TPatId> for cs::Pat<Hole, K>
+where
+    E: ConstructEnv,
+    K: Construct<E, KindId>,
+{
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, TPatId)> {
+        let cs::Pat(Hole, kd) = self;
+        let (env, kd) = kd.construct(tycker, env)?;
+        let tpat = Alloc::alloc(tycker, Hole, kd, env.ty());
+        Ok((env, tpat))
     }
 }
-impl<'a, K> Construct<Tycker<'a>, TPatId> for cs::Ann<VarName, K>
+impl<E, V, K> Construct<E, TPatId> for cs::Pat<V, K>
 where
-    K: Construct<Tycker<'a>, KindId>,
+    E: ConstructEnv,
+    V: IntoName<VarName>,
+    K: Construct<E, KindId>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TPatId {
-        let cs::Ann(var, kd) = self;
-        let ty = kd.build(tycker, env);
-        let def = Alloc::alloc(tycker, var, ty.into(), &());
-        cs::Ann(def, ty).build(tycker, env)
-    }
-}
-impl<'a, V, K> Construct<Tycker<'a>, TPatId> for cs::Pat<V, K>
-where
-    V: Construct<Tycker<'a>, VarName>,
-    K: Construct<Tycker<'a>, KindId>,
-{
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TPatId {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, TPatId)> {
         let cs::Pat(var, kd) = self;
-        let var = var.build(tycker, env);
-        let ty = kd.build(tycker, env);
-        let def = Alloc::alloc(tycker, var, ty.into(), &());
-        cs::Ann(def, ty).build(tycker, env)
+        let (env, kd) = kd.construct(tycker, env)?;
+        let def = Alloc::alloc(tycker, var.into_name(), kd.into(), &());
+        cs::Ann(def, kd).construct(tycker, env)
     }
 }
 
 /* ---------------------------------- Type ---------------------------------- */
 
-impl<'a, T> Construct<Tycker<'a>, TypeId> for cs::Type<T>
+impl<E, T> Construct<E, TypeId> for cs::Type<T>
 where
-    T: Construct<Tycker<'a>, TypeId>,
+    E: ConstructEnv,
+    T: Construct<E, TypeId>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, TypeId)> {
         let cs::Type(ty) = self;
-        ty.build(tycker, env)
+        ty.construct(tycker, env)
     }
 }
-impl<'a> Construct<Tycker<'a>, TypeId> for cs::TypeOf<VPatId> {
-    fn build(self, tycker: &mut Tycker<'a>, _env: &TyEnv) -> TypeId {
+impl<E: ConstructEnv> Construct<E, TypeId> for cs::TypeOf<VPatId> {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, TypeId)> {
         let cs::TypeOf(vpat) = self;
-        tycker.statics.annotations_vpat[&vpat]
+        Ok((env, tycker.statics.annotations_vpat[&vpat]))
     }
 }
-impl<'a> Construct<Tycker<'a>, TypeId> for cs::TypeOf<ValueId> {
-    fn build(self, tycker: &mut Tycker<'a>, _env: &TyEnv) -> TypeId {
+impl<E: ConstructEnv> Construct<E, TypeId> for cs::TypeOf<ValueId> {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, TypeId)> {
         let cs::TypeOf(value) = self;
-        tycker.statics.annotations_value[&value]
+        Ok((env, tycker.statics.annotations_value[&value]))
     }
 }
-impl<'a> Construct<Tycker<'a>, TypeId> for cs::TypeOf<CompuId> {
-    fn build(self, tycker: &mut Tycker<'a>, _env: &TyEnv) -> TypeId {
+impl<E: ConstructEnv> Construct<E, TypeId> for cs::TypeOf<CompuId> {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, TypeId)> {
         let cs::TypeOf(compu) = self;
-        tycker.statics.annotations_compu[&compu]
+        Ok((env, tycker.statics.annotations_compu[&compu]))
     }
 }
-impl<'a, K> Construct<Tycker<'a>, TypeId> for cs::Ann<Hole, (K, su::TermId)>
+impl<E, K> Construct<E, TypeId> for cs::Ann<Hole, (K, su::TermId)>
 where
-    K: Construct<Tycker<'a>, KindId>,
+    E: ConstructEnv,
+    K: Construct<E, KindId>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, TypeId)> {
         let cs::Ann(Hole, (kd, site)) = self;
-        let kd = kd.build(tycker, env);
+        let (env, kd) = kd.construct(tycker, env)?;
         let fill: FillId = tycker.fresh();
         tycker.statics.fills.insert_new(fill, site.into());
-        Alloc::alloc(tycker, fill, kd, env)
+        let ty = Alloc::alloc(tycker, fill, kd, env.ty());
+        Ok((env, ty))
     }
 }
-impl<'a> Construct<Tycker<'a>, TypeId> for DefId {
-    fn build(self, _tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
-        // Note: different from monadic construction, here we do not need to further substitute
-        let AnnId::Type(ty) = env[&self] else { unreachable!() };
-        ty
-    }
-}
-impl<'a> Construct<Tycker<'a>, TypeId> for AbstId {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
+impl<E: ConstructEnv> Construct<E, TypeId> for AbstId {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, TypeId)> {
         let kd = tycker.statics.annotations_abst[&self];
-        Alloc::alloc(tycker, self, kd, env)
+        let ty = Alloc::alloc(tycker, self, kd, env.ty());
+        Ok((env, ty))
     }
 }
-impl<'a, T> Construct<Tycker<'a>, TypeId> for cs::Ty<T>
+/// A constructed type application is normalized, together with its type argument.
+impl<E, S, T> Construct<E, TypeId> for App<S, T>
 where
-    T: Construct<Tycker<'a>, AbstId>,
+    E: ConstructEnv,
+    S: Construct<E, TypeId>,
+    T: Construct<E, TypeId>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
-        let cs::Ty(abst) = self;
-        let abst = abst.build(tycker, env);
-        abst.build(tycker, env)
-    }
-}
-impl<'a, S, F, T> Construct<Tycker<'a>, TypeId> for Abs<S, F>
-where
-    S: Construct<Tycker<'a>, TPatId>,
-    F: FnOnce(TPatId, DefId, KindId) -> T,
-    T: Construct<Tycker<'a>, TypeId>,
-{
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
-        let Abs(param, ty) = self;
-        let tpat = param.build(tycker, env);
-        let (def, param_kd) = tpat.destruct_def(tycker);
-        let witness: AbstId = Alloc::alloc(tycker, tpat, (), &());
-        let witness_ty = Alloc::alloc(tycker, witness, param_kd, env);
-        let body_env = env.clone() + [(def, witness_ty.into())];
-        let body = ty(tpat, def, param_kd).build(tycker, &body_env);
-        let kd = Arrow(param_kd, cs::TypeOf(body)).build(tycker, env);
-        let binder = TypeBinder { pattern: tpat, witness };
-        Alloc::alloc(tycker, TypeAbstraction { binder, body }, kd, env)
-    }
-}
-impl<'a, S, T> Construct<Tycker<'a>, TypeId> for App<S, T>
-where
-    S: Construct<Tycker<'a>, TypeId>,
-    T: Construct<Tycker<'a>, TypeId>,
-{
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, TypeId)> {
         let App(ty_1, ty_2) = self;
-        let ty_1 = ty_1.build(tycker, env);
+        let (env, ty_1) = ty_1.construct(tycker, env)?;
         let kd_1 = tycker.statics.type_kind(ty_1);
-        let Some((_kd_a, kd_b)) = kd_1.destruct_arrow(tycker) else { unreachable!() };
-        let ty_2 = ty_2.build(tycker, env);
-        // let kd_2 = tycker.statics.type_kind(ty_2);
-        // let Ok(_) = Lub::lub(kd_a, kd_2, tycker) else { unreachable!() };
-        // Note: note that the resulting type application of [`Construct::build`] is not normalized
-        Alloc::alloc(tycker, App(ty_1, ty_2), kd_b, env)
+        let Some((_, kd_b)) = kd_1.destruct_arrow(tycker) else {
+            unreachable!("a type operator has an arrow kind")
+        };
+        let (env, ty_2) = ty_2.construct(tycker, env)?;
+        let ty = Alloc::alloc(tycker, App(ty_1, ty_2), kd_b, env.ty());
+        let ty = ty.normalize(tycker, kd_b)?;
+        Ok((env, ty))
     }
 }
-impl<'a> Construct<Tycker<'a>, TypeId> for PrimitiveTy {
-    fn build(self, tycker: &mut Tycker<'a>, _env: &TyEnv) -> TypeId {
-        tycker.intrinsics.primitives[&self.0]
+impl<E: ConstructEnv> Construct<E, TypeId> for PrimitiveTy {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, TypeId)> {
+        Ok((env, tycker.intrinsics.primitives[&self.0]))
     }
 }
-impl<'a> Construct<Tycker<'a>, TypeId> for ThkTy {
-    fn build(self, tycker: &mut Tycker<'a>, _env: &TyEnv) -> TypeId {
-        tycker.intrinsics.thk
+impl<E: ConstructEnv> Construct<E, TypeId> for ThkTy {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, TypeId)> {
+        Ok((env, tycker.intrinsics.thk))
     }
 }
-impl<'a, T> Construct<Tycker<'a>, TypeId> for cs::Thk<T>
+impl<E: ConstructEnv> Construct<E, TypeId> for RetTy {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, TypeId)> {
+        Ok((env, tycker.intrinsics.ret))
+    }
+}
+impl<E: ConstructEnv> Construct<E, TypeId> for UnitTy {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, TypeId)> {
+        Ok((env, tycker.intrinsics.unit))
+    }
+}
+impl<E, T> Construct<E, TypeId> for cs::Thk<T>
 where
-    T: Construct<Tycker<'a>, TypeId>,
+    E: ConstructEnv,
+    T: Construct<E, TypeId>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, TypeId)> {
         let cs::Thk(arg) = self;
-        let thk = ThkTy.build(tycker, env);
-        let arg = arg.build(tycker, env);
-        let vtype = VType.build(tycker, env);
-        Alloc::alloc(tycker, App(thk, arg), vtype, env)
+        let (env, thk) = ThkTy.construct(tycker, env)?;
+        let (env, arg) = arg.construct(tycker, env)?;
+        let (env, vtype) = VType.construct(tycker, env)?;
+        let ty = Alloc::alloc(tycker, App(thk, arg), vtype, env.ty());
+        Ok((env, ty))
     }
 }
-impl<'a, F, T> Construct<Tycker<'a>, TypeId> for cs::Data<DataId, F>
+impl<E, T> Construct<E, TypeId> for cs::Ret<T>
 where
-    F: Clone + FnOnce(CtorName, TypeId) -> T,
-    T: Construct<Tycker<'a>, TypeId>,
+    E: ConstructEnv,
+    T: Construct<E, TypeId>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, TypeId)> {
+        let cs::Ret(arg) = self;
+        let (env, ret) = RetTy.construct(tycker, env)?;
+        let (env, arg) = arg.construct(tycker, env)?;
+        let (env, ctype) = CType.construct(tycker, env)?;
+        let ty = Alloc::alloc(tycker, App(ret, arg), ctype, env.ty());
+        Ok((env, ty))
+    }
+}
+impl<E, F, T> Construct<E, TypeId> for cs::Data<DataId, F>
+where
+    E: ConstructEnv,
+    F: Clone + FnOnce(CtorName, TypeId) -> T,
+    T: Construct<E, TypeId>,
+{
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, TypeId)> {
         let cs::Data(data, f) = self;
         let arms = tycker.statics.datas[&data].clone();
-        let arms_ = arms
+        let arms = arms
             .into_iter()
             .map(|(ctor, ty)| {
-                let ty_ = (f.clone())(ctor.clone(), ty).build(tycker, env);
-                (ctor, ty_)
+                let (_, ty) = (f.clone())(ctor.clone(), ty).construct(tycker, env.clone())?;
+                Ok((ctor, ty))
             })
-            .collect::<rpds::VectorSync<_>>();
+            .collect::<Result<rpds::VectorSync<_>>>()?;
         let data: DataId = tycker.fresh();
-        tycker.statics.datas.insert_new(data, Data::new(arms_.iter().cloned()));
-        let kd = VType.build(tycker, env);
-        Alloc::alloc(tycker, data, kd, env)
+        tycker.statics.datas.insert_new(data, Data::new(arms.iter().cloned()));
+        let (env, kd) = VType.construct(tycker, env)?;
+        let ty = Alloc::alloc(tycker, data, kd, env.ty());
+        Ok((env, ty))
     }
 }
-impl<'a> Construct<Tycker<'a>, TypeId> for UnitTy {
-    fn build(self, tycker: &mut Tycker<'a>, _env: &TyEnv) -> TypeId {
-        tycker.intrinsics.unit
-    }
-}
-impl<'a, T> Construct<Tycker<'a>, TypeId> for Prod<T>
+impl<E, F, T> Construct<E, TypeId> for cs::CoData<CoDataId, F>
 where
-    T: Construct<Tycker<'a>, TypeId>,
-{
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
-        let Prod(components) = self;
-        let components = components.into_iter().map(|ty| ty.build(tycker, env)).collect();
-        let vtype = VType.build(tycker, env);
-        Alloc::alloc(tycker, Prod(components), vtype, env)
-    }
-}
-impl<'a, F, A, T> Construct<Tycker<'a>, TypeId> for cs::Exists<A, F>
-where
-    F: FnOnce(AbstId) -> T,
-    A: Construct<Tycker<'a>, AbstId>,
-    T: Construct<Tycker<'a>, TypeId>,
-{
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
-        let cs::Exists(abst, ty) = self;
-        let abst = abst.build(tycker, env);
-        let ty = ty(abst).build(tycker, env);
-        let vtype = VType.build(tycker, env);
-        let binder = TypeBinder::with_witness(tycker, abst, env);
-        Alloc::alloc(tycker, Exists::new(binder, ty), vtype, env)
-    }
-}
-impl<'a> Construct<Tycker<'a>, TypeId> for cs::TopTy {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
-        let ctype = CType.build(tycker, env);
-        let coda: CoDataId = tycker.fresh();
-        tycker.statics.codatas.insert_new(coda, CoData::new([]));
-        Alloc::alloc(tycker, coda, ctype, env)
-    }
-}
-impl<'a, F, T> Construct<Tycker<'a>, TypeId> for cs::CoData<CoDataId, F>
-where
+    E: ConstructEnv,
     F: Clone + FnOnce(DtorName, TypeId) -> T,
-    T: Construct<Tycker<'a>, TypeId>,
+    T: Construct<E, TypeId>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, TypeId)> {
         let cs::CoData(coda, f) = self;
         let arms = tycker.statics.codatas[&coda].clone();
-        let arms_ = arms
+        let arms = arms
             .into_iter()
             .map(|(dtor, ty)| {
-                let ty_ = (f.clone())(dtor.clone(), ty).build(tycker, env);
-                (dtor, ty_)
+                let (_, ty) = (f.clone())(dtor.clone(), ty).construct(tycker, env.clone())?;
+                Ok((dtor, ty))
             })
-            .collect::<rpds::VectorSync<_>>();
+            .collect::<Result<rpds::VectorSync<_>>>()?;
         let coda: CoDataId = tycker.fresh();
-        tycker.statics.codatas.insert_new(coda, CoData::new(arms_.iter().cloned()));
-        let kd = CType.build(tycker, env);
-        Alloc::alloc(tycker, coda, kd, env)
+        tycker.statics.codatas.insert_new(coda, CoData::new(arms.iter().cloned()));
+        let (env, kd) = CType.construct(tycker, env)?;
+        let ty = Alloc::alloc(tycker, coda, kd, env.ty());
+        Ok((env, ty))
     }
 }
-impl<'a, S, T> Construct<Tycker<'a>, TypeId> for Arrow<S, T>
+impl<E, T> Construct<E, TypeId> for Prod<T>
 where
-    S: Construct<Tycker<'a>, TypeId>,
-    T: Construct<Tycker<'a>, TypeId>,
+    E: ConstructEnv,
+    T: Construct<E, TypeId>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
-        let Arrow(ty_1, ty_2) = self;
-        let ty_1 = ty_1.build(tycker, env);
-        let ty_2 = ty_2.build(tycker, env);
-        let ctype = CType.build(tycker, env);
-        Alloc::alloc(tycker, Arrow(ty_1, ty_2), ctype, env)
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, TypeId)> {
+        let Prod(components) = self;
+        let (env, components): (E, Vec<TypeId>) = components.construct(tycker, env)?;
+        let (env, vtype) = VType.construct(tycker, env)?;
+        let ty = Alloc::alloc(tycker, Prod(components), vtype, env.ty());
+        Ok((env, ty))
     }
 }
-impl<'a> Construct<Tycker<'a>, TypeId> for PackPi {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
-        let ctype = CType.build(tycker, env);
-        Alloc::alloc(tycker, self, ctype, env)
-    }
-}
-impl<'a, F, A, T> Construct<Tycker<'a>, TypeId> for cs::Forall<A, F>
+impl<E, F, A, T> Construct<E, TypeId> for cs::Forall<A, F>
 where
+    E: ConstructEnv,
     F: FnOnce(AbstId) -> T,
-    A: Construct<Tycker<'a>, AbstId>,
-    T: Construct<Tycker<'a>, TypeId>,
+    A: Construct<E, AbstId>,
+    T: Construct<E, TypeId>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, TypeId)> {
         let cs::Forall(abst, ty) = self;
-        let abst = abst.build(tycker, env);
-        let ty = ty(abst).build(tycker, env);
-        let ctype = CType.build(tycker, env);
-        let binder = TypeBinder::with_witness(tycker, abst, env);
-        Alloc::alloc(tycker, Forall(binder, ty), ctype, env)
+        let (env, abst) = abst.construct(tycker, env)?;
+        let (env, ty) = ty(abst).construct(tycker, env)?;
+        let (env, ctype) = CType.construct(tycker, env)?;
+        let binder = TypeBinder::with_witness(tycker, abst, env.ty());
+        let ty = Alloc::alloc(tycker, Forall(binder, ty), ctype, env.ty());
+        Ok((env, ty))
     }
 }
-impl<'a> Construct<Tycker<'a>, TypeId> for RetTy {
-    fn build(self, tycker: &mut Tycker<'a>, _env: &TyEnv) -> TypeId {
-        tycker.intrinsics.ret
+impl<E: ConstructEnv> Construct<E, TypeId> for cs::TopTy {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, TypeId)> {
+        let (env, ctype) = CType.construct(tycker, env)?;
+        let coda: CoDataId = tycker.fresh();
+        tycker.statics.codatas.insert_new(coda, CoData::new([]));
+        let ty = Alloc::alloc(tycker, coda, ctype, env.ty());
+        Ok((env, ty))
     }
 }
-impl<'a, T> Construct<Tycker<'a>, TypeId> for cs::Ret<T>
+impl<E, S, T> Construct<E, TypeId> for Arrow<S, T>
 where
-    T: Construct<Tycker<'a>, TypeId>,
+    E: ConstructEnv,
+    S: Construct<E, TypeId>,
+    T: Construct<E, TypeId>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
-        let cs::Ret(arg) = self;
-        let ret = RetTy.build(tycker, env);
-        let arg = arg.build(tycker, env);
-        let ctype = CType.build(tycker, env);
-        Alloc::alloc(tycker, App(ret, arg), ctype, env)
-    }
-}
-impl<'a> Tycker<'a> {
-    /// generates `Thunk B`
-    pub fn thk_arg(&mut self, env: &TyEnv, arg: TypeId) -> TypeId {
-        App(ThkTy, arg).build(self, env)
-    }
-    /// generates `Thunk _`
-    pub fn thk_hole(&mut self, env: &TyEnv, site: su::TermId) -> TypeId {
-        cs::Thk(cs::Ann(Hole, (CType, site))).build(self, env)
-    }
-    /// generates `Ret A`
-    pub fn ret_arg(&mut self, env: &TyEnv, arg: TypeId) -> TypeId {
-        App(RetTy, arg).build(self, env)
-    }
-    /// generates `Ret _`
-    pub fn ret_hole(&mut self, env: &TyEnv, site: su::TermId) -> TypeId {
-        cs::Ret(cs::Ann(Hole, (VType, site))).build(self, env)
-    }
-    pub fn type_top(&mut self, env: &TyEnv) -> TypeId {
-        cs::TopTy.build(self, env)
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, TypeId)> {
+        let Arrow(ty_1, ty_2) = self;
+        let (env, ty_1) = ty_1.construct(tycker, env)?;
+        let (env, ty_2) = ty_2.construct(tycker, env)?;
+        let (env, ctype) = CType.construct(tycker, env)?;
+        let ty = Alloc::alloc(tycker, Arrow(ty_1, ty_2), ctype, env.ty());
+        Ok((env, ty))
     }
 }
 
 /* ------------------------------ ValuePattern ------------------------------ */
-impl<'a> Construct<Tycker<'a>, VPatId> for cs::Ann<Option<DefId>, TypeId> {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> VPatId {
-        let cs::Ann(tm, ty) = self;
-        match tm {
-            | Some(def) => cs::Ann(def, ty).build(tycker, env),
-            | None => cs::Ann(Hole, ty).build(tycker, env),
-        }
+
+impl<E, T> Construct<E, VPatId> for cs::Pat<Hole, T>
+where
+    E: ConstructEnv,
+    T: Construct<E, TypeId>,
+{
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, VPatId)> {
+        let cs::Pat(Hole, ty) = self;
+        let (env, ty) = ty.construct(tycker, env)?;
+        cs::Ann(Hole, ty).construct(tycker, env)
     }
 }
-impl<'a, T> Construct<Tycker<'a>, VPatId> for cs::Pat<Option<DefId>, T>
+impl<E, V, T> Construct<E, VPatId> for cs::Pat<V, T>
 where
-    T: Construct<Tycker<'a>, TypeId>,
+    E: ConstructEnv,
+    V: IntoName<VarName>,
+    T: Construct<E, TypeId>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> VPatId {
-        let cs::Pat(tm, ty) = self;
-        let ty = ty.build(tycker, env);
-        match tm {
-            | Some(def) => cs::Ann(def, ty).build(tycker, env),
-            | None => cs::Ann(Hole, ty).build(tycker, env),
-        }
-    }
-}
-impl<'a, T> Construct<Tycker<'a>, VPatId> for cs::Ann<VarName, T>
-where
-    T: Construct<Tycker<'a>, TypeId>,
-{
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> VPatId {
-        let cs::Ann(var, ty) = self;
-        let ty = ty.build(tycker, env);
-        let def = Alloc::alloc(tycker, var, ty.into(), &());
-        cs::Ann(def, ty).build(tycker, env)
-    }
-}
-impl<'a, V, T> Construct<Tycker<'a>, VPatId> for cs::Pat<V, T>
-where
-    V: Construct<Tycker<'a>, VarName>,
-    T: Construct<Tycker<'a>, TypeId>,
-{
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> VPatId {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, VPatId)> {
         let cs::Pat(var, ty) = self;
-        let var = var.build(tycker, env);
-        let ty = ty.build(tycker, env);
-        let def = Alloc::alloc(tycker, var, ty.into(), &());
-        cs::Ann(def, ty).build(tycker, env)
+        let (env, ty) = ty.construct(tycker, env)?;
+        let def = Alloc::alloc(tycker, var.into_name(), ty.into(), &());
+        cs::Ann(def, ty).construct(tycker, env)
+    }
+}
+
+/// The data type that a constructed constructor belongs to.
+struct DataHint(TypeId);
+
+impl DataHint {
+    fn resolve(self, tycker: &mut Tycker<'_>, env: &TyEnv) -> Result<DataId> {
+        let view = self.0.unroll(tycker)?.subst_env(tycker, env)?;
+        let Type::Data(data) = tycker.type_filled(&view)?.to_owned() else {
+            unreachable!("a constructed constructor retains a data classifier")
+        };
+        Ok(data)
+    }
+}
+
+impl<E, C, V, T> Construct<E, VPatId> for cs::Pat<cs::Ctor<C, V>, T>
+where
+    E: ConstructEnv,
+    C: IntoName<CtorName>,
+    V: Construct<E, VPatId>,
+    T: Construct<E, TypeId>,
+{
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, VPatId)> {
+        let cs::Pat(cs::Ctor(ctor, body), ty) = self;
+        let (env, body) = body.construct(tycker, env)?;
+        let (env, ty) = ty.construct(tycker, env)?;
+        let pattern = Alloc::alloc(tycker, Ctor(ctor.into_name(), body), ty, env.ty());
+        let data = DataHint(ty).resolve(tycker, env.ty())?;
+        tycker.statics.data_pat_hints.insert_new(pattern, data);
+        Ok((env, pattern))
+    }
+}
+impl<E: ConstructEnv> Construct<E, VPatId> for Triv {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, VPatId)> {
+        let (env, ty) = UnitTy.construct(tycker, env)?;
+        cs::Ann(Triv, ty).construct(tycker, env)
+    }
+}
+impl<E, S, T> Construct<E, VPatId> for ConsN<S, T>
+where
+    E: ConstructEnv,
+    S: Construct<E, VPatId>,
+    T: Construct<E, VPatId>,
+{
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, VPatId)> {
+        let ConsN(items, tail) = self;
+        let (env, mut components): (E, Vec<VPatId>) = items.construct(tycker, env)?;
+        let (env, tail) = tail.construct(tycker, env)?;
+        components.push(tail);
+        let component_tys = components
+            .iter()
+            .map(|component| tycker.statics.annotations_vpat[component])
+            .collect::<Vec<_>>();
+        let (env, ty) = Prod(component_tys).construct(tycker, env)?;
+        cs::Ann(ss::ValuePattern::VCons(components), ty).construct(tycker, env)
     }
 }
 
 /* ---------------------------------- Value --------------------------------- */
 
-impl<'a, T> Construct<Tycker<'a>, ValueId> for cs::Value<T>
+impl<E, T> Construct<E, ValueId> for cs::Value<T>
 where
-    T: Construct<Tycker<'a>, ValueId>,
+    E: ConstructEnv,
+    T: Construct<E, ValueId>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> ValueId {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, ValueId)> {
         let cs::Value(arg) = self;
-        arg.build(tycker, env)
+        arg.construct(tycker, env)
     }
 }
-impl<'a> Construct<Tycker<'a>, ValueId> for DefId {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> ValueId {
-        let AnnId::Type(ty) = tycker.statics.annotations_var[&self] else { unreachable!() };
-        Alloc::alloc(tycker, self, ty, env)
+/// A value pattern constructs the value it binds.
+impl<E: ConstructEnv> Construct<E, ValueId> for VPatId {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, ValueId)> {
+        let value = self.reify(tycker);
+        Ok((env, value))
     }
 }
-impl<'a> Construct<Tycker<'a>, ValueId> for Option<DefId> {
-    fn build(self, tycker: &mut Tycker<'a>, _env: &TyEnv) -> ValueId {
-        let Some(def) = self else { unreachable!() };
-        def.build(tycker, _env)
+impl<E: ConstructEnv> Construct<E, ValueId> for DefId {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, ValueId)> {
+        let def = env.def(self);
+        let AnnId::Type(ty) = tycker.statics.annotations_var[&def] else {
+            unreachable!("a value definition is annotated with its type")
+        };
+        let value = Alloc::alloc(tycker, def, ty, env.ty());
+        Ok((env, value))
     }
 }
-impl<'a, T> Construct<Tycker<'a>, ValueId> for Thunk<T>
+impl<E, T> Construct<E, ValueId> for Thunk<T>
 where
-    T: Construct<Tycker<'a>, CompuId>,
+    E: ConstructEnv,
+    T: Construct<E, CompuId>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> ValueId {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, ValueId)> {
         let Thunk(body) = self;
-        let body = body.build(tycker, env);
+        let (env, body) = body.construct(tycker, env)?;
         let body_ty = tycker.statics.annotations_compu[&body];
-        let ty = cs::Thk(body_ty).build(tycker, env);
-        Alloc::alloc(tycker, Thunk(body), ty, env)
+        let (env, ty) = cs::Thk(body_ty).construct(tycker, env)?;
+        let value = Alloc::alloc(tycker, Thunk(body), ty, env.ty());
+        Ok((env, value))
     }
 }
-impl<'a> Construct<Tycker<'a>, ValueId> for Triv {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> ValueId {
-        let ty = UnitTy.build(tycker, env);
-        Alloc::alloc(tycker, Triv, ty, env)
+impl<E: ConstructEnv> Construct<E, ValueId> for Triv {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, ValueId)> {
+        let (env, ty) = UnitTy.construct(tycker, env)?;
+        let value = Alloc::alloc(tycker, Triv, ty, env.ty());
+        Ok((env, value))
     }
 }
-impl<'a, S, T> Construct<Tycker<'a>, ValueId> for Cons<S, T>
+impl<E, S, T> Construct<E, ValueId> for ConsN<S, T>
 where
-    S: Construct<Tycker<'a>, ValueId>,
-    T: Construct<Tycker<'a>, ValueId>,
+    E: ConstructEnv,
+    S: Construct<E, ValueId>,
+    T: Construct<E, ValueId>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> ValueId {
-        let Cons(a, b) = self;
-        let a = a.build(tycker, env);
-        let a_ty = tycker.statics.annotations_value[&a];
-        let b = b.build(tycker, env);
-        let b_ty = tycker.statics.annotations_value[&b];
-        let ty = Prod(vec![a_ty, b_ty]).build(tycker, env);
-        Alloc::alloc(tycker, ss::Value::VCons(vec![a, b]), ty, env)
-    }
-}
-impl<'a, S, T> Construct<Tycker<'a>, ValueId> for ConsN<S, T>
-where
-    S: Construct<Tycker<'a>, ValueId>,
-    T: Construct<Tycker<'a>, ValueId>,
-{
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> ValueId {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, ValueId)> {
         let ConsN(items, tail) = self;
-        let mut components =
-            items.into_iter().map(|item| item.build(tycker, env)).collect::<Vec<_>>();
-        let tail = tail.build(tycker, env);
-        let ty = Prod(
-            components
-                .iter()
-                .chain(std::iter::once(&tail))
-                .map(|component| tycker.statics.annotations_value[component])
-                .collect(),
-        )
-        .build(tycker, env);
+        let (env, mut components): (E, Vec<ValueId>) = items.construct(tycker, env)?;
+        let (env, tail) = tail.construct(tycker, env)?;
         components.push(tail);
-        Alloc::alloc(tycker, ss::Value::VCons(components), ty, env)
+        let component_tys = components
+            .iter()
+            .map(|component| tycker.statics.annotations_value[component])
+            .collect::<Vec<_>>();
+        let (env, ty) = Prod(component_tys).construct(tycker, env)?;
+        let value = Alloc::alloc(tycker, ss::Value::VCons(components), ty, env.ty());
+        Ok((env, value))
     }
 }
-impl<'a, S, V, T> Construct<Tycker<'a>, ValueId> for cs::Ann<Cons<cs::Ty<S>, V>, T>
+impl<E, C, V, T> Construct<E, ValueId> for cs::Ann<cs::Ctor<C, V>, T>
 where
-    S: Construct<Tycker<'a>, TypeId>,
-    V: Construct<Tycker<'a>, ValueId>,
-    T: Construct<Tycker<'a>, TypeId>,
+    E: ConstructEnv,
+    C: IntoName<CtorName>,
+    V: Construct<E, ValueId>,
+    T: Construct<E, TypeId>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> ValueId {
-        let cs::Ann(Cons(cs::Ty(a), b), ty) = self;
-        let a = a.build(tycker, env);
-        let b = b.build(tycker, env);
-        let ty = ty.build(tycker, env);
-        Alloc::alloc(tycker, ConsN(vec![a.into()], b), ty, env)
-    }
-}
-impl<'a, C, V, T> Construct<Tycker<'a>, ValueId> for cs::Ann<cs::Ctor<C, V>, T>
-where
-    C: Construct<Tycker<'a>, CtorName>,
-    V: Construct<Tycker<'a>, ValueId>,
-    T: Construct<Tycker<'a>, TypeId>,
-{
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> ValueId {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, ValueId)> {
         let cs::Ann(cs::Ctor(ctor, body), ty) = self;
-        let ctor = ctor.build(tycker, env);
-        let body = body.build(tycker, env);
-        let ty = ty.build(tycker, env);
-        cs::Ann(Ctor(ctor, body), ty).build(tycker, env)
+        let (env, body) = body.construct(tycker, env)?;
+        let (env, ty) = ty.construct(tycker, env)?;
+        let value = Alloc::alloc(tycker, Ctor(ctor.into_name(), body), ty, env.ty());
+        let data = DataHint(ty).resolve(tycker, env.ty())?;
+        tycker.statics.data_hints.insert_new(value, data);
+        Ok((env, value))
     }
 }
-
-impl<'a> Tycker<'a> {
-    pub fn value_var(&mut self, env: &TyEnv, def: DefId, ty: TypeId) -> ValueId {
-        cs::Ann(def, ty).build(self, env)
-    }
-    pub fn value_thunk(&mut self, env: &TyEnv, body: CompuId) -> ValueId {
-        Thunk(body).build(self, env)
-    }
-    pub fn value_triv(&mut self, env: &TyEnv) -> ValueId {
-        Triv.build(self, env)
-    }
-    pub fn value_vcons(&mut self, env: &TyEnv, items: Vec<ValueId>) -> ValueId {
-        match ConsN::from_vec(items) {
-            | Some(cons) => cons.build(self, env),
-            | None => Triv.build(self, env),
-        }
+/// An administrative pure binding around a value.
+impl<E, P, B, F, R> Construct<E, ValueId> for Let<P, B, F>
+where
+    E: ConstructEnv,
+    P: Construct<E, VPatId>,
+    B: Construct<E, ValueId>,
+    F: FnOnce(VPatId) -> R,
+    R: Construct<E, ValueId>,
+{
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, ValueId)> {
+        let Let { binder, bindee, tail } = self;
+        let (env, bindee) = bindee.construct(tycker, env)?;
+        let (env, binder) = binder.construct(tycker, env)?;
+        let (env, tail) = tail(binder).construct(tycker, env)?;
+        let tail_ty = tycker.statics.annotations_value[&tail];
+        let value = Alloc::alloc(tycker, Let { binder, bindee, tail }, tail_ty, env.ty());
+        Ok((env, value))
     }
 }
 
 /* ------------------------------- Computation ------------------------------ */
 
-impl<'a, T> Construct<Tycker<'a>, CompuId> for cs::Compu<T>
+/// Computation abstraction over a value parameter.
+impl<E, P, F, T> Construct<E, CompuId> for Abs<P, F>
 where
-    T: Construct<Tycker<'a>, CompuId>,
+    E: ConstructEnv,
+    P: Construct<E, VPatId>,
+    F: FnOnce(VPatId) -> T,
+    T: Construct<E, CompuId>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> CompuId {
-        let cs::Compu(arg) = self;
-        arg.build(tycker, env)
-    }
-}
-/// computation abstraction over a value parameter
-impl<'a, P, F, T> Construct<Tycker<'a>, CompuId> for Abs<P, F>
-where
-    P: Construct<Tycker<'a>, VPatId>,
-    F: FnOnce(Option<DefId>) -> T,
-    T: Construct<Tycker<'a>, CompuId>,
-{
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> CompuId {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, CompuId)> {
         let Abs(vpat, body) = self;
-        let vpat: VPatId = vpat.build(tycker, env);
-        let (def, param_ty) = vpat.try_destruct_def(tycker);
-        let body = body(def).build(tycker, env);
+        let (env, vpat) = vpat.construct(tycker, env)?;
+        let param_ty = tycker.statics.annotations_vpat[&vpat];
+        let (env, body) = body(vpat).construct(tycker, env)?;
         let body_ty = tycker.statics.annotations_compu[&body];
-        let ty = Arrow(param_ty, body_ty).build(tycker, env);
-        Alloc::alloc(tycker, Abs(vpat, body), ty, env)
+        let (env, ty) = Arrow(param_ty, body_ty).construct(tycker, env)?;
+        let compu = Alloc::alloc(tycker, Abs(vpat, body), ty, env.ty());
+        Ok((env, compu))
     }
 }
-/// computation type abstraction
-impl<'a, P, F, T> Construct<Tycker<'a>, CompuId> for Abs<cs::Ty<P>, F>
+/// Computation application to a value argument.
+impl<E, S, T> Construct<E, CompuId> for App<S, T>
 where
-    P: Construct<Tycker<'a>, TPatId>,
-    F: FnOnce(Option<DefId>, AbstId) -> T,
-    T: Construct<Tycker<'a>, CompuId>,
+    E: ConstructEnv,
+    S: Construct<E, CompuId>,
+    T: Construct<E, ValueId>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> CompuId {
-        let Abs(cs::Ty(tpat), body) = self;
-        let tpat: TPatId = tpat.build(tycker, env);
-        let (def, param_kd) = tpat.try_destruct_def(tycker);
-        let abst = Alloc::alloc(tycker, def, param_kd, &());
-        let body = body(def, abst);
-        // TODO: add env when building the body
-        let body = body.build(tycker, env);
-        let body_ty = tycker.statics.annotations_compu[&body];
-        let ctype = CType.build(tycker, env);
-        let binder = TypeBinder { pattern: tpat, witness: abst };
-        let ty = Alloc::alloc(tycker, Forall(binder, body_ty), ctype, env);
-        Alloc::alloc(tycker, Abs(tpat, body), ty, env)
-    }
-}
-impl<'a, F, T> Construct<Tycker<'a>, CompuId> for Abs<cs::Ty<AbstId>, F>
-where
-    F: FnOnce(Option<DefId>, AbstId) -> T,
-    T: Construct<Tycker<'a>, CompuId>,
-{
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> CompuId {
-        let Abs(cs::Ty(abst), body) = self;
-        use zydeco_utils::arena::ArenaAccess;
-        let def = tycker.statics.abst_hints.get(&abst).cloned();
-        let param_kd = tycker.statics.annotations_abst[&abst];
-        let tpat: TPatId = cs::Ann(def, param_kd).build(tycker, env);
-        // TODO: add env when building the body
-        let body = body(def, abst).build(tycker, env);
-        let body_ty = tycker.statics.annotations_compu[&body];
-        let ctype = CType.build(tycker, env);
-        let binder = TypeBinder { pattern: tpat, witness: abst };
-        let ty = Alloc::alloc(tycker, Forall(binder, body_ty), ctype, env);
-        Alloc::alloc(tycker, Abs(tpat, body), ty, env)
-    }
-}
-// computation application to a value argument
-impl<'a, S, T> Construct<Tycker<'a>, CompuId> for App<S, T>
-where
-    S: Construct<Tycker<'a>, CompuId>,
-    T: Construct<Tycker<'a>, ValueId>,
-{
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> CompuId {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, CompuId)> {
         let App(abs, arg) = self;
-        let abs = abs.build(tycker, env);
+        let (env, abs) = abs.construct(tycker, env)?;
         let abs_ty = tycker.statics.annotations_compu[&abs];
-        let Some((param_ty, body_ty)) = abs_ty.destruct_arrow(tycker) else { unreachable!() };
-        let arg = arg.build(tycker, env);
+        let Some((param_ty, body_ty)) = abs_ty.destruct_arrow(tycker) else {
+            return tycker.err(TyckError::TypeExpected {
+                expected: "a computation arrow for an application".to_owned(),
+                found: abs_ty,
+            });
+        };
+        let (env, arg) = arg.construct(tycker, env)?;
         let arg_ty = tycker.statics.annotations_value[&arg];
-        let Ok(_) = Lub::lub(param_ty, arg_ty, tycker) else { unreachable!() };
-        Alloc::alloc(tycker, App(abs, arg), body_ty, env)
+        Lub::lub(param_ty, arg_ty, tycker)?;
+        let compu = Alloc::alloc(tycker, App(abs, arg), body_ty, env.ty());
+        Ok((env, compu))
     }
 }
-// computation type application
-impl<'a, S, T> Construct<Tycker<'a>, CompuId> for App<S, cs::Ty<T>>
+impl<E, P, F, T> Construct<E, CompuId> for Fix<P, F>
 where
-    S: Construct<Tycker<'a>, CompuId>,
-    T: Construct<Tycker<'a>, TypeId>,
+    E: ConstructEnv,
+    P: Construct<E, VPatId>,
+    F: FnOnce(VPatId) -> T,
+    T: Construct<E, CompuId>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> CompuId {
-        let App(abs, cs::Ty(arg)) = self;
-        let abs = abs.build(tycker, env);
-        let abs_ty = tycker.statics.annotations_compu[&abs];
-        let Some((binder, body_ty)) = abs_ty.destruct_forall_binder(tycker) else { unreachable!() };
-        let arg = arg.build(tycker, env);
-        let domain_kd = binder.domain_kind(tycker);
-        let arg_kd = tycker.statics.type_kind(arg);
-        let Ok(_) = Lub::lub(domain_kd, arg_kd, tycker) else { unreachable!() };
-        let Ok(payload) = binder.pattern.bind_argument(tycker, arg) else { unreachable!() };
-        let Ok(ty) = body_ty.subst_abst(tycker, (binder.witness, payload)) else { unreachable!() };
-        Alloc::alloc(tycker, App(abs, arg), ty, env)
-    }
-}
-// fixed point
-impl<'a, V, T, F> Construct<Tycker<'a>, CompuId> for Fix<cs::Ann<V, T>, F>
-where
-    V: Construct<Tycker<'a>, VarName>,
-    T: Construct<Tycker<'a>, TypeId>,
-    F: FnOnce(DefId) -> CompuId,
-{
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> CompuId {
-        let Fix(cs::Ann(var, param_ty), body) = self;
-        let var = var.build(tycker, env);
-        let param_ty = param_ty.build(tycker, env);
-        let def = Alloc::alloc(tycker, var, param_ty.into(), &());
-        let Some(ty) = param_ty.destruct_thk_app(tycker) else { unreachable!() };
-        let vpat: VPatId = Alloc::alloc(tycker, def, param_ty, env);
-        let body = body(def);
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, CompuId)> {
+        let Fix(vpat, body) = self;
+        let (env, vpat) = vpat.construct(tycker, env)?;
+        let (env, body) = body(vpat).construct(tycker, env)?;
         let body_ty = tycker.statics.annotations_compu[&body];
-        let Ok(_) = Lub::lub(ty, body_ty, tycker) else { unreachable!() };
-        Alloc::alloc(tycker, Fix(vpat, body), ty, env)
+        let compu = Alloc::alloc(tycker, Fix(vpat, body), body_ty, env.ty());
+        Ok((env, compu))
     }
 }
-// force
-impl<'a, T> Construct<Tycker<'a>, CompuId> for Force<T>
+impl<E, T> Construct<E, CompuId> for Force<T>
 where
-    T: Construct<Tycker<'a>, ValueId>,
+    E: ConstructEnv,
+    T: Construct<E, ValueId>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> CompuId {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, CompuId)> {
         let Force(thk) = self;
-        let thk = thk.build(tycker, env);
+        let (env, thk) = thk.construct(tycker, env)?;
         let thk_ty = tycker.statics.annotations_value[&thk];
-        let Some(body_ty) = thk_ty.destruct_thk_app(tycker) else { unreachable!() };
-        Alloc::alloc(tycker, Force(thk), body_ty, env)
+        let Some(body_ty) = thk_ty.destruct_thk_app(tycker) else {
+            unreachable!("a forced value is a thunk")
+        };
+        let compu = Alloc::alloc(tycker, Force(thk), body_ty, env.ty());
+        Ok((env, compu))
     }
 }
-// return
-impl<'a, T> Construct<Tycker<'a>, CompuId> for Return<T>
+/// A pure binding around a computation.
+impl<E, P, B, F, R> Construct<E, CompuId> for Let<P, B, F>
 where
-    T: Construct<Tycker<'a>, ValueId>,
-{
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> CompuId {
-        let Return(val) = self;
-        let val = val.build(tycker, env);
-        let val_ty = tycker.statics.annotations_value[&val];
-        let ret_ty = cs::Ret(val_ty).build(tycker, env);
-        Alloc::alloc(tycker, Return(val), ret_ty, env)
-    }
-}
-// bind
-impl<'a, V, B, F, R> Construct<Tycker<'a>, CompuId> for Bind<V, B, F>
-where
-    V: Construct<Tycker<'a>, VarName>,
-    B: Construct<Tycker<'a>, CompuId>,
-    F: FnOnce(DefId) -> R,
-    R: Construct<Tycker<'a>, CompuId>,
-{
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> CompuId {
-        let Bind { binder, bindee, tail } = self;
-        let bindee = bindee.build(tycker, env);
-        let bindee_ty = tycker.statics.annotations_compu[&bindee];
-        let Some(def_ty) = bindee_ty.destruct_ret_app(tycker) else { unreachable!() };
-        let var = binder.build(tycker, env);
-        let def = Alloc::alloc(tycker, var, def_ty.into(), &());
-        let binder = Alloc::alloc(tycker, def, def_ty, env);
-        let tail = tail(def).build(tycker, env);
-        let tail_ty = tycker.statics.annotations_compu[&tail];
-        Alloc::alloc(tycker, Bind { binder, bindee, tail }, tail_ty, env)
-    }
-}
-// pure bind
-impl<'a, P, B, F, R> Construct<Tycker<'a>, CompuId> for Let<P, B, F>
-where
-    P: Construct<Tycker<'a>, VPatId>,
-    B: Construct<Tycker<'a>, ValueId>,
+    E: ConstructEnv,
+    P: Construct<E, VPatId>,
+    B: Construct<E, ValueId>,
     F: FnOnce(VPatId) -> R,
-    R: Construct<Tycker<'a>, CompuId>,
+    R: Construct<E, CompuId>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> CompuId {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, CompuId)> {
         let Let { binder, bindee, tail } = self;
-        let bindee = bindee.build(tycker, env);
-        let binder = binder.build(tycker, env);
-        let tail = tail(binder).build(tycker, env);
+        let (env, bindee) = bindee.construct(tycker, env)?;
+        let (env, binder) = binder.construct(tycker, env)?;
+        let (env, tail) = tail(binder).construct(tycker, env)?;
         let tail_ty = tycker.statics.annotations_compu[&tail];
-        Alloc::alloc(tycker, Let { binder, bindee, tail }, tail_ty, env)
+        let compu = Alloc::alloc(tycker, Let { binder, bindee, tail }, tail_ty, env.ty());
+        Ok((env, compu))
     }
 }
-// // match
-// impl<T, F, R> Construct<Tycker<'a>, CompuId> for cs::Match<DataId, T, F>
-// where
-//     T: Construct<Tycker<'a>, ValueId>,
-//     F: Clone + FnOnce(CtorName, DefId, TypeId) -> R,
-//     R: Construct<Tycker<'a>, CompuId>,
-// {
-//     fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> Result<CompuId> {
-//         let cs::Match(data, scrut, arm) = self;
-//         let scrut = scrut.build(tycker, env)?;
-//         let data = tycker.statics.datas.defs[&data].to_owned();
-//         let mut ty_ = None;
-//         let arms = (data.into_iter())
-//             .map(|(ctor, ty)| {
-//                 let var = VarName(format!("{}", ctor.0.trim_start_matches("+").to_lowercase()));
-//                 let def = Alloc::alloc(tycker, var, ty.into());
-//                 let binder = cs::Ann(def, ty).build(tycker, env)?;
-//                 let tail = (arm.clone())(ctor, def, ty).build(tycker, env)?;
-//                 // Todo: consider lub (?)
-//                 let tail_ty = tycker.statics.annotations_compu[&tail];
-//                 ty_ = Some(tail_ty);
-//                 Ok(Matcher { binder, tail })
-//             })
-//             .collect::<Result<Vec<_>>>()?;
-//         Ok(Alloc::alloc(tycker, Match { scrut, arms }, ty_.unwrap()))
-//     }
-// }
-// // comatch
-// impl<F, R> Construct<Tycker<'a>, CompuId> for cs::CoMatch<CoDataId, F>
-// where
-//     F: Clone + FnOnce(DtorName, TypeId) -> R,
-//     R: Construct<Tycker<'a>, CompuId>,
-// {
-//     fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> Result<CompuId> {
-//         let cs::CoMatch(coda_id, arm) = self;
-//         let coda = tycker.statics.codatas.defs[&coda_id].to_owned();
-//         let arms = (coda.into_iter())
-//             .map(|(dtor, ty)| {
-//                 let tail = (arm.clone())(dtor.clone(), ty).build(tycker, env)?;
-//                 let tail_ty = tycker.statics.annotations_compu[&tail];
-//                 let Ok(_) = Lub::lub(ty, tail_ty, tycker) else { unreachable!() };
-//                 Ok(CoMatcher { dtor, tail })
-//             })
-//             .collect::<Result<Vec<_>>>()?;
-//         let ctype = CType.build(tycker, env)?;
-//         let ty_ = Alloc::alloc(tycker, Type::from(coda_id), ctype);
-//         Ok(Alloc::alloc(tycker, CoMatch { arms }, ty_))
-//     }
-// }
-// dtor
-impl<'a, T> Construct<Tycker<'a>, CompuId> for Dtor<T, DtorName>
+/// Shape-check a comatch while retaining its nominal expected classifier.
+impl<E, F, R> Construct<E, CompuId> for cs::CoMatch<TypeId, F>
 where
-    T: Construct<Tycker<'a>, CompuId>,
+    E: ConstructEnv,
+    F: Clone + FnOnce(DtorName, TypeId) -> R,
+    R: Construct<E, CompuId>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> CompuId {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, CompuId)> {
+        let cs::CoMatch(ty, arm) = self;
+        let view = ty.unroll(tycker)?;
+        let Type::CoData(coda_id) = tycker.type_filled(&view)? else {
+            return tycker.err(TyckError::TypeExpected {
+                expected: "codata for a comatch".to_owned(),
+                found: ty,
+            });
+        };
+        let coda = tycker.statics.codatas[&coda_id].to_owned();
+        let arms = coda
+            .into_iter()
+            .map(|(dtor, ty)| {
+                let (_, tail) = (arm.clone())(dtor.clone(), ty).construct(tycker, env.clone())?;
+                Lub::lub(ty, tycker.statics.annotations_compu[&tail], tycker)?;
+                Ok(CoMatcher { dtor, tail })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let compu = Alloc::alloc(tycker, CoMatch { arms }, ty, env.ty());
+        let _ = tycker.statics.codata_hints.upsert(compu, coda_id);
+        Ok((env, compu))
+    }
+}
+impl<E, T> Construct<E, CompuId> for Dtor<T, DtorName>
+where
+    E: ConstructEnv,
+    T: Construct<E, CompuId>,
+{
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, CompuId)> {
         let Dtor(head, dtor) = self;
-        let head = head.build(tycker, env);
+        let (env, head) = head.construct(tycker, env)?;
         let head_ty = tycker.statics.annotations_compu[&head];
-        let Some(coda) = head_ty.destruct_codata(env, tycker) else { unreachable!() };
-        let Some(ty) = coda.get(&dtor) else { unreachable!() };
-        Alloc::alloc(tycker, Dtor(head, dtor), ty, env)
+        let head_view = head_ty.unroll(tycker)?.subst_env(tycker, env.ty())?;
+        let Type::CoData(coda_id) = tycker.type_filled(&head_view)?.to_owned() else {
+            return tycker.err(TyckError::TypeExpected {
+                expected: "codata for a destructor".to_owned(),
+                found: head_ty,
+            });
+        };
+        let _ = tycker.statics.codata_hints.upsert(head, coda_id);
+        let coda = tycker.statics.codatas[&coda_id].to_owned();
+        let Some(ty) = coda.get(&dtor) else {
+            return tycker.err(TyckError::UnknownCoDataDestructor(dtor));
+        };
+        let compu = Alloc::alloc(tycker, Dtor(head, dtor), ty, env.ty());
+        Ok((env, compu))
     }
 }
-impl<'a, T, D> Construct<Tycker<'a>, CompuId> for cs::Dtor<T, D>
+impl<E, T, D> Construct<E, CompuId> for cs::Dtor<T, D>
 where
-    T: Construct<Tycker<'a>, CompuId>,
-    D: Construct<Tycker<'a>, DtorName>,
+    E: ConstructEnv,
+    T: Construct<E, CompuId>,
+    D: IntoName<DtorName>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> CompuId {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, CompuId)> {
         let cs::Dtor(head, dtor) = self;
-        let dtor = dtor.build(tycker, env);
-        Dtor(head, dtor).build(tycker, env)
+        Dtor(head, dtor.into_name()).construct(tycker, env)
     }
 }
-// top
-impl<'a> Construct<Tycker<'a>, CompuId> for cs::Top {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> CompuId {
-        let top = cs::TopTy.build(tycker, env);
+impl<E: ConstructEnv> Construct<E, CompuId> for cs::Top {
+    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, CompuId)> {
+        let (env, top) = cs::TopTy.construct(tycker, env)?;
         let Ok(Type::CoData(codata)) = tycker.type_filled(&top) else {
             unreachable!("top is an empty codata")
         };
-        let compu = Alloc::alloc(tycker, CoMatch { arms: Vec::new() }, top, env);
+        let compu = Alloc::alloc(tycker, CoMatch { arms: Vec::new() }, top, env.ty());
         tycker.statics.codata_hints.insert_new(compu, codata);
-        compu
+        Ok((env, compu))
     }
 }
 
-impl<'a> Tycker<'a> {
-    pub fn compu_vabs<F, T>(
-        &mut self, env: &TyEnv, name: impl Construct<Tycker<'a>, VarName> + 'a,
-        param_ty: impl Construct<Tycker<'a>, TypeId>, body: F,
-    ) -> CompuId
-    where
-        F: FnOnce(Option<DefId>) -> T,
-        T: Construct<Tycker<'a>, CompuId>,
-    {
-        let name = name.build(self, env);
-        Abs(cs::Ann(name, param_ty), body).build(self, env)
+/* ------------------------------ Type helpers ------------------------------ */
+
+impl Tycker<'_> {
+    /// `Thk B` for a known computation type `B`.
+    pub fn thk_arg(&mut self, env: &TyEnv, arg: TypeId) -> TypeId {
+        cs::Thk(arg).build(self, env)
     }
-    pub fn compu_tabs(
-        &mut self, env: &TyEnv, name: impl Construct<Tycker<'a>, VarName>,
-        param_kd: impl Construct<Tycker<'a>, KindId>,
-        body: impl FnOnce(Option<DefId>, AbstId) -> CompuId,
-    ) -> CompuId {
-        let name = name.build(self, env);
-        Abs(cs::Ty(cs::Ann(name, param_kd)), body).build(self, env)
+    /// `Thk _`, whose computation type is inferred at `site`.
+    pub fn thk_hole(&mut self, env: &TyEnv, site: su::TermId) -> TypeId {
+        cs::Thk(cs::Ann(Hole, (CType, site))).build(self, env)
     }
-    pub fn compu_vapp(
-        &mut self, env: &TyEnv, abs: impl Construct<Tycker<'a>, CompuId>,
-        arg: impl Construct<Tycker<'a>, ValueId>,
-    ) -> CompuId {
-        App(abs, arg).build(self, env)
-    }
-    pub fn compu_tapp(
-        &mut self, env: &TyEnv, abs: impl Construct<Tycker<'a>, CompuId>,
-        arg: impl Construct<Tycker<'a>, TypeId>,
-    ) -> CompuId {
-        App(abs, cs::Ty(arg)).build(self, env)
-    }
-    pub fn compu_fix(
-        &mut self, env: &TyEnv, name: impl Construct<Tycker<'a>, VarName>,
-        ty: impl Construct<Tycker<'a>, TypeId>, body: impl FnOnce(DefId) -> CompuId,
-    ) -> CompuId {
-        Fix(cs::Ann(name, ty), body).build(self, env)
-    }
-    pub fn compu_force(
-        &mut self, env: &TyEnv, thk: impl Construct<Tycker<'a>, ValueId>,
-    ) -> CompuId {
-        Force(thk).build(self, env)
-    }
-    pub fn compu_ret(&mut self, env: &TyEnv, val: impl Construct<Tycker<'a>, ValueId>) -> CompuId {
-        Return(val).build(self, env)
-    }
-    pub fn compu_bind(
-        &mut self, env: &TyEnv, bindee: impl Construct<Tycker<'a>, CompuId>,
-        name: impl Construct<Tycker<'a>, VarName>, tail: impl FnOnce(DefId) -> CompuId,
-    ) -> CompuId {
-        Bind { binder: name, bindee, tail }.build(self, env)
-    }
-    pub fn compu_let<R>(
-        &mut self, env: &TyEnv, bindee: impl Construct<Tycker<'a>, ValueId>,
-        binder: impl Construct<Tycker<'a>, VPatId>, tail: impl FnOnce(VPatId) -> R,
-    ) -> CompuId
-    where
-        R: Construct<Tycker<'a>, CompuId>,
-    {
-        Let { binder, bindee, tail }.build(self, env)
-    }
-    pub fn compu_top(&mut self, env: &TyEnv) -> CompuId {
-        cs::Top.build(self, env)
-    }
-    pub fn compu_dtor(
-        &mut self, env: &TyEnv, head: impl Construct<Tycker<'a>, CompuId>,
-        dtor: impl Construct<Tycker<'a>, DtorName>,
-    ) -> CompuId {
-        cs::Dtor(head, dtor).build(self, env)
+    /// `Ret _`, whose value type is inferred at `site`.
+    pub fn ret_hole(&mut self, env: &TyEnv, site: su::TermId) -> TypeId {
+        cs::Ret(cs::Ann(Hole, (VType, site))).build(self, env)
     }
 }
 
 #[cfg(test)]
 mod kind_test {
-    use super::super::*;
+    use crate::*;
 
     #[test]
     fn r#static() {
-        fn _f<'a>(tycker: &mut Tycker<'a>, env: &TyEnv) -> KindId {
+        fn _f(tycker: &mut Tycker<'_>, env: &TyEnv) -> KindId {
             // VType -> (CType -> CType)
             Arrow(VType, Arrow(CType, CType)).build(tycker, env)
         }

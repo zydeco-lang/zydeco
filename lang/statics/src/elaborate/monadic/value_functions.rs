@@ -48,9 +48,9 @@ impl ValueFunctionTranslation {
                 let pattern = source.pattern;
                 let (local, binder) = Self::type_binder(tycker, local, source, pattern)?;
                 let (local, domain) =
-                    cs::Thk(cs::Signature { ty: binder.witness }).mbuild(tycker, local)?;
+                    cs::Thk(cs::Signature { ty: binder.witness }).construct(tycker, local)?;
                 let (local, codomain) =
-                    cs::TypeLift { ty: self.signature.codomain }.mbuild(tycker, local)?;
+                    cs::TypeLift { ty: self.signature.codomain }.construct(tycker, local)?;
                 let codomain = Self::pi(tycker, &local, Self::value_parameter(domain), codomain);
                 Self::pi(tycker, &local, ValPiBinder::Type(binder), codomain)
             }
@@ -61,7 +61,7 @@ impl ValueFunctionTranslation {
                 }
                 .translate(tycker, &local.ty)?;
                 let (local, domain) =
-                    cs::TypeLift { ty: parameter.domain }.mbuild(tycker, local)?;
+                    cs::TypeLift { ty: parameter.domain }.construct(tycker, local)?;
                 let (local, witnesses) = match parameter.witnesses {
                     | Some(witnesses) => {
                         let (local, fresh) = witnesses.iter().try_fold(
@@ -83,7 +83,7 @@ impl ValueFunctionTranslation {
                     | None => (local, None),
                 };
                 let (local, codomain) =
-                    cs::TypeLift { ty: self.signature.codomain }.mbuild(tycker, local)?;
+                    cs::TypeLift { ty: self.signature.codomain }.construct(tycker, local)?;
                 Self::pi(
                     tycker,
                     &local,
@@ -103,13 +103,13 @@ impl ValueFunctionTranslation {
             | (ValPiBinder::Type(source), ValBinder::Type(pattern)) => {
                 let (local, binder) = Self::type_binder(tycker, local, source, pattern)?;
                 let (local, structure) =
-                    cs::StrPat("str", binder.witness, None).mbuild(tycker, local)?;
-                let (local, body) = cs::TermLift { tm: body }.mbuild(tycker, local)?;
-                let (local, codomain) = cs::TypeOf(body).mbuild(tycker, local)?;
+                    cs::StrPat("str", binder.witness, None).construct(tycker, local)?;
+                let (local, body) = cs::TermLift { tm: body }.construct(tycker, local)?;
+                let (local, codomain) = cs::TypeOf(body).construct(tycker, local)?;
                 let (local, expected) =
-                    cs::TypeLift { ty: self.signature.codomain }.mbuild(tycker, local)?;
+                    cs::TypeLift { ty: self.signature.codomain }.construct(tycker, local)?;
                 Lub::lub(expected, codomain, tycker)?;
-                let (local, domain) = cs::TypeOf(structure).mbuild(tycker, local)?;
+                let (local, domain) = cs::TypeOf(structure).construct(tycker, local)?;
                 let inner_ty = Self::pi(tycker, &local, Self::value_parameter(domain), codomain);
                 let inner = Alloc::alloc(
                     tycker,
@@ -137,17 +137,17 @@ impl ValueFunctionTranslation {
                         PackPiPatternTranslation::new(pattern, &signature, tycker, &local.ty)?;
                     translation.translate(tycker, local)?
                 } else {
-                    cs::TermLift { tm: pattern }.mbuild(tycker, local)?
+                    cs::TermLift { tm: pattern }.construct(tycker, local)?
                 };
                 let witnesses = parameter.witnesses.map(|witnesses| {
                     witnesses
                         .map(|witness| local.subst_abst.get(&witness).copied().unwrap_or(witness))
                 });
-                let (local, domain) = cs::TypeOf(pattern).mbuild(tycker, local)?;
-                let (local, body) = cs::TermLift { tm: body }.mbuild(tycker, local)?;
-                let (local, codomain) = cs::TypeOf(body).mbuild(tycker, local)?;
+                let (local, domain) = cs::TypeOf(pattern).construct(tycker, local)?;
+                let (local, body) = cs::TermLift { tm: body }.construct(tycker, local)?;
+                let (local, codomain) = cs::TypeOf(body).construct(tycker, local)?;
                 let (local, expected) =
-                    cs::TypeLift { ty: self.signature.codomain }.mbuild(tycker, local)?;
+                    cs::TypeLift { ty: self.signature.codomain }.construct(tycker, local)?;
                 Lub::lub(expected, codomain, tycker)?;
                 let ty = Self::pi(
                     tycker,
@@ -166,13 +166,13 @@ impl ValueFunctionTranslation {
         tycker: &mut Tycker<'_>, env: MonEnv, function: ValueId, argument: ValArgument,
         result: TypeId,
     ) -> Result<(MonEnv, ValueId)> {
-        let (env, function) = cs::TermLift { tm: function }.mbuild(tycker, env)?;
-        let (env, function_ty) = cs::TypeOf(function).mbuild(tycker, env)?;
+        let (env, function) = cs::TermLift { tm: function }.construct(tycker, env)?;
+        let (env, function_ty) = cs::TypeOf(function).construct(tycker, env)?;
         let signature = Self::signature(tycker, function_ty)?;
         let (env, application) = match (signature.binder, argument) {
             | (ValPiBinder::Type(binder), ValArgument::Type(source)) => {
-                let (env, argument) = cs::TypeLift { ty: source }.mbuild(tycker, env)?;
-                let (env, argument_kind) = cs::TypeOf(argument).mbuild(tycker, env)?;
+                let (env, argument) = cs::TypeLift { ty: source }.construct(tycker, env)?;
+                let (env, argument_kind) = cs::TypeOf(argument).construct(tycker, env)?;
                 Lub::lub(binder.domain_kind(tycker), argument_kind, tycker)?;
                 let payload = binder.pattern.bind_argument(tycker, argument)?;
                 let inner_ty = signature.codomain.subst_abst(tycker, (binder.witness, payload))?;
@@ -186,8 +186,9 @@ impl ValueFunctionTranslation {
                 let ValPiBinder::Value(parameter) = signature.binder else {
                     unreachable!("translated type application is followed by structure application")
                 };
-                let (env, structure) = Thunk(cs::Structure { ty: source }).mbuild(tycker, env)?;
-                let (env, structure_ty) = cs::TypeOf(structure).mbuild(tycker, env)?;
+                let (env, structure) =
+                    Thunk(cs::Structure { ty: source }).construct(tycker, env)?;
+                let (env, structure_ty) = cs::TypeOf(structure).construct(tycker, env)?;
                 Lub::lub(parameter.domain, structure_ty, tycker)?;
                 Lub::lub(result, signature.codomain, tycker)?;
                 let application = Alloc::alloc(
@@ -199,8 +200,8 @@ impl ValueFunctionTranslation {
                 (env, application)
             }
             | (ValPiBinder::Value(parameter), ValArgument::Value(argument)) => {
-                let (env, argument) = cs::TermLift { tm: argument }.mbuild(tycker, env)?;
-                let (env, argument_ty) = cs::TypeOf(argument).mbuild(tycker, env)?;
+                let (env, argument) = cs::TermLift { tm: argument }.construct(tycker, env)?;
+                let (env, argument_ty) = cs::TypeOf(argument).construct(tycker, env)?;
                 Lub::lub(parameter.domain, argument_ty, tycker)?;
                 let application = Alloc::alloc(
                     tycker,

@@ -19,9 +19,8 @@ pub use identity::{DerivedAllocator, DerivedIdRegistry};
 /// + The parameter [`Alloc::Ann`] is the type of the annotation of the entity.
 ///   Each implementation will specify a suitable annotation to ensure type safety.
 ///
-/// The trait is different from [`Construct`] in that [`Construct::build`] implementations
-/// are built on top of [`Alloc`] implementations, and thus are more convenient to use if
-/// the type inference is easy, i.e. the annotations are not needed.
+/// [`Construct`] builds on [`Alloc`]: its constructions infer the annotations that
+/// [`Alloc::alloc`] takes explicitly, which is more convenient when they can be inferred.
 pub trait Alloc<Arena, T> {
     /// The annotation of this allocation.
     type Ann;
@@ -153,38 +152,17 @@ where
 
 /* ---------------------------------- Fill ---------------------------------- */
 
-impl<Arena> Alloc<Arena, FillId> for InferenceSite
+impl<Arena, S> Alloc<Arena, FillId> for S
 where
     Arena: StaticsAlloc,
+    S: Into<InferenceSite>,
 {
     type Ann = ();
     type Env = ();
     fn alloc(arena: &mut Arena, val: Self, (): Self::Ann, _env: &Self::Env) -> FillId {
         let id = arena.fresh();
-        AsMut::<StaticsArena>::as_mut(arena).fills.insert_new(id, val);
+        AsMut::<StaticsArena>::as_mut(arena).fills.insert_new(id, val.into());
         id
-    }
-}
-
-impl<Arena> Alloc<Arena, FillId> for su::TermId
-where
-    Arena: StaticsAlloc,
-{
-    type Ann = ();
-    type Env = ();
-    fn alloc(arena: &mut Arena, val: Self, (): Self::Ann, env: &Self::Env) -> FillId {
-        Alloc::alloc(arena, InferenceSite::from(val), (), env)
-    }
-}
-
-impl<Arena> Alloc<Arena, FillId> for su::PatId
-where
-    Arena: StaticsAlloc,
-{
-    type Ann = ();
-    type Env = ();
-    fn alloc(arena: &mut Arena, val: Self, (): Self::Ann, env: &Self::Env) -> FillId {
-        Alloc::alloc(arena, InferenceSite::from(val), (), env)
     }
 }
 
@@ -200,116 +178,51 @@ where
         arena.alloc_kind_pre(val.into())
     }
 }
-impl<Arena> Alloc<Arena, KindId> for Kind
+impl<Arena, S> Alloc<Arena, KindId> for S
 where
     Arena: StaticsAlloc,
+    S: Into<Kind>,
 {
     type Ann = ();
     type Env = ();
     fn alloc(arena: &mut Arena, val: Self, (): Self::Ann, _env: &Self::Env) -> KindId {
-        arena.alloc_kind_pre(Fillable::Done(val))
+        arena.alloc_kind_pre(Fillable::Done(val.into()))
     }
-}
-macro_rules! AllocKind {
-    ($($t:ty)*) => {
-        $(
-            impl<Arena> Alloc<Arena, KindId> for $t
-            where
-                Arena: StaticsAlloc,
-            {
-                type Ann = ();
-                type Env = ();
-                fn alloc(arena: &mut Arena, val: Self, (): Self::Ann, env: &Self::Env) -> KindId {
-                    Alloc::alloc(arena, Kind::from(val), (), env)
-                }
-            }
-        )*
-    };
-}
-AllocKind! {
-    VType
-    CType
-    ArrowU<KindId>
-    Label<FieldName, KindId>
 }
 
 /* ------------------------------- KindPattern ------------------------------ */
 
-impl<Arena> Alloc<Arena, KPatId> for KindPattern
+impl<Arena, S> Alloc<Arena, KPatId> for S
 where
     Arena: StaticsAlloc,
+    S: Into<KindPattern>,
 {
     type Ann = ();
     type Env = TyEnv;
 
     fn alloc(arena: &mut Arena, val: Self, (): Self::Ann, env: &Self::Env) -> KPatId {
-        let kpat = arena.alloc_kpat(val);
+        let kpat = arena.alloc_kpat(val.into());
         AsMut::<StaticsArena>::as_mut(arena).env_kpat.insert_new(kpat, env.clone());
         kpat
     }
 }
 
-macro_rules! AllocKindPattern {
-    ($($t:ty)*) => {
-        $(
-            impl<Arena> Alloc<Arena, KPatId> for $t
-            where
-                Arena: StaticsAlloc,
-            {
-                type Ann = ();
-                type Env = TyEnv;
-
-                fn alloc(
-                    arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env,
-                ) -> KPatId {
-                    Alloc::alloc(arena, KindPattern::from(val), ann, env)
-                }
-            }
-        )*
-    };
-}
-
-AllocKindPattern! {
-    Hole
-    DefId
-}
-
 /* ------------------------------- TypePattern ------------------------------ */
 
-impl<Arena> Alloc<Arena, TPatId> for TypePattern
+impl<Arena, S> Alloc<Arena, TPatId> for S
 where
     Arena: StaticsAlloc,
+    S: Into<TypePattern>,
 {
     type Ann = KindId;
     type Env = TyEnv;
     fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> TPatId {
-        let tpat = arena.alloc_tpat(val);
+        let tpat = arena.alloc_tpat(val.into());
         let statics = AsMut::<StaticsArena>::as_mut(arena);
         statics.annotations_tpat.insert_new(tpat, ann);
         statics.env_tpat.insert_new(tpat, env.clone());
         tpat
     }
-}
-macro_rules! AllocTypePattern {
-    ($($t:ty)*) => {
-        $(
-            impl<Arena> Alloc<Arena, TPatId> for $t
-            where
-                Arena: StaticsAlloc,
-            {
-                type Ann = KindId;
-                type Env = TyEnv;
-                fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> TPatId {
-                    Alloc::alloc(arena, TypePattern::from(val), ann, env)
-                }
-            }
-        )*
-    };
-}
-AllocTypePattern! {
-    Hole
-    DefId
-    Named<FieldName, TPatId>
 }
 
 /* ---------------------------------- Type ---------------------------------- */
@@ -332,197 +245,72 @@ where
         ty
     }
 }
-impl<Arena> Alloc<Arena, TypeId> for Type
+impl<Arena, S> Alloc<Arena, TypeId> for S
 where
     Arena: StaticsAlloc,
+    S: Into<Type>,
 {
     type Ann = KindId;
     type Env = TyEnv;
     fn alloc(arena: &mut Arena, val: Self, kd: Self::Ann, env: &Self::Env) -> TypeId {
-        let ty = arena.alloc_type_pre(Fillable::Done(val), kd);
+        let ty = arena.alloc_type_pre(Fillable::Done(val.into()), kd);
         let statics = AsMut::<StaticsArena>::as_mut(arena);
         let env = statics.intern_env(env);
         statics.env_type.insert_new(ty, env);
         ty
     }
 }
-macro_rules! AllocType {
-    ($($t:ty)*) => {
-        $(
-            impl<Arena> Alloc<Arena, TypeId> for $t
-            where
-                Arena: StaticsAlloc,
-            {
-                type Ann = KindId;
-                type Env = TyEnv;
-                fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> TypeId {
-                    Alloc::alloc(arena, Type::from(val), ann, env)
-                }
-            }
-        )*
-    };
-}
-AllocType! {
-    DefId
-    AbstId
-    TypeAbstraction
-    App<TypeId, TypeId>
-    Named<FieldName, TypeId>
-    Label<FieldName, TypeId>
-    Proj<TypeId, FieldName>
-    ThkTy
-    RetTy
-    UnitTy
-    OpaqueTy
-    PrimitiveTy
-    OSTy
-    ValPi
-    ArrowU<TypeId>
-    Forall
-    PackPi
-    Prod<TypeId>
-    Exists
-    ManifestKind
-    DataId
-    CoDataId
-}
 
 /* ------------------------------ ValuePattern ------------------------------ */
 
-impl<Arena> Alloc<Arena, VPatId> for ValuePattern
+impl<Arena, S> Alloc<Arena, VPatId> for S
 where
     Arena: StaticsAlloc,
+    S: Into<ValuePattern>,
 {
     type Ann = TypeId;
     type Env = TyEnv;
     fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> VPatId {
-        let vpat = arena.alloc_vpat(val);
+        let vpat = arena.alloc_vpat(val.into());
         let statics = AsMut::<StaticsArena>::as_mut(arena);
         statics.annotations_vpat.insert_new(vpat, ann);
         statics.env_vpat.insert_new(vpat, env.clone());
         vpat
     }
 }
-macro_rules! AllocValuePattern {
-    ($($t:ty)*) => {
-        $(
-            impl<Arena> Alloc<Arena, VPatId> for $t
-            where
-                Arena: StaticsAlloc,
-            {
-                type Ann = TypeId;
-                type Env = TyEnv;
-                fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> VPatId {
-                    Alloc::alloc(arena, ValuePattern::from(val), ann, env)
-                }
-            }
-        )*
-    };
-}
-AllocValuePattern! {
-    Hole
-    DefId
-    Named<FieldName, VPatId>
-    Ctor<CtorName, VPatId>
-    Alias<VPatId>
-    Triv
-    Vec<VPatId>
-    ConsN<StaticPatId, VPatId>
-    Box<ViewPattern>
-}
 
 /* ---------------------------------- Value --------------------------------- */
 
-impl<Arena> Alloc<Arena, ValueId> for Value
+impl<Arena, S> Alloc<Arena, ValueId> for S
 where
     Arena: StaticsAlloc,
+    S: Into<Value>,
 {
     type Ann = TypeId;
     type Env = TyEnv;
     fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> ValueId {
-        let value = arena.alloc_value(val);
+        let value = arena.alloc_value(val.into());
         let statics = AsMut::<StaticsArena>::as_mut(arena);
         statics.annotations_value.insert_new(value, ann);
         statics.env_value.insert_new(value, env.clone());
         value
     }
 }
-macro_rules! AllocValue {
-    ($($t:ty)*) => {
-        $(
-            impl<Arena> Alloc<Arena, ValueId> for $t
-            where
-                Arena: StaticsAlloc,
-            {
-                type Ann = TypeId;
-                type Env = TyEnv;
-                fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> ValueId {
-                    Alloc::alloc(arena, Value::from(val), ann, env)
-                }
-            }
-        )*
-    };
-}
-AllocValue! {
-    Hole
-    DefId
-    Named<FieldName, ValueId>
-    Let<VPatId, ValueId, ValueId>
-    Abs<ValBinder, ValueId>
-    App<ValueId, ValArgument>
-    Thunk<CompuId>
-    Ctor<CtorName, ValueId>
-    Triv
-    Vec<ValueId>
-    ConsN<StaticTermId, ValueId>
-    Proj<ValueId, ResolvedField>
-    Literal
-}
 
 /* ------------------------------- Computation ------------------------------ */
 
-impl<Arena> Alloc<Arena, CompuId> for Computation
+impl<Arena, S> Alloc<Arena, CompuId> for S
 where
     Arena: StaticsAlloc,
+    S: Into<Computation>,
 {
     type Ann = TypeId;
     type Env = TyEnv;
     fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> CompuId {
-        let compu = arena.alloc_compu(val);
+        let compu = arena.alloc_compu(val.into());
         let statics = AsMut::<StaticsArena>::as_mut(arena);
         statics.annotations_compu.insert_new(compu, ann);
         statics.env_compu.insert_new(compu, env.clone());
         compu
     }
-}
-macro_rules! AllocComputation {
-    ($($t:ty)*) => {
-        $(
-            impl<Arena> Alloc<Arena, CompuId> for $t
-            where
-                Arena: StaticsAlloc,
-            {
-                type Ann = TypeId;
-                type Env = TyEnv;
-                fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> CompuId {
-                    Alloc::alloc(arena, Computation::from(val), ann, env)
-                }
-            }
-        )*
-    };
-}
-AllocComputation! {
-    Hole
-    Abs<VPatId, CompuId>
-    App<CompuId, ValueId>
-    Abs<TPatId, CompuId>
-    App<CompuId, TypeId>
-    Fix<VPatId, CompuId>
-    Force<ValueId>
-    Return<ValueId>
-    Bind<VPatId, CompuId, CompuId>
-    Let<VPatId, ValueId, CompuId>
-    Match<ValueId, VPatId, CompuId>
-    CoMatch<DtorName, CompuId>
-    Dtor<CompuId, DtorName>
 }

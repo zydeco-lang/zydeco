@@ -285,18 +285,6 @@ mod impls_str_env {
         pub fn new() -> Self {
             Self::default()
         }
-        // pub fn extended(
-        //     &self, abst: AbstId, def: Option<DefId>, str: impl MonConstruct<ValueId>,
-        //     tycker: &mut Tycker, env: MonEnv,
-        // ) -> Self {
-        //     let mut new = self.clone();
-        //     if let Some(def) = def {
-        //         new.def_map.insert(def, abst);
-        //     }
-        //     let Ok((_env, str)) = str.mbuild(tycker, env) else { unreachable!() };
-        //     new.absts.insert(abst, str);
-        //     new
-        // }
     }
 }
 

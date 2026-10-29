@@ -36,7 +36,7 @@ pub use unit::*;
 /// Typed arena allocation helpers.
 pub mod alloc;
 pub use alloc::*;
-/// HOAS-style constructors for typed internal transformations.
+/// HOAS-style construction of typed syntax, parameterized by its environment.
 pub mod construct;
 pub use construct::*;
 /// Destructors and inspection helpers for typed nodes.
@@ -56,7 +56,6 @@ pub mod fold;
 pub mod normalize;
 /// Type-directed source elaborations.
 pub mod elaborate;
-pub use elaborate::monadic::construct::MonConstruct;
 /// Post-check validation passes over typed syntax.
 pub mod validate;
 

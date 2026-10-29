@@ -316,7 +316,7 @@ impl NominalTranslation {
                 local.subst_abst.insert_mut(*dependency, binder.witness);
                 parameters.push(binder);
             }
-            let (_, mut definition) = cs::TypeLift { ty: body }.mbuild(tycker, local)?;
+            let (_, mut definition) = cs::TypeLift { ty: body }.construct(tycker, local)?;
             for binder in parameters.into_iter().rev() {
                 let kind = Arrow(binder.domain_kind(tycker), tycker.statics.type_kind(definition))
                     .build(tycker, &env.ty);
@@ -370,11 +370,11 @@ impl NominalTranslation {
             return tycker.err(TyckError::NotInlinableSeal(source));
         };
         let (env, constructor) =
-            App(App(family.constructor, env.monad_ty), env.basis.algebra).mbuild(tycker, env)?;
+            App(App(family.constructor, env.monad_ty), env.basis.algebra).construct(tycker, env)?;
         family.dependencies.into_iter().try_fold(
             (env, constructor),
             |(env, constructor), dependency| {
-                App(constructor, cs::TypeLift { ty: cs::Type(dependency) }).mbuild(tycker, env)
+                App(constructor, cs::TypeLift { ty: cs::Type(dependency) }).construct(tycker, env)
             },
         )
     }
@@ -387,13 +387,13 @@ impl NominalTranslation {
         };
         let dictionary =
             env.nominal_dictionary.expect("structures are built after reserving their dictionary");
-        let (env, reference) = Dtor(Force(dictionary), family.method).mbuild(tycker, env)?;
+        let (env, reference) = Dtor(Force(dictionary), family.method).construct(tycker, env)?;
         family.dependencies.into_iter().try_fold(
             (env, reference),
             |(env, reference), dependency| {
                 let ty = cs::Type(dependency);
                 App(App(reference, cs::Ty(cs::TypeLift { ty })), Thunk(cs::Structure { ty }))
-                    .mbuild(tycker, env)
+                    .construct(tycker, env)
             },
         )
     }
@@ -413,7 +413,7 @@ impl NominalTranslation {
                 let (local, parameters) =
                     StructureParameters::dependencies(tycker, env.clone(), &family.dependencies)?;
                 let (_, target) = Self::apply(tycker, local.clone(), *source)?;
-                let (_, signature) = cs::Signature { ty: target }.mbuild(tycker, local)?;
+                let (_, signature) = cs::Signature { ty: target }.construct(tycker, local)?;
                 let signature = parameters.signature(tycker, &env, signature);
                 Ok((family.method.clone(), signature))
             })
@@ -422,9 +422,9 @@ impl NominalTranslation {
         tycker.statics.codatas.insert_new(codata, CoData::new(signatures));
         let ctype = CType.build(tycker, &env.ty);
         let dictionary_ty = Alloc::alloc(tycker, Type::CoData(codata), ctype, &env.ty);
-        let (env, dictionary_thunk_ty) = cs::Thk(dictionary_ty).mbuild(tycker, env)?;
+        let (env, dictionary_thunk_ty) = cs::Thk(dictionary_ty).construct(tycker, env)?;
         let (mut recursive, self_pattern) =
-            cs::Pat("algebras", dictionary_thunk_ty).mbuild(tycker, env.clone())?;
+            cs::Pat("algebras", dictionary_thunk_ty).construct(tycker, env.clone())?;
         recursive.nominal_dictionary = Some(self_pattern.reify(tycker));
         let methods = env
             .nominals
@@ -451,9 +451,9 @@ impl NominalTranslation {
         let body = Alloc::alloc(tycker, CoMatch { arms: methods }, dictionary_ty, &env.ty);
         let _ = tycker.statics.codata_hints.upsert(body, codata);
         let fixed = Alloc::alloc(tycker, Fix(self_pattern, body), dictionary_ty, &env.ty);
-        let (_, value) = Thunk(fixed).mbuild(tycker, env.clone())?;
+        let (_, value) = Thunk(fixed).construct(tycker, env.clone())?;
         let (mut env, pattern) =
-            cs::Pat("nominal_algebras", dictionary_thunk_ty).mbuild(tycker, env)?;
+            cs::Pat("nominal_algebras", dictionary_thunk_ty).construct(tycker, env)?;
         env.nominal_dictionary = Some(pattern.reify(tycker));
         Ok((env, Some((pattern, value))))
     }
@@ -467,7 +467,7 @@ impl NominalTranslation {
         while let Kind::Arrow(Arrow(domain, codomain)) = tycker.kind_filled(&kind)? {
             let binder = Self::parameter(tycker, &env, domain, None);
             let (local, structure) =
-                cs::StrPat("structure", binder.witness, None).mbuild(tycker, env)?;
+                cs::StrPat("structure", binder.witness, None).construct(tycker, env)?;
             env = local;
             parameters.0.push((binder.clone(), structure));
             let argument = Alloc::alloc(tycker, binder.witness, domain, &env.ty);
@@ -475,13 +475,13 @@ impl NominalTranslation {
             kind = codomain;
         }
         let (_, body) = match tycker.kind_filled(&kind)? {
-            | Kind::VType(_) => cs::Top.mbuild(tycker, env)?,
+            | Kind::VType(_) => cs::Top.construct(tycker, env)?,
             | Kind::CType(_) => {
                 let view = source.unroll(tycker)?;
                 let Type::CoData(source_codata) = tycker.type_filled(&view)? else {
                     return tycker.err(TyckError::MissingStructure(source));
                 };
-                CoDataStructureTranslation { source, source_codata }.mbuild(tycker, env)?
+                CoDataStructureTranslation { source, source_codata }.construct(tycker, env)?
             }
             | _ => {
                 return tycker.err(TyckError::MissingStructure(source));
@@ -506,7 +506,7 @@ impl StructureParameters {
             let binder = NominalTranslation::parameter(tycker, &env, kind, Some(*dependency));
             env.subst_abst.insert_mut(*dependency, binder.witness);
             let (local, structure) =
-                cs::StrPat("structure", binder.witness, None).mbuild(tycker, env)?;
+                cs::StrPat("structure", binder.witness, None).construct(tycker, env)?;
             env = local;
             parameters.0.push((binder, structure));
         }
