@@ -29,7 +29,7 @@ extern {
         "data" => ParserToken::Syntax(Tok::Data),
         "codata" => ParserToken::Syntax(Tok::Codata),
         "as" => ParserToken::Syntax(Tok::As),
-        "define" => ParserToken::Syntax(Tok::Define),
+        "def" => ParserToken::Syntax(Tok::Define),
         "let" => ParserToken::Syntax(Tok::Let),
         "param" => ParserToken::Syntax(Tok::Param),
         "val" => ParserToken::Syntax(Tok::Val),
@@ -152,7 +152,7 @@ MetaSegment: String = {
     "data" => "data".into(),
     "codata" => "codata".into(),
     "as" => "as".into(),
-    "define" => "define".into(),
+    "def" => "def".into(),
     "let" => "let".into(),
     "param" => "param".into(),
     "val" => "val".into(),
@@ -562,7 +562,7 @@ Term: ParsedNode<Term> = {
             tail,
         }.into())
     },
-    "define" <binding:GenBindTerm> <placement:Placement> <tail:TermGen<Term>> => {
+    "def" <binding:GenBindTerm> <placement:Placement> <tail:TermGen<Term>> => {
         ParsedNode::Syntax(ContextBind {
             mode: DefinitionMode::Nominal,
             binding,

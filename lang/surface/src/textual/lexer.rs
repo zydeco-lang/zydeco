@@ -43,7 +43,7 @@ pub enum Tok<'input> {
     As,
     #[token("def")]
     #[token("define")]
-    #[token_metadata(canonical = "define")]
+    #[token_metadata(canonical = "def")]
     Define,
     #[token("let")]
     Let,

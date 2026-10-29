@@ -805,8 +805,8 @@ These payload-free kinds are derived from the lexer's `Tok` declaration,
 so an expected identifier needs no invented source text and no separately maintained terminal inventory.
 
 `TokenMetadata` reads fixed spellings directly from Logos's `#[token(...)]` attributes.
-A token with several aliases selects one registered spelling explicitly: both `def`
-and `define` lex as `Define`, whose canonical spelling remains `define`.
+A token with several aliases selects one registered spelling explicitly:
+both `def` and `define` lex as `Define`, whose canonical spelling is `def`.
 Variable lexical categories have no fixed source spelling.
 Their grammar names default to the variant name, with explicit overrides for existing labels such as `LowerId`.
 Trivia and malformed lexical tokens are marked as excluded from parser expectations;

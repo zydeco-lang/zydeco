@@ -34,9 +34,9 @@ fn every_fixed_spelling_lexes_to_its_declared_kind_and_formats_canonically() {
         }
     });
     assert_eq!(TokenKind::Define.source_spellings(), ["def", "define"]);
-    assert_eq!(TokenKind::Define.source_spelling(), Some("define"));
-    assert_eq!(TokenKind::from_parser_name("define"), Some(TokenKind::Define));
-    assert_eq!(TokenKind::from_parser_name("def"), None);
+    assert_eq!(TokenKind::Define.source_spelling(), Some("def"));
+    assert_eq!(TokenKind::from_parser_name("def"), Some(TokenKind::Define));
+    assert_eq!(TokenKind::from_parser_name("define"), None);
 }
 
 #[test]

@@ -426,6 +426,26 @@ fn a_real_error_followed_by_eof_is_not_just_incomplete_input() {
 }
 
 #[test]
+fn expected_definitions_are_reported_with_the_canonical_def_spelling() {
+    let source = "let value = 1 in";
+    let error = crate::textual::ParseError {
+        error: StrictParser::source(source, &mut Parser::new()).unwrap_err(),
+        file_map: zydeco_utils::span::FileMap::local(source, None),
+    };
+    let ParseIssueKind::UnrecognizedEof { expected } = &error.error.primary().kind else {
+        panic!("a missing body ends the input early")
+    };
+    assert!(expected.contains(&TokenKind::Define));
+    let message = error.to_string();
+    assert!(message.split([' ', ',']).any(|word| word == "def"), "{message}");
+    assert!(!message.contains("define"), "{message}");
+    assert!(
+        StrictParser::source("let value = 1 in def copy = value in copy", &mut Parser::new())
+            .is_ok()
+    );
+}
+
+#[test]
 fn completion_keeps_real_errors_before_and_after_the_cursor() {
     let source = "let first = in let second =  in let third = in third";
     let offset = source.find(" in let third").unwrap();
