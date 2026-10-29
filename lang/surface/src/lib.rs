@@ -50,11 +50,6 @@ pub mod textual {
     mod discovery;
     pub use discovery::*;
 
-    /// A formatter built on top of the textual syntax.
-    /// Introduces the ugly syntax.
-    /// Outputs a safe surface syntax.
-    mod ugly;
-
     /// Configurable pretty printing over canonical textual syntax.
     mod pretty;
 
@@ -63,7 +58,6 @@ pub mod textual {
         pub use super::pretty::{
             IndentWidth, LayoutIntentions, Parentheses, PrettyFormatter, PrettyOptions,
         };
-        pub use super::ugly::*;
     }
     /// Span lookup and cursor/region utilities.
     mod span;

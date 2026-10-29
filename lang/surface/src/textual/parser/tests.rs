@@ -312,7 +312,7 @@ fn ordinary_recovery_is_typed_and_strict_parsing_rejects_it() {
 }
 
 #[test]
-fn strict_source_and_term_reject_syntax_accepted_only_through_recovery() {
+fn strict_sources_reject_syntax_accepted_only_through_recovery() {
     [
         ("let value = in value", "let value = 1 in value"),
         ("fn => body", "fn argument => body"),
@@ -322,46 +322,41 @@ fn strict_source_and_term_reject_syntax_accepted_only_through_recovery() {
     ]
     .into_iter()
     .for_each(|(source, repaired)| {
-        let recovered_source = RecoveringParser::new(source).source(&mut Parser::new());
-        let recovered_term = RecoveringParser::new(source).term(&mut Parser::new());
-        assert!(recovered_source.syntax.is_some(), "source: {source:?}");
-        assert!(recovered_term.syntax.is_some(), "source: {source:?}");
-        assert!(!recovered_source.issues.is_empty(), "source: {source:?}");
-        assert!(recovered_source.issues.iter().all(|issue| issue.recovery.is_some()));
+        let recovered = RecoveringParser::new(source).source(&mut Parser::new());
+        assert!(recovered.syntax.is_some(), "source: {source:?}");
+        assert!(!recovered.issues.is_empty(), "source: {source:?}");
+        assert!(recovered.issues.iter().all(|issue| issue.recovery.is_some()));
 
-        let source_failure = StrictParser::source(source, &mut Parser::new())
+        let failure = StrictParser::source(source, &mut Parser::new())
             .expect_err("a recovered source must not pass strict parsing");
-        let term_failure = StrictParser::term(source, &mut Parser::new())
-            .expect_err("a recovered term must not pass strict parsing");
-        RejectionAssertions::same_issues(&source_failure, &recovered_source.issues);
-        RejectionAssertions::same_issues(&term_failure, &recovered_term.issues);
+        RejectionAssertions::same_issues(&failure, &recovered.issues);
 
         assert!(StrictParser::source(repaired, &mut Parser::new()).is_ok(), "repair: {repaired:?}");
-        assert!(StrictParser::term(repaired, &mut Parser::new()).is_ok(), "repair: {repaired:?}");
     });
 }
 
 #[test]
-fn strict_pattern_rejects_syntax_accepted_only_through_recovery() {
-    [("", "_"), ("(,)", "(value,)"), ("+Some", "+Some value")].into_iter().for_each(
-        |(source, repaired)| {
-            let recovered = RecoveringParser::new(source).pattern(&mut Parser::new());
-            assert!(recovered.syntax.is_some(), "source: {source:?}");
-            assert!(!recovered.issues.is_empty(), "source: {source:?}");
-            assert!(recovered.issues.iter().all(|issue| matches!(
-                issue.recovery,
-                Some(RecoveryHole { entity: ParsedHole::Pattern(_) })
-            )));
+fn strict_sources_reject_patterns_accepted_only_through_recovery() {
+    [
+        ("let = value in value", "let item = value in value"),
+        ("let (,) = value in value", "let (item,) = value in value"),
+        ("match value | +Some => 1 end", "match value | +Some item => 1 end"),
+    ]
+    .into_iter()
+    .for_each(|(source, repaired)| {
+        let recovered = RecoveringParser::new(source).source(&mut Parser::new());
+        assert!(recovered.syntax.is_some(), "source: {source:?}");
+        assert!(!recovered.issues.is_empty(), "source: {source:?}");
+        assert!(recovered.issues.iter().all(|issue| matches!(
+            issue.recovery,
+            Some(RecoveryHole { entity: ParsedHole::Pattern(_) })
+        )));
 
-            let failure = StrictParser::pattern(source, &mut Parser::new())
-                .expect_err("a recovered pattern must not pass strict parsing");
-            RejectionAssertions::same_issues(&failure, &recovered.issues);
-            assert!(
-                StrictParser::pattern(repaired, &mut Parser::new()).is_ok(),
-                "repair: {repaired:?}"
-            );
-        },
-    );
+        let failure = StrictParser::source(source, &mut Parser::new())
+            .expect_err("a recovered pattern must not pass strict parsing");
+        RejectionAssertions::same_issues(&failure, &recovered.issues);
+        assert!(StrictParser::source(repaired, &mut Parser::new()).is_ok(), "repair: {repaired:?}");
+    });
 }
 
 #[test]
@@ -507,8 +502,8 @@ fn ordinary_recovery_does_not_expose_a_discarded_completion_marker_as_source() {
 #[test]
 fn an_authored_hole_is_not_a_completion_or_recovery_hole() {
     let mut parser = Parser::new();
-    let parsed = RecoveringParser::new("_").term(&mut parser);
-    let term = parsed.syntax.expect("an authored hole should parse");
+    let parsed = RecoveringParser::new("_").source(&mut parser);
+    let term = parsed.syntax.expect("an authored hole should parse").root;
 
     assert!(parsed.issues.is_empty());
     assert!(parsed.completion.is_none());

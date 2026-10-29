@@ -1,37 +1,136 @@
 pub(super) mod corpus;
 
+use crate::textual::arena::TextArena;
 use crate::{
     bitter::{SourceUnitDesugarer, fmt::Formatter as BitterFormatter, syntax as bitter},
     metadata::{
         BuiltinMetaError, IntrinsicMeta, IntrinsicMetaError, MetadataValidationError,
         MonadicMetaError,
     },
-    textual::{
-        fmt::Formatter,
-        syntax::{
-            Alias, Ann, Appli, BindingFlavor, Block, BuiltinRole, BuiltinValueRole, ContextBind,
-            Ctor, DefinitionMode, Dtor, EntityId, ExistentialParameter, Exists, Force, Hole,
-            IntegerLiteral, IntegerOperation, IntegerType, IntrinsicRole, Label, Literal,
-            ManifestPattern, Meta, MetaNode, MetaTerm, Named, Pack, Param, ParameterFlavor, Paren,
-            Parser, Pattern, Pipeline, PipelineDirection, Placement, Prod, Proj, ProjectionPattern,
-            Return, SourceUnit, Term, ViewPattern,
-        },
+    textual::syntax::{
+        Alias, Ann, Appli, BindingFlavor, Block, BuiltinRole, BuiltinValueRole, ContextBind, Ctor,
+        DefinitionMode, Dtor, EntityId, ExistentialParameter, Exists, Force, Hole, IntegerLiteral,
+        IntegerOperation, IntegerType, IntrinsicRole, Label, Literal, ManifestPattern, Meta,
+        MetaNode, MetaTerm, Named, Pack, Param, ParameterFlavor, Paren, Parser, PatId, Pattern,
+        Pipeline, PipelineDirection, Placement, Prod, Proj, ProjectionPattern, Return, SourceUnit,
+        Term, TermId, ViewPattern,
     },
 };
+use std::{collections::HashMap, ops::Range};
 use zydeco_syntax::Ugly;
 use zydeco_utils::pass::CompilerPass;
 
 use super::*;
 
+/// Stable AST structure and source-level values of a parsed tree, without its arena IDs.
+///
+/// Each node keeps its own syntax as `Debug` prints it, with every child identity replaced
+/// by that child's traversal index, so two parses agree exactly when their shapes and values do.
+/// Spans carried inside a payload, such as metadata on existential parameters,
+/// agree only between parses of one source.
+#[derive(Debug, Eq, PartialEq)]
+pub(super) struct SyntaxProjection {
+    nodes: Vec<ProjectedNode>,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct ProjectedNode {
+    syntax: String,
+    children: Vec<usize>,
+}
+
+impl SyntaxProjection {
+    /// Project the tree reachable from `root`, together with each projected node's source range.
+    pub(super) fn with_root(parser: &Parser, root: TermId) -> (Self, Vec<Range<usize>>) {
+        let arena = &parser.arena;
+        let mut indices = HashMap::new();
+        let mut order = Vec::new();
+        let mut pending = vec![EntityId::Term(root)];
+        while let Some(entity) = pending.pop() {
+            if let std::collections::hash_map::Entry::Vacant(entry) = indices.entry(entity) {
+                entry.insert(order.len());
+                order.push(entity);
+                pending.extend(arena.children(entity).into_iter().rev());
+            }
+        }
+        let nodes = order
+            .iter()
+            .map(|entity| {
+                let children = arena.children(*entity);
+                let syntax = children.iter().fold(Self::syntax(arena, *entity), |syntax, child| {
+                    syntax.replace(&Self::identity(*child), &format!("#{}", indices[child]))
+                });
+                ProjectedNode {
+                    syntax,
+                    children: children.iter().map(|child| indices[child]).collect(),
+                }
+            })
+            .collect();
+        let ranges = order.iter().map(|entity| parser.spans[entity].range()).collect();
+        (Self { nodes }, ranges)
+    }
+
+    fn syntax(arena: &TextArena, entity: EntityId) -> String {
+        match entity {
+            | EntityId::Def(id) => format!("{:?}", arena.defs[&id]),
+            | EntityId::Pat(id) => format!("{:?}", arena.pats[&id]),
+            | EntityId::CoPat(id) => format!("{:?}", arena.copats[&id]),
+            | EntityId::Meta(id) => format!("{:?}", arena.metas[&id]),
+            | EntityId::Term(id) => format!("{:?}", arena.terms[&id]),
+        }
+    }
+
+    /// How a child's arena identity appears inside its parent's `Debug` output.
+    fn identity(entity: EntityId) -> String {
+        match entity {
+            | EntityId::Def(id) => format!("{id:?}"),
+            | EntityId::Pat(id) => format!("{id:?}"),
+            | EntityId::CoPat(id) => format!("{id:?}"),
+            | EntityId::Meta(id) => format!("{id:?}"),
+            | EntityId::Term(id) => format!("{id:?}"),
+        }
+    }
+}
+
+/// A pattern parsed in the binder position of a `let`, where the grammar admits every pattern form.
+struct BoundPattern;
+
+impl BoundPattern {
+    fn parse(pattern: &str, parser: &mut Parser) -> PatId {
+        let source = format!("let {pattern} = value in value");
+        let root = StrictParser::source(&source, parser).unwrap().root;
+        let Term::ContextBind(ContextBind { binding, .. }) = &parser.arena.terms[&root] else {
+            panic!("expected `{source}` to parse as a let binding")
+        };
+        binding.binder
+    }
+}
+
+#[test]
+fn syntax_projection_compares_shapes_and_values_but_not_arena_ids() {
+    let project = |source: &str, parser: &mut Parser| {
+        let root = StrictParser::source(source, parser).unwrap().root;
+        SyntaxProjection::with_root(parser, root).0
+    };
+    let mut shared = Parser::new();
+    let original = project("let x = 1 in x", &mut shared);
+    // A second parse into the same arena allocates fresh IDs for the same tree.
+    assert_eq!(project("let x = 1 in x", &mut shared), original);
+    for changed in ["let y = 1 in y", "let x = 2 in x", "let x = (1) in x", "def x = 1 in x"] {
+        assert_ne!(project(changed, &mut Parser::new()), original, "{changed}");
+    }
+}
+
 #[test]
 fn rejects_retired_do_tilde_syntax() {
     let retired = "do~ first; second";
     let mut parser = Parser::new();
-    assert!(StrictParser::term(retired, &mut parser).is_err());
+    assert!(StrictParser::source(retired, &mut parser).is_err());
 
     let explicit = "first { second }";
     let mut parser = Parser::new();
-    StrictParser::term(explicit, &mut parser)
+    StrictParser::source(explicit, &mut parser)
+        .map(|unit| unit.root)
         .expect("explicit continuation application must remain available");
 }
 
@@ -40,7 +139,7 @@ fn rejects_retired_monadic_block_syntax() {
     let source = "monadic ret () end";
     let mut parser = Parser::new();
     assert!(
-        StrictParser::term(source, &mut parser).is_err(),
+        StrictParser::source(source, &mut parser).is_err(),
         "the delimited monadic keyword form must remain retired"
     );
 }
@@ -194,7 +293,8 @@ fn monadic_metadata_extent_survives_bitter_formatting() {
 fn retired_monadic_keywords_are_available_as_identifiers() {
     let source = "let monadic = 1 in let monadically = monadic in monadically";
     let mut parser = Parser::new();
-    StrictParser::term(source, &mut parser)
+    StrictParser::source(source, &mut parser)
+        .map(|unit| unit.root)
         .expect("retired monadic keywords must lex as ordinary identifiers");
 }
 
@@ -203,7 +303,7 @@ fn parses_decimal_and_scientific_float_literals() {
     [("1.25", 1.25), ("-2.5e1", -25.0), ("1e3", 1000.0)].into_iter().for_each(
         |(source, expected)| {
             let mut parser = Parser::new();
-            let term = StrictParser::term(source, &mut parser).unwrap();
+            let term = StrictParser::source(source, &mut parser).map(|unit| unit.root).unwrap();
             let Term::Lit(Literal::Float(value)) = parser.arena.terms[&term] else {
                 panic!("expected `{source}` to parse as a float literal")
             };
@@ -213,7 +313,7 @@ fn parses_decimal_and_scientific_float_literals() {
 
     let source = "1";
     let mut parser = Parser::new();
-    let term = StrictParser::term(source, &mut parser).unwrap();
+    let term = StrictParser::source(source, &mut parser).map(|unit| unit.root).unwrap();
     assert!(matches!(
         parser.arena.terms[&term],
         Term::Lit(Literal::Integer(IntegerLiteral::Unresolved(1)))
@@ -233,7 +333,8 @@ fn separates_term_body_arrows_from_type_arrows() {
     .into_iter()
     .for_each(|source| {
         let mut parser = Parser::new();
-        StrictParser::term(source, &mut parser)
+        StrictParser::source(source, &mut parser)
+            .map(|unit| unit.root)
             .unwrap_or_else(|error| panic!("expected `{source}` to parse: {error}"));
     });
 
@@ -249,7 +350,7 @@ fn separates_term_body_arrows_from_type_arrows() {
     .for_each(|source| {
         let mut parser = Parser::new();
         assert!(
-            StrictParser::term(source, &mut parser).is_err(),
+            StrictParser::source(source, &mut parser).is_err(),
             "expected `{source}` to be rejected"
         );
     });
@@ -259,7 +360,7 @@ fn separates_term_body_arrows_from_type_arrows() {
 fn metadata_preserves_identifiers_strings_integers_and_applications() {
     let source = r#"@[debug(name,"value",1,nested("path"))] _"#;
     let mut parser = Parser::new();
-    let term = StrictParser::term(source, &mut parser).unwrap();
+    let term = StrictParser::source(source, &mut parser).map(|unit| unit.root).unwrap();
 
     let Term::Meta(MetaTerm(meta, payload)) = &parser.arena.terms[&term] else {
         panic!("expected a metadata term")
@@ -315,7 +416,7 @@ fn metadata_preserves_identifiers_strings_integers_and_applications() {
 fn parenthesized_metadata_defaults_its_payload_to_a_hole() {
     let source = r#"@(debug(name,"value",1,nested("path")))"#;
     let mut parser = Parser::new();
-    let term = StrictParser::term(source, &mut parser).unwrap();
+    let term = StrictParser::source(source, &mut parser).map(|unit| unit.root).unwrap();
 
     let Term::Meta(MetaTerm(meta, payload)) = &parser.arena.terms[&term] else {
         panic!("expected a metadata term")
@@ -326,19 +427,14 @@ fn parenthesized_metadata_defaults_its_payload_to_a_hole() {
     );
     assert!(matches!(parser.arena.terms[payload], Term::Hole(Hole)));
 
-    // The sugar renders in its parenthesized form and reparses.
-    let rendered = term.ugly(&Formatter::new(&parser.arena));
-    assert_eq!(rendered, source);
-    let mut roundtrip = Parser::new();
-    StrictParser::term(&rendered, &mut roundtrip).unwrap();
-
     // `@(meta)` and `@[meta] _` are indistinguishable once parsed.
     let bracketed = r#"@[debug(name,"value",1,nested("path"))] _"#;
     let mut bracketed_parser = Parser::new();
-    let bracketed_term = StrictParser::term(bracketed, &mut bracketed_parser).unwrap();
+    let bracketed_term =
+        StrictParser::source(bracketed, &mut bracketed_parser).map(|unit| unit.root).unwrap();
     assert_eq!(
-        term.ugly(&Formatter::new(&parser.arena)),
-        bracketed_term.ugly(&Formatter::new(&bracketed_parser.arena)),
+        SyntaxProjection::with_root(&parser, term).0,
+        SyntaxProjection::with_root(&bracketed_parser, bracketed_term).0,
     );
 }
 
@@ -346,7 +442,10 @@ fn parenthesized_metadata_defaults_its_payload_to_a_hole() {
 fn parenthesized_metadata_rejects_an_empty_annotation() {
     let source = "@()";
     let mut parser = Parser::new();
-    assert!(StrictParser::term(source, &mut parser).is_err(), "expected `{source}` to be rejected");
+    assert!(
+        StrictParser::source(source, &mut parser).is_err(),
+        "expected `{source}` to be rejected"
+    );
 }
 
 #[test]
@@ -798,7 +897,7 @@ fn source_unit_wraps_exactly_one_complete_term() {
 fn parses_uniform_term_composition_forms() {
     let source = "begin let answer = seed that param seed that ret answer end";
     let mut parser = Parser::new();
-    let term = StrictParser::term(source, &mut parser).unwrap();
+    let term = StrictParser::source(source, &mut parser).map(|unit| unit.root).unwrap();
 
     let Term::Block(Block(body)) = &parser.arena.terms[&term] else {
         panic!("expected a context-forming block")
@@ -819,7 +918,7 @@ fn parses_uniform_term_composition_forms() {
     assert!(matches!(parser.arena.terms[tail], Term::Ret(_)));
 
     let nominal = "def Hidden = Int in Hidden";
-    let nominal = StrictParser::term(nominal, &mut parser).unwrap();
+    let nominal = StrictParser::source(nominal, &mut parser).map(|unit| unit.root).unwrap();
     assert!(matches!(
         parser.arena.terms[&nominal],
         Term::ContextBind(ContextBind {
@@ -834,16 +933,17 @@ fn parses_uniform_term_composition_forms() {
 fn parses_value_pi_abstractions_and_bindings() {
     let pi_source = "val pi (A : VType) (value : A) . A";
     let mut parser = Parser::new();
-    let pi = StrictParser::term(pi_source, &mut parser).unwrap();
+    let pi = StrictParser::source(pi_source, &mut parser).map(|unit| unit.root).unwrap();
     assert!(matches!(parser.arena.terms[&pi], Term::ValPi(_)));
 
     let abstraction_source = "val (A : VType) (value : A) => value";
-    let abstraction = StrictParser::term(abstraction_source, &mut parser).unwrap();
+    let abstraction =
+        StrictParser::source(abstraction_source, &mut parser).map(|unit| unit.root).unwrap();
     assert!(matches!(parser.arena.terms[&abstraction], Term::ValAbs(_)));
 
     let local_source = "let val identity (value : Int) : Int = value that 1 |> identity";
     let mut parser = Parser::new();
-    let local = StrictParser::term(local_source, &mut parser).unwrap();
+    let local = StrictParser::source(local_source, &mut parser).map(|unit| unit.root).unwrap();
     let Term::ContextBind(ContextBind { binding, placement: Placement::That, tail, .. }) =
         &parser.arena.terms[&local]
     else {
@@ -860,14 +960,14 @@ fn parses_value_pi_abstractions_and_bindings() {
 fn parses_lexical_and_block_value_parameters() {
     let mut parser = Parser::new();
     let lexical_source = "param val (value : Int) in value";
-    let lexical = StrictParser::term(lexical_source, &mut parser).unwrap();
+    let lexical = StrictParser::source(lexical_source, &mut parser).map(|unit| unit.root).unwrap();
     assert!(matches!(
         parser.arena.terms[&lexical],
         Term::Param(Param { flavor: ParameterFlavor::Value, placement: Placement::In, .. })
     ));
 
     let mobile_source = "param val (value : Int) that value";
-    let mobile = StrictParser::term(mobile_source, &mut parser).unwrap();
+    let mobile = StrictParser::source(mobile_source, &mut parser).map(|unit| unit.root).unwrap();
     assert!(matches!(
         parser.arena.terms[&mobile],
         Term::Param(Param { flavor: ParameterFlavor::Value, placement: Placement::That, .. })
@@ -878,21 +978,22 @@ fn parses_lexical_and_block_value_parameters() {
 fn parses_both_pipeline_spellings_and_view_patterns() {
     let mut parser = Parser::new();
     let forward = "pair |> first Int String";
-    let forward = StrictParser::term(forward, &mut parser).unwrap();
+    let forward = StrictParser::source(forward, &mut parser).map(|unit| unit.root).unwrap();
     assert!(matches!(
         parser.arena.terms[&forward],
         Term::Pipeline(Pipeline { direction: PipelineDirection::Forward, .. })
     ));
 
     let backward = "first Int String <| pair";
-    let backward = StrictParser::term(backward, &mut parser).unwrap();
+    let backward = StrictParser::source(backward, &mut parser).map(|unit| unit.root).unwrap();
     assert!(matches!(
         parser.arena.terms[&backward],
         Term::Pipeline(Pipeline { direction: PipelineDirection::Backward, .. })
     ));
 
     let pattern_source = "let first[Int, String] ~> selected = pair in selected";
-    let pattern_term = StrictParser::term(pattern_source, &mut parser).unwrap();
+    let pattern_term =
+        StrictParser::source(pattern_source, &mut parser).map(|unit| unit.root).unwrap();
     let Term::ContextBind(ContextBind { binding, .. }) = &parser.arena.terms[&pattern_term] else {
         panic!("expected a binding with a view pattern")
     };
@@ -903,11 +1004,6 @@ fn parses_both_pipeline_spellings_and_view_patterns() {
         panic!("expected an instantiated view head")
     };
     assert_eq!(head.len(), 3);
-
-    let rendered = pattern_term.ugly(&Formatter::new(&parser.arena));
-    assert_eq!(rendered, pattern_source);
-    let mut roundtrip = Parser::new();
-    StrictParser::term(&rendered, &mut roundtrip).unwrap();
 }
 
 #[test]
@@ -923,7 +1019,7 @@ fn backward_application_accepts_a_full_right_operand() {
     ] {
         let mut parser = Parser::new();
         let source = format!("apply <| {subject}");
-        let term = StrictParser::term(&source, &mut parser).unwrap();
+        let term = StrictParser::source(&source, &mut parser).map(|unit| unit.root).unwrap();
         let Term::Pipeline(Pipeline {
             direction: PipelineDirection::Backward,
             subject: parsed_subject,
@@ -932,16 +1028,21 @@ fn backward_application_accepts_a_full_right_operand() {
         else {
             panic!("expected a backward application: {source}")
         };
-        let expected_subject = StrictParser::term(subject, &mut parser).unwrap();
-        let formatter = Formatter::new(&parser.arena);
-        assert_eq!(parsed_subject.ugly(&formatter), expected_subject.ugly(&formatter));
+        let expected_subject =
+            StrictParser::source(subject, &mut parser).map(|unit| unit.root).unwrap();
+        assert_eq!(
+            SyntaxProjection::with_root(&parser, parsed_subject).0,
+            SyntaxProjection::with_root(&parser, expected_subject).0
+        );
     }
 }
 
 #[test]
 fn backward_application_remains_right_associative() {
     let mut parser = Parser::new();
-    let term = StrictParser::term("first <| second <| value", &mut parser).unwrap();
+    let term = StrictParser::source("first <| second <| value", &mut parser)
+        .map(|unit| unit.root)
+        .unwrap();
     let Term::Pipeline(Pipeline { subject, function, .. }) = parser.arena.terms[&term] else {
         panic!("expected an outer backward application")
     };
@@ -963,7 +1064,7 @@ fn backward_application_rejects_incomplete_operands() {
         "value |> fn argument => argument",
     ] {
         let mut parser = Parser::new();
-        assert!(StrictParser::term(source, &mut parser).is_err(), "source: {source}");
+        assert!(StrictParser::source(source, &mut parser).is_err(), "source: {source}");
     }
 }
 
@@ -971,7 +1072,7 @@ fn backward_application_rejects_incomplete_operands() {
 fn parses_manifest_existential_with_a_punned_field_binder() {
     let source = "exists (= Counter as Int : VType) . Counter";
     let mut parser = Parser::new();
-    let term = StrictParser::term(source, &mut parser).unwrap();
+    let term = StrictParser::source(source, &mut parser).map(|unit| unit.root).unwrap();
 
     let Term::Exists(Exists { parameters, body }) = &parser.arena.terms[&term] else {
         panic!("expected a manifest existential")
@@ -1004,18 +1105,13 @@ fn parses_manifest_existential_with_a_punned_field_binder() {
     assert_eq!(definition.plain(), "Int");
     assert_eq!(kind.plain(), "VType");
     assert_eq!(body.plain(), "Counter");
-
-    let rendered = term.ugly(&Formatter::new(&parser.arena));
-    assert_eq!(rendered, "exists (#Counter = ((Counter as Int) : VType)) . Counter");
-    let mut roundtrip = Parser::new();
-    StrictParser::term(&rendered, &mut roundtrip).unwrap();
 }
 
 #[test]
 fn parses_manifest_existential_inside_an_explicit_named_pattern() {
     let source = "exists (#Counter = ((Representation as Int) : VType)) . Representation";
     let mut parser = Parser::new();
-    let term = StrictParser::term(source, &mut parser).unwrap();
+    let term = StrictParser::source(source, &mut parser).map(|unit| unit.root).unwrap();
 
     let Term::Exists(Exists { parameters, .. }) = &parser.arena.terms[&term] else {
         panic!("expected a manifest existential")
@@ -1055,7 +1151,7 @@ fn parses_manifest_existential_inside_an_explicit_named_pattern() {
 fn parses_manifest_existential_with_an_inferred_classifier() {
     let source = "exists (VType as @[intrinsic(vtype)] _) . VType";
     let mut parser = Parser::new();
-    let term = StrictParser::term(source, &mut parser).unwrap();
+    let term = StrictParser::source(source, &mut parser).map(|unit| unit.root).unwrap();
 
     let Term::Exists(Exists { parameters, body }) = &parser.arena.terms[&term] else {
         panic!("expected a manifest existential")
@@ -1098,7 +1194,7 @@ fn parses_manifest_existential_with_an_inferred_classifier() {
 fn parses_interleaved_abstract_and_manifest_existential_parameters() {
     let source = "exists (X : VType) (Y as X : VType) (value : Y) . X";
     let mut parser = Parser::new();
-    let term = StrictParser::term(source, &mut parser).unwrap();
+    let term = StrictParser::source(source, &mut parser).map(|unit| unit.root).unwrap();
 
     let Term::Exists(Exists { parameters, body }) = &parser.arena.terms[&term] else {
         panic!("expected an existential telescope")
@@ -1122,7 +1218,7 @@ fn parses_interleaved_abstract_and_manifest_existential_parameters() {
 fn parses_pack_introduction_with_a_manifest_telescope() {
     let source = "pack (X as Int : VType) (Y as Char) where (0 : X), 'a' : Y, end";
     let mut parser = Parser::new();
-    let term = StrictParser::term(source, &mut parser).unwrap();
+    let term = StrictParser::source(source, &mut parser).map(|unit| unit.root).unwrap();
 
     let Term::Pack(Pack { parameters, body }) = &parser.arena.terms[&term] else {
         panic!("expected a package introduction")
@@ -1157,11 +1253,6 @@ fn parses_pack_introduction_with_a_manifest_telescope() {
 
     assert_eq!(kind.plain(), "VType");
     assert_eq!(parser.arena.defs[inner].plain(), "Y");
-
-    let rendered = term.ugly(&Formatter::new(&parser.arena));
-    let mut roundtrip = Parser::new();
-    StrictParser::term(&rendered, &mut roundtrip)
-        .expect("rendered package introductions must reparse");
 }
 
 #[test]
@@ -1169,7 +1260,7 @@ fn rejects_an_empty_pack_payload() {
     let source = "pack (X as Int : VType) where end";
     let mut parser = Parser::new();
     assert!(
-        StrictParser::term(source, &mut parser).is_err(),
+        StrictParser::source(source, &mut parser).is_err(),
         "a package payload must list at least one component"
     );
 }
@@ -1178,7 +1269,7 @@ fn rejects_an_empty_pack_payload() {
 fn parses_pack_introduction_with_sealed_evidence() {
     let source = "pack (= Bool : VType) is Bool (#Flag = Flag) is (List Bool) where 0 end";
     let mut parser = Parser::new();
-    let term = StrictParser::term(source, &mut parser).unwrap();
+    let term = StrictParser::source(source, &mut parser).map(|unit| unit.root).unwrap();
 
     let Term::Pack(Pack { parameters, .. }) = &parser.arena.terms[&term] else {
         panic!("expected a package introduction")
@@ -1201,17 +1292,13 @@ fn parses_pack_introduction_with_sealed_evidence() {
     let Term::App(_) = &parser.arena.terms[&components[0]] else {
         panic!("expected an application inside the evidence parentheses")
     };
-
-    let rendered = term.ugly(&Formatter::new(&parser.arena));
-    let mut roundtrip = Parser::new();
-    StrictParser::term(&rendered, &mut roundtrip).expect("rendered sealed parameters must reparse");
 }
 
 #[test]
 fn parses_named_term_fields() {
     let source = "(#x = 1, #y = 2)";
     let mut parser = Parser::new();
-    let term = StrictParser::term(source, &mut parser).unwrap();
+    let term = StrictParser::source(source, &mut parser).map(|unit| unit.root).unwrap();
 
     let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
         panic!("expected a parenthesized named tuple")
@@ -1242,7 +1329,7 @@ fn parses_named_term_fields() {
 fn parses_comma_separated_named_terms_without_early_sorting() {
     let source = "(#x = Int, #y = String)";
     let mut parser = Parser::new();
-    let term = StrictParser::term(source, &mut parser).unwrap();
+    let term = StrictParser::source(source, &mut parser).map(|unit| unit.root).unwrap();
 
     let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
         panic!("expected a parenthesized named type")
@@ -1270,7 +1357,7 @@ fn parses_comma_separated_named_terms_without_early_sorting() {
 fn parses_labeled_product_type() {
     let source = "(#x :: Int) * (#y :: String)";
     let mut parser = Parser::new();
-    let term = StrictParser::term(source, &mut parser).unwrap();
+    let term = StrictParser::source(source, &mut parser).map(|unit| unit.root).unwrap();
 
     let Term::Prod(Prod(components)) = &parser.arena.terms[&term] else {
         panic!("expected a product type")
@@ -1308,7 +1395,7 @@ fn parses_labeled_product_type() {
 fn parses_chained_labels_right_associatively() {
     let source = "(#outer :: #inner :: Int)";
     let mut parser = Parser::new();
-    let term = StrictParser::term(source, &mut parser).unwrap();
+    let term = StrictParser::source(source, &mut parser).map(|unit| unit.root).unwrap();
 
     let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
         panic!("expected a parenthesized labeled term")
@@ -1331,7 +1418,7 @@ fn parses_chained_labels_right_associatively() {
 fn annotation_binds_inside_a_named_classifier() {
     let source = "(#field :: A : K)";
     let mut parser = Parser::new();
-    let term = StrictParser::term(source, &mut parser).unwrap();
+    let term = StrictParser::source(source, &mut parser).map(|unit| unit.root).unwrap();
 
     let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
         panic!("expected a parenthesized labeled term")
@@ -1357,7 +1444,7 @@ fn annotation_binds_inside_a_named_classifier() {
 fn parses_mixed_named_and_labeled_terms_right_associatively() {
     let source = "(#outer = #inner :: Int)";
     let mut parser = Parser::new();
-    let term = StrictParser::term(source, &mut parser).unwrap();
+    let term = StrictParser::source(source, &mut parser).map(|unit| unit.root).unwrap();
 
     let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
         panic!("expected a parenthesized named term")
@@ -1380,7 +1467,7 @@ fn parses_mixed_named_and_labeled_terms_right_associatively() {
 fn parentheses_classify_the_whole_named_introduction() {
     let source = "((#field = value) : (#field :: classifier))";
     let mut parser = Parser::new();
-    let term = StrictParser::term(source, &mut parser).unwrap();
+    let term = StrictParser::source(source, &mut parser).map(|unit| unit.root).unwrap();
 
     let Term::Paren(Paren(annotations)) = &parser.arena.terms[&term] else {
         panic!("expected a parenthesized annotation")
@@ -1422,7 +1509,7 @@ fn parentheses_classify_the_whole_named_introduction() {
 fn parses_named_term_payload_annotation() {
     let source = "(#name = 1 : _)";
     let mut parser = Parser::new();
-    let term = StrictParser::term(source, &mut parser).unwrap();
+    let term = StrictParser::source(source, &mut parser).map(|unit| unit.root).unwrap();
 
     let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
         panic!("expected a parenthesized named tuple")
@@ -1447,7 +1534,7 @@ fn parses_named_term_payload_annotation() {
 fn parses_punned_named_terms_and_payload_annotations() {
     let source = "(= left, middle, = right : Int)";
     let mut parser = Parser::new();
-    let term = StrictParser::term(source, &mut parser).unwrap();
+    let term = StrictParser::source(source, &mut parser).map(|unit| unit.root).unwrap();
 
     let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
         panic!("expected a parenthesized mixed tuple")
@@ -1488,7 +1575,7 @@ fn parses_punned_named_terms_and_payload_annotations() {
 fn field_names_and_puns_accept_uppercase_variable_names() {
     let source = "(#Explicit = payload, = Inferred)";
     let mut parser = Parser::new();
-    let term = StrictParser::term(source, &mut parser).unwrap();
+    let term = StrictParser::source(source, &mut parser).map(|unit| unit.root).unwrap();
 
     let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
         panic!("expected a parenthesized named tuple")
@@ -1517,7 +1604,7 @@ fn field_names_and_puns_accept_uppercase_variable_names() {
 fn rejects_punning_a_non_variable_term() {
     let source = "(= 1)";
     let mut parser = Parser::new();
-    let parsed = StrictParser::term(source, &mut parser);
+    let parsed = StrictParser::source(source, &mut parser).map(|unit| unit.root);
 
     assert!(parsed.is_err());
 }
@@ -1526,7 +1613,7 @@ fn rejects_punning_a_non_variable_term() {
 fn parses_chained_named_terms() {
     let source = "(#outer = #inner = 1)";
     let mut parser = Parser::new();
-    let term = StrictParser::term(source, &mut parser).unwrap();
+    let term = StrictParser::source(source, &mut parser).map(|unit| unit.root).unwrap();
 
     let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
         panic!("expected a parenthesized named tuple")
@@ -1551,7 +1638,7 @@ fn parses_chained_named_terms() {
 fn parses_named_pattern_fields() {
     let source = "(#x = left, #y = right)";
     let mut parser = Parser::new();
-    let pattern = StrictParser::pattern(source, &mut parser).unwrap();
+    let pattern = BoundPattern::parse(source, &mut parser);
 
     let Pattern::Paren(Paren(fields)) = &parser.arena.pats[&pattern] else {
         panic!("expected a parenthesized named tuple pattern")
@@ -1579,7 +1666,7 @@ fn parses_named_pattern_fields() {
 fn parses_semicolon_pattern_aliases_in_source_order() {
     let source = "(whole; first; second)";
     let mut parser = Parser::new();
-    let pattern = StrictParser::pattern(source, &mut parser).unwrap();
+    let pattern = BoundPattern::parse(source, &mut parser);
 
     let Pattern::Alias(Alias(patterns)) = &parser.arena.pats[&pattern] else {
         panic!("expected a pattern alias")
@@ -1601,7 +1688,7 @@ fn parses_semicolon_pattern_aliases_in_source_order() {
 fn parses_field_projection_patterns_as_alias_members() {
     let source = "(/x = left; /y = right; whole)";
     let mut parser = Parser::new();
-    let pattern = StrictParser::pattern(source, &mut parser).unwrap();
+    let pattern = BoundPattern::parse(source, &mut parser);
 
     let Pattern::Alias(Alias(patterns)) = &parser.arena.pats[&pattern] else {
         panic!("expected a pattern alias")
@@ -1631,7 +1718,7 @@ fn parses_field_projection_patterns_as_alias_members() {
 fn parses_punned_field_projection_patterns_and_payload_annotations() {
     let source = "(/left : Int; /Right; whole)";
     let mut parser = Parser::new();
-    let pattern = StrictParser::pattern(source, &mut parser).unwrap();
+    let pattern = BoundPattern::parse(source, &mut parser);
 
     let Pattern::Alias(Alias(patterns)) = &parser.arena.pats[&pattern] else {
         panic!("expected a pattern alias")
@@ -1666,7 +1753,7 @@ fn parses_punned_field_projection_patterns_and_payload_annotations() {
 fn parses_chained_field_projection_patterns_right_associatively() {
     let source = "(/outer = /inner = payload)";
     let mut parser = Parser::new();
-    let pattern = StrictParser::pattern(source, &mut parser).unwrap();
+    let pattern = BoundPattern::parse(source, &mut parser);
 
     let Pattern::Paren(Paren(patterns)) = &parser.arena.pats[&pattern] else {
         panic!("expected a parenthesized projection pattern")
@@ -1688,7 +1775,7 @@ fn parses_chained_field_projection_patterns_right_associatively() {
 fn parses_named_pattern_payload_annotation() {
     let source = "(#name = payload : _)";
     let mut parser = Parser::new();
-    let pattern = StrictParser::pattern(source, &mut parser).unwrap();
+    let pattern = BoundPattern::parse(source, &mut parser);
 
     let Pattern::Paren(Paren(fields)) = &parser.arena.pats[&pattern] else {
         panic!("expected a parenthesized named tuple pattern")
@@ -1713,7 +1800,7 @@ fn parses_named_pattern_payload_annotation() {
 fn parses_punned_named_patterns_and_payload_annotations() {
     let source = "(= left : Int, middle, = right)";
     let mut parser = Parser::new();
-    let pattern = StrictParser::pattern(source, &mut parser).unwrap();
+    let pattern = BoundPattern::parse(source, &mut parser);
 
     let Pattern::Paren(Paren(fields)) = &parser.arena.pats[&pattern] else {
         panic!("expected a parenthesized mixed tuple pattern")
@@ -1754,7 +1841,7 @@ fn parses_punned_named_patterns_and_payload_annotations() {
 fn parses_chained_named_patterns() {
     let source = "(#outer = #inner = payload)";
     let mut parser = Parser::new();
-    let pattern = StrictParser::pattern(source, &mut parser).unwrap();
+    let pattern = BoundPattern::parse(source, &mut parser);
 
     let Pattern::Paren(Paren(fields)) = &parser.arena.pats[&pattern] else {
         panic!("expected a parenthesized named tuple pattern")
@@ -1779,7 +1866,7 @@ fn parses_chained_named_patterns() {
 fn parses_chained_named_projection() {
     let source = "rectangle/top_left/x";
     let mut parser = Parser::new();
-    let term = StrictParser::term(source, &mut parser).unwrap();
+    let term = StrictParser::source(source, &mut parser).map(|unit| unit.root).unwrap();
 
     let Term::Proj(Proj(inner, x)) = &parser.arena.terms[&term] else {
         panic!("expected an outer named projection")
@@ -1800,7 +1887,7 @@ fn parses_chained_named_projection() {
 fn named_projection_binds_tighter_than_application() {
     let source = "service/inspect rectangle/top_left";
     let mut parser = Parser::new();
-    let term = StrictParser::term(source, &mut parser).unwrap();
+    let term = StrictParser::source(source, &mut parser).map(|unit| unit.root).unwrap();
 
     let Term::App(Appli(items)) = &parser.arena.terms[&term] else {
         panic!("expected an application")
@@ -1829,7 +1916,8 @@ fn named_projection_binds_tighter_than_application() {
 fn named_projection_binds_tighter_than_undelimited_prefix_forms() {
     let force_source = "! package/action argument";
     let mut force_parser = Parser::new();
-    let force = StrictParser::term(force_source, &mut force_parser).unwrap();
+    let force =
+        StrictParser::source(force_source, &mut force_parser).map(|unit| unit.root).unwrap();
 
     let Term::App(Appli(force_application)) = &force_parser.arena.terms[&force] else {
         panic!("expected forcing to bind tighter than application")
@@ -1849,7 +1937,8 @@ fn named_projection_binds_tighter_than_undelimited_prefix_forms() {
 
     let return_source = "ret package/value";
     let mut return_parser = Parser::new();
-    let returned = StrictParser::term(return_source, &mut return_parser).unwrap();
+    let returned =
+        StrictParser::source(return_source, &mut return_parser).map(|unit| unit.root).unwrap();
 
     let Term::Ret(Return(projected)) = &return_parser.arena.terms[&returned] else {
         panic!("expected a return")
@@ -1862,7 +1951,9 @@ fn named_projection_binds_tighter_than_undelimited_prefix_forms() {
 
     let constructor_source = "+Some package/value";
     let mut constructor_parser = Parser::new();
-    let constructed = StrictParser::term(constructor_source, &mut constructor_parser).unwrap();
+    let constructed = StrictParser::source(constructor_source, &mut constructor_parser)
+        .map(|unit| unit.root)
+        .unwrap();
 
     let Term::Ctor(Ctor(name, projected)) = &constructor_parser.arena.terms[&constructed] else {
         panic!("expected a constructor")
@@ -1879,7 +1970,7 @@ fn named_projection_binds_tighter_than_undelimited_prefix_forms() {
 fn parses_chained_dot_elimination() {
     let source = "rectangle .top_left .x";
     let mut parser = Parser::new();
-    let term = StrictParser::term(source, &mut parser).unwrap();
+    let term = StrictParser::source(source, &mut parser).map(|unit| unit.root).unwrap();
 
     let Term::Dtor(Dtor(inner, x)) = &parser.arena.terms[&term] else {
         panic!("expected an outer dot elimination")

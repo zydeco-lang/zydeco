@@ -345,32 +345,10 @@ impl ParseFailure {
 /// Result of a recovering parse. Syntax is absent after an unrecoverable syntax
 /// error or a fallible-action failure.
 #[derive(Clone, Debug)]
-pub struct RecoveringParse<Syntax> {
-    pub syntax: Option<Syntax>,
+pub struct RecoveringParse {
+    pub syntax: Option<SourceUnit>,
     pub issues: Vec<ParseIssue>,
     pub completion: Option<CompletionSite>,
-}
-
-trait ParsedRoot {
-    fn entity(&self) -> EntityId;
-}
-
-impl ParsedRoot for SourceUnit {
-    fn entity(&self) -> EntityId {
-        self.root.into()
-    }
-}
-
-impl ParsedRoot for TermId {
-    fn entity(&self) -> EntityId {
-        (*self).into()
-    }
-}
-
-impl ParsedRoot for PatId {
-    fn entity(&self) -> EntityId {
-        (*self).into()
-    }
 }
 
 /// Why an editor cursor cannot become a parser completion position.
@@ -448,7 +426,7 @@ impl<'source> CompletionCursor<'source> {
     }
 }
 
-/// Namespace for compiler-strict parser entry points.
+/// Namespace for the compiler-strict parser entry point.
 pub struct StrictParser;
 
 impl StrictParser {
@@ -463,32 +441,10 @@ impl StrictParser {
         Self::finish(parsed, syntax, recovery)
     }
 
-    pub fn term(source: &str, syntax: &mut Parser) -> Result<TermId, ParseFailure> {
-        let mut recovery = RecoveryAccumulator::default();
-        let parsed = generated::SingleTermParser::new().parse(
-            source,
-            syntax,
-            &mut recovery,
-            ParseTokens::ordinary(source),
-        );
-        Self::finish(parsed, syntax, recovery)
-    }
-
-    pub fn pattern(source: &str, syntax: &mut Parser) -> Result<PatId, ParseFailure> {
-        let mut recovery = RecoveryAccumulator::default();
-        let parsed = generated::SinglePatternParser::new().parse(
-            source,
-            syntax,
-            &mut recovery,
-            ParseTokens::ordinary(source),
-        );
-        Self::finish(parsed, syntax, recovery)
-    }
-
-    fn finish<Syntax: ParsedRoot>(
-        parsed: Result<Syntax, RawParseError<'_>>, syntax: &Parser,
+    fn finish(
+        parsed: Result<SourceUnit, RawParseError<'_>>, syntax: &Parser,
         recovery: RecoveryAccumulator<'_>,
-    ) -> Result<Syntax, ParseFailure> {
+    ) -> Result<SourceUnit, ParseFailure> {
         let RecoveringParse { syntax: parsed, issues, completion: _ } =
             RecoveringParser::finish(parsed, syntax, recovery, None);
         match (parsed, issues.is_empty()) {
@@ -502,7 +458,7 @@ impl StrictParser {
 /// Recovering parser bound to one immutable source snapshot.
 ///
 /// A completion cursor and its replacement range can only be used with the source
-/// on which they were validated; the entry points do not accept another source.
+/// on which they were validated; the entry point does not accept another source.
 #[derive(Clone, Debug)]
 pub struct RecoveringParser<'source> {
     source: &'source str,
@@ -522,7 +478,7 @@ impl<'source> RecoveringParser<'source> {
         CompletionCursor::at(source, offset).map(Self::with_completion)
     }
 
-    pub fn source(&self, syntax: &mut Parser) -> RecoveringParse<SourceUnit> {
+    pub fn source(&self, syntax: &mut Parser) -> RecoveringParse {
         let mut recovery = RecoveryAccumulator::default();
         let parsed = generated::SourceUnitParser::new().parse(
             self.source,
@@ -533,32 +489,10 @@ impl<'source> RecoveringParser<'source> {
         Self::finish(parsed, syntax, recovery, self.completion.as_ref())
     }
 
-    pub fn term(&self, syntax: &mut Parser) -> RecoveringParse<TermId> {
-        let mut recovery = RecoveryAccumulator::default();
-        let parsed = generated::SingleTermParser::new().parse(
-            self.source,
-            syntax,
-            &mut recovery,
-            ParseTokens::new(self.source, self.completion.as_ref()),
-        );
-        Self::finish(parsed, syntax, recovery, self.completion.as_ref())
-    }
-
-    pub fn pattern(&self, syntax: &mut Parser) -> RecoveringParse<PatId> {
-        let mut recovery = RecoveryAccumulator::default();
-        let parsed = generated::SinglePatternParser::new().parse(
-            self.source,
-            syntax,
-            &mut recovery,
-            ParseTokens::new(self.source, self.completion.as_ref()),
-        );
-        Self::finish(parsed, syntax, recovery, self.completion.as_ref())
-    }
-
-    fn finish<Syntax: ParsedRoot>(
-        parsed: Result<Syntax, RawParseError<'_>>, parser: &Parser,
+    fn finish(
+        parsed: Result<SourceUnit, RawParseError<'_>>, parser: &Parser,
         recovery: RecoveryAccumulator<'_>, completion: Option<&CompletionCursor<'_>>,
-    ) -> RecoveringParse<Syntax> {
+    ) -> RecoveringParse {
         let mut issues = recovery.finish();
         let parsed_root = match parsed {
             | Ok(parsed) => Some(parsed),
@@ -574,7 +508,10 @@ impl<'source> RecoveringParser<'source> {
                 .find_map(|issue| issue.recovery)
                 .filter(|hole| {
                     parsed_root.as_ref().is_some_and(|root| {
-                        parser.arena.reachable_from(root.entity()).contains(&hole.entity.entity())
+                        parser
+                            .arena
+                            .reachable_from(root.root.into())
+                            .contains(&hole.entity.entity())
                     })
                 })
                 .map(|hole| CompletionHole { entity: hole.entity });

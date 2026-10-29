@@ -2,119 +2,12 @@
 
 use super::{super::*, RejectionAssertions};
 use crate::textual::{
-    fmt::Formatter,
-    syntax::{CoPattern, MetaNode, Span},
-    tests::corpus::ZydecoCorpus,
+    syntax::Span,
+    tests::{SyntaxProjection, corpus::ZydecoCorpus},
 };
-use std::{
-    collections::{HashMap, HashSet},
-    fs,
-    mem::{Discriminant, discriminant},
-};
-use strum::VariantArray;
-use zydeco_syntax::Ugly;
+use std::{collections::HashSet, fs};
 
-#[derive(Debug, Eq, PartialEq)]
-enum NodeKind {
-    Definition,
-    Pattern(Discriminant<Pattern>),
-    CoPattern(Discriminant<CoPattern>),
-    Metadata(Discriminant<MetaNode>),
-    Term(Discriminant<Term>),
-}
-
-#[derive(Debug, Eq, PartialEq)]
-struct ProjectedNode {
-    kind: NodeKind,
-    children: Vec<usize>,
-}
-
-/// Compare stable AST structure and source-level values without comparing arena IDs.
-/// The existing formatter supplies values; tags and edges preserve structure that
-/// printing can elide, such as a boundary wrapper or a singleton grouping node.
-#[derive(Debug, Eq, PartialEq)]
-struct SyntaxProjection {
-    rendered: String,
-    nodes: Vec<ProjectedNode>,
-}
-
-impl SyntaxProjection {
-    fn with_root(parser: &Parser, root: EntityId) -> (Self, Vec<Range<usize>>) {
-        let arena = &parser.arena;
-        let formatter = Formatter::new(arena);
-        let rendered = match root {
-            | EntityId::Def(id) => id.ugly(&formatter),
-            | EntityId::Pat(id) => id.ugly(&formatter),
-            | EntityId::CoPat(id) => id.ugly(&formatter),
-            | EntityId::Meta(id) => id.ugly(&formatter),
-            | EntityId::Term(id) => id.ugly(&formatter),
-        };
-        let mut indices = HashMap::new();
-        let mut order = Vec::new();
-        let mut pending = vec![root];
-        while let Some(entity) = pending.pop() {
-            if let std::collections::hash_map::Entry::Vacant(entry) = indices.entry(entity) {
-                entry.insert(order.len());
-                order.push(entity);
-                pending.extend(arena.children(entity).into_iter().rev());
-            }
-        }
-        let nodes = order
-            .iter()
-            .map(|entity| {
-                let kind = match entity {
-                    | EntityId::Def(_) => NodeKind::Definition,
-                    | EntityId::Pat(id) => NodeKind::Pattern(discriminant(&arena.pats[id])),
-                    | EntityId::CoPat(id) => NodeKind::CoPattern(discriminant(&arena.copats[id])),
-                    | EntityId::Meta(id) => NodeKind::Metadata(discriminant(&arena.metas[id])),
-                    | EntityId::Term(id) => NodeKind::Term(discriminant(&arena.terms[id])),
-                };
-                ProjectedNode {
-                    kind,
-                    children: arena.children(*entity).iter().map(|child| indices[child]).collect(),
-                }
-            })
-            .collect();
-        let ranges = order.iter().map(|entity| parser.spans[entity].range()).collect();
-        (Self { rendered, nodes }, ranges)
-    }
-}
-
-#[derive(Copy, Clone, Debug, strum::VariantArray)]
-enum EntryPoint {
-    Source,
-    Term,
-    Pattern,
-}
-
-impl EntryPoint {
-    fn strict(self, source: &str, parser: &mut Parser) -> Result<EntityId, ParseFailure> {
-        match self {
-            | Self::Source => StrictParser::source(source, parser).map(|root| root.entity()),
-            | Self::Term => StrictParser::term(source, parser).map(|root| root.entity()),
-            | Self::Pattern => StrictParser::pattern(source, parser).map(|root| root.entity()),
-        }
-    }
-
-    fn recover(
-        self, request: &RecoveringParser<'_>, parser: &mut Parser,
-    ) -> RecoveringParse<EntityId> {
-        match self {
-            | Self::Source => Self::erase(request.source(parser)),
-            | Self::Term => Self::erase(request.term(parser)),
-            | Self::Pattern => Self::erase(request.pattern(parser)),
-        }
-    }
-
-    fn erase<Root: ParsedRoot>(parsed: RecoveringParse<Root>) -> RecoveringParse<EntityId> {
-        let RecoveringParse { syntax, issues, completion } = parsed;
-        RecoveringParse { syntax: syntax.map(|root| root.entity()), issues, completion }
-    }
-}
-
-struct ParserContract {
-    entry: EntryPoint,
-}
+struct ParserContract;
 
 impl ParserContract {
     fn range(source: &str, range: &Range<usize>) {
@@ -133,7 +26,7 @@ impl ParserContract {
         }
     }
 
-    fn invariants(source: &str, parser: &Parser, parsed: &RecoveringParse<EntityId>) {
+    fn invariants(source: &str, parser: &Parser, parsed: &RecoveringParse) {
         parser.spans.iter().for_each(|(_, span)| Self::range(source, &span.range()));
         assert!(
             parsed.syntax.is_some() || !parsed.issues.is_empty() || parsed.completion.is_some()
@@ -159,8 +52,10 @@ impl ParserContract {
                     .all(|pair| pair[0].range.end <= pair[1].range.start)
             );
         });
-        let reachable =
-            parsed.syntax.map(|root| parser.arena.reachable_from(root)).unwrap_or_default();
+        let reachable = parsed
+            .syntax
+            .map(|unit| parser.arena.reachable_from(unit.root.into()))
+            .unwrap_or_default();
         if let Some(completion) = &parsed.completion {
             Self::range(source, &completion.replacement);
             if let Some(hole) = completion.hole {
@@ -176,31 +71,29 @@ impl ParserContract {
 
     /// The strict LALRPOP facade is the reference for acceptance. Separate arena IDs
     /// are erased, while reachable shape, values, and spans must agree on success.
-    fn check(&self, source: &str) {
+    fn check(source: &str) {
         let mut parser = Parser::new();
-        let recovered = self.entry.recover(&RecoveringParser::new(source), &mut parser);
+        let recovered = RecoveringParser::new(source).source(&mut parser);
         Self::invariants(source, &parser, &recovered);
         let mut reference = Parser::new();
-        match self.entry.strict(source, &mut reference) {
-            | Ok(root) => {
-                assert!(recovered.issues.is_empty(), "{:?}: {source:?}", self.entry);
+        match StrictParser::source(source, &mut reference) {
+            | Ok(unit) => {
+                assert!(recovered.issues.is_empty(), "{source:?}");
                 assert_eq!(
-                    SyntaxProjection::with_root(&reference, root),
-                    SyntaxProjection::with_root(&parser, recovered.syntax.unwrap()),
-                    "{:?}: {source:?}",
-                    self.entry,
+                    SyntaxProjection::with_root(&reference, unit.root),
+                    SyntaxProjection::with_root(&parser, recovered.syntax.unwrap().root),
+                    "{source:?}",
                 );
             }
             | Err(failure) => RejectionAssertions::same_issues(&failure, &recovered.issues),
         }
         // Recovery choices must also be deterministic on rejected input.
         let mut repeated_parser = Parser::new();
-        let repeated = self.entry.recover(&RecoveringParser::new(source), &mut repeated_parser);
+        let repeated = RecoveringParser::new(source).source(&mut repeated_parser);
         assert_eq!(
-            recovered.syntax.map(|root| SyntaxProjection::with_root(&parser, root)),
-            repeated.syntax.map(|root| SyntaxProjection::with_root(&repeated_parser, root)),
-            "{:?}: {source:?}",
-            self.entry,
+            recovered.syntax.map(|unit| SyntaxProjection::with_root(&parser, unit.root)),
+            repeated.syntax.map(|unit| SyntaxProjection::with_root(&repeated_parser, unit.root)),
+            "{source:?}",
         );
         assert_eq!(recovered.issues.len(), repeated.issues.len());
         if !repeated.issues.is_empty() {
@@ -211,32 +104,31 @@ impl ParserContract {
         }
     }
 
-    fn completion(&self, source: &str, offset: usize) {
+    fn completion(source: &str, offset: usize) {
         let request = match RecoveringParser::at(source, offset) {
             | Ok(request) => request,
             | Err(CompletionCursorError::OpaqueSource { .. }) => return,
             | Err(error) => panic!("invalid test cursor: {error}"),
         };
         let mut parser = Parser::new();
-        let parsed = self.entry.recover(&request, &mut parser);
+        let parsed = request.source(&mut parser);
         Self::invariants(source, &parser, &parsed);
         let completion = parsed.completion.unwrap();
         assert!(completion.replacement.start <= offset && offset <= completion.replacement.end);
     }
 
-    fn repair(&self, source: &str, repaired: &str) {
+    fn repair(source: &str, repaired: &str) {
         let mut parser = Parser::new();
-        let recovered = self.entry.recover(&RecoveringParser::new(source), &mut parser);
+        let recovered = RecoveringParser::new(source).source(&mut parser);
         Self::invariants(source, &parser, &recovered);
         assert!(!recovered.issues.is_empty(), "a repair fixture must start malformed: {source:?}");
-        assert!(self.entry.strict(source, &mut Parser::new()).is_err());
+        assert!(StrictParser::source(source, &mut Parser::new()).is_err());
         let mut reference = Parser::new();
-        let repaired_root = self
-            .entry
-            .strict(repaired, &mut reference)
-            .unwrap_or_else(|error| panic!("bad repair {repaired:?}: {error:?}"));
+        let repaired_root = StrictParser::source(repaired, &mut reference)
+            .unwrap_or_else(|error| panic!("bad repair {repaired:?}: {error:?}"))
+            .root;
         assert_eq!(
-            SyntaxProjection::with_root(&parser, recovered.syntax.unwrap()).0,
+            SyntaxProjection::with_root(&parser, recovered.syntax.unwrap().root).0,
             SyntaxProjection::with_root(&reference, repaired_root).0,
             "recovery of {source:?} differs from explicit repair {repaired:?}",
         );
@@ -259,10 +151,7 @@ fn repository_sources_agree_with_strict_parsing_in_shape_values_and_spans() {
         }
     });
     assert!(unparsed.is_empty(), "strict parsing failed for:\n{}", unparsed.join("\n"));
-    sources.into_iter().for_each(|source| {
-        ParserContract { entry: EntryPoint::Source }.check(&source);
-        ParserContract { entry: EntryPoint::Term }.check(&source);
-    });
+    sources.into_iter().for_each(|source| ParserContract::check(&source));
 }
 
 #[test]
@@ -277,17 +166,11 @@ fn recovery_matches_explicit_strict_repairs_and_retains_later_syntax() {
         ("match value | +A => 1 | +B b => b end", "match value | +A _ => 1 | +B b => b end"),
         ("comatch | .get => | .next x => x end", "comatch | .get => _ | .next x => x end"),
         ("@[tag(x)] let value = ? in value", "@[tag(x)] let value = _ in value"),
+        ("let (,) = value in value", "let (_, ) = value in value"),
+        ("match value | +Some => 1 end", "match value | +Some _ => 1 end"),
     ]
     .into_iter()
-    .for_each(|(source, repaired)| {
-        ParserContract { entry: EntryPoint::Source }.repair(source, repaired);
-        ParserContract { entry: EntryPoint::Term }.repair(source, repaired);
-    });
-    [("", "_"), ("(,)", "(_, )"), ("+Some", "+Some _")].into_iter().for_each(
-        |(source, repaired)| {
-            ParserContract { entry: EntryPoint::Pattern }.repair(source, repaired);
-        },
-    );
+    .for_each(|(source, repaired)| ParserContract::repair(source, repaired));
 }
 
 #[test]
@@ -320,8 +203,8 @@ fn completion_matches_an_explicit_hole_at_the_validated_replacement() {
         let mut reference = Parser::new();
         let repaired_root = StrictParser::source(&repaired, &mut reference).unwrap().root;
         assert_eq!(
-            SyntaxProjection::with_root(&parser, root.into()).0,
-            SyntaxProjection::with_root(&reference, repaired_root.into()).0,
+            SyntaxProjection::with_root(&parser, root).0,
+            SyntaxProjection::with_root(&reference, repaired_root).0,
             "{marked:?}",
         );
     });
@@ -421,7 +304,7 @@ fn a_source_bound_cursor_stays_valid_across_repeated_parses_and_earlier_allocati
         CompletionCursor::at("let value =  in value", 12).unwrap(),
     );
     let mut parser = Parser::new();
-    let old = StrictParser::term("_", &mut parser).unwrap();
+    let old = StrictParser::source("_", &mut parser).unwrap().root;
     let first = request.source(&mut parser).completion.unwrap().hole.unwrap();
     let second = request.source(&mut parser).completion.unwrap().hole.unwrap();
     assert_ne!(first.entity, ParsedHole::Term(old));
@@ -446,7 +329,7 @@ fn literal_overflow_is_a_typed_fatal_error_with_the_numeric_span() {
         let failure = StrictParser::source(&source, &mut Parser::new()).unwrap_err();
         RejectionAssertions::same_issues(&failure, &recovered.issues);
         // Ordinary integer literals are arbitrary precision, not metadata integers.
-        assert!(StrictParser::term(number, &mut Parser::new()).is_ok());
+        assert!(StrictParser::source(number, &mut Parser::new()).is_ok());
     });
     ["9223372036854775807", "-9223372036854775808"].into_iter().for_each(|number| {
         assert!(
@@ -484,7 +367,7 @@ fn malformed_lexemes_recover_without_silent_eof_and_pair_with_valid_sources() {
             &issue.kind, ParseIssueKind::UnrecognizedToken { token: DiagnosticToken::Invalid(actual), .. } if *actual == error
         )), "{source:?}: {failure:?}");
         assert!(StrictParser::source(valid, &mut Parser::new()).is_ok(), "{valid:?}");
-        ParserContract { entry: EntryPoint::Source }.check(source);
+        ParserContract::check(source);
     });
 }
 
@@ -539,23 +422,18 @@ fn deterministic_token_mutations_and_edit_prefixes_obey_the_parser_contract() {
     .into_iter()
     .for_each(|source| {
         assert!(StrictParser::source(source, &mut Parser::new()).is_ok(), "bad seed: {source:?}");
-        EntryPoint::VARIANTS.iter().copied().for_each(|entry| {
-            let contract = ParserContract { entry };
-            // An editor observes every prefix while typing, including inside UTF-8 literals.
-            source.char_indices().map(|(offset, _)| offset).chain([source.len()]).for_each(
-                |offset| {
-                    contract.check(&source[..offset]);
-                    contract.completion(&source[..offset], offset);
-                    contract.completion(source, offset);
-                },
-            );
-            Lexer::new(source).map(Result::unwrap).for_each(|(start, _, end)| {
-                ["", "?", "]"].into_iter().for_each(|replacement| {
-                    let mut edited = source.to_owned();
-                    edited.replace_range(start..end, replacement);
-                    contract.check(&edited);
-                    contract.completion(&edited, start);
-                });
+        // An editor observes every prefix while typing, including inside UTF-8 literals.
+        source.char_indices().map(|(offset, _)| offset).chain([source.len()]).for_each(|offset| {
+            ParserContract::check(&source[..offset]);
+            ParserContract::completion(&source[..offset], offset);
+            ParserContract::completion(source, offset);
+        });
+        Lexer::new(source).map(Result::unwrap).for_each(|(start, _, end)| {
+            ["", "?", "]"].into_iter().for_each(|replacement| {
+                let mut edited = source.to_owned();
+                edited.replace_range(start..end, replacement);
+                ParserContract::check(&edited);
+                ParserContract::completion(&edited, start);
             });
         });
     });

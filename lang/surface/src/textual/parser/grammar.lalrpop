@@ -284,11 +284,6 @@ Pattern: ParsedNode<Pattern> = {
     <Paren<PatternAnnId>> => ParsedNode::Syntax(<>.into()),
 };
 
-pub SinglePattern: PatId = <pattern:PatId> => {
-    parser.capture_source_information(input);
-    pattern
-};
-
 CoPatternGen<P>: CoPatId = <Sp<P>> => parser.copat(<>);
 
 #[inline]
@@ -578,11 +573,6 @@ Term: ParsedNode<Term> = {
         let payload = parser.term(span.make(Term::Hole(Hole)));
         ParsedNode::Syntax(MetaTerm(meta, payload).into())
     },
-};
-
-pub SingleTerm: TermId = <term:TermId> => {
-    parser.capture_source_information(input);
-    term
 };
 
 pub SourceUnit: SourceUnit = {

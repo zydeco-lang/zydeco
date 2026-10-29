@@ -60,7 +60,7 @@ of highlighting the whole annotation.
 ## Errors and formatting
 
 - [`err`] formats every retained parser issue with its source context.
-- `ugly` implements debug spelling; the [`fmt`] module re-exports rendering entry points.
+- The [`fmt`] module re-exports the pretty printer's entry points and options.
 - `pretty` constructs documents from textual syntax, trivia, and intentions.
   Its private `context`, `punning`, and `config` modules supply grammar contexts, punning, and options;
   corpus checks in `corpus` compare preservation and idempotence.

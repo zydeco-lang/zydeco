@@ -418,24 +418,6 @@ impl<'arena> PrettyFormatter<'arena> {
         self.render_doc(document.append(RcDoc::hardline()))
     }
 
-    /// Render one term without adding a trailing newline.
-    pub fn render_term(&self, term: TermId) -> String {
-        let document = self.with_trailing_comments(term.into(), self.term(term));
-        self.render_doc(document)
-    }
-
-    /// Render one pattern without adding a trailing newline.
-    pub fn render_pattern(&self, pattern: PatId) -> String {
-        let document = self.with_trailing_comments(pattern.into(), self.pattern(pattern));
-        self.render_doc(document)
-    }
-
-    /// Render one copattern spine without adding a trailing newline.
-    pub fn render_copattern(&self, pattern: CoPatId) -> String {
-        let document = self.with_trailing_comments(pattern.into(), self.copattern(pattern));
-        self.render_doc(document)
-    }
-
     fn render_doc(&self, document: RcDoc<'arena>) -> String {
         let mut output = String::new();
         document.render_fmt(self.options.line_width, &mut output).unwrap();
