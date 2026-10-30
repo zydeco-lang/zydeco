@@ -25,6 +25,9 @@ and parallel construction interfaces, the duplicated support of the two stack IR
 the abstract-machine Wasm backend and ZASM interpreter, and the dead code those commits deleted,
 including `Instruction::Clear`, the unused `GenBindNull` rule, and the AMD64 emitter's front-end arena references.
 The pass framework left the deletions, because procedure localization became its second pass.
+Later commits removed the unused pass combinators, the recursive folder driver,
+the compact and moving frame variants, and the test-only parser entry points and printer,
+and replaced the typed-arena lint with a test-only invariant check, so the deletions now list only what remains.
 The record also dropped the tree-sitter bullet, because the repository keeps the generated parser,
 and the arena method `rebind` from the dead-code list, because the interpreter's linker calls it.
 The measurements, the reproduction, and the evidence for the remaining findings still describe the measured revision.
@@ -209,9 +212,9 @@ High SPS and SPSLow erase the source types,
 after which [protocol extraction](../../references/compiler.md#partial-source-protocols),
 the SPSLow protocol and [entry contract](../../references/compiler.md#word-entry-contracts) checks,
 and the two structural checks rebuild partial protocols to validate the compiler's own passes.
-With the [typed-arena lint](../../references/compiler.md#typed-arena-lint),
-which re-derives the checker's kinds and type equalities, the second type systems total 4,809 production lines,
-of which the lint and its re-derivation are about 2.5k.
+With the typed-arena lint, which re-derived the checker's kinds and type equalities,
+the second type systems totaled 4,809 production lines at the measured revision;
+the lint and its re-derivation, about 2.5k of them, have since been removed.
 The audit's [validator finding](../2026-10-21-cleanup-audit/README.md#backend-translation-validators) frames
 the SPSLow checks as a choice about how to check `SPS_l`; this record adds that carrying the calculi's types
 through both IRs would make the checks an IR type checker and remove the extraction.
@@ -319,12 +322,10 @@ Line deltas marked ≈ are review estimates inferred from file sizes; they overl
 
 ### Deletions without design change
 
-These are the audit's first two steps, restated with the sizes at this revision:
-the unused pass combinators, the typed-arena lint with a small test helper kept, the recursive folder driver,
-the representation-policy trait, the compact and moving frame variants, the raw memory kernels,
-and the test-only [parser entry points and ugly printer](../2026-10-21-cleanup-audit/README.md#dead-code).
-Together they are ≈5k–7k production lines plus their tests, and they change compiler reference text
-but no source behavior.
+Of the audit's first two steps, the raw memory kernels remain, ≈650–900 production lines plus their tests;
+removing them changes compiler reference text but no source behavior.
+The representation-policy trait is not such a deletion: `build --representation` selects among its policies,
+so removing it removes that option.
 
 This review adds dead code that the audit did not list: the `pats` and `terms` site maps of high SPS and SPSLow,
 whose only readers copy them into the next phase's arena.

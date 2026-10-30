@@ -19,8 +19,12 @@ the parallel visitors of the two stack IRs, the session's whole-program test pip
 and the stale tutorial, OOPSLA links, placeholder ideas, and missing calculus correspondence.
 A later commit removed the unused CLI entry points, graph operations, and assembly dependency graph,
 and made parser diagnostics spell `def`, so the dead-code and defect lists dropped those items.
-The pass framework no longer serves a single pass, because procedure localization became its second,
-so only its test-only combinators remain a finding.
+Further commits removed the test-only scaffolding, namely the pass combinators, the recursive folder driver, the compact
+and moving frame environments, and the test-only parser entry points and printer, and replaced the typed-arena lint
+with a test-only invariant check, so the record dropped those findings and the dead-code section.
+The finding that the pass framework served one pass left the record once procedure localization became its second.
+The representation-policy finding was wrong at the measured revision, which already selected policies
+through `build --representation`; the finding and its verification bullet now say so.
 The record also dropped the tooling removals that the repository declined, namely the resumable test runner,
 the tracked shell completions and tree-sitter parser, and the reserved formatter options,
 together with the section that recorded those decisions.
@@ -95,9 +99,8 @@ which includes the SPSLow validators, and 1,703 in the protocol extraction.
 ## Recurring pattern
 
 Most removable weight belongs to features whose only clients are their tests or a small surface
-that the change also reworks: the manual-memory library beyond the 592 lines std reaches, C exports and native units,
-package relationships, monadic-translation extensions, view patterns, `@[doc]`, the typed-arena lint,
-the recursive folder driver, the generic representation-policy trait, and compact frame environments.
+that the change also reworks: the manual-memory library beyond the 592 lines std reaches,
+C exports and native units, package relationships, monadic-translation extensions, view patterns, and `@[doc]`.
 The SPSLow validators left this list with the SPS half of the yardstick, because they check part
 of `SPS_l`'s typing ([backend translation validators](#backend-translation-validators)).
 
@@ -248,29 +251,17 @@ Direct allocation with the existing derived identifiers would save ≈2.3k–2.8
 The proposal records the overhead as a 2026-08-14 measurement and asks for re-measurement
 before extending the migration.
 
-### Typed-arena lint
-
-The [typed-arena lint](../../references/compiler.md#typed-arena-lint) and its re-derivation,
-`validate/lint.rs` and `validate/rederive.rs` with about 2,600 lines, run only under `--lint-types` and in tests.
-The statics review found no commit in which the lint caught a checker defect,
-and it duplicates kind agreement and structural type equality.
-A test helper of about 200 lines that checks fill closure, annotation sorts,
-and hole policy would keep the useful part and save ≈2k lines.
-
 ### Test-only generality
 
 Several production interfaces carry parameters that only tests vary:
 
-- the folder `Driver` parameter, whose `Recursive` implementation appears only in test modules (≈400 lines);
-- the representation-policy trait, whose production path fixes one policy and whose variations come only
-  from tests (≈350);
-- compact and moving frame environments, whose feature and code paths are exercised only
-  by tests (the compact environment is selected through a test that rewrites `runtime/Cargo.toml`) (≈650);
 - raw memory kernels, a fused IR that applies only to a 64-bit load, at most 32 operations,
   and a store of the same type (≈650–900);
 - the live editor configuration in Cajun, which serves two hover settings (≈270);
-- `--target-arch`, which accepts `Aarch64` but rejects it downstream, leaving one supported value;
-- the pass combinators `when`, `by_ref`, and `repeat`, which only the pass framework's own tests use.
+- `--target-arch`, which accepts `Aarch64` but rejects it downstream, leaving one supported value.
+
+The representation-policy trait (≈350) is not test-only: `build --representation` selects among its policies,
+so removing it would remove a documented option.
 
 ### Parallel implementations
 
@@ -286,14 +277,6 @@ Each of these mechanisms exists more than once:
 - the CLI and TUI repeat diagnostic dispatch, and the TUI strips ANSI escapes with a hand-written state machine;
 - the arena traits carry 54 source-level marker and accessor implementations,
   and `ArenaAccess` is mostly imported only to bring methods into scope (≈600).
-
-### Dead code
-
-These items have no working production use:
-
-- `StrictParser::term` and `pattern` with their recovering counterparts,
-  whose test-only grammar entry points enlarge the LALRPOP tables;
-- the test-only printer `textual/ugly.rs`, with 659 lines.
 
 ## Defects found during the audit
 
@@ -341,14 +324,13 @@ jumps, and packages that closure conversion builds.
 
 ## Suggested order
 
-1. Remove the dead code, which changes neither behavior nor reference text.
-2. Remove test-only scaffolding and unconsumed machinery: the unused pass combinators, the lint,
-   folder drivers, representation policies, frame experiments, and producer queries.
+1. Remove the unconsumed producer queries.
    Source behavior stays the same, but the compiler reference sections that describe them change,
    which requires approval.
-3. Decide the design findings: the systems-programming thread, a minimal package system, the monadic extensions,
-   the rare surface forms, the effect-library breadth, and how SPSLow output is checked against `SPS_l`.
-4. Merge the parallel implementations, and fold documentation into the references that own each rule.
+2. Decide the design findings: the systems-programming thread, a minimal package system, the monadic extensions,
+   the rare surface forms, the effect-library breadth, the representation policies behind `build --representation`,
+   and how SPSLow output is checked against `SPS_l`.
+3. Merge the parallel implementations, and fold documentation into the references that own each rule.
 
 A step that touches `lang/stackir`, ZASM, or the native backend must keep the SPS paper's implementation claim true:
 lowering to SPS, β-simplification, closure conversion with existential packages, and lowering to executable code.
@@ -415,8 +397,8 @@ It corrected or qualified these statements in place:
 
 - `--target-os` has two fully implemented values, Linux and macOS, so only `--target-arch` remains a candidate interface
   with one supported value.
-- The representation-policy description inverted its implementations: production fixes the `Local` policy,
-  and the `RepresentationStrategy` enum varies only in tests.
+- The representation-policy description inverted its implementations: production defaults to the `Local` policy,
+  and `build --representation` or the tests select the others.
 - Ten, not twelve, numeric builtin packages are identical up to the type name;
   `int64` and `uint64` add conversion roles, and the role denominator now names the annotations it counts.
 - The `<|` and `~>` rows of the surface-forms table mixed use and file counts; both rows now state both.
