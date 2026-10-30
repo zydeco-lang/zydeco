@@ -15,7 +15,7 @@ impl LayoutCase {
         let source = Self::source(&format!(
             "let code = match {expression} | {pattern} => 0 | _ => 1 end in ! exit code"
         ));
-        SourceCase::assert_accepted(SourceCase::check_linted(&source));
+        SourceCase::assert_accepted(SourceCase::check_invariants(&source));
         SourceCase::assert_accepted(SourceCase::run(&source));
     }
 }

@@ -23,7 +23,7 @@ let (/Monad; /Algebra) = monadic_basis in
 
     fn assert_linted_and_lowered(source: &str) {
         let source = Self::source(source);
-        SourceCase::assert_accepted(SourceCase::check_linted(&source));
+        SourceCase::assert_accepted(SourceCase::check_invariants(&source));
         SourceCase::assert_accepted(SourceCase::lower(&source));
     }
 }
@@ -58,7 +58,7 @@ let Implementation = @[typeof] ({
 ret ()
 "#,
     );
-    SourceCase::assert_accepted(SourceCase::check_linted(&source));
+    SourceCase::assert_accepted(SourceCase::check_invariants(&source));
     SourceCase::assert_rejected(
         SourceCase::check(&source.replace("(_ : Thk (Algebra M Y))", "(_ : Int)")),
         TyckDiagnosticCode::TypeMismatch,
@@ -119,7 +119,7 @@ fn source_annotations_match_translated_package_routes() {
     let source = MonadicCase::source(include_str!(
         "../cases/monadic-value-functions/source_annotations_match_translated_package_routes.zy"
     ));
-    SourceCase::assert_accepted(SourceCase::check_linted(&source));
+    SourceCase::assert_accepted(SourceCase::check_invariants(&source));
 }
 
 #[test]

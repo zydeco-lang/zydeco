@@ -54,5 +54,5 @@ It exports those queries through one public module boundary.
 `elaborate::monadic` implements the algebra translation, while `elaborate::static_values` shares evaluator state
 across value reduction, pattern handling, computation traversal, and residual construction and validation.
 
-`validate` consumes typed syntax for coverage and the optional type lint.
+`validate` consumes typed syntax for coverage and execution readiness.
 `fmt` and the crate-private `source_span` provide formatting and source-aware diagnostic locations.

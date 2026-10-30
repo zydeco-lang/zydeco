@@ -589,10 +589,11 @@ The [checker module guide](lang/statics/src/check/README.md) locates local judgm
 [coverage](docs/references/compiler.md#coverage) validates typed matches;
 [static elaboration](docs/references/compiler.md#static-elimination) records the residual root used
 by both interpreter linking and SPS lowering.
-The optional [typed-arena lint](docs/references/compiler.md#typed-arena-lint) checks the published artifact's integrity.
+Tests assert the [typed-arena invariants](docs/references/compiler.md#typed-arena-invariants) of the published artifact.
 The [pattern proposal](docs/proposals/exhaustiveness.md)
 and the [retention](docs/ideas/README.md#compiler-memory-retention)
-and [lint](docs/ideas/README.md#stronger-typed-arena-verification) ideas retain the remaining design questions.
+and [arena verification](docs/ideas/README.md#stronger-typed-arena-verification) ideas retain the
+remaining design questions.
 
 ### Source and Editor Analysis
 

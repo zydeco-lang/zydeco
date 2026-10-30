@@ -51,7 +51,7 @@ let _ : WithMonad IOption = (OW, #monad = ow/monad, #option = ow/option) in
 ! exit 0
 "#,
     );
-    SourceCase::assert_accepted(SourceCase::check_linted(&source));
+    SourceCase::assert_accepted(SourceCase::check_invariants(&source));
     SourceCase::assert_accepted(SourceCase::lower(&source));
 }
 

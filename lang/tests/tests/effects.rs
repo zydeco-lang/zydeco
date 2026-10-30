@@ -52,7 +52,7 @@ let _ : WithMonad (IException Unit) =
 ! exit 0
 "#,
     );
-    SourceCase::assert_accepted(SourceCase::check_linted(&source));
+    SourceCase::assert_accepted(SourceCase::check_invariants(&source));
     SourceCase::assert_accepted(SourceCase::lower(&source));
 }
 
@@ -79,7 +79,7 @@ do status <- ! run_state_exn Int Unit Int (Ret Int) 7 { ! run (C, c) }
 ! exit status
 "#,
     );
-    SourceCase::assert_accepted(SourceCase::check_linted(&source));
+    SourceCase::assert_accepted(SourceCase::check_invariants(&source));
     SourceCase::assert_accepted(SourceCase::run(&source));
     SourceCase::assert_accepted(SourceCase::lower(&source));
 }
@@ -97,7 +97,7 @@ let _ : Thk (forall (E : VType) . pi ((M, _) : WithMonad (IException E)) .
 ! exit 0
 "#,
     );
-    SourceCase::assert_accepted(SourceCase::check_linted(&source));
+    SourceCase::assert_accepted(SourceCase::check_invariants(&source));
     SourceCase::assert_accepted(SourceCase::lower(&source));
 }
 
@@ -163,7 +163,7 @@ do (x, s) <- ! forward (S, s) 7;
 match (x, s) | (7, 7) => ! exit 0 | _ => ! exit 1 end
 "#,
     );
-    SourceCase::assert_accepted(SourceCase::check_linted(&source));
+    SourceCase::assert_accepted(SourceCase::check_invariants(&source));
     SourceCase::assert_accepted(SourceCase::run(&source));
     SourceCase::assert_accepted(SourceCase::lower(&source));
 }

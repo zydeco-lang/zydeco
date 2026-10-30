@@ -77,7 +77,7 @@ _zydeco() {
 
     case "${cmd}" in
         zydeco)
-            opts="-h -V --lint-types --help --version show passes fmt run check test repl build help"
+            opts="-h -V --help --version show passes fmt run check test repl build help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -91,7 +91,7 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__build)
-            opts="-p -t -b -r -x -h --package --pkg --target-os --target-arch --target --representation --sps-passes --sps-scheme --trace-passes --verify-passes --dump-passes --build-dir --runtime-dir --link-library --execute --lint-types --help"
+            opts="-p -t -b -r -x -h --package --pkg --target-os --target-arch --target --representation --sps-passes --sps-scheme --trace-passes --verify-passes --dump-passes --build-dir --runtime-dir --link-library --execute --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -165,7 +165,7 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__check)
-            opts="-p -h --package --pkg --lint-types --help"
+            opts="-p -h --package --pkg --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -191,7 +191,7 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__fmt)
-            opts="-h --check --lint-types --help"
+            opts="-h --check --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -345,7 +345,7 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__passes)
-            opts="-h --sps-passes --sps-scheme --lint-types --help"
+            opts="-h --sps-passes --sps-scheme --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -367,7 +367,7 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__repl)
-            opts="-h --lint-types --help"
+            opts="-h --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -381,7 +381,7 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__run)
-            opts="-p -t -r -h --package --pkg --target --runtime-dir --link-library --dry --lint-types --help"
+            opts="-p -t -r -h --package --pkg --target --runtime-dir --link-library --dry --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -427,7 +427,7 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__show)
-            opts="-p -h --package --pkg --lint-types --help"
+            opts="-p -h --package --pkg --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -453,7 +453,7 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__test)
-            opts="-p -t -r -h --package --pkg --target --runtime-dir --link-library --lint-types --help"
+            opts="-p -t -r -h --package --pkg --target --runtime-dir --link-library --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0

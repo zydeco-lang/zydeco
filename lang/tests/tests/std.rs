@@ -43,7 +43,7 @@ let _ = val (E : VType) (A : VType) (value : Thk (ExceptionT E Ret A)) =>
 "#,
         library = library.display(),
     ));
-    SourceCase::assert_accepted(SourceCase::check_linted(&source));
+    SourceCase::assert_accepted(SourceCase::check_invariants(&source));
     SourceCase::assert_accepted(SourceCase::lower(&source));
 }
 
@@ -124,7 +124,7 @@ fn colocated_contracts_preserve_representation_opacity() {
         let accepted = RepresentationCase::source(&format!(
             "let _ = val (value : {abstract_type}) => (value : {abstract_type}) in ! exit 0"
         ));
-        SourceCase::assert_accepted(SourceCase::check_linted(&accepted));
+        SourceCase::assert_accepted(SourceCase::check_invariants(&accepted));
         let rejected = RepresentationCase::source(&format!(
             "let _ = val (value : {abstract_type}) => (value : {representation}) in ! exit 0"
         ));
@@ -135,7 +135,7 @@ fn colocated_contracts_preserve_representation_opacity() {
 
 #[test]
 fn colocated_factories_keep_independent_openings_distinct() {
-    SourceCase::assert_accepted(SourceCase::check_linted(&RepresentationCase::source(
+    SourceCase::assert_accepted(SourceCase::check_invariants(&RepresentationCase::source(
         "let _ : Thk (Ret Bytes) = bytes/empty in ! exit 0",
     )));
     SourceCase::assert_rejected(
@@ -165,6 +165,6 @@ let _ : SameAdditive Int = dictionary in
             library = library.display(),
         )
     };
-    SourceCase::assert_accepted(SourceCase::check_linted(&source("0")));
+    SourceCase::assert_accepted(SourceCase::check_invariants(&source("0")));
     SourceCase::assert_rejected(SourceCase::check(&source("()")), TyckDiagnosticCode::TypeMismatch);
 }

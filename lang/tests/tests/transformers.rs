@@ -78,7 +78,7 @@ let _ = val (M : VType -> CType) (A : VType) (m : Thk (NonDetT M A)) =>
 ! exit 0
 "#,
     );
-    SourceCase::assert_accepted(SourceCase::check_linted(&source));
+    SourceCase::assert_accepted(SourceCase::check_invariants(&source));
     SourceCase::assert_accepted(SourceCase::lower(&source));
 }
 
@@ -107,7 +107,7 @@ do (answer, written) <- ! identity (W, w/monad) .monad .bind Int Int {
 match (answer, written) | (5, 3) => ! exit 0 | _ => ! exit 1 end
 "#,
     );
-    SourceCase::assert_accepted(SourceCase::check_linted(&source));
+    SourceCase::assert_accepted(SourceCase::check_invariants(&source));
     SourceCase::assert_accepted(SourceCase::lower(&source));
     SourceCase::assert_accepted(SourceCase::run(&source));
 }
@@ -130,7 +130,7 @@ do ((answer, state), written) <- ! forwarded .monad .bind Int Int {
 match (answer, state, written) | (5, 7, 1) => ! exit 0 | _ => ! exit 1 end
 "#,
     );
-    SourceCase::assert_accepted(SourceCase::check_linted(&source));
+    SourceCase::assert_accepted(SourceCase::check_invariants(&source));
     SourceCase::assert_accepted(SourceCase::lower(&source));
     SourceCase::assert_accepted(SourceCase::run(&source));
 }

@@ -191,14 +191,16 @@ owns the current split.
 
 ### Stronger typed-arena verification
 
-Parent/child checks, product reconstruction, and definition-reference scope need use-site instantiations
-or equivalent derivation witnesses, whose retention cost must be measured against the retained-fact boundary.
+Tests assert only the [typed-arena invariants](../references/compiler.md#typed-arena-invariants).
+An optional lint that also re-derived annotations was removed on 2026-10-29.
+A verifier that re-derives annotations would need use-site instantiations or equivalent derivation witnesses
+for parent/child checks, product reconstruction, and definition-reference scope,
+and their retention cost must be measured against the retained-fact boundary.
 Checking a shared node under every scope needs a scope-sensitive traversal,
 and a finer skolem policy must distinguish deliberate export from accidental escape.
-Remaining checks to establish before asserting them: that every `Type::Label` payload has kind `VType`,
+Other candidate invariants remain to be established: that every `Type::Label` payload has kind `VType`,
 the kinded shapes of `ManifestKind` and `SCons`, whether a finished arena may retain `Type::Var`,
-declaration telescopes for orphan `Data` and `CoData` arms, and how the lint should treat deliberate source holes.
-[The typed-arena lint](../references/compiler.md#typed-arena-lint) owns the current checks and limits.
+and declaration telescopes for orphan `Data` and `CoData` arms.
 
 ## Tooling
 

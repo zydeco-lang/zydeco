@@ -506,10 +506,16 @@ fn implicit_and_explicit_programs_have_the_same_runtime_result() {
 fn defaults_add_no_residual_code_or_runtime_metadata() {
     let fixture = Fixture::new();
     let source = include_str!("../../../lib/tests/prelude/shared.zy").replace("../../std", "$std");
-    let compiler = zydeco_cli::CommandCompiler::default().with_lint_types(true);
-    let implicit = compiler.lower(&fixture.write("implicit.zy", &source)).unwrap();
-    let explicit =
-        compiler.lower(&fixture.write("explicit.zy", &Fixture::explicit(&source))).unwrap();
+    let compiler = zydeco_cli::CommandCompiler::default();
+    let lower = |path: std::path::PathBuf| {
+        let analysis = compiler.analyze(&path).unwrap();
+        let program = compiler.checked_program(&analysis).unwrap();
+        let invariants = zydeco_tests::invariants::ArenaInvariants { statics: &program.statics };
+        assert!(invariants.violations(program.root).is_empty());
+        compiler.lower(&path).unwrap()
+    };
+    let implicit = lower(fixture.write("implicit.zy", &source));
+    let explicit = lower(fixture.write("explicit.zy", &Fixture::explicit(&source)));
     use zydeco_stackir::low::syntax::{
         BuiltinValueRole, Computation, Cons, ExternalFunction, IntegerLiteral, Literal, Stack,
         Value, ValuePattern,

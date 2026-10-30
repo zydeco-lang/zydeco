@@ -47,7 +47,7 @@ let _ : Thk (NO Int) = { ! nondet/choose (NO, #monad = no/monad, #nondet = no/no
 ! exit 0
 "#,
     );
-    SourceCase::assert_accepted(SourceCase::check_linted(&source));
+    SourceCase::assert_accepted(SourceCase::check_invariants(&source));
     SourceCase::assert_accepted(SourceCase::lower(&source));
 }
 

@@ -39,7 +39,7 @@ fn nominal_type_mismatches_identify_their_distinct_source_bindings() {
         "let Package = exists (X : VType) . X in fn (p : Package) => let (X, x) = p in do _ <- (ret x : Ret X); ret ()",
         "let A = (def X : VType = Int in X) in let B = A in fn (x : A) => (ret x : Ret B)",
     ] {
-        SourceCase::assert_accepted(SourceCase::check_linted(body));
+        SourceCase::assert_accepted(SourceCase::check_invariants(body));
     }
 }
 
@@ -115,7 +115,7 @@ fn binding_cycles_fail_before_dependent_annotations_are_checked() {
         "begin def ! _ (M : VType) (x : M) : Ret M = ret x that ! exit 0 end",
         "begin def fix loop (x : Int) : Ret Int = ! loop x that ! exit 0 end",
     ] {
-        SourceCase::assert_accepted(SourceCase::check_linted(body));
+        SourceCase::assert_accepted(SourceCase::check_invariants(body));
     }
 }
 
@@ -212,7 +212,7 @@ fn independent_components_and_arms_report_all_type_errors() {
             .map(|diagnostic| diagnostic.primary.as_ref().unwrap().span)
             .collect::<Vec<_>>();
         assert_ne!(spans[0], spans[1], "independent errors retain their own sites");
-        SourceCase::assert_accepted(SourceCase::check_linted(&accepted));
+        SourceCase::assert_accepted(SourceCase::check_invariants(&accepted));
     }
 }
 
@@ -231,5 +231,7 @@ fn failed_patterns_do_not_invent_bindings_for_their_bodies() {
     assert!(
         diagnostics.iter().any(|diagnostic| diagnostic.code == TyckDiagnosticCode::TypeMismatch)
     );
-    SourceCase::assert_accepted(SourceCase::check_linted("ret (match 0 | 0 => 1 | _ => 2 end)"));
+    SourceCase::assert_accepted(SourceCase::check_invariants(
+        "ret (match 0 | 0 => 1 | _ => 2 end)",
+    ));
 }

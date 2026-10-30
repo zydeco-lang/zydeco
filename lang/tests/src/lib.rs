@@ -1,3 +1,4 @@
+pub mod invariants;
 mod template;
 
 pub mod utils {
@@ -190,23 +191,18 @@ pub mod utils {
             })
         }
 
-        /// Check a source with the internal type lint enabled.
-        ///
-        /// The lint aborts on any internal inconsistency, so success here
-        /// asserts that the finished arena satisfies the lint's invariants.
-        pub fn check_linted(source: &str) -> Result<(), CaseError> {
-            Self::with_source(SourceCasePrelude::Core, source, |path| {
-                CommandCompiler::default()
-                    .with_lint_types(true)
-                    .analyze(path)
-                    .map(|_| ())
-                    .map_err(CaseError::Compile)
-            })
+        /// Check a source and assert the invariants of its finished arena.
+        pub fn check_invariants(source: &str) -> Result<(), CaseError> {
+            let (statics, root) = Self::checked_arena(source)?;
+            let violations =
+                crate::invariants::ArenaInvariants { statics: &statics }.violations(root);
+            assert!(violations.is_empty(), "a successful check left {violations:?}");
+            Ok(())
         }
 
         /// The cloned finished arena of a checked source, with its root annotation.
         ///
-        /// Mutation tests corrupt the clone and re-run the lint directly.
+        /// Mutation tests corrupt the clone and check its invariants directly.
         pub fn checked_arena(
             source: &str,
         ) -> Result<

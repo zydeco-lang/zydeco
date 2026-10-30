@@ -29,9 +29,13 @@ let (/Monad; /Algebra) = @(import("{}/monad.zy")) in
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("root.zy");
         std::fs::write(&path, Self::source(body)).unwrap();
-        let compiler = CommandCompiler::default().with_lint_types(true);
+        let compiler = CommandCompiler::default();
         let analysis = compiler.analyze(&path).unwrap();
-        compiler.checked_program(&analysis).unwrap()
+        let program = compiler.checked_program(&analysis).unwrap();
+        let violations = zydeco_tests::invariants::ArenaInvariants { statics: &program.statics }
+            .violations(program.root);
+        assert!(violations.is_empty(), "{violations:?}");
+        program
     }
 }
 
@@ -134,7 +138,7 @@ fn new_roots_lint_and_lower_through_the_shared_pipeline() {
         ),
     ] {
         let source = MonadicRootCase::source(fixture);
-        SourceCase::assert_accepted(SourceCase::check_linted(&source));
+        SourceCase::assert_accepted(SourceCase::check_invariants(&source));
         let executable = if fixture.contains("-- stage: run") {
             source
         } else {

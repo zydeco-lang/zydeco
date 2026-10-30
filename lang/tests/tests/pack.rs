@@ -23,7 +23,7 @@ fn inferred_named_witnesses_preserve_typed_arena_and_lowering_invariants() {
         include_str!("../cases/existential/sealed_pack_infers_named_witness_classifiers.zy"),
     ] {
         let source = format!("let case_value = ({fixture}) in ! exit 0");
-        SourceCase::assert_accepted(SourceCase::check_linted(&source));
+        SourceCase::assert_accepted(SourceCase::check_invariants(&source));
         SourceCase::assert_accepted(SourceCase::lower(&source));
     }
 }

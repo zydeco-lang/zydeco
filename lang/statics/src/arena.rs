@@ -291,7 +291,7 @@ impl TermFactsArena {
         self.indexes.get(term).map(|index| &self.facts[index.offset()])
     }
 
-    pub(crate) fn iter(&self) -> impl Iterator<Item = (su::TermId, &TermFacts)> {
+    pub fn iter(&self) -> impl Iterator<Item = (su::TermId, &TermFacts)> {
         self.indexes.iter().map(|(term, index)| (term, &self.facts[index.offset()]))
     }
 }

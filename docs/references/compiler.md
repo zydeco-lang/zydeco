@@ -1262,7 +1262,7 @@ The static evaluator can forward opaque runtime monad dictionaries through known
 it never executes their structure thunks to recover a type witness.
 Translated terms retain source provenance so residualization failures identify the source construct.
 [Source fixtures](../../lang/tests/cases/monadic-value-functions) cover signatures, witness scope, and rejection;
-[Rust assertions](../../lang/tests/tests/monadic_value_functions.rs) retain typed-arena lint and lowering checks.
+[Rust assertions](../../lang/tests/tests/monadic_value_functions.rs) retain typed-arena invariant and lowering checks.
 The [State fixture](../../lib/tests/monadic/value-functions.zy) checks effect order through the interpreter
 and the Wasm backend.
 
@@ -1312,7 +1312,7 @@ and retains the nominal classifier on the result.
 This keeps codata introductions, observations, algebra signatures, and coverage hints consistent.
 [Nominal fixtures](../../lang/tests/cases/monadic-nominal) cover mutual recursion, growing type arguments,
 scoped and higher-kinded dependencies, packages, nested translation, and applicative equality and rejection.
-[Rust regressions](../../lang/tests/tests/monadic_nominal.rs) retain typed-arena lint,
+[Rust regressions](../../lang/tests/tests/monadic_nominal.rs) retain typed-arena invariant checks,
 lowering, source sharing, and bounded family counts on a 160-declaration cycle.
 The [State fixture](../../lib/tests/monadic/nominal-types.zy) checks runtime dictionary selection,
 finite protocol observations, and absence of eager effects in the interpreter, native backend, and Wasm backend.
@@ -1405,7 +1405,7 @@ typed holes may still be inspected during ordinary checking.
 [Static-elimination fixtures](../../lang/tests/cases/static-elimination) distinguish erased library structure,
 runtime payloads, and failed evidence recovery.
 [Rust regressions](../../lang/tests/tests/static_elimination.rs) inspect residual sharing and source facts,
-retain lint and lowering assertions, and generate boundary and reduction-limit matrices.
+retain invariant and lowering assertions, and generate boundary and reduction-limit matrices.
 
 ### Residual Runtime Traversal
 
@@ -1425,60 +1425,23 @@ execution, library export checking, and the REPL reject the complete collection 
 [Runtime traversal tests](../../lang/statics/tests/runtime_traversal.rs) pair shared reachable holes
 with the accepted residual root that erases them; foreign-interface tests cover supplied implementations.
 
-### Typed-Arena Lint
+### Typed-Arena Invariants
 
-[LintChecker](../../lang/statics/src/validate/lint.rs) is an optional verifier over a complete arena.
-It independently inspects the artifact, but shared derivation rules establish consistency rather
-than a separate soundness proof: a faulty rule can reproduce the same wrong result.
-Its practical boundary is corruption introduced by mutation, normalization, retries,
-or generated syntax, demonstrated with seeded defects.
-It checks fill closure, annotation presence and sorts, agreement of surface-keyed and node-keyed views,
-and existence of referenced nodes and definitions.
-Kind comparisons resolve normalized structure; raw kind-ID equality is insufficient after reconciliation.
-Paired value and computation annotations likewise compare normalized type structure,
-including the payloads of copied data/codata arms; different arena IDs alone do not establish disagreement.
-Bound type witnesses compare by alpha-equivalence (consistent renaming of a binder and its uses),
-with matching kinds and named-pattern structure.
-Free witnesses retain their distinct identities.
-Structural-comparison memoization includes the binder correspondence, so agreement
-under a universal cannot equate unrelated witnesses outside it.
-The well-formedness sweep includes orphaned allocations left by retries.
-Abstract-witness kinds can come from their annotation, a denoting type node, or an enclosing binder;
-requiring an `annotations_abst` row for every witness would reject legitimate artifacts.
+A successful check leaves invariants that later phases rely on without rechecking.
+Every kind and type cell has left its inference-hole form.
+Every allocated value, computation, value pattern, type pattern, and type carries an annotation,
+including allocations that inference retries abandoned.
+Abstract-type witnesses are exempt, because their kind can come from their own table,
+from a type node that denotes them, or from an enclosing binder.
+Value and value-pattern annotations have kind `VType`, and computation annotations have kind `CType`.
+No residual value or computation hole survives, except the placeholder of a foreign import,
+and neither the root nor any recorded term annotation is a hole.
 
-[Re-derivation](../../lang/statics/src/validate/rederive.rs) checks type-former kinds across the whole arena.
-Supported term-constructor shapes and witness binding are checked from source, residual,
-and definition roots, using the documented ambient-witness policy.
-Roots include recorded aliases, inlinable and type definitions, data/codata arms, and seals.
-Supported introduction shapes cover thunks, returns, named values, units, and literals;
-operand-dependent checks exclude abstract identities and applications other than `Thk` and `Ret`.
-Shared nodes can have different use-site instantiations,
-so the verifier cannot soundly compare every recorded parent/child annotation
-or reconstruct every lexical reference context from this artifact.
-Arena-wide annotation integrity includes abandoned allocations,
-while structural scope reconstruction applies only to reachable roots.
-A shared node can carry a generic or labeled annotation at one recording site and an instantiated or plain annotation
-at another; the artifact lacks the per-use evidence needed for unrestricted parent/child re-derivation.
-Product checks and definition-reference scope across imports and aliases remain deferred;
-reference existence is still checked.
-
-A reachable abstract witness must be structurally bound or ambient.
-The ambient set includes seals, existential skolems, definition-denoted identities,
-and named witnesses: recursive groups allocate identities together,
-and packed value elaboration can distribute bindings without one structural encloser.
-This policy detects unbound anonymous witnesses with existing table entries,
-but does not reconstruct every source non-escape proof.
-The visited-node cache checks a shared node under the first encountered scope only.
-Scope-sensitive traversal, finer export provenance,
-and use-site derivation evidence remain [open ideas](../ideas/README.md#stronger-typed-arena-verification).
-
-`CommandCompiler::with_lint_types`, exposed as `--lint-types`, runs the verifier
-after a successful check and outside query memoization.
-Findings are typed internal errors and abort the gated command; they are not source diagnostics.
-Its hole policy also detects non-foreign term placeholders, so this verifier has a stricter completion expectation
-than ordinary hole inspection.
-[Mutation tests](../../lang/tests/tests/tyck_lint.rs) must show that a seeded corrupt fact is detected,
-paired with clean cases that prevent false positives.
+Tests check these invariants; compilation does not.
+[`ArenaInvariants`](../../lang/tests/src/invariants.rs) reports every violation in a finished arena,
+and `SourceCase::check_invariants` asserts that the arena of each source it checks has none.
+[Mutation tests](../../lang/tests/tests/arena_invariants.rs) corrupt one fact of a checked fixture
+and require the matching violation, paired with the unmodified fixture.
 
 ## C7. Linking and the Reference Interpreter
 
@@ -3643,7 +3606,7 @@ an IR snapshot alone does not prove effect order.
 | --- | --- |
 | Grammar or formatting | Surface parser agreement, recovery contracts, semantic/comment preservation, idempotence |
 | Typing, scope, or a source rejection | [Source fixtures](../../lang/tests/cases) or the relevant Rust integration target, with exact diagnostic codes |
-| Typed-arena invariant | A seeded mutation and a clean counterpart in [type-lint tests](../../lang/tests/tests/tyck_lint.rs) |
+| Typed-arena invariant | A seeded mutation and a clean counterpart in [arena invariant tests](../../lang/tests/tests/arena_invariants.rs) |
 | SPS reduction or representation | SPS and SPSLow invariant checks, blocked-rewrite cases, and runtime observations |
 | Native layout or allocation | Preparation/model unit tests and targeted native-model or GC integration tests |
 | Host or FFI operation | Signature rejection tests, adapter tests, declared I/O, and target-specific execution |

@@ -17,7 +17,7 @@ fn initialized_pointers_can_be_read_taken_and_freed() {
     let body = "! (repr/codec/init vacant 7) OS { fn value => \
         ! (codecs/unsafe/take L UInt8 repr/codec value) OS { fn vacant _ => \
         ! (allocation/unsafe/release L Unit allocation/static_heap () repr/storage vacant) OS no { ! exit 0 } } }";
-    SourceCase::assert_accepted(SourceCase::check_linted(&source(body)));
+    SourceCase::assert_accepted(SourceCase::check_invariants(&source(body)));
     SourceCase::assert_accepted(SourceCase::run(&source(body)));
 }
 

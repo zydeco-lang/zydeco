@@ -383,7 +383,7 @@ match storage/constant/create {count} {alignment}
 end
 "#
         ));
-        SourceCase::assert_accepted(SourceCase::check_linted(&source));
+        SourceCase::assert_accepted(SourceCase::check_invariants(&source));
         SourceCase::assert_accepted(SourceCase::run(&source));
     }
 }

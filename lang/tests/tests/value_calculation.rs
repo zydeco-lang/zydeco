@@ -8,7 +8,7 @@ fn value_matches_and_arithmetic_reduce_through_higher_order_application() {
     let source = include_str!(
         "../cases/value-calculation/value_matches_and_arithmetic_reduce_through_higher_order_application.zy"
     );
-    SourceCase::assert_accepted(SourceCase::check_linted(source));
+    SourceCase::assert_accepted(SourceCase::check_invariants(source));
     SourceCase::assert_accepted(SourceCase::run_monadic(source));
     SourceCase::assert_accepted(SourceCase::lower(source));
 }
@@ -46,7 +46,7 @@ fn known_choices_can_forward_runtime_payloads_through_views_and_nested_patterns(
     let source = include_str!(
         "../cases/value-calculation/known_choices_can_forward_runtime_payloads_through_views_and_nested_patterns.zy"
     );
-    SourceCase::assert_accepted(SourceCase::check_linted(source));
+    SourceCase::assert_accepted(SourceCase::check_invariants(source));
     SourceCase::assert_accepted(SourceCase::lower(source));
 }
 

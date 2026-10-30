@@ -1,6 +1,6 @@
 # Print an optspec for argparse to handle cmd's options that are independent of any subcommand.
 function __fish_zydeco_global_optspecs
-    string join \n lint-types h/help V/version
+    string join \n h/help V/version
 end
 
 function __fish_zydeco_needs_command
@@ -24,7 +24,6 @@ function __fish_zydeco_using_subcommand
     contains -- $cmd[1] $argv
 end
 
-complete -c zydeco -n "__fish_zydeco_needs_command" -l lint-types -d 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
 complete -c zydeco -n "__fish_zydeco_needs_command" -s h -l help -d 'Print help'
 complete -c zydeco -n "__fish_zydeco_needs_command" -s V -l version -d 'Print version'
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "show" -d 'List the project\'s packages and relationships without checking or executing code'
@@ -37,16 +36,13 @@ complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "repl" -d 'Start the d
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "build" -d 'Build a Zydeco program for the selected target'
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c zydeco -n "__fish_zydeco_using_subcommand show" -s p -l pkg -l package -d 'Select declared packages by name; omit to list all packages' -r
-complete -c zydeco -n "__fish_zydeco_using_subcommand show" -l lint-types -d 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
 complete -c zydeco -n "__fish_zydeco_using_subcommand show" -s h -l help -d 'Print help'
 complete -c zydeco -n "__fish_zydeco_using_subcommand passes" -l sps-passes -d 'Explain `default`, `none`, or a comma-separated list such as normalize,normalize' -r
 complete -c zydeco -n "__fish_zydeco_using_subcommand passes" -l sps-scheme -d 'Explain the selection under this stack-passing scheme' -r -f -a "dup\t'Copy the consumer stack into every arm of a branch'
 br\t'Name the consumer stack once at each branch (default)'
 full\t'Name every frame as it is pushed'"
-complete -c zydeco -n "__fish_zydeco_using_subcommand passes" -l lint-types -d 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
 complete -c zydeco -n "__fish_zydeco_using_subcommand passes" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c zydeco -n "__fish_zydeco_using_subcommand fmt" -l check -d 'Report files that would change without writing them, and exit unsuccessfully when at least one file would change'
-complete -c zydeco -n "__fish_zydeco_using_subcommand fmt" -l lint-types -d 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
 complete -c zydeco -n "__fish_zydeco_using_subcommand fmt" -s h -l help -d 'Print help'
 complete -c zydeco -n "__fish_zydeco_using_subcommand run" -s p -l pkg -l package -d 'Select declared packages by name; repeat for multiple packages' -r
 complete -c zydeco -n "__fish_zydeco_using_subcommand run" -s t -l target -d 'Execution backend' -r -f -a "interpreter\t''
@@ -55,10 +51,8 @@ wasm-sps\t''"
 complete -c zydeco -n "__fish_zydeco_using_subcommand run" -s r -l runtime-dir -d 'Native runtime sources, used by exe' -r -F
 complete -c zydeco -n "__fish_zydeco_using_subcommand run" -l link-library -d 'Resolve a compiled library through its checked artifact manifest (repeatable)' -r -F
 complete -c zydeco -n "__fish_zydeco_using_subcommand run" -l dry -d 'Dry run (don\'t execute)'
-complete -c zydeco -n "__fish_zydeco_using_subcommand run" -l lint-types -d 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
 complete -c zydeco -n "__fish_zydeco_using_subcommand run" -s h -l help -d 'Print help'
 complete -c zydeco -n "__fish_zydeco_using_subcommand check" -s p -l pkg -l package -d 'Select declared packages by name; repeat for multiple packages' -r
-complete -c zydeco -n "__fish_zydeco_using_subcommand check" -l lint-types -d 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
 complete -c zydeco -n "__fish_zydeco_using_subcommand check" -s h -l help -d 'Print help'
 complete -c zydeco -n "__fish_zydeco_using_subcommand test" -s p -l pkg -l package -d 'Select declared packages by name; repeat for multiple packages' -r
 complete -c zydeco -n "__fish_zydeco_using_subcommand test" -s t -l target -d 'Execution backend or all; repeat to test multiple backends in order' -r -f -a "interpreter\t''
@@ -67,9 +61,7 @@ wasm-sps\t''
 all\t''"
 complete -c zydeco -n "__fish_zydeco_using_subcommand test" -s r -l runtime-dir -d 'Native runtime sources, used by exe' -r -F
 complete -c zydeco -n "__fish_zydeco_using_subcommand test" -l link-library -d 'Resolve a compiled library through its checked artifact manifest (repeatable)' -r -F
-complete -c zydeco -n "__fish_zydeco_using_subcommand test" -l lint-types -d 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
 complete -c zydeco -n "__fish_zydeco_using_subcommand test" -s h -l help -d 'Print help'
-complete -c zydeco -n "__fish_zydeco_using_subcommand repl" -l lint-types -d 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
 complete -c zydeco -n "__fish_zydeco_using_subcommand repl" -s h -l help -d 'Print help'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s p -l pkg -l package -d 'Select declared packages by name; repeat for multiple packages' -r
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l target-os -d 'Target OS (defaults to host OS)' -r -f -a "linux\t''
@@ -99,7 +91,6 @@ complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l trace-passes -d 
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l verify-passes -d 'Verify SPS invariants before and after each selected pass'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l dump-passes -d 'Print SPS IR before and after each selected pass on stderr'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s x -l execute -d 'Run the program after building'
-complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l lint-types -d 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from show passes fmt run check test repl build help" -f -a "show" -d 'List the project\'s packages and relationships without checking or executing code'
 complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from show passes fmt run check test repl build help" -f -a "passes" -d 'List optional compiler passes and SPS schemes, or explain a selected SPS plan'

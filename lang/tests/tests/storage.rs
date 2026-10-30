@@ -54,7 +54,7 @@ fn codecs_require_matching_states_values_and_layout_witnesses() {
     let valid = "! (codec/init vacant (7 : Int64)) OS { fn initialized => \
         ! (codecs/unsafe/take L Int64 codec initialized) OS { fn vacant _ => \
         ! (allocation/unsafe/release L Unit allocation/static_heap () layout vacant) OS no { ! exit 0 } } }";
-    SourceCase::assert_accepted(SourceCase::check_linted(&source(valid)));
+    SourceCase::assert_accepted(SourceCase::check_invariants(&source(valid)));
     SourceCase::assert_accepted(SourceCase::run(&source(valid)));
     for (invalid, code) in [
         ("! (codec/read vacant) OS { fn _ => ! exit 0 }", TyckDiagnosticCode::TypeMismatch),

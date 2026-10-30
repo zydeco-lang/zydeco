@@ -18,7 +18,6 @@ zydeco run path/to/main.zy -t wasm-sps
 The [quick start](../README.md#quick-start) supplies a complete runnable example;
 the [execution reference](../docs/references/language.md#selecting-an-execution-backend) defines backend selection,
 arguments, streams, and exit status.
-Use `--lint-types` before the command for additional typed-arena invariant checks.
 
 From the repository root, select declared packages by name or tests by file:
 

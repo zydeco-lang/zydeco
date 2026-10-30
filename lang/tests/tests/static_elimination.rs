@@ -1,7 +1,8 @@
 //! Source cases live in `cases/static-elimination/`; Rust retains arena assertions and generated matrices.
 
 use std::collections::HashSet;
-use zydeco_statics::{TyckDiagnosticCode, arena::StaticsArena, syntax::*, validate::LintChecker};
+use zydeco_statics::{TyckDiagnosticCode, arena::StaticsArena, syntax::*};
+use zydeco_tests::invariants::ArenaInvariants;
 use zydeco_tests::utils::SourceCase;
 
 /// Inspect executable reachability, leaving the source graph available for
@@ -21,7 +22,7 @@ let result = match add 12 4 | 16 => sub 16 16 | _ => 1 end in
 ! exit result
 "#;
     let (statics, root) = SourceCase::checked_arena(source).unwrap();
-    assert!(LintChecker::new(&statics).validate(root).is_empty());
+    assert!(ArenaInvariants { statics: &statics }.violations(root).is_empty());
     assert!(statics.values.iter().any(|(_, node)| matches!(node, Value::Match(_))));
     assert!(statics.values.iter().any(|(_, node)| matches!(node, Value::IntOp(_))));
     let Some(TermAnnId::Compu(root, _)) = statics.static_elaboration.as_ref().unwrap().residual
@@ -42,7 +43,7 @@ fn known_named_witnesses_bind_the_payload_type_during_static_elimination() {
     let source = include_str!(
         "../cases/static-elimination/known_named_witnesses_bind_the_payload_type_during_static_elimination.zy"
     );
-    SourceCase::assert_accepted(SourceCase::check_linted(source));
+    SourceCase::assert_accepted(SourceCase::check_invariants(source));
     SourceCase::assert_accepted(SourceCase::lower(source));
 }
 
@@ -59,7 +60,7 @@ let _ = keep Item () in
 ! exit fields/value
 "#
         );
-        SourceCase::assert_accepted(SourceCase::check_linted(&source));
+        SourceCase::assert_accepted(SourceCase::check_invariants(&source));
         SourceCase::assert_accepted(SourceCase::run(&source));
         SourceCase::assert_accepted(SourceCase::lower(&source));
     }
@@ -172,7 +173,7 @@ end
         statics.values.iter().any(|(_, node)| matches!(node, Value::ValApp(_))),
         "source applications remain available for classifier queries"
     );
-    assert!(LintChecker::new(&statics).validate(source_root).is_empty());
+    assert!(ArenaInvariants { statics: &statics }.violations(source_root).is_empty());
     let elaboration = statics.static_elaboration.as_ref().expect("checked sources are elaborated");
     assert_eq!(elaboration.source, source_root);
     let Some(TermAnnId::Compu(root, _)) = elaboration.residual else {
@@ -200,7 +201,7 @@ fn static_arguments_and_results_can_be_functions_and_packages() {
     let source = include_str!(
         "../cases/static-elimination/static_arguments_and_results_can_be_functions_and_packages.zy"
     );
-    SourceCase::assert_accepted(SourceCase::check_linted(source));
+    SourceCase::assert_accepted(SourceCase::check_invariants(source));
     SourceCase::assert_accepted(SourceCase::lower(source));
 }
 
@@ -209,7 +210,7 @@ fn inferred_factory_fields_specialize_solved_result_holes() {
     let source = include_str!(
         "../cases/static-elimination/inferred_factory_fields_specialize_solved_result_holes.zy"
     );
-    SourceCase::assert_accepted(SourceCase::check_linted(source));
+    SourceCase::assert_accepted(SourceCase::check_invariants(source));
     SourceCase::assert_accepted(SourceCase::lower(source));
 }
 
@@ -218,7 +219,7 @@ fn dependent_applications_recover_forwarded_and_constructed_package_witnesses() 
     let source = include_str!(
         "../cases/static-elimination/dependent_applications_recover_forwarded_and_constructed_package_witnesses.zy"
     );
-    SourceCase::assert_accepted(SourceCase::check_linted(source));
+    SourceCase::assert_accepted(SourceCase::check_invariants(source));
     SourceCase::assert_accepted(SourceCase::lower(source));
 }
 
@@ -227,7 +228,7 @@ fn dependent_product_arguments_preserve_each_forwarded_witness() {
     let source = include_str!(
         "../cases/static-elimination/dependent_product_arguments_preserve_each_forwarded_witness.zy"
     );
-    SourceCase::assert_accepted(SourceCase::check_linted(source));
+    SourceCase::assert_accepted(SourceCase::check_invariants(source));
     SourceCase::assert_accepted(SourceCase::lower(source));
 }
 
@@ -236,7 +237,7 @@ fn witness_inspection_keeps_runtime_constructor_payloads_opaque() {
     let source = include_str!(
         "../cases/static-elimination/witness_inspection_keeps_runtime_constructor_payloads_opaque.zy"
     );
-    SourceCase::assert_accepted(SourceCase::check_linted(source));
+    SourceCase::assert_accepted(SourceCase::check_invariants(source));
     SourceCase::assert_accepted(SourceCase::lower(source));
 }
 
@@ -285,7 +286,7 @@ fn specialization_keeps_type_arguments_and_lexical_captures_distinct() {
     let source = include_str!(
         "../cases/static-elimination/specialization_keeps_type_arguments_and_lexical_captures_distinct.zy"
     );
-    SourceCase::assert_accepted(SourceCase::check_linted(source));
+    SourceCase::assert_accepted(SourceCase::check_invariants(source));
     SourceCase::assert_accepted(SourceCase::lower(source));
 }
 
@@ -317,7 +318,7 @@ fn aliases_of_partial_value_applications_preserve_bound_arguments() {
     let source = include_str!(
         "../cases/static-elimination/aliases_of_partial_value_applications_preserve_bound_arguments.zy"
     );
-    SourceCase::assert_accepted(SourceCase::check_linted(source));
+    SourceCase::assert_accepted(SourceCase::check_invariants(source));
     SourceCase::assert_accepted(SourceCase::lower(source));
 }
 
@@ -346,5 +347,5 @@ fn reified_polymorphic_members_of_opaque_type_families_lint_cleanly() {
     let source = include_str!(
         "../cases/static-elimination/reified_polymorphic_members_of_opaque_type_families_lint_cleanly.zy"
     );
-    SourceCase::assert_accepted(SourceCase::check_linted(source));
+    SourceCase::assert_accepted(SourceCase::check_invariants(source));
 }

@@ -10,7 +10,7 @@ fn single_constructor_decomposition_is_irrefutable() {
         "let W = data | +W : Int end in let (whole; +W x) = (+W 0 : W) in ! exit x",
         "let W = data | +W : Int end in let (/field = +W x) = (#field = (+W 0 : W)) in ! exit x",
     ] {
-        SourceCase::assert_accepted(SourceCase::check_linted(body));
+        SourceCase::assert_accepted(SourceCase::check_invariants(body));
         SourceCase::assert_accepted(SourceCase::run(body));
         SourceCase::assert_accepted(SourceCase::lower(body));
     }
@@ -43,7 +43,7 @@ fn partial_headers_allow_all_their_own_binders() {
         "@[partial] let ! f (0 : Int) (1 : Int) : Ret Int = ret 0 in do r <- ! f 0 1; ! exit r",
         "let B = data | +T : Unit | +F : Unit end in @[partial] let +T() = (+T() : B) in ! exit 0",
     ] {
-        SourceCase::assert_accepted(SourceCase::check_linted(body));
+        SourceCase::assert_accepted(SourceCase::check_invariants(body));
         SourceCase::assert_accepted(SourceCase::run(body));
         SourceCase::assert_accepted(SourceCase::lower(body));
     }

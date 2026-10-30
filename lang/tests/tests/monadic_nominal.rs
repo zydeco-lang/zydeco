@@ -35,7 +35,7 @@ let (/Monad; /Algebra) = monadic_basis in
 
     fn assert_linted_and_lowered(source: &str) {
         let source = Self::source(source);
-        SourceCase::assert_accepted(SourceCase::check_linted(&source));
+        SourceCase::assert_accepted(SourceCase::check_invariants(&source));
         SourceCase::assert_accepted(SourceCase::lower(&source));
     }
 }
@@ -122,7 +122,7 @@ fn nominal_families_parameterize_the_selected_algebra_constructor() {
     let source = MonadicCase::source(include_str!(
         "../cases/monadic-nominal/nominal_families_parameterize_the_selected_algebra_constructor.zy"
     ));
-    SourceCase::assert_accepted(SourceCase::check_linted(&source));
+    SourceCase::assert_accepted(SourceCase::check_invariants(&source));
 }
 
 #[test]
@@ -201,7 +201,7 @@ end }} in
 {source}
 "#
     );
-    SourceCase::assert_accepted(SourceCase::check_linted(&source));
+    SourceCase::assert_accepted(SourceCase::check_invariants(&source));
     SourceCase::assert_accepted(SourceCase::run(&source));
 }
 

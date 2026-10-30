@@ -62,14 +62,14 @@ end
 
 #[test]
 fn checksum_has_a_direct_foreign_classifier() {
-    SourceCase::assert_accepted(SourceCase::check_linted(include_str!(
+    SourceCase::assert_accepted(SourceCase::check_invariants(include_str!(
         "../cases/ffi-examples/checksum_has_a_direct_foreign_classifier.zy"
     )));
 }
 
 #[test]
 fn pointer_only_record_imports_have_no_implicit_length_argument() {
-    SourceCase::assert_accepted(SourceCase::check_linted(include_str!(
+    SourceCase::assert_accepted(SourceCase::check_invariants(include_str!(
         "../cases/ffi-examples/pointer_only_record_imports_have_no_implicit_length_argument.zy"
     )));
 }
@@ -85,7 +85,7 @@ let inspect : Thk (Ptr L Init -> Ret UInt) = {
 } in ! exit 0
 "#,
     );
-    SourceCase::assert_accepted(SourceCase::check_linted(&wrapper));
+    SourceCase::assert_accepted(SourceCase::check_invariants(&wrapper));
     SourceCase::assert_accepted(SourceCase::lower(&wrapper));
     ForeignExamples::rejects(
         &ForeignExamples::record(&ForeignExamples::declaration(
@@ -106,7 +106,7 @@ fn a_logical_product_does_not_select_the_c_record_value_abi() {
 
 #[test]
 fn raw_mutable_destinations_are_supported_and_capturing_callbacks_remain_unsupported() {
-    SourceCase::assert_accepted(SourceCase::check_linted(include_str!(
+    SourceCase::assert_accepted(SourceCase::check_invariants(include_str!(
         "../cases/ffi-examples/raw_mutable_destinations_are_supported.zy"
     )));
     ForeignExamples::rejects(
@@ -150,7 +150,7 @@ do foreign <- ! bytes/from_string "{literal}";
 
 "#
     ));
-    SourceCase::assert_accepted(SourceCase::check_linted(&source));
+    SourceCase::assert_accepted(SourceCase::check_invariants(&source));
     let program = directory.path().join("record-input.zy");
     std::fs::write(
         &program,

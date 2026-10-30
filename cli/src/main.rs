@@ -16,7 +16,7 @@ use zydeco_tui::{Repl, ReplError};
 
 fn main() {
     let cli = Cli::parse();
-    let compiler = CommandCompiler::default().with_lint_types(cli.lint_types);
+    let compiler = CommandCompiler::default();
     let result = Application { compiler }.run(cli.command);
     match result {
         | Ok(code) => std::process::exit(code),

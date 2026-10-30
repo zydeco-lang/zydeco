@@ -18,7 +18,6 @@ set edit:completion:arg-completer[zydeco] = {|@words|
     }
     var completions = [
         &'zydeco'= {
-            cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
             cand -h 'Print help'
             cand --help 'Print help'
             cand -V 'Print version'
@@ -37,20 +36,17 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand -p 'Select declared packages by name; omit to list all packages'
             cand --pkg 'Select declared packages by name; omit to list all packages'
             cand --package 'Select declared packages by name; omit to list all packages'
-            cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
             cand -h 'Print help'
             cand --help 'Print help'
         }
         &'zydeco;passes'= {
             cand --sps-passes 'Explain `default`, `none`, or a comma-separated list such as normalize,normalize'
             cand --sps-scheme 'Explain the selection under this stack-passing scheme'
-            cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
             cand -h 'Print help (see more with ''--help'')'
             cand --help 'Print help (see more with ''--help'')'
         }
         &'zydeco;fmt'= {
             cand --check 'Report files that would change without writing them, and exit unsuccessfully when at least one file would change'
-            cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
             cand -h 'Print help'
             cand --help 'Print help'
         }
@@ -64,7 +60,6 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand --runtime-dir 'Native runtime sources, used by exe'
             cand --link-library 'Resolve a compiled library through its checked artifact manifest (repeatable)'
             cand --dry 'Dry run (don''t execute)'
-            cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
             cand -h 'Print help'
             cand --help 'Print help'
         }
@@ -72,7 +67,6 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand -p 'Select declared packages by name; repeat for multiple packages'
             cand --pkg 'Select declared packages by name; repeat for multiple packages'
             cand --package 'Select declared packages by name; repeat for multiple packages'
-            cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
             cand -h 'Print help'
             cand --help 'Print help'
         }
@@ -85,12 +79,10 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand -r 'Native runtime sources, used by exe'
             cand --runtime-dir 'Native runtime sources, used by exe'
             cand --link-library 'Resolve a compiled library through its checked artifact manifest (repeatable)'
-            cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
             cand -h 'Print help'
             cand --help 'Print help'
         }
         &'zydeco;repl'= {
-            cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
             cand -h 'Print help'
             cand --help 'Print help'
         }
@@ -115,7 +107,6 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand --dump-passes 'Print SPS IR before and after each selected pass on stderr'
             cand -x 'Run the program after building'
             cand --execute 'Run the program after building'
-            cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
             cand -h 'Print help (see more with ''--help'')'
             cand --help 'Print help (see more with ''--help'')'
         }

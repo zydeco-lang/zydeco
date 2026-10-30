@@ -15,7 +15,7 @@ use zydeco_stackir::{
     SpsLoweringError, SpsScheme,
     passes::{SpsFailure, SpsInspection, SpsObserver, SpsPlan, SpsSelection},
 };
-use zydeco_statics::{BuiltinPackagePlanError, arena::StaticsArena, validate::LintChecker};
+use zydeco_statics::{BuiltinPackagePlanError, arena::StaticsArena};
 use zydeco_surface::{scoped::arena::ScopedArena, textual::syntax::SpanArena};
 use zydeco_utils::{pass::CompilerPass, pipeline};
 
@@ -24,7 +24,6 @@ use zydeco_utils::{pass::CompilerPass, pipeline};
 pub struct CommandCompiler {
     session: CompilerSession,
     project: Arc<zydeco_session::source::Project>,
-    lint_types: bool,
     representation: RepresentationStrategy,
     sps: SpsSelection,
     pass_inspection: SpsInspection,
@@ -90,15 +89,6 @@ impl CommandCompiler {
         self
     }
 
-    /// Re-validate the finished arena after every successful check.
-    ///
-    /// Lint failures are compiler bugs, so the gated entry point aborts with an
-    /// internal error report instead of returning a user diagnostic.
-    pub fn with_lint_types(mut self, enabled: bool) -> Self {
-        self.lint_types = enabled;
-        self
-    }
-
     pub fn analyze(&self, path: &Path) -> Result<Arc<ProgramAnalysis>, CompileError> {
         let analysis = self
             .session
@@ -114,27 +104,9 @@ impl CommandCompiler {
         &self, analysis: Arc<ProgramAnalysis>,
     ) -> Result<Arc<ProgramAnalysis>, CompileError> {
         match analysis.outcome() {
-            | AnalysisOutcome::Checked { .. } => {
-                if self.lint_types {
-                    self.lint_checked_program(&analysis);
-                }
-                Ok(analysis)
-            }
+            | AnalysisOutcome::Checked { .. } => Ok(analysis),
             | AnalysisOutcome::Rejected { .. } => Err(CompileError::Rejected(analysis)),
         }
-    }
-
-    fn lint_checked_program(&self, analysis: &Arc<ProgramAnalysis>) {
-        let Some(program) = self.checked_program(analysis) else {
-            unreachable!("a checked analysis materializes its program")
-        };
-        let errors = LintChecker::new(&program.statics).validate(program.root);
-        assert!(
-            errors.is_empty(),
-            "the type lint found {} internal error(s) after a successful check:\n{}",
-            errors.len(),
-            errors.iter().map(|error| format!("  - {error}")).collect::<Vec<_>>().join("\n"),
-        );
     }
 
     pub fn checked_program(

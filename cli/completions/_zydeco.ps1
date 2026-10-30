@@ -21,7 +21,6 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
 
     $completions = @(switch ($command) {
         'zydeco' {
-            [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('-V', '-V ', [CompletionResultType]::ParameterName, 'Print version')
@@ -41,7 +40,6 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             [CompletionResult]::new('-p', '-p', [CompletionResultType]::ParameterName, 'Select declared packages by name; omit to list all packages')
             [CompletionResult]::new('--pkg', '--pkg', [CompletionResultType]::ParameterName, 'Select declared packages by name; omit to list all packages')
             [CompletionResult]::new('--package', '--package', [CompletionResultType]::ParameterName, 'Select declared packages by name; omit to list all packages')
-            [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -49,14 +47,12 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
         'zydeco;passes' {
             [CompletionResult]::new('--sps-passes', '--sps-passes', [CompletionResultType]::ParameterName, 'Explain `default`, `none`, or a comma-separated list such as normalize,normalize')
             [CompletionResult]::new('--sps-scheme', '--sps-scheme', [CompletionResultType]::ParameterName, 'Explain the selection under this stack-passing scheme')
-            [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             break
         }
         'zydeco;fmt' {
             [CompletionResult]::new('--check', '--check', [CompletionResultType]::ParameterName, 'Report files that would change without writing them, and exit unsuccessfully when at least one file would change')
-            [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -71,7 +67,6 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             [CompletionResult]::new('--runtime-dir', '--runtime-dir', [CompletionResultType]::ParameterName, 'Native runtime sources, used by exe')
             [CompletionResult]::new('--link-library', '--link-library', [CompletionResultType]::ParameterName, 'Resolve a compiled library through its checked artifact manifest (repeatable)')
             [CompletionResult]::new('--dry', '--dry', [CompletionResultType]::ParameterName, 'Dry run (don''t execute)')
-            [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -80,7 +75,6 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             [CompletionResult]::new('-p', '-p', [CompletionResultType]::ParameterName, 'Select declared packages by name; repeat for multiple packages')
             [CompletionResult]::new('--pkg', '--pkg', [CompletionResultType]::ParameterName, 'Select declared packages by name; repeat for multiple packages')
             [CompletionResult]::new('--package', '--package', [CompletionResultType]::ParameterName, 'Select declared packages by name; repeat for multiple packages')
-            [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -94,13 +88,11 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             [CompletionResult]::new('-r', '-r', [CompletionResultType]::ParameterName, 'Native runtime sources, used by exe')
             [CompletionResult]::new('--runtime-dir', '--runtime-dir', [CompletionResultType]::ParameterName, 'Native runtime sources, used by exe')
             [CompletionResult]::new('--link-library', '--link-library', [CompletionResultType]::ParameterName, 'Resolve a compiled library through its checked artifact manifest (repeatable)')
-            [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
         'zydeco;repl' {
-            [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -126,7 +118,6 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             [CompletionResult]::new('--dump-passes', '--dump-passes', [CompletionResultType]::ParameterName, 'Print SPS IR before and after each selected pass on stderr')
             [CompletionResult]::new('-x', '-x', [CompletionResultType]::ParameterName, 'Run the program after building')
             [CompletionResult]::new('--execute', '--execute', [CompletionResultType]::ParameterName, 'Run the program after building')
-            [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             break

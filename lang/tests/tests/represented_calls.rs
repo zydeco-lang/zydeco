@@ -22,7 +22,7 @@ end
         );
         let source = MemoryCase::source(&body);
         if accepted {
-            SourceCase::assert_accepted(SourceCase::check_linted(&source));
+            SourceCase::assert_accepted(SourceCase::check_invariants(&source));
             SourceCase::assert_accepted(SourceCase::run(&source));
         } else {
             SourceCase::assert_rejected(

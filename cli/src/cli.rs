@@ -132,11 +132,6 @@ impl TargetOs {
 #[command(version, about, long_about = None,
     after_help = "Packages are loaded from package.zy and workspace.zy in the working directory.")]
 pub struct Cli {
-    /// Re-validate the finished typed arena after every successful check,
-    /// reporting internal compiler errors (debugging aid)
-    #[arg(long, global = true)]
-    pub lint_types: bool,
-
     #[command(subcommand)]
     pub command: Commands,
 }

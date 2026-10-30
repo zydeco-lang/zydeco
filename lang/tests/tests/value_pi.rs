@@ -8,7 +8,7 @@ fn backward_application_accepts_bare_type_and_value_abstractions() {
     let source = include_str!(
         "../cases/value-pi/backward_application_accepts_bare_type_and_value_abstractions.zy"
     );
-    SourceCase::assert_accepted(SourceCase::check_linted(source));
+    SourceCase::assert_accepted(SourceCase::check_invariants(source));
     SourceCase::assert_accepted(SourceCase::lower(source));
 }
 

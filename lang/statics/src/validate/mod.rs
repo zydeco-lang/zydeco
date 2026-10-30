@@ -11,11 +11,3 @@ pub use executable::*;
 /// Coverage and exhaustiveness validation for data matches and codata comatches.
 pub mod coverage;
 pub use coverage::*;
-
-/// Well-formedness lint over the finished arena.
-pub mod lint;
-pub use lint::*;
-
-/// Structural re-derivation of annotations from term structure.
-pub mod rederive;
-pub use rederive::*;
