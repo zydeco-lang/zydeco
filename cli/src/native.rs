@@ -350,7 +350,9 @@ pub enum NativeError {
     UnsupportedHostArchitecture(&'static str),
     #[error("unsupported host operating system `{0}`")]
     UnsupportedHostOperatingSystem(&'static str),
-    #[error("the amd64 backend cannot target {0:?}")]
+    #[error(
+        "the AMD64 backend cannot target {0}; the architecture defaults to the host, so pass `--target-arch x86-64`"
+    )]
     UnsupportedAmd64Architecture(TargetArchitecture),
     #[error("cannot prepare the build directory: {0}")]
     PrepareBuildDirectory(#[source] std::io::Error),

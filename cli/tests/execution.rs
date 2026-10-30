@@ -322,6 +322,35 @@ fn build_execute_outside_exe_is_rejected_or_ignored_without_running() {
 }
 
 #[test]
+fn native_targets_reject_a_non_amd64_architecture_before_compiling() {
+    let fixture = Fixture::new();
+    fixture.write("main.zy", &Fixture::file_effect());
+    for target in ["asm", "exe", "object", "staticlib", "sharedlib"] {
+        let output = fixture
+            .command(&["build", "main.zy", "-t", target, "--target-arch", "aarch64", "-b", "build"])
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(1), "{target}");
+        assert!(output.stdout.is_empty(), "{target}: {}", String::from_utf8_lossy(&output.stdout));
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("cannot target aarch64"), "{target}: {stderr}");
+        assert!(stderr.contains("--target-arch x86-64"), "{target}: {stderr}");
+        assert!(!stderr.contains("compiled C libraries"), "{target}: {stderr}");
+        assert!(!stderr.contains("panicked"), "{target}: {stderr}");
+    }
+    assert!(!fixture.directory.path().join("build").exists());
+    // The accepted counterpart: every AMD64 spelling selects the backend.
+    for architecture in ["x86-64", "x86", "amd64"] {
+        let output = fixture
+            .command(&["build", "main.zy", "-t", "asm", "--target-arch", architecture])
+            .output()
+            .unwrap();
+        assert!(!Fixture::stdout(&output, 0).is_empty(), "{architecture}");
+    }
+    assert!(!fixture.directory.path().join("executed.marker").exists());
+}
+
+#[test]
 fn dry_run_needs_no_backend_tools_and_does_not_execute() {
     let fixture = Fixture::new();
     fixture.write(

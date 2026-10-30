@@ -15,6 +15,16 @@ pub enum BuildTarget {
     Exe,
 }
 
+impl BuildTarget {
+    /// Whether the AMD64 backend produces this target.
+    pub fn is_native(self) -> bool {
+        match self {
+            | Self::Asm | Self::Object | Self::Staticlib | Self::Sharedlib | Self::Exe => true,
+            | Self::Zir | Self::Zasm | Self::WasmSps => false,
+        }
+    }
+}
+
 /// Backends that can execute a program with the host Builtin package.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
 pub enum ExecutionTarget {
@@ -108,6 +118,14 @@ impl TargetArchitecture {
             | "aarch64" => Ok(Self::Aarch64),
             | architecture => Err(architecture),
         }
+    }
+}
+
+impl std::fmt::Display for TargetArchitecture {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(
+            self.to_possible_value().expect("target architecture has a CLI name").get_name(),
+        )
     }
 }
 

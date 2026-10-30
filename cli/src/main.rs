@@ -367,6 +367,9 @@ impl Application {
         &self, sources: Vec<SourceReference>, target: BuildTarget, options: BuildOptions,
         execute: bool, representation: Option<RepresentationStrategy>, libraries: LinkedLibraries,
     ) -> Result<i32, ApplicationError> {
+        if target.is_native() && options.architecture != TargetArchitecture::X86_64 {
+            return Err(NativeError::UnsupportedAmd64Architecture(options.architecture).into());
+        }
         let kind = match target {
             | BuildTarget::Object => Some(LibraryArtifactKind::Object),
             | BuildTarget::Staticlib => Some(LibraryArtifactKind::Staticlib),
@@ -477,12 +480,6 @@ impl Application {
                 | BuildTarget::Zir => println!("{}", backend.render_sps_low()),
                 | BuildTarget::Zasm => println!("{}", backend.render_assembly()),
                 | BuildTarget::Asm => {
-                    if options.architecture != TargetArchitecture::X86_64 {
-                        return Err(NativeError::UnsupportedAmd64Architecture(
-                            options.architecture,
-                        )
-                        .into());
-                    }
                     println!("{}", backend.emit_amd64(options.operating_system).assembly);
                 }
                 | BuildTarget::WasmSps => {

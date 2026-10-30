@@ -81,6 +81,8 @@ zydeco build path/to/main.zy --target exe --target-arch x86-64 --build-dir build
 
 The result is `build/main.exe`. Add `--execute` to run it after linking.
 Architecture and OS default to the host; `--target-arch` and `--target-os` select them explicitly.
+Native targets reject every architecture other than AMD64 before compiling,
+so an ARM host must pass `--target-arch x86-64`.
 Build and runtime directories default to `build/` and `runtime/` relative to the working directory.
 
 Native linking copies runtime sources into the build directory, writes the compiler's embedded model

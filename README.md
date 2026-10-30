@@ -7,7 +7,7 @@ It explores explicit control flow, stack-manipulating computation, and relative 
 Its [term-oriented design](docs/references/language.md#term-oriented-composition) uses expressions
 for type construction, local programming, and library composition.
 
-The repository includes an interpreter, a terminal REPL, experimental native and WebAssembly backends,
+The repository includes an interpreter, a terminal REPL, a compiler to native AMD64 executables,
 and editor support through the Cajun language server.
 
 ## Quick Start
@@ -79,8 +79,7 @@ From this repository's root, `zydeco show` lists declarations and `zydeco check 
 Select a test explicitly, for example `zydeco test lib/tests/std/bool.zy`.
 [Suite selection from relationships](docs/ideas/README.md#project-context-inspection) remains planned.
 Both `run` and `test` default to the interpreter; `-t` (`--target`) selects a backend.
-Repeat it for a test matrix: `zydeco test lib/tests/std/bool.zy -t interpreter -t wasm-sps`.
-Use `zydeco test lib/tests/std/bool.zy -t all` to include every backend, including native `exe`.
+Repeat it for a test matrix: `zydeco test lib/tests/std/bool.zy -t interpreter -t exe`.
 Quoted file imports and direct CLI paths also work without named package declarations.
 See the [CLI guide](cli/README.md#run-and-test-programs) for command examples
 and the [source package reference](docs/references/language.md#source-packages) for declarations and discovery.
@@ -101,16 +100,18 @@ See the [REPL workflow](cli/README.md#interactive-repl) for submission keys and 
 
 ## Compiling Programs
 
-Build the experimental WebAssembly target:
+The compiler lowers a checked program through stack-passing style to a native AMD64 executable.
+Compile and run `hello-world.zy` in one step, or build the executable:
 
 ```sh
-zydeco build hello-world.zy --target wasm-sps --build-dir build
+zydeco run hello-world.zy -t exe
+zydeco build hello-world.zy --target exe --target-arch x86-64
 ```
 
-The command produces `build/hello-world.sps.wasm`, a module that requires imports from the `zydeco` host namespace.
-`zydeco run hello-world.zy -t wasm-sps` compiles and executes with the bundled host, requiring Node.js.
-The [compilation workflow](cli/README.md#build-artifacts) explains native targets and execution with the Node.js host.
-[DESIGN.md](DESIGN.md#webassembly-backend) describes the lowering strategy, host ABI, and limitations.
+`build` defaults to the host architecture, so an ARM host passes `--target-arch x86-64`.
+The [native executable guide](cli/README.md#native-executables) lists the required tools,
+and the [compiler reference](docs/references/compiler.md#selecting-and-inspecting-passes) explains how
+to inspect the stack-passing-style program with `--target zir`.
 
 ## Editor Support
 
