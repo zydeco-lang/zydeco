@@ -30,6 +30,8 @@ the compact and moving frame variants, and the test-only parser entry points and
 and replaced the typed-arena lint with a test-only invariant check, so the deletions now list only what remains.
 The record also dropped the tree-sitter bullet, because the repository keeps the generated parser,
 and the arena method `rebind` from the dead-code list, because the interpreter's linker calls it.
+The representation-policy trait left the deletions as well, because `build --representation` selects
+among its policies and the repository keeps that option.
 The measurements, the reproduction, and the evidence for the remaining findings still describe the measured revision.
 
 ## Yardstick
@@ -324,8 +326,6 @@ Line deltas marked ≈ are review estimates inferred from file sizes; they overl
 
 Of the audit's first two steps, the raw memory kernels remain, ≈650–900 production lines plus their tests;
 removing them changes compiler reference text but no source behavior.
-The representation-policy trait is not such a deletion: `build --representation` selects among its policies,
-so removing it removes that option.
 
 This review adds dead code that the audit did not list: the `pats` and `terms` site maps of high SPS and SPSLow,
 whose only readers copy them into the next phase's arena.

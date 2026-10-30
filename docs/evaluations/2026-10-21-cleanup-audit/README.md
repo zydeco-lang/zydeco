@@ -23,11 +23,12 @@ Further commits removed the test-only scaffolding, namely the pass combinators, 
 and moving frame environments, and the test-only parser entry points and printer, and replaced the typed-arena lint
 with a test-only invariant check, so the record dropped those findings and the dead-code section.
 The finding that the pass framework served one pass left the record once procedure localization became its second.
-The representation-policy finding was wrong at the measured revision, which already selected policies
-through `build --representation`; the finding and its verification bullet now say so.
 The record also dropped the tooling removals that the repository declined, namely the resumable test runner,
 the tracked shell completions and tree-sitter parser, and the reserved formatter options,
 together with the section that recorded those decisions.
+It dropped the representation-policy finding as well: the measured revision already selected policies
+through `build --representation`, so they were never test-only, and the repository keeps that option.
+The verification bullet that called them test-only is corrected.
 The yardstick no longer excludes the paper's duplicating and full schemes or its second-class procedures,
 which the compiler has since implemented.
 The measurements, the reproduction, and the evidence for the remaining findings still describe the measured revision.
@@ -260,9 +261,6 @@ Several production interfaces carry parameters that only tests vary:
 - the live editor configuration in Cajun, which serves two hover settings (≈270);
 - `--target-arch`, which accepts `Aarch64` but rejects it downstream, leaving one supported value.
 
-The representation-policy trait (≈350) is not test-only: `build --representation` selects among its policies,
-so removing it would remove a documented option.
-
 ### Parallel implementations
 
 Each of these mechanisms exists more than once:
@@ -328,8 +326,7 @@ jumps, and packages that closure conversion builds.
    Source behavior stays the same, but the compiler reference sections that describe them change,
    which requires approval.
 2. Decide the design findings: the systems-programming thread, a minimal package system, the monadic extensions,
-   the rare surface forms, the effect-library breadth, the representation policies behind `build --representation`,
-   and how SPSLow output is checked against `SPS_l`.
+   the rare surface forms, the effect-library breadth, and how SPSLow output is checked against `SPS_l`.
 3. Merge the parallel implementations, and fold documentation into the references that own each rule.
 
 A step that touches `lang/stackir`, ZASM, or the native backend must keep the SPS paper's implementation claim true:
