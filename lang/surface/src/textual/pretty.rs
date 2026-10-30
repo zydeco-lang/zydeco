@@ -447,9 +447,21 @@ impl<'arena> PrettyFormatter<'arena> {
     fn with_comments(
         &self, comments: &'arena [LeadingComment], document: RcDoc<'arena>,
     ) -> RcDoc<'arena> {
+        self.with_separated_comments(comments, LineSeparation::SameLine, document)
+    }
+
+    /// Print comments before a document, separating the last comment from
+    /// the document by at least `minimum`.
+    fn with_separated_comments(
+        &self, comments: &'arena [LeadingComment], minimum: LineSeparation, document: RcDoc<'arena>,
+    ) -> RcDoc<'arena> {
+        let last = comments.len().saturating_sub(1);
         comments
             .iter()
-            .fold(RcDoc::nil(), |prefix, comment| {
+            .enumerate()
+            .fold(RcDoc::nil(), |prefix, (index, comment)| {
+                let separation = comment.separation_after();
+                let separation = if index == last { separation.max(minimum) } else { separation };
                 prefix
                     .append(if comment.comment().as_text().is_some() {
                         self.ensure_line_start()
@@ -457,7 +469,7 @@ impl<'arena> PrettyFormatter<'arena> {
                         RcDoc::nil()
                     })
                     .append(self.comment(comment.comment()))
-                    .append(self.line_separation(comment.separation_after()))
+                    .append(self.line_separation(separation))
             })
             .append(document)
     }
@@ -1446,7 +1458,7 @@ impl<'arena> PrettyFormatter<'arena> {
         | Term::SignatureBoundary(SignatureBoundary(inner)) = &self.arena.terms[&term]
         {
             let document = self.term_with_requirement(*inner, requirement);
-            return self.with_leading_comments(term.into(), document);
+            return self.with_term_comments(term, requirement, document);
         }
         let document = match &self.arena.terms[&term] {
             | Term::Meta(MetaTerm(meta, inner)) => {
@@ -1575,8 +1587,8 @@ impl<'arena> PrettyFormatter<'arena> {
                 BoundaryLayout::hanging("", self.indent()),
                 self.term_through_fragment(*body, TermPrecedence::Prefix),
             ),
-            | Term::Do(Bind { binder, bindee, tail }) => self.block_like(
-                self.prefixed(
+            | Term::Do(Bind { binder, bindee, tail }) => self
+                .prefixed(
                     term,
                     "do",
                     BoundaryLayout::aligned(""),
@@ -1589,14 +1601,11 @@ impl<'arena> PrettyFormatter<'arena> {
                 ))
                 .append(RcDoc::text(";"))
                 .append(self.sequence_tail((*bindee).into(), *tail)),
-            ),
-            | Term::Let(GenLet { binding, tail }) => self.block_like(
-                RcDoc::text("let")
-                    .append(self.placed_binding(term, binding, Placement::In))
-                    .append(self.sequence_tail(binding.bindee.into(), *tail)),
-            ),
-            | Term::Param(Param { flavor, binder, placement, tail }) => self.block_like(
-                self.prefixed(
+            | Term::Let(GenLet { binding, tail }) => RcDoc::text("let")
+                .append(self.placed_binding(term, binding, Placement::In))
+                .append(self.sequence_tail(binding.bindee.into(), *tail)),
+            | Term::Param(Param { flavor, binder, placement, tail }) => self
+                .prefixed(
                     term,
                     match flavor {
                         | ParameterFlavor::Plain => "param",
@@ -1608,7 +1617,6 @@ impl<'arena> PrettyFormatter<'arena> {
                 .append(RcDoc::text(" "))
                 .append(self.placement(*placement))
                 .append(self.sequence_tail((*binder).into(), *tail)),
-            ),
             | Term::Pipeline(Pipeline { direction, subject, function }) => match direction {
                 | PipelineDirection::Forward => self
                     .term_through(*subject, TermPrecedence::ForwardCut)
@@ -1624,22 +1632,18 @@ impl<'arena> PrettyFormatter<'arena> {
                     | DefinitionMode::Transparent => "let",
                     | DefinitionMode::Nominal => "def",
                 };
-                self.block_like(
-                    RcDoc::text(keyword)
-                        .append(self.placed_binding(term, binding, *placement))
-                        .append(self.sequence_tail(binding.bindee.into(), *tail)),
-                )
+                RcDoc::text(keyword)
+                    .append(self.placed_binding(term, binding, *placement))
+                    .append(self.sequence_tail(binding.bindee.into(), *tail))
             }
             | Term::Block(Block(body)) => self.block(term, "begin", *body, "end"),
-            | Term::Data(Data { arms }) => self.block_like(self.data(term, arms)),
-            | Term::CoData(CoData { arms }) => self.block_like(self.codata(term, arms)),
+            | Term::Data(Data { arms }) => self.data(term, arms),
+            | Term::CoData(CoData { arms }) => self.codata(term, arms),
             | Term::Ctor(Ctor(name, body)) => {
                 self.constructor(name).append(self.term_constructor_argument(*body))
             }
-            | Term::Match(Match { scrut, arms }) => {
-                self.block_like(self.matcher(term, *scrut, arms))
-            }
-            | Term::CoMatch(CoMatchParam { arms }) => self.block_like(self.comatcher(term, arms)),
+            | Term::Match(Match { scrut, arms }) => self.matcher(term, *scrut, arms),
+            | Term::CoMatch(CoMatchParam { arms }) => self.comatcher(term, arms),
             | Term::Dtor(Dtor(body, name)) => self
                 .term_through(*body, TermPrecedence::Application)
                 .append(RcDoc::text(" "))
@@ -1655,7 +1659,37 @@ impl<'arena> PrettyFormatter<'arena> {
         } else {
             self.delimited(None, "(", vec![LayoutFragment::entity(term.into(), document)], ",", ")")
         };
-        self.with_leading_comments(term.into(), document)
+        self.with_term_comments(term, requirement, document)
+    }
+
+    /// Attach a term's leading comments, anchoring a block construct that
+    /// its grammar position leaves unparenthesized.
+    fn with_term_comments(
+        &self, term: TermId, requirement: TermRequirement, document: RcDoc<'arena>,
+    ) -> RcDoc<'arena> {
+        if self.grammar.accepts_term(requirement, term) && self.is_block_like(term) {
+            self.block_like(term, document)
+        } else {
+            self.with_leading_comments(term.into(), document)
+        }
+    }
+
+    /// Sequence bindings and arm blocks are block-like: their interior aligns
+    /// with their head.
+    fn is_block_like(&self, term: TermId) -> bool {
+        match &self.arena.terms[&term] {
+            | Term::SourceBoundary(SourceBoundary(inner))
+            | Term::SignatureBoundary(SignatureBoundary(inner)) => self.is_block_like(*inner),
+            | Term::Do(_)
+            | Term::Let(_)
+            | Term::Param(_)
+            | Term::ContextBind(_)
+            | Term::Data(_)
+            | Term::CoData(_)
+            | Term::Match(_)
+            | Term::CoMatch(_) => true,
+            | _ => false,
+        }
     }
 
     /// Render a `@[format(...)]` annotation, applying its directive to the
@@ -2283,8 +2317,10 @@ impl<'arena> PrettyFormatter<'arena> {
     /// breaks, and arm blocks, whose arms always break — must start on a
     /// line of their own. The guard fails mid-line and lets an enclosing
     /// boundary fall back to its broken form instead of anchoring the
-    /// construct to a running line.
-    fn block_like(&self, document: RcDoc<'arena>) -> RcDoc<'arena> {
+    /// construct to a running line. Leading comments extend the construct's
+    /// layout start, so the guard precedes them, and the construct itself
+    /// still starts the line after the last one.
+    fn block_like(&self, term: TermId, document: RcDoc<'arena>) -> RcDoc<'arena> {
         RcDoc::column(|column| {
             RcDoc::nesting(
                 move |nesting| {
@@ -2292,7 +2328,11 @@ impl<'arena> PrettyFormatter<'arena> {
                 },
             )
         })
-        .append(document)
+        .append(self.with_separated_comments(
+            self.arena.trivia.leading_comments(term.into()),
+            LineSeparation::NextLine,
+            document,
+        ))
     }
 
     /// Attach the stage-closing placement marker to a bindee. Mirroring the
@@ -5030,6 +5070,53 @@ mod tests {
             assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
             assert_eq!(RetainedComments::collect(source), RetainedComments::collect(&formatted));
         });
+    }
+
+    #[test]
+    fn block_constructs_start_their_own_line_after_leading_comments() {
+        let cases = [
+            // A same-line comment keeps its line, and the block construct
+            // starts the next one.
+            ("/- outer -/ let value = 'x' in value", "/- outer -/\nlet value = 'x' in\nvalue\n"),
+            ("/- c -/ match x\n| +A() => ret 0\nend", "/- c -/\nmatch x\n| +A() => ret 0\nend\n"),
+            // Only the separation before the construct breaks.
+            (
+                "/- first -/ /- second -/ let value = 'x' in value",
+                "/- first -/ /- second -/\nlet value = 'x' in\nvalue\n",
+            ),
+            // A line comment already ends its line.
+            ("-- line\nlet value = 'x' in value", "-- line\nlet value = 'x' in\nvalue\n"),
+            // A term that may start mid-line stays beside its comment.
+            ("/- c -/ value", "/- c -/ value\n"),
+            // The comment starts the construct's layout, so a nested
+            // construct moves to its own line together with its comments.
+            (
+                "let x = /- c -/ let y = 'a' in y in x",
+                "let x =\n  /- c -/\n  let y = 'a' in\n  y\nin\nx\n",
+            ),
+            (
+                "let x = -- c\nlet y = 'a' in y in x",
+                "let x =\n  -- c\n  let y = 'a' in\n  y\nin\nx\n",
+            ),
+        ];
+
+        [LayoutIntentions::Preserve, LayoutIntentions::BlankLinesOnly, LayoutIntentions::Ignore]
+            .into_iter()
+            .for_each(|policy| {
+                cases.into_iter().for_each(|(source, expected)| {
+                    let parsed = ParsedSource::new(source);
+                    let formatted = parsed.render(policy);
+                    assert_eq!(formatted, expected, "source: {source}");
+
+                    let reparsed = ParsedSource::new(&formatted);
+                    assert_eq!(formatted, reparsed.render(policy), "source: {source}");
+                    assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+                    assert_eq!(
+                        RetainedComments::collect(source),
+                        RetainedComments::collect(&formatted)
+                    );
+                });
+            });
     }
 
     #[test]

@@ -90,8 +90,9 @@ impl SurfaceComment {
     }
 }
 
-/// The canonical line separation between trivia and adjacent syntax.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+/// The canonical line separation between trivia and adjacent syntax,
+/// ordered by vertical distance.
+#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum LineSeparation {
     SameLine,
     NextLine,
