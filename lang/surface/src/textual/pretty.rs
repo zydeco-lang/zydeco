@@ -290,6 +290,7 @@ impl InfixOperator {
 struct InfixOperand<'arena> {
     document: RcDoc<'arena>,
     starts_with_comment: bool,
+    comments_end_line: bool,
 }
 
 impl<'arena> BoundaryLayout<'arena> {
@@ -612,33 +613,53 @@ impl<'arena> PrettyFormatter<'arena> {
         }
     }
 
+    /// Place a continuation after a boundary. A continuation whose leading
+    /// comments end their line cannot share the running line, so its
+    /// boundary breaks before the comments.
     fn layout_boundary(
+        &self, intent: BoundaryIntent, layout: BoundaryLayout<'arena>,
+        continuation: LayoutFragment<'arena>,
+    ) -> RcDoc<'arena> {
+        let LayoutFragment { document, anchors } = continuation;
+        if self.leading_comments_end_line(anchors.first) {
+            layout.place(self.expanded_placement(intent), document)
+        } else {
+            self.retained_boundary(intent, layout, document)
+        }
+    }
+
+    /// Place a continuation at the boundary's retained placement. A joined
+    /// boundary keeps its broken alternative for width selection.
+    fn retained_boundary(
         &self, intent: BoundaryIntent, layout: BoundaryLayout<'arena>, continuation: RcDoc<'arena>,
     ) -> RcDoc<'arena> {
-        let retained = self.retained_placement(intent);
-        match retained {
+        match self.retained_placement(intent) {
             | BoundaryPlacement::Joined => self.flexible(
                 layout.place(BoundaryPlacement::Joined, continuation.clone()),
                 layout.place(BoundaryPlacement::Broken, continuation),
             ),
-            | BoundaryPlacement::Broken | BoundaryPlacement::BlankLine => {
+            | retained @ (BoundaryPlacement::Broken | BoundaryPlacement::BlankLine) => {
                 layout.place(retained, continuation)
             }
         }
     }
 
-    fn fragment_boundary(
-        &self, intent: BoundaryIntent, layout: BoundaryLayout<'arena>,
-        continuation: LayoutFragment<'arena>,
-    ) -> RcDoc<'arena> {
-        self.layout_boundary(intent, layout, continuation.document)
+    /// Whether an entity's leading comments end a line before it. Line and
+    /// documentation comments always do; a block comment does when a line
+    /// break follows it.
+    fn leading_comments_end_line(&self, entity: EntityId) -> bool {
+        self.arena
+            .trivia
+            .leading_comments(entity)
+            .iter()
+            .any(|comment| comment.separation_after() != LineSeparation::SameLine)
     }
 
     fn prefixed(
         &self, enclosing: impl Into<EntityId>, prefix: &'static str,
         layout: BoundaryLayout<'arena>, child: LayoutFragment<'arena>,
     ) -> RcDoc<'arena> {
-        RcDoc::text(prefix).append(self.fragment_boundary(
+        RcDoc::text(prefix).append(self.layout_boundary(
             BoundaryIntent::after_start(enclosing, child.anchors.first),
             layout,
             child,
@@ -657,7 +678,7 @@ impl<'arena> PrettyFormatter<'arena> {
     ) -> LayoutFragment<'arena> {
         let intent = BoundaryIntent::between(left.anchors.last, right.anchors.first);
         let anchors = LayoutAnchors { first: left.anchors.first, last: right.anchors.last };
-        let document = left.document.append(self.layout_boundary(intent, layout, right.document));
+        let document = left.document.append(self.layout_boundary(intent, layout, right));
         LayoutFragment { document, anchors }
     }
 
@@ -731,7 +752,7 @@ impl<'arena> PrettyFormatter<'arena> {
                     self.layout_boundary(
                         intent.blank_line_only(),
                         BoundaryLayout::aligned(""),
-                        right.document,
+                        right,
                     ),
                 );
             return LayoutFragment { document, anchors };
@@ -744,14 +765,17 @@ impl<'arena> PrettyFormatter<'arena> {
         let inline = self.single_line(inline_head).append(self.layout_boundary(
             intent,
             inline_layout,
-            right.document.clone(),
+            right.clone(),
         ));
         // An ordinary entity-to-entity break is satisfied by moving the
         // separator. A blank line still belongs between it and the right side.
-        let aligned =
-            left.document.append(RcDoc::hardline().append(RcDoc::text(separator)).append(
-                self.layout_boundary(intent.blank_line_only(), aligned_layout, right.document),
-            ));
+        let aligned = left.document.append(
+            RcDoc::hardline().append(RcDoc::text(separator)).append(self.layout_boundary(
+                intent.blank_line_only(),
+                aligned_layout,
+                right,
+            )),
+        );
         let document = self.flexible(inline, aligned);
         LayoutFragment { document, anchors }
     }
@@ -773,7 +797,7 @@ impl<'arena> PrettyFormatter<'arena> {
             .append(self.layout_boundary(
                 intent,
                 BoundaryLayout::hanging("", self.indent()),
-                bindee.document.clone(),
+                bindee.clone(),
             ));
         // A blank line between the type and the bindee belongs before the
         // separator, so it excludes the attached form.
@@ -786,7 +810,7 @@ impl<'arena> PrettyFormatter<'arena> {
                 .append(self.layout_boundary(
                     intent,
                     BoundaryLayout::hanging("", self.indent()),
-                    bindee.document.clone(),
+                    bindee.clone(),
                 ))
         } else {
             RcDoc::fail()
@@ -797,7 +821,7 @@ impl<'arena> PrettyFormatter<'arena> {
             self.layout_boundary(
                 intent.blank_line_only(),
                 BoundaryLayout::hanging("", self.indent()),
-                bindee.document,
+                bindee,
             ),
         ));
         let document = self.flexible(inline, self.flexible(attached, aligned));
@@ -819,7 +843,7 @@ impl<'arena> PrettyFormatter<'arena> {
         let inline = self.single_line(probe.clone()).append(self.layout_boundary(
             intent,
             body_layout.clone(),
-            bindee.document.clone(),
+            bindee.clone(),
         ));
         let aligned = head
             .document
@@ -880,11 +904,13 @@ impl<'arena> PrettyFormatter<'arena> {
             let mut document = self.term_through(operand, precedence);
             let mut starts_with_comment =
                 !self.arena.trivia.leading_comments(operand.into()).is_empty();
+            let mut comments_end_line = self.leading_comments_end_line(operand.into());
             if let Some(site) = comment_site {
                 starts_with_comment |= !self.arena.trivia.leading_comments(site.into()).is_empty();
+                comments_end_line |= self.leading_comments_end_line(site.into());
                 document = self.with_leading_comments(site.into(), document);
             }
-            operands.push(InfixOperand { document, starts_with_comment });
+            operands.push(InfixOperand { document, starts_with_comment, comments_end_line });
             if index < last {
                 boundaries
                     .push(BoundaryIntent::between(operand, sites[index + 1].0).resolve(self.arena));
@@ -906,8 +932,17 @@ impl<'arena> PrettyFormatter<'arena> {
         let hanging_indent_usize = usize::try_from(hanging_indent).unwrap_or_default();
         let operator_padding =
             usize::try_from(hanging_indent.saturating_sub(symbol_width)).unwrap_or_default();
+        // A boundary breaks where the source broke it or where the following
+        // operand's comments end their line.
+        let forced_breaks = operands[1..]
+            .iter()
+            .zip(boundaries.iter().copied())
+            .map(|(operand, intention)| operand.comments_end_line || self.forces_break(intention))
+            .collect::<Vec<_>>();
         let mut table = operands[0].document.clone().nest(hanging_indent);
-        for (operand, intention) in operands[1..].iter().zip(boundaries.iter().copied()) {
+        for ((operand, intention), forced) in
+            operands[1..].iter().zip(boundaries.iter().copied()).zip(forced_breaks.iter().copied())
+        {
             let continuation = operand.document.clone().nest(hanging_indent);
             let line_break = self.mandatory_line_break(intention);
             let inline = RcDoc::space()
@@ -928,8 +963,7 @@ impl<'arena> PrettyFormatter<'arena> {
                     .append(RcDoc::text(" ".repeat(operator_padding)))
                     .append(continuation)
             };
-            let boundary =
-                if self.forces_break(intention) { broken } else { self.flexible(inline, broken) };
+            let boundary = if forced { broken } else { self.flexible(inline, broken) };
             table = table.append(boundary);
         }
         let begins_after_same_line_comment = self
@@ -944,9 +978,7 @@ impl<'arena> PrettyFormatter<'arena> {
             self.at_line_start(RcDoc::text(" ".repeat(hanging_indent_usize)).append(table))
         };
 
-        let preserves_break =
-            boundaries.iter().flatten().any(|intention| self.forces_break(Some(*intention)));
-        if preserves_break {
+        if forced_breaks.contains(&true) {
             return hanging;
         }
 
@@ -1486,7 +1518,7 @@ impl<'arena> PrettyFormatter<'arena> {
                         {
                             self.metadata_wrapper("@(", ")", *meta)
                         }
-                        | _ => self.annotation_prefix(*meta).append(self.fragment_boundary(
+                        | _ => self.annotation_prefix(*meta).append(self.layout_boundary(
                             BoundaryIntent::after_start(term, *inner),
                             BoundaryLayout::aligned(""),
                             self.term_through_fragment(*inner, TermPrecedence::Binder),
@@ -1507,7 +1539,7 @@ impl<'arena> PrettyFormatter<'arena> {
             | Term::Var(name) => self.variable(name),
             | Term::Named(Named(field, inner)) => self.named_term(term, field, *inner),
             | Term::Label(Label(field, inner)) => {
-                self.marked_field(field).append(self.fragment_boundary(
+                self.marked_field(field).append(self.layout_boundary(
                     BoundaryIntent::after_start(term, *inner),
                     BoundaryLayout::aligned(" ::"),
                     self.annotated_term_fragment(*inner),
@@ -1602,7 +1634,7 @@ impl<'arena> PrettyFormatter<'arena> {
                     BoundaryLayout::aligned(""),
                     LayoutFragment::entity((*binder).into(), self.pattern(*binder)),
                 )
-                .append(self.fragment_boundary(
+                .append(self.layout_boundary(
                     BoundaryIntent::between(*binder, *bindee),
                     BoundaryLayout::hanging(" <-", self.indent()),
                     self.term_through_fragment(*bindee, TermPrecedence::Binder),
@@ -1720,7 +1752,7 @@ impl<'arena> PrettyFormatter<'arena> {
         let prefix = self.annotation_prefix(meta);
         let payload = scoped.term_through_fragment(inner, TermPrecedence::Binder);
         if scoped.options.line_width == self.options.line_width {
-            return prefix.append(scoped.fragment_boundary(
+            return prefix.append(scoped.layout_boundary(
                 BoundaryIntent::after_start(term, inner),
                 BoundaryLayout::aligned(""),
                 payload,
@@ -1730,7 +1762,7 @@ impl<'arena> PrettyFormatter<'arena> {
         if rendered.contains('\n') {
             return prefix.append(self.embedded_block(&rendered));
         }
-        prefix.append(scoped.fragment_boundary(
+        prefix.append(scoped.layout_boundary(
             BoundaryIntent::after_start(term, inner),
             BoundaryLayout::aligned(""),
             LayoutFragment::entity(inner.into(), RcDoc::text(rendered)),
@@ -1871,13 +1903,13 @@ impl<'arena> PrettyFormatter<'arena> {
         match payload {
             | Some(PunnedTermPayload::Variable) => RcDoc::text("= ").append(self.field(field)),
             | Some(PunnedTermPayload::Annotated { variable, classifier }) => {
-                RcDoc::text("= ").append(self.field(field)).append(self.fragment_boundary(
+                RcDoc::text("= ").append(self.field(field)).append(self.layout_boundary(
                     BoundaryIntent::between(variable, classifier),
                     BoundaryLayout::aligned(" :"),
                     self.term_fragment(classifier),
                 ))
             }
-            | _ => self.marked_field(field).append(self.fragment_boundary(
+            | _ => self.marked_field(field).append(self.layout_boundary(
                 BoundaryIntent::after_start(term, inner),
                 BoundaryLayout::aligned(" ="),
                 self.annotated_term_fragment(inner),
@@ -1940,13 +1972,13 @@ impl<'arena> PrettyFormatter<'arena> {
         match self.punning.pattern_payload(field, inner) {
             | Some(PunnedPatternPayload::Variable) => RcDoc::text("= ").append(self.field(field)),
             | Some(PunnedPatternPayload::Annotated { variable, classifier }) => {
-                RcDoc::text("= ").append(self.field(field)).append(self.fragment_boundary(
+                RcDoc::text("= ").append(self.field(field)).append(self.layout_boundary(
                     BoundaryIntent::between(variable, classifier),
                     BoundaryLayout::aligned(" :"),
                     self.term_fragment(classifier),
                 ))
             }
-            | None => self.marked_field(field).append(self.fragment_boundary(
+            | None => self.marked_field(field).append(self.layout_boundary(
                 BoundaryIntent::after_start(pattern, inner),
                 BoundaryLayout::aligned(" ="),
                 LayoutFragment::entity(inner.into(), self.annotated_pattern(inner)),
@@ -1958,13 +1990,13 @@ impl<'arena> PrettyFormatter<'arena> {
         match self.punning.pattern_payload(field, inner) {
             | Some(PunnedPatternPayload::Variable) => RcDoc::text("/").append(self.field(field)),
             | Some(PunnedPatternPayload::Annotated { variable, classifier }) => {
-                RcDoc::text("/").append(self.field(field)).append(self.fragment_boundary(
+                RcDoc::text("/").append(self.field(field)).append(self.layout_boundary(
                     BoundaryIntent::between(variable, classifier),
                     BoundaryLayout::aligned(" :"),
                     self.term_fragment(classifier),
                 ))
             }
-            | None => RcDoc::text("/").append(self.field(field)).append(self.fragment_boundary(
+            | None => RcDoc::text("/").append(self.field(field)).append(self.layout_boundary(
                 BoundaryIntent::after_start(pattern, inner),
                 BoundaryLayout::aligned(" ="),
                 LayoutFragment::entity(inner.into(), self.annotated_pattern(inner)),
@@ -2197,21 +2229,21 @@ impl<'arena> PrettyFormatter<'arena> {
                         }
                         | Some(PunnedPatternPayload::Annotated { variable, classifier }) => {
                             RcDoc::text("= ").append(self.field(field)).append(
-                                self.fragment_boundary(
+                                self.layout_boundary(
                                     BoundaryIntent::between(variable, classifier),
                                     BoundaryLayout::aligned(" :"),
                                     self.term_fragment(classifier),
                                 ),
                             )
                         }
-                        | None => self.marked_field(field).append(self.fragment_boundary(
+                        | None => self.marked_field(field).append(self.layout_boundary(
                             BoundaryIntent::after_start(*named, inner.anchors.first),
                             BoundaryLayout::aligned(" ="),
                             inner,
                         )),
                     }
                 } else {
-                    self.marked_field(field).append(self.fragment_boundary(
+                    self.marked_field(field).append(self.layout_boundary(
                         BoundaryIntent::after_start(*named, inner.anchors.first),
                         BoundaryLayout::aligned(" ="),
                         inner,
@@ -2295,14 +2327,14 @@ impl<'arena> PrettyFormatter<'arena> {
             | None => LayoutFragment::entity((*binder).into(), head),
         };
         let head_anchors = head.anchors;
-        let head = LayoutFragment {
-            document: self.fragment_boundary(
-                BoundaryIntent::after_start(enclosing, head.anchors.first),
-                BoundaryLayout::aligned(""),
-                head,
-            ),
-            anchors: head_anchors,
+        let intent = BoundaryIntent::after_start(enclosing, head.anchors.first);
+        let document = match modifier {
+            // A modifier leads the head, so the binder's comments follow it
+            // instead of starting the continuation.
+            | Some(_) => self.retained_boundary(intent, BoundaryLayout::aligned(""), head.document),
+            | None => self.layout_boundary(intent, BoundaryLayout::aligned(""), head),
         };
+        let head = LayoutFragment { document, anchors: head_anchors };
         let placement = self.placement(placement);
         let bindee =
             self.bindee_with_placement(self.term_fragment(*bindee), placement, binding_nesting);
@@ -2430,13 +2462,12 @@ impl<'arena> PrettyFormatter<'arena> {
 
     fn data(&self, enclosing: TermId, arms: &[DataArm]) -> RcDoc<'arena> {
         let arms = arms.iter().map(|arm| {
-            let document = RcDoc::text("| ").append(self.constructor(&arm.name)).append(
-                self.fragment_boundary(
+            let document =
+                RcDoc::text("| ").append(self.constructor(&arm.name)).append(self.layout_boundary(
                     BoundaryIntent::after_arm_prefix(arm.param),
                     BoundaryLayout::hanging(" :", self.indent()),
                     self.term_fragment(arm.param),
-                ),
-            );
+                ));
             LayoutFragment::entity(arm.param.into(), document)
         });
         self.arm_block(enclosing.into(), RcDoc::text("data"), arms)
@@ -2450,7 +2481,7 @@ impl<'arena> PrettyFormatter<'arena> {
                 | None => document,
             };
             let first: EntityId = arm.params.map_or_else(|| arm.out.into(), Into::into);
-            let document = document.append(self.fragment_boundary(
+            let document = document.append(self.layout_boundary(
                 BoundaryIntent::after_arm_prefix(arm.out),
                 BoundaryLayout::hanging(" :", self.indent()),
                 self.term_fragment(arm.out),
@@ -2463,14 +2494,14 @@ impl<'arena> PrettyFormatter<'arena> {
     fn matcher(
         &self, term: TermId, scrutinee: TermId, arms: &[Matcher<PatId, TermId>],
     ) -> RcDoc<'arena> {
-        let head = RcDoc::text("match").append(self.fragment_boundary(
+        let head = RcDoc::text("match").append(self.layout_boundary(
             BoundaryIntent::after_start(term, scrutinee),
             BoundaryLayout::hanging("", self.indent()),
             self.term_fragment(scrutinee),
         ));
         let arms = arms.iter().map(|arm| {
             let document =
-                RcDoc::text("| ").append(self.pattern(arm.binder)).append(self.fragment_boundary(
+                RcDoc::text("| ").append(self.pattern(arm.binder)).append(self.layout_boundary(
                     BoundaryIntent::between(arm.binder, arm.tail),
                     BoundaryLayout::hanging(" =>", self.indent()),
                     self.term_fragment(arm.tail),
@@ -2485,13 +2516,12 @@ impl<'arena> PrettyFormatter<'arena> {
 
     fn comatcher(&self, enclosing: TermId, arms: &[CoMatcherParam]) -> RcDoc<'arena> {
         let arms = arms.iter().map(|arm| {
-            let document = RcDoc::text("| ").append(self.copattern(arm.params)).append(
-                self.fragment_boundary(
+            let document =
+                RcDoc::text("| ").append(self.copattern(arm.params)).append(self.layout_boundary(
                     BoundaryIntent::between(arm.params, arm.tail),
                     BoundaryLayout::hanging(" =>", self.indent()),
                     self.term_fragment(arm.tail),
-                ),
-            );
+                ));
             LayoutFragment {
                 document,
                 anchors: LayoutAnchors { first: arm.params.into(), last: arm.tail.into() },
@@ -5138,6 +5168,89 @@ mod tests {
             .into_iter()
             .for_each(|policy| {
                 cases.into_iter().for_each(|(source, expected)| {
+                    let parsed = ParsedSource::new(source);
+                    let formatted = parsed.render(policy);
+                    assert_eq!(formatted, expected, "source: {source}");
+
+                    let reparsed = ParsedSource::new(&formatted);
+                    assert_eq!(formatted, reparsed.render(policy), "source: {source}");
+                    assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+                    assert_eq!(
+                        RetainedComments::collect(source),
+                        RetainedComments::collect(&formatted)
+                    );
+                });
+            });
+    }
+
+    #[test]
+    fn boundaries_break_before_leading_comments_that_end_their_line() {
+        // Each uncommented source keeps its joined boundary; its commented
+        // counterpart breaks there, and the comment nests with its term.
+        let pairs = [
+            // An arm payload.
+            [
+                ("match x\n| +A() => ret 0\nend", "match x\n| +A() => ret 0\nend\n"),
+                (
+                    "match x\n| +A() => -- note\nret 0\nend",
+                    "match x\n| +A() =>\n  -- note\n  ret 0\nend\n",
+                ),
+            ],
+            // A block comment ends its line only before a source line break.
+            [
+                (
+                    "match x\n| +A() => /- note -/ ret 0\nend",
+                    "match x\n| +A() => /- note -/ ret 0\nend\n",
+                ),
+                (
+                    "match x\n| +A() => /- note -/\nret 0\nend",
+                    "match x\n| +A() =>\n  /- note -/\n  ret 0\nend\n",
+                ),
+            ],
+            // Any comment that ends its line breaks the boundary, including
+            // one before a same-line comment.
+            [
+                (
+                    "match x\n| +A() => /- a -/ /- b -/ ret 0\nend",
+                    "match x\n| +A() => /- a -/ /- b -/ ret 0\nend\n",
+                ),
+                (
+                    "match x\n| +A() => -- a\n/- b -/ ret 0\nend",
+                    "match x\n| +A() =>\n  -- a\n  /- b -/ ret 0\nend\n",
+                ),
+            ],
+            // Documentation always ends its line.
+            [
+                ("match x\n| +A() => @[doc] ret 0\nend", "match x\n| +A() => @[doc] ret 0\nend\n"),
+                (
+                    "match x\n| +A() => --| Explain.\n@[doc] ret 0\nend",
+                    "match x\n| +A() =>\n  --| Explain.\n  @[doc] ret 0\nend\n",
+                ),
+            ],
+            // A binding's bindee.
+            [
+                ("let x = foo in x", "let x = foo in\nx\n"),
+                ("let x = -- c\nfoo in x", "let x =\n  -- c\n  foo\nin\nx\n"),
+            ],
+            // An application argument.
+            [("f a b", "f a b\n"), ("f a -- c\nb", "f a\n  -- c\n  b\n")],
+            // An aligned boundary breaks without indentation.
+            [("@[m] x", "@[m] x\n"), ("@[m] -- c\nx", "@[m]\n-- c\nx\n")],
+            // An infix operand hangs the whole chain.
+            [("A -> B", "A -> B\n"), ("A -> -- c\nB", "   A ->\n   -- c\n   B\n")],
+            // A modifier leads the binding head, so a comment after it does
+            // not start the continuation and the boundary before it stays
+            // joined.
+            [
+                ("let fix x = 'a' in x", "let fix x = 'a' in\nx\n"),
+                ("let fix -- c\nx = 'a' in x", "let fix -- c\nx\n=\n  'a'\nin\nx\n"),
+            ],
+        ];
+
+        [LayoutIntentions::Preserve, LayoutIntentions::BlankLinesOnly, LayoutIntentions::Ignore]
+            .into_iter()
+            .for_each(|policy| {
+                pairs.into_iter().flatten().for_each(|(source, expected)| {
                     let parsed = ParsedSource::new(source);
                     let formatted = parsed.render(policy);
                     assert_eq!(formatted, expected, "source: {source}");

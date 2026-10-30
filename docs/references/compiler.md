@@ -3296,6 +3296,34 @@ An annotation with a hole payload prints in its parenthesized `@(meta)` form;
 Line comments use `--` or `--|`; nested block comments retain their delimiters and relative indentation.
 Raw whitespace is not retained except under an explicit `@[format(verbatim)]` directive.
 
+Because a leading comment extends the layout start of its anchor, a comment
+that ends its line leaves no room for the anchor on the running line.
+A line comment always ends its line, and a block comment does when a source line break follows it.
+The boundary before the comments therefore takes its broken form even where the source
+and the width would keep it joined, and the comments and the anchor start the next line together
+at the boundary's continuation indentation: one level below the boundary's line
+for a hanging boundary, or aligned with it for an aligned one.
+For example, the source
+
+```zydeco
+match x
+| +A() => -- Explain the payload.
+ret 0
+end
+```
+
+formats as
+
+```zydeco
+match x
+| +A() =>
+  -- Explain the payload.
+  ret 0
+end
+```
+
+A canonical gap has no boundary to break, so there the anchor follows the comment at the enclosing indentation.
+
 #### Formatter Laws
 
 The following laws elaborate the layout laws for concrete constructs.
@@ -3331,7 +3359,8 @@ Under the `Preserve` policy an observed break is not collapsed and a larger empt
 Under `BlankLinesOnly` the same holds for blank lines, while every single break is left to the width decision.
 Under `Ignore` no observed separation is retained.
 
-A joined boundary can still break when its compact form does not fit.
+A joined boundary can still break when its compact form does not fit,
+or when a leading comment ends its line ([Retained Source Information](#retained-source-information)).
 A boundary that always breaks, such as the gap between match arms or between the stages of a `do` chain,
 retains one empty line where the source had at least one.
 Local groups remain compact when they fit, even inside an expanded parent.

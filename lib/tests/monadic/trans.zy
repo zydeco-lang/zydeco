@@ -126,8 +126,9 @@ begin
       | .lift M A mo m =>
         -- m : U(M A)
         comatch
-        | .run R bAlg kS kE => -- kS : U(A -> R), bAlg : Algebra M B
-        ! bAlg A m kS
+        | .run R bAlg kS kE =>
+          -- kS : U(A -> R), bAlg : Algebra M B
+          ! bAlg A m kS
         end
       end
     that
@@ -145,14 +146,15 @@ begin
         | .bind A A' m k =>
           -- m : U(KOptT M A), k : U(A -> KOptT M A'), goal: KOptT M A'
           comatch
-          | .run R bAlg kS kE => -- kS : U(A' -> R), kE: U R, bAlg: Algebra M R, goal: R
-          ! m .run
-            R
-            bAlg
-            {
-              fn a => ! k a .run R bAlg kS kE
-            }
-            kE
+          | .run R bAlg kS kE =>
+            -- kS : U(A' -> R), kE: U R, bAlg: Algebra M R, goal: R
+            ! m .run
+              R
+              bAlg
+              {
+                fn a => ! k a .run R bAlg kS kE
+              }
+              kE
           end
         end
     that

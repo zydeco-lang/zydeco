@@ -299,12 +299,15 @@ begin
     def fix malg : Algebra MExnOS Compu = fn A m f =>
       -- m : U (MExnOS A), f: U (A -> Compu)
       comatch
-      | .app a => -- goal: Compu
-      ! malg A m { fn v => ! f v .app a }
-      | .bind x sc k => -- goal: Compu
-      ! malg A m { fn v => ! f v .bind x sc k }
-      | .os => -- goal: MExnOS Value, use ordinary bind
-      ! mexn .bind A Value m { fn x => ! f x .os }
+      | .app a =>
+        -- goal: Compu
+        ! malg A m { fn v => ! f v .app a }
+      | .bind x sc k =>
+        -- goal: Compu
+        ! malg A m { fn v => ! f v .bind x sc k }
+      | .os =>
+        -- goal: MExnOS Value, use ordinary bind
+        ! mexn .bind A Value m { fn x => ! f x .os }
       end that
 
     def fix malg-err : AlgebraErr MExnOS Compu =
