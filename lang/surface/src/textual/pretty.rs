@@ -450,18 +450,21 @@ impl<'arena> PrettyFormatter<'arena> {
         self.with_separated_comments(comments, LineSeparation::SameLine, document)
     }
 
-    /// Print comments before a document, separating the last comment from
-    /// the document by at least `minimum`.
+    /// Print comments before a document. Each separation is at least what
+    /// the following item requires: another comment its own least
+    /// separation, and the document `minimum`.
     fn with_separated_comments(
         &self, comments: &'arena [LeadingComment], minimum: LineSeparation, document: RcDoc<'arena>,
     ) -> RcDoc<'arena> {
-        let last = comments.len().saturating_sub(1);
+        let required = comments
+            .iter()
+            .skip(1)
+            .map(|comment| Self::least_separation_before(comment.comment()))
+            .chain(std::iter::once(minimum));
         comments
             .iter()
-            .enumerate()
-            .fold(RcDoc::nil(), |prefix, (index, comment)| {
-                let separation = comment.separation_after();
-                let separation = if index == last { separation.max(minimum) } else { separation };
+            .zip(required)
+            .fold(RcDoc::nil(), |prefix, (comment, required)| {
                 prefix
                     .append(if comment.comment().as_text().is_some() {
                         self.ensure_line_start()
@@ -469,7 +472,7 @@ impl<'arena> PrettyFormatter<'arena> {
                         RcDoc::nil()
                     })
                     .append(self.comment(comment.comment()))
-                    .append(self.line_separation(separation))
+                    .append(self.line_separation(comment.separation_after().max(required)))
             })
             .append(document)
     }
@@ -508,13 +511,8 @@ impl<'arena> PrettyFormatter<'arena> {
 
     fn with_trailing_comments(&self, entity: EntityId, document: RcDoc<'arena>) -> RcDoc<'arena> {
         self.arena.trivia.trailing_comments(entity).iter().fold(document, |document, comment| {
-            let separation = if comment.comment().as_text().is_some()
-                && comment.separation_before() == LineSeparation::SameLine
-            {
-                LineSeparation::NextLine
-            } else {
-                comment.separation_before()
-            };
+            let separation =
+                comment.separation_before().max(Self::least_separation_before(comment.comment()));
             document
                 .append(self.line_separation(separation))
                 .append(self.comment(comment.comment()))
@@ -551,6 +549,16 @@ impl<'arena> PrettyFormatter<'arena> {
             | LineSeparation::SameLine => RcDoc::space(),
             | LineSeparation::NextLine => RcDoc::hardline(),
             | LineSeparation::BlankLine => BoundaryLayout::blank_line(),
+        }
+    }
+
+    /// Documentation starts on a fresh line; other comments may share the
+    /// line of whatever precedes them.
+    fn least_separation_before(comment: &SurfaceComment) -> LineSeparation {
+        if comment.as_text().is_some() {
+            LineSeparation::NextLine
+        } else {
+            LineSeparation::SameLine
         }
     }
 
@@ -5027,6 +5035,32 @@ mod tests {
 
             let reparsed = ParsedSource::new(&formatted);
             assert_eq!(formatted, reparsed.render(LayoutIntentions::Ignore));
+        });
+    }
+
+    #[test]
+    fn documentation_starts_a_fresh_line_after_a_same_line_comment() {
+        let cases = [
+            ("/- c -/ --| doc\nvalue", "/- c -/\n--| doc\nvalue\n"),
+            ("/- a -/ /- b -/ --| doc\nvalue", "/- a -/ /- b -/\n--| doc\nvalue\n"),
+            ("/- c -/ --| doc\n@[doc] value", "/- c -/\n--| doc\n@[doc] value\n"),
+            // Other comments keep sharing a line, and a line comment already
+            // ends its own.
+            ("/- a -/ /- b -/ value", "/- a -/ /- b -/ value\n"),
+            ("-- line\n--| doc\nvalue", "-- line\n--| doc\nvalue\n"),
+            // Trailing documentation follows the same rule.
+            ("value /- c -/ --| doc", "value /- c -/\n--| doc\n"),
+        ];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+            assert_eq!(formatted, expected, "source: {source}");
+            assert_eq!(RetainedComments::collect(source), RetainedComments::collect(&formatted));
+
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve), "source: {source}");
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
         });
     }
 
