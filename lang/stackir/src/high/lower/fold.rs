@@ -1,7 +1,7 @@
 //! Occurrence-based reconstruction of residual typed terms with resumable continuations.
 
 use super::*;
-use zydeco_utils::fold::{Folder, Step};
+use zydeco_utils::fold::{Explicit, Folder, Step};
 
 /// Match decisions share plans, never generated SPS nodes. Flat storage also makes
 /// cloning and dropping a long fallthrough chain independent of the Rust stack.
@@ -305,8 +305,8 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
         }
     }
 
-    pub(super) fn lower<D: Driver>(mut self, root: ss::CompuId, stack: StackId) -> CompuId {
-        D::run(&mut self, Work::Computation(root, stack));
+    pub(super) fn lower(mut self, root: ss::CompuId, stack: StackId) -> CompuId {
+        Explicit::run(&mut self, Work::Computation(root, stack));
         assert!(self.patterns.is_empty() && self.values.is_empty() && self.tags.is_empty());
         let root = self.computation();
         assert!(self.computations.is_empty());

@@ -14,17 +14,14 @@ use crate::scheme::SpsScheme;
 use derive_more::{AsMut, AsRef};
 use std::{collections::HashMap, convert::Infallible, rc::Rc};
 use zydeco_statics::syntax as ss;
-use zydeco_utils::{
-    fold::{Driver, Explicit},
-    pass::CompilerPass,
-};
+use zydeco_utils::{fold::Explicit, pass::CompilerPass};
 
 mod fold;
 mod pattern;
 mod decision;
 
 #[cfg(test)]
-mod driver_tests;
+mod reconstruction_tests;
 
 use fold::NormalizationFolder;
 
@@ -36,16 +33,7 @@ impl CompilerPass<FragmentProgram> for Normalizer {
     type Error = Infallible;
 
     fn run(&mut self, program: FragmentProgram) -> Result<Self::Output, Self::Error> {
-        self.run_with_driver::<Explicit>(program)
-    }
-}
-
-impl Normalizer {
-    /// Select continuation storage for reconstruction, pattern copying, and pattern decisions.
-    pub fn run_with_driver<D: Driver>(
-        &mut self, program: FragmentProgram,
-    ) -> Result<FragmentProgram, Infallible> {
-        Ok(Normalization::new(program).run::<D>())
+        Ok(Normalization::new(program).run())
     }
 }
 
@@ -164,9 +152,9 @@ impl Normalization {
         }
     }
 
-    fn run<D: Driver>(mut self) -> FragmentProgram {
+    fn run(mut self) -> FragmentProgram {
         let source_root = self.root;
-        let root = NormalizationFolder::<D>::new(&mut self).run(source_root);
+        let root = NormalizationFolder::new(&mut self).run(source_root);
         FragmentProgram::try_new(SpsProgram::new(self.arena, root), self.scheme)
             .expect("normalization preserves lexical ownership and its scheme's fragment")
     }
@@ -408,14 +396,14 @@ impl Normalization {
         }
     }
 
-    fn pattern<D: Driver>(&mut self, id: VPatId) -> VPatId {
-        D::run(&mut pattern::PatternFolder { norm: self, renamings: HashMap::new() }, id)
+    fn pattern(&mut self, id: VPatId) -> VPatId {
+        Explicit::run(&mut pattern::PatternFolder { norm: self, renamings: HashMap::new() }, id)
     }
 
     /// A builtin body can be expanded repeatedly inside one continuation. Each
     /// load must bind a distinct observation, including while older observations
     /// remain live across a later store and load.
-    fn load_pattern<D: Driver>(&mut self, result: VPatId, env: EnvId) -> (VPatId, EnvId) {
+    fn load_pattern(&mut self, result: VPatId, env: EnvId) -> (VPatId, EnvId) {
         let renamings: HashMap<_, _> = result
             .vars(&self.source)
             .into_iter()
@@ -431,7 +419,7 @@ impl Normalization {
                 .iter()
                 .map(|(original, fresh)| (*original, Rc::new(KnownValue::Alias(*fresh)))),
         );
-        let pattern = D::run(&mut pattern::PatternFolder { norm: self, renamings }, result);
+        let pattern = Explicit::run(&mut pattern::PatternFolder { norm: self, renamings }, result);
         (pattern, env)
     }
 
@@ -458,8 +446,8 @@ impl Normalization {
     }
 
     /// A decision is useful only when no earlier arm could match instead.
-    fn matches<D: Driver>(&self, binder: VPatId, known: &KnownValue) -> Option<bool> {
-        D::run(
+    fn matches(&self, binder: VPatId, known: &KnownValue) -> Option<bool> {
+        Explicit::run(
             &mut decision::DecisionFolder { source: &self.source.inner },
             (binder, decision::KnownView::Value(known)),
         )
@@ -595,7 +583,8 @@ mod tests {
         }
 
         fn normalize(self, root: CompuId) -> SpsProgram {
-            let normalized = driver_tests::Drivers::normalize(&self.arena, root, self.scheme);
+            let normalized =
+                reconstruction_tests::Fixture::normalize(&self.arena, root, self.scheme);
             assert!(normalized.root().free_vars(normalized.arena()).is_empty());
             normalized
         }

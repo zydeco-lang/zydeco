@@ -1,6 +1,5 @@
 use super::*;
 use crate::low::variables::Variables;
-use zydeco_utils::fold::{Explicit, Recursive};
 
 #[derive(Debug, PartialEq, Eq)]
 enum Event {
@@ -23,22 +22,22 @@ impl Visitor<SpsLow> for Trace {
 struct Fixture;
 
 impl Fixture {
+    /// Run the two analyses together and separately; composition must not change either.
     fn analyze(arena: &SpsLowInnerArena, root: EntityId) -> (Variables, Trace) {
-        let mut explicit = Together { first: Variables::default(), second: Trace::default() };
-        let mut recursive = Together { first: Variables::default(), second: Trace::default() };
+        let mut together = Together { first: Variables::default(), second: Trace::default() };
         let traversal = Traversal { arena };
-        traversal.run_with_driver::<Explicit>(root, &mut explicit);
-        traversal.run_with_driver::<Recursive>(root, &mut recursive);
-        assert_eq!(explicit.second.0, recursive.second.0);
+        traversal.run(root, &mut together);
         let mut separate = Trace::default();
         traversal.run(root, &mut separate);
-        assert_eq!(explicit.second.0, separate.0);
+        let mut variables = Variables::default();
+        traversal.run(root, &mut variables);
+        assert_eq!(together.second.0, separate.0);
         for event in &separate.0 {
             if let Event::Exit(id) = event {
                 match *id {
                     | EntityId::Pattern(id) => assert_eq!(
-                        explicit.first.bound_variables(id).map(|vars| &vars.0),
-                        recursive.first.bound_variables(id).map(|vars| &vars.0),
+                        together.first.bound_variables(id).map(|vars| &vars.0),
+                        variables.bound_variables(id).map(|vars| &vars.0),
                     ),
                     | id => {
                         let term: TermId = match id {
@@ -48,12 +47,11 @@ impl Fixture {
                             | EntityId::Pattern(_) => unreachable!(),
                         };
                         assert_eq!(
-                            explicit
+                            together
                                 .first
                                 .free_variables(term)
                                 .map(|vars| vars.iter().collect::<Vec<_>>()),
-                            recursive
-                                .first
+                            variables
                                 .free_variables(term)
                                 .map(|vars| vars.iter().collect::<Vec<_>>()),
                         );
@@ -61,12 +59,12 @@ impl Fixture {
                 }
             }
         }
-        (explicit.first, explicit.second)
+        (together.first, together.second)
     }
 }
 
 #[test]
-fn drivers_observe_repeated_edges_without_reexpanding_children() {
+fn traversal_observes_repeated_edges_without_reexpanding_children() {
     let mut arena = SpsLowArena::default();
     let def = arena.admin.fresh_def();
     let value = Value::Var(def).build(&mut arena, None);

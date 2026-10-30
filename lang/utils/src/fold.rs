@@ -1,7 +1,7 @@
-//! Resumable folds with statically selected continuation storage.
+//! Resumable folds whose unfinished parents live in an explicit vector.
 //!
-//! Folders own child order, state, and recovery. Drivers only execute calls and
-//! return their results; an error-valued result is an ordinary return to the parent.
+//! Folders own child order, state, and recovery. The driver only runs calls and
+//! returns their results; an error-valued result is an ordinary return to the parent.
 
 /// The next child call and its unfinished parent, or a completed result.
 pub enum Step<F: Folder> {
@@ -14,7 +14,7 @@ pub enum Step<F: Folder> {
     Return(F::Output),
 }
 
-/// One folder definition shared by native recursion and explicit continuations.
+/// A traversal written as resumable steps, so input depth does not consume the native stack.
 ///
 /// Frames own the state needed after a child returns. They may contain arena IDs
 /// or references to stable external storage, but cannot borrow the mutable folder.
@@ -29,17 +29,11 @@ pub trait Folder: Sized {
     fn resume(&mut self, frame: Self::Frame, child: Self::Output) -> Step<Self>;
 }
 
-/// Compile-time choice of continuation storage, independent of folder semantics.
-pub trait Driver {
-    fn run<F: Folder>(folder: &mut F, input: F::Input) -> F::Output;
-}
-
-/// Execute through a vector of unfinished parents, with constant driver call depth.
-#[derive(Clone, Copy, Debug, Default)]
+/// The folder driver: unfinished parents live in a vector, so native call depth stays constant.
 pub struct Explicit;
 
-impl Driver for Explicit {
-    fn run<F: Folder>(folder: &mut F, input: F::Input) -> F::Output {
+impl Explicit {
+    pub fn run<F: Folder>(folder: &mut F, input: F::Input) -> F::Output {
         let mut frames = Vec::new();
         let mut step = folder.enter(input);
         loop {
@@ -53,28 +47,6 @@ impl Driver for Explicit {
                     | Some(frame) => folder.resume(frame, output),
                     | None => return output,
                 },
-            };
-        }
-    }
-}
-
-/// Execute the same folder with unfinished parents stored in Rust call frames.
-///
-/// Use for bounded inputs and driver comparisons; input depth consumes native stack.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct Recursive;
-
-impl Driver for Recursive {
-    fn run<F: Folder>(folder: &mut F, input: F::Input) -> F::Output {
-        let mut step = folder.enter(input);
-        loop {
-            step = match step {
-                | Step::TailCall(input) => folder.enter(input),
-                | Step::Call { input, frame } => {
-                    let child = Self::run(folder, input);
-                    folder.resume(frame, child)
-                }
-                | Step::Return(output) => return output,
             };
         }
     }

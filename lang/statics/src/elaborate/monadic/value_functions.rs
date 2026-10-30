@@ -225,7 +225,7 @@ struct ValueFunctionWitnessRoute {
 
 impl ValueFunctionWitnessRoute {
     fn translate(self, tycker: &mut Tycker<'_>, env: &TyEnv) -> Result<PackageWitnessProjection> {
-        use zydeco_utils::fold::{Driver, Explicit};
+        use zydeco_utils::fold::Explicit;
         Explicit::run(&mut WitnessRouteFolder { tycker, env }, self)
     }
 }

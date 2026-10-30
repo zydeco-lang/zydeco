@@ -11,7 +11,7 @@ use zydeco_statics::{
 };
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
 use zydeco_utils::{
-    fold::{Driver, Explicit},
+    fold::Explicit,
     pass::CompilerPass,
     prelude::ArenaAccess,
     span::{PathDisplay, Span, internal_ariadne_span},
@@ -378,23 +378,17 @@ impl RootLowerer<'_> {
     pub fn run_with_builtin(
         &mut self, root: ss::CompuId, builtin: Option<BuiltinPackagePlan>,
     ) -> Result<FragmentProgram, Vec<SpsLoweringError>> {
-        self.run_with_driver::<Explicit>(root, builtin)
-    }
-
-    /// Select continuation storage for both package materialization and residual reconstruction.
-    pub fn run_with_driver<D: Driver>(
-        &mut self, root: ss::CompuId, builtin: Option<BuiltinPackagePlan>,
-    ) -> Result<FragmentProgram, Vec<SpsLoweringError>> {
         let mut lowerer = Lowerer::new(self.scoped, self.statics, self.scheme);
         let root = self.statics.execution_compu(root);
         let mut stack = StackVar.build(&mut lowerer, None);
         let mut named = Vec::new();
         if let Some(plan) = builtin {
-            let package = D::run(&mut BuiltinPackageFolder { lowerer: &mut lowerer }, plan.value);
+            let package =
+                Explicit::run(&mut BuiltinPackageFolder { lowerer: &mut lowerer }, plan.value);
             let frame = Cons(package, stack).build(&mut lowerer, None);
             stack = lowerer.push_onto(frame, &mut named, None);
         }
-        let root = LoweringFolder::new(&mut lowerer).lower::<D>(root, stack);
+        let root = LoweringFolder::new(&mut lowerer).lower(root, stack);
         let root = lowerer.arena.name_frames(named, root, None);
         lowerer.finish(root)
     }

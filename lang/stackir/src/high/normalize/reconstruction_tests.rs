@@ -1,10 +1,9 @@
 use super::*;
 use crate::protocol::{StackProtocol, ValueProtocol};
-use zydeco_utils::fold::Recursive;
 
-pub(super) struct Drivers;
+pub(super) struct Fixture;
 
-impl Drivers {
+impl Fixture {
     fn integer(arena: &mut SpsArena, value: i64) -> ValueId {
         Literal::Integer(IntegerLiteral::Int(value)).build(arena, None)
     }
@@ -44,21 +43,12 @@ impl Drivers {
     }
 
     pub(super) fn normalize(source: &SpsArena, root: CompuId, scheme: SpsScheme) -> SpsProgram {
-        let explicit = Normalizer
-            .run_with_driver::<Explicit>(Self::input(source, root, scheme))
-            .unwrap()
-            .into_program();
-        let recursive = Normalizer
-            .run_with_driver::<Recursive>(Self::input(source, root, scheme))
-            .unwrap()
-            .into_program();
-        assert_eq!(Snapshot::of(&explicit), Snapshot::of(&recursive));
-        explicit
+        Normalizer.run_infallible(Self::input(source, root, scheme)).into_program()
     }
 }
 
 #[test]
-fn drivers_fold_comparisons_and_preserve_unknown_operands_and_movement_barriers() {
+fn normalization_folds_comparisons_and_preserves_unknown_operands_and_movement_barriers() {
     enum Case {
         True,
         False,
@@ -70,13 +60,13 @@ fn drivers_fold_comparisons_and_preserve_unknown_operands_and_movement_barriers(
         let mut arena = SpsArena::default();
         let first = match case {
             | Case::Unknown => Hole.build(&mut arena, None),
-            | Case::OperandTrap => Drivers::trap(&mut arena),
-            | Case::False => Drivers::integer(&mut arena, 3),
-            | _ => Drivers::integer(&mut arena, 1),
+            | Case::OperandTrap => Fixture::trap(&mut arena),
+            | Case::False => Fixture::integer(&mut arena, 3),
+            | _ => Fixture::integer(&mut arena, 1),
         };
-        let second = Drivers::integer(&mut arena, 2);
+        let second = Fixture::integer(&mut arena, 2);
         let [when_true, when_false] = [11, 22].map(|result| {
-            let value = Drivers::integer(&mut arena, result);
+            let value = Fixture::integer(&mut arena, result);
             let stack = StackVar.build(&mut arena, None);
             SReturn { stack, value }.build(&mut arena, None)
         });
@@ -89,11 +79,11 @@ fn drivers_fold_comparisons_and_preserve_unknown_operands_and_movement_barriers(
         .build(&mut arena, None);
         let mut bindee = StackVar.build(&mut arena, None);
         if matches!(case, Case::StackTrap) {
-            let value = Drivers::trap(&mut arena);
+            let value = Fixture::trap(&mut arena);
             bindee = Cons(value, bindee).build(&mut arena, None);
         }
         let root = Let { binder: StackVar, bindee, tail }.build(&mut arena, None);
-        let output = Drivers::normalize(&arena, root, SpsScheme::BranchJoin);
+        let output = Fixture::normalize(&arena, root, SpsScheme::BranchJoin);
         let inner = &output.arena().inner;
         match case {
             | Case::True | Case::False => {
@@ -196,7 +186,7 @@ impl Snapshot {
 }
 
 #[test]
-fn drivers_preserve_reconstruction_sites_and_protocols() {
+fn normalization_preserves_reconstruction_sites_and_protocols() {
     let mut arena = SpsArena::default();
     let mut origins = IdAllocator::<zydeco_statics::arena::StaticsScope>::new();
     let pattern_site = ss::PatId::Value(origins.alloc());
@@ -222,7 +212,7 @@ fn drivers_preserve_reconstruction_sites_and_protocols() {
     );
     arena.inner.compu_protocols.insert_new(root, protocol.clone());
 
-    let normalized = Drivers::normalize(&arena, root, SpsScheme::BranchJoin);
+    let normalized = Fixture::normalize(&arena, root, SpsScheme::BranchJoin);
     let snapshot = Snapshot::of(&normalized);
     assert_eq!(snapshot.pattern_protocols.len(), 1);
     assert_eq!(snapshot.value_protocols.len(), 1);
@@ -237,7 +227,7 @@ fn drivers_preserve_reconstruction_sites_and_protocols() {
 }
 
 #[test]
-fn drivers_preserve_empty_and_wide_child_sequences() {
+fn normalization_preserves_empty_and_wide_child_sequences() {
     enum Children {
         Values,
         ComatchArms,
@@ -288,7 +278,7 @@ fn drivers_preserve_empty_and_wide_child_sequences() {
                     (root, [count * 2, count + 1, count + 1, count + 2])
                 }
             };
-            let normalized = Drivers::normalize(&arena, root, SpsScheme::BranchJoin);
+            let normalized = Fixture::normalize(&arena, root, SpsScheme::BranchJoin);
             assert_eq!(Snapshot::of(&normalized).counts, expected);
         }
     }

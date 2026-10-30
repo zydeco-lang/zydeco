@@ -45,10 +45,10 @@ or the phase's acceptance boundary.
 ## Further resumable folder migrations
 
 The implemented [resumable execution contract](../references/compiler.md#resumable-folder-execution) provides
-statically selected native and explicit-stack drivers for residual lowering, Builtin packed value materialization,
+an explicit-stack driver for residual lowering, Builtin packed value materialization,
 SPS reconstruction and pattern decisions, closure conversion, SPSLow structural analysis, local unboxing,
 and [CPS assembly lowering](../references/compiler.md#cps-assembly-lowering).
-Their equivalence and depth checks support using the interface for those boundaries.
+Their behavior and depth checks support using the interface for those boundaries.
 The following sections record boundaries skipped after evaluation because their ownership
 or consumer interfaces need a further design choice.
 
@@ -206,13 +206,13 @@ A migration needs a concrete maintenance benefit and must preserve entry/exit ba
 early termination, and occurrence policies.
 
 The residual runtime traversal is a lazy `Iterator`: a consumer can stop after any yielded node.
-A whole-fold `Driver::run` cannot replace that suspension boundary without changing the consumer interface
-or buffering the traversal.
-Keep a lazy adapter requirement separate from reconstruction driver selection.
+A whole-fold `Explicit::run` cannot replace that suspension boundary
+without changing the consumer interface or buffering the traversal.
+Keep a lazy adapter requirement separate from the reconstruction driver.
 
 Desugaring retains its current execution mechanisms.
 Do not expand the common folder protocol merely to accommodate all these mechanisms at once.
-Each subsequent migration should demonstrate a simpler client under both drivers and retain its depth fixture.
+Each subsequent migration should demonstrate a simpler client and retain its depth fixture.
 
 ## Additional graph views and adapters
 

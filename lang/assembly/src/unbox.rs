@@ -10,9 +10,8 @@
 
 use crate::representation::{Local, RepresentationPolicy, UnboxingOpportunity, UnboxingReason};
 use std::collections::{HashMap, HashSet};
-use std::marker::PhantomData;
 use zydeco_stackir::low::traverse::{Edge, EntityId, Node, Occurrence, Traversal, Visitor};
-use zydeco_utils::fold::{Driver, Explicit, Folder, Step};
+use zydeco_utils::fold::{Explicit, Folder, Step};
 
 use zydeco_stackir::{SpsLowProgram, low::syntax as sk};
 
@@ -33,29 +32,20 @@ impl LocalUnboxing {
     pub fn with_policy<P: RepresentationPolicy + ?Sized>(
         program: &SpsLowProgram, policy: &P,
     ) -> Self {
-        Self::with_policy_and_driver::<Explicit>(program, policy)
-    }
-
-    pub fn with_policy_and_driver<D: Driver>(
-        program: &SpsLowProgram, policy: &(impl RepresentationPolicy + ?Sized),
-    ) -> Self {
         let arena = program.arena();
-        let mut collector =
-            Collector::<_, D> { arena, policy, unboxing: Self::default(), driver: PhantomData };
-        Traversal { arena: &arena.inner }
-            .run_with_driver::<D>(program.root().into(), &mut collector);
+        let mut collector = Collector { arena, policy, unboxing: Self::default() };
+        Traversal { arena: &arena.inner }.run(program.root().into(), &mut collector);
         collector.unboxing
     }
 }
 
-struct Collector<'a, P: ?Sized, D> {
+struct Collector<'a, P: ?Sized> {
     arena: &'a sk::SpsLowArena,
     policy: &'a P,
     unboxing: LocalUnboxing,
-    driver: PhantomData<D>,
 }
 
-impl<P: RepresentationPolicy + ?Sized, D: Driver> Visitor<sk::SpsLow> for Collector<'_, P, D> {
+impl<P: RepresentationPolicy + ?Sized> Visitor<sk::SpsLow> for Collector<'_, P> {
     fn enter(&mut self, node: Node<'_>, _edge: Edge, occurrence: Occurrence) {
         debug_assert_eq!(occurrence, Occurrence::First, "validated SPSLow ownership");
         match node {
@@ -87,7 +77,7 @@ impl<P: RepresentationPolicy + ?Sized, D: Driver> Visitor<sk::SpsLow> for Collec
     }
 }
 
-impl<P: RepresentationPolicy + ?Sized, D: Driver> Collector<'_, P, D> {
+impl<P: RepresentationPolicy + ?Sized> Collector<'_, P> {
     fn mark_product_pair(&mut self, value: sk::ValueId, pattern: sk::VPatId) {
         let Some((value_items, value_arity)) = self.vcons_shape(value) else { return };
         let Some((pattern_items, pattern_arity)) = self.vpat_shape(pattern) else { return };
@@ -147,7 +137,7 @@ impl<P: RepresentationPolicy + ?Sized, D: Driver> Collector<'_, P, D> {
             ),
             | _ => return,
         };
-        let info = VarUse::classify_with_driver::<D>(&self.arena.inner, body, *def, shape);
+        let info = VarUse::classify(&self.arena.inner, body, *def, shape);
         if info.all_eliminations
             && !info.escapes
             && self.policy.unbox(UnboxingOpportunity { reason, fields })
@@ -191,7 +181,7 @@ enum VariableShape {
 }
 
 impl VarUse {
-    fn classify_with_driver<D: Driver>(
+    fn classify(
         arena: &sk::SpsLowInnerArena, root: sk::CompuId, def: sk::DefId, shape: VariableShape,
     ) -> Self {
         let mut folder = VariableUsesFolder {
@@ -200,7 +190,7 @@ impl VarUse {
             shape,
             info: Self { all_eliminations: true, ..Self::default() },
         };
-        D::run(&mut folder, Use::Node(root.into()));
+        Explicit::run(&mut folder, Use::Node(root.into()));
         folder.info
     }
 }
@@ -318,7 +308,6 @@ mod tests {
     use zydeco_stackir::{SpsScheme, arena::Construct as _};
     use zydeco_statics::arena::StaticsScope;
     use zydeco_utils::arena::IdAllocator;
-    use zydeco_utils::fold::Recursive;
 
     struct Fixture;
 
@@ -338,10 +327,7 @@ mod tests {
         fn select(
             program: &SpsLowProgram, policy: &(impl RepresentationPolicy + ?Sized),
         ) -> LocalUnboxing {
-            let explicit = LocalUnboxing::with_policy(program, policy);
-            let recursive = LocalUnboxing::with_policy_and_driver::<Recursive>(program, policy);
-            assert_eq!(explicit, recursive);
-            explicit
+            LocalUnboxing::with_policy(program, policy)
         }
 
         fn definition(arena: &mut sk::SpsLowArena) -> sk::DefId {
@@ -664,7 +650,7 @@ mod tests {
     }
 
     #[test]
-    fn drivers_preserve_policy_call_order_for_empty_and_wide_products() {
+    fn policy_calls_follow_source_order_for_empty_and_wide_products() {
         #[derive(Default)]
         struct Alternating(std::cell::RefCell<Vec<(UnboxingReason, usize)>>);
         impl RepresentationPolicy for Alternating {
@@ -685,21 +671,16 @@ mod tests {
             root = sk::LetValue { binder, bindee, tail: root }.build(&mut arena, None);
         }
         let program = SpsLowProgram::try_new(arena, root, SpsScheme::BranchJoin).unwrap();
-        let explicit = Alternating::default();
-        let recursive = Alternating::default();
+        let policy = Alternating::default();
+        LocalUnboxing::with_policy(&program, &policy);
         assert_eq!(
-            LocalUnboxing::with_policy_and_driver::<Explicit>(&program, &explicit),
-            LocalUnboxing::with_policy_and_driver::<Recursive>(&program, &recursive),
-        );
-        assert_eq!(
-            explicit.0.borrow().as_slice(),
-            &[
+            policy.0.into_inner(),
+            [
                 (UnboxingReason::DirectProduct, 0),
                 (UnboxingReason::DirectProduct, 1),
                 (UnboxingReason::DirectProduct, 128),
             ]
         );
-        assert_eq!(explicit.0.into_inner(), recursive.0.into_inner());
     }
 
     #[test]
@@ -718,12 +699,10 @@ mod tests {
         let root = sk::LetValue { binder, bindee, tail }.build(&mut arena, None);
         let program = SpsLowProgram::try_new(arena, root, SpsScheme::BranchJoin).unwrap();
         let shape = VariableShape::Closure;
-        let explicit =
-            VarUse::classify_with_driver::<Explicit>(&program.arena().inner, root, label, shape);
-        let recursive =
-            VarUse::classify_with_driver::<Recursive>(&program.arena().inner, root, label, shape);
-        assert_eq!(explicit, recursive);
-        assert_eq!(explicit, VarUse { all_eliminations: true, ..VarUse::default() });
+        assert_eq!(
+            VarUse::classify(&program.arena().inner, root, label, shape),
+            VarUse { all_eliminations: true, ..VarUse::default() }
+        );
     }
 
     #[test]
@@ -776,12 +755,7 @@ mod tests {
                 let stack = sk::Cons(value, ambient).build(&mut arena, None);
                 let root = sk::SHole(stack).build(&mut arena, None);
                 // Isolate this semantic view from the separate entry and protocol validators.
-                let usage = VarUse::classify_with_driver::<Explicit>(
-                    &arena.inner,
-                    root,
-                    def,
-                    VariableShape::Closure,
-                );
+                let usage = VarUse::classify(&arena.inner, root, def, VariableShape::Closure);
                 assert!(usage.escapes);
                 assert!(!usage.all_eliminations);
             })

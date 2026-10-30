@@ -6,7 +6,7 @@
 //! site, protocol evidence, and builtin provenance.
 
 use super::{syntax::*, traverse::EntityId};
-use zydeco_utils::fold::{Driver, Explicit, Folder, Step};
+use zydeco_utils::fold::{Explicit, Folder, Step};
 
 impl SpsArena {
     /// Copy a stack, including the continuations and closures it contains, into fresh nodes.

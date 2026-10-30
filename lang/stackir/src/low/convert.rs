@@ -12,12 +12,7 @@ use std::{collections::HashMap, convert::Infallible};
 use zydeco_statics::{arena::StaticsArena, syntax as ss};
 use zydeco_surface::scoped::arena::ScopedArena;
 use zydeco_syntax::VarName;
-use zydeco_utils::{
-    arena::ArenaAccess as _,
-    context::Context,
-    fold::{Driver, Explicit},
-    pass::CompilerPass,
-};
+use zydeco_utils::{arena::ArenaAccess as _, context::Context, pass::CompilerPass};
 
 mod pattern;
 mod procedures;
@@ -34,16 +29,7 @@ impl CompilerPass<FragmentProgram> for SpsLowConverter<'_> {
     type Error = Infallible;
 
     fn run(&mut self, program: FragmentProgram) -> Result<Self::Output, Self::Error> {
-        self.run_with_driver::<Explicit>(program)
-    }
-}
-
-impl SpsLowConverter<'_> {
-    /// Select continuation storage for reconstruction and pattern translation.
-    pub fn run_with_driver<D: Driver>(
-        &mut self, program: FragmentProgram,
-    ) -> Result<SpsLowProgram, Infallible> {
-        Ok(ClosureConversion::new(program, self.scoped, self.statics).convert::<D>())
+        Ok(ClosureConversion::new(program, self.scoped, self.statics).convert())
     }
 }
 
@@ -109,9 +95,9 @@ impl<'a> ClosureConversion<'a> {
         }
     }
 
-    fn convert<D: Driver>(mut self) -> SpsLowProgram {
+    fn convert(mut self) -> SpsLowProgram {
         let source = self.root;
-        let root = fold::ConversionFolder::<D>::new(&mut self).run(source);
+        let root = fold::ConversionFolder::new(&mut self).run(source);
         SpsLowProgram::try_new(self.arena, root, self.scheme)
             .expect("closure conversion produces closed first-order SPSLow")
     }
@@ -258,7 +244,7 @@ mod tests {
 
         fn convert(self, root: high::CompuId) -> SpsLowProgram {
             let statics = StaticsArena::default();
-            fold::tests::Drivers::convert(&self.arena, root, &self.scoped, &statics)
+            fold::tests::Fixture::convert(&self.arena, root, &self.scoped, &statics)
         }
     }
 

@@ -1,10 +1,9 @@
 use super::*;
 use crate::high::syntax::*;
-use zydeco_utils::fold::Recursive;
 
-pub(in crate::low::convert) struct Drivers;
+pub(in crate::low::convert) struct Fixture;
 
-impl Drivers {
+impl Fixture {
     fn input(source: &high::SpsArena, root: high::CompuId) -> FragmentProgram {
         let arena = high::SpsArena {
             admin: high::AdminArena {
@@ -31,14 +30,7 @@ impl Drivers {
     pub(in crate::low::convert) fn convert(
         source: &high::SpsArena, root: high::CompuId, scoped: &ScopedArena, statics: &StaticsArena,
     ) -> SpsLowProgram {
-        let mut converter = SpsLowConverter { scoped, statics };
-        let explicit = converter.run_with_driver::<Explicit>(Self::input(source, root)).unwrap();
-        let recursive = converter.run_with_driver::<Recursive>(Self::input(source, root)).unwrap();
-        assert_eq!(
-            Snapshot::of(&explicit, source, scoped, statics),
-            Snapshot::of(&recursive, source, scoped, statics)
-        );
-        explicit
+        SpsLowConverter { scoped, statics }.run_infallible(Self::input(source, root))
     }
 
     fn returning(arena: &mut high::SpsArena) -> high::CompuId {
@@ -52,142 +44,8 @@ impl Drivers {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-enum Definition {
-    Source(high::DefId),
-    Generated(u32),
-}
-
-impl Definition {
-    fn of(id: high::DefId, source: &high::SpsArena) -> Self {
-        if source.admin.defs.get(&id).is_some() {
-            Self::Source(id)
-        } else {
-            Self::Generated(id.raw().into_u32())
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
-struct Continuation {
-    stack: u32,
-    result: u32,
-    body: u32,
-    captures: Vec<(Definition, Definition)>,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-struct Snapshot {
-    rendered: String,
-    counts: [usize; 4],
-    definitions: Vec<(Definition, VarName)>,
-    terms: Vec<(u32, Option<ss::TermId>)>,
-    patterns: Vec<(u32, Option<ss::PatId>)>,
-    value_protocols: Vec<(u32, ValueProtocol)>,
-    pattern_protocols: Vec<(u32, ValueProtocol)>,
-    entry_protocols: Vec<(u32, low::EntryProtocol)>,
-    case_protocols: Vec<(u32, StackProtocol)>,
-    continuations: Vec<Continuation>,
-}
-
-impl Snapshot {
-    fn sorted<Id: ArenaId, T>(items: impl Iterator<Item = (Id, T)>) -> Vec<(u32, T)> {
-        let mut items = items.map(|(id, value)| (id.raw().into_u32(), value)).collect::<Vec<_>>();
-        items.sort_by_key(|(id, _)| *id);
-        items
-    }
-
-    fn of(
-        program: &SpsLowProgram, source: &high::SpsArena, scoped: &ScopedArena,
-        statics: &StaticsArena,
-    ) -> Self {
-        let arena = program.arena();
-        let formatter =
-            crate::low::fmt::Formatter::new(&arena.admin, &arena.inner, scoped, statics);
-        let mut rendered = program.root().ugly(&formatter);
-        let mut definitions = arena
-            .admin
-            .defs
-            .iter()
-            .map(|(id, name)| {
-                let definition = Definition::of(*id, source);
-                if let Definition::Generated(slot) = definition {
-                    rendered = rendered.replace(&id.concise(), &format!("[generated#{slot}]"));
-                }
-                (definition, name.clone())
-            })
-            .collect::<Vec<_>>();
-        definitions.sort_by(|a, b| a.0.cmp(&b.0));
-        let mut terms = arena
-            .inner
-            .values
-            .iter()
-            .map(|(id, _)| low::TermId::Value(*id))
-            .chain(arena.inner.stacks.iter().map(|(id, _)| low::TermId::Stack(*id)))
-            .chain(arena.inner.compus.iter().map(|(id, _)| low::TermId::Compu(*id)))
-            .map(|id| {
-                let slot = match id {
-                    | low::TermId::Value(id) => id.raw().into_u32(),
-                    | low::TermId::Stack(id) => id.raw().into_u32(),
-                    | low::TermId::Compu(id) => id.raw().into_u32(),
-                };
-                (slot, arena.admin.terms.back(&id).copied())
-            })
-            .collect::<Vec<_>>();
-        terms.sort_by_key(|(slot, _)| *slot);
-        let mut continuations = arena
-            .inner
-            .continuations
-            .iter()
-            .map(|(stack, entry)| Continuation {
-                stack: stack.raw().into_u32(),
-                result: entry.result.raw().into_u32(),
-                body: entry.body.raw().into_u32(),
-                captures: entry
-                    .captures
-                    .iter()
-                    .map(|capture| {
-                        (
-                            Definition::of(capture.source, source),
-                            Definition::of(capture.binding, source),
-                        )
-                    })
-                    .collect(),
-            })
-            .collect::<Vec<_>>();
-        continuations.sort_by_key(|entry| entry.stack);
-        Self {
-            rendered,
-            definitions,
-            terms,
-            continuations,
-            counts: [
-                arena.inner.vpats.len(),
-                arena.inner.values.len(),
-                arena.inner.stacks.len(),
-                arena.inner.compus.len(),
-            ],
-            patterns: Self::sorted(
-                arena.inner.vpats.iter().map(|(id, _)| (*id, arena.admin.pats.back(id).copied())),
-            ),
-            value_protocols: Self::sorted(
-                arena.inner.value_protocols.iter().map(|(id, p)| (*id, p.clone())),
-            ),
-            pattern_protocols: Self::sorted(
-                arena.inner.pattern_protocols.iter().map(|(id, p)| (*id, p.clone())),
-            ),
-            entry_protocols: Self::sorted(
-                arena.inner.entry_protocols.iter().map(|(id, p)| (*id, p.clone())),
-            ),
-            case_protocols: Self::sorted(
-                arena.inner.case_protocols.iter().map(|(id, p)| (*id, p.clone())),
-            ),
-        }
-    }
-}
-
 #[test]
-fn drivers_preserve_empty_and_wide_children() {
+fn conversion_preserves_empty_and_wide_children() {
     for count in [0, 1, 32] {
         let mut arena = high::SpsArena::default();
         let arms = (0..count)
@@ -213,20 +71,20 @@ fn drivers_preserve_empty_and_wide_children() {
         }];
         coarms.extend((1..count).map(|idx| CoMatcher {
             dtor: Cons(DtorIdx { idx, name: DtorName(format!("method{idx}")) }, StackVar),
-            tail: Drivers::returning(&mut arena),
+            tail: Fixture::returning(&mut arena),
         }));
         let scrut = StackVar.build(&mut arena, None);
         let root = SCoMatch { scrut, arms: coarms }.build(&mut arena, None);
-        Drivers::convert(&arena, root, &ScopedArena::default(), &StaticsArena::default());
+        Fixture::convert(&arena, root, &ScopedArena::default(), &StaticsArena::default());
     }
 }
 
 #[test]
-fn drivers_preserve_comparison_operands_successors_and_shared_stack() {
+fn conversion_preserves_comparison_operands_successors_and_shared_stack() {
     let mut arena = high::SpsArena::default();
     let operands =
         [4, 9].map(|value| Literal::Integer(IntegerLiteral::Int(value)).build(&mut arena, None));
-    let [when_true, when_false] = [(); 2].map(|()| Drivers::returning(&mut arena));
+    let [when_true, when_false] = [(); 2].map(|()| Fixture::returning(&mut arena));
     let tail = CompareBranch {
         operation: ComparisonOp::Integer(IntegerType::Int, ComparisonPredicate::Lt),
         operands,
@@ -235,10 +93,10 @@ fn drivers_preserve_comparison_operands_successors_and_shared_stack() {
     }
     .build(&mut arena, None);
     let binder = Hole.build(&mut arena, None);
-    let body = Drivers::returning(&mut arena);
+    let body = Fixture::returning(&mut arena);
     let bindee = Kont { binder, body }.build(&mut arena, None);
     let root = Let { binder: StackVar, bindee, tail }.build(&mut arena, None);
-    let output = Drivers::convert(&arena, root, &ScopedArena::default(), &StaticsArena::default());
+    let output = Fixture::convert(&arena, root, &ScopedArena::default(), &StaticsArena::default());
     let low::Computation::LetStack(low::LetStack { tail, .. }) =
         output.arena().inner.compus[&output.root()]
     else {
@@ -249,7 +107,7 @@ fn drivers_preserve_comparison_operands_successors_and_shared_stack() {
 }
 
 #[test]
-fn drivers_preserve_origins_and_partial_protocols() {
+fn conversion_preserves_origins_and_partial_protocols() {
     let mut arena = high::SpsArena::default();
     let mut origins = IdAllocator::<zydeco_statics::arena::StaticsScope>::new();
     let value_site = ss::TermId::Value(origins.alloc());
@@ -267,7 +125,7 @@ fn drivers_preserve_origins_and_partial_protocols() {
         .insert_new(closure, ValueProtocol::Thunk(Box::new(protocol.clone())));
     let stack = StackVar.build(&mut arena, None);
     let root = SReturn { stack, value: closure }.build(&mut arena, None);
-    let output = Drivers::convert(&arena, root, &ScopedArena::default(), &StaticsArena::default());
+    let output = Fixture::convert(&arena, root, &ScopedArena::default(), &StaticsArena::default());
     assert_eq!(output.arena().inner.entry_protocols.len(), 1);
     assert!(
         output
@@ -290,9 +148,9 @@ fn drivers_preserve_origins_and_partial_protocols() {
 #[test]
 fn deep_conversion_reconstructs_and_drops_without_native_recursion() {
     // Isolate reconstruction: low validation has independent recursive analyses.
-    Drivers::small_stack(|| {
+    Fixture::small_stack(|| {
         let mut arena = high::SpsArena::default();
-        let mut root = Drivers::returning(&mut arena);
+        let mut root = Fixture::returning(&mut arena);
         for _ in 0..4096 {
             let binder: high::VPatId = Hole.build(&mut arena, None);
             let bindee = Triv.build(&mut arena, None);
@@ -307,11 +165,11 @@ fn deep_conversion_reconstructs_and_drops_without_native_recursion() {
         let scoped = ScopedArena::default();
         let statics = StaticsArena::default();
         let mut conversion = ClosureConversion::new(program, &scoped, &statics);
-        ConversionFolder::<Explicit>::new(&mut conversion).run(root);
+        ConversionFolder::new(&mut conversion).run(root);
         assert_eq!(conversion.arena.inner.compus.len(), 4096 * 3 + 2);
         assert_eq!(conversion.arena.inner.values.len(), 4096 * 5 + 2);
     });
-    Drivers::small_stack(|| {
+    Fixture::small_stack(|| {
         let mut arena = high::SpsArena::default();
         let mut stack = StackVar.build(&mut arena, None);
         for _ in 0..16384 {
@@ -325,7 +183,7 @@ fn deep_conversion_reconstructs_and_drops_without_native_recursion() {
         let scoped = ScopedArena::default();
         let statics = StaticsArena::default();
         let mut conversion = ClosureConversion::new(program, &scoped, &statics);
-        ConversionFolder::<Explicit>::new(&mut conversion).run(root);
+        ConversionFolder::new(&mut conversion).run(root);
         assert_eq!(conversion.arena.inner.stacks.len(), 16385);
         assert_eq!(conversion.arena.inner.values.len(), 16384);
     });

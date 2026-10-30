@@ -35,7 +35,7 @@ impl Deep {
             stack = sk::Cons(dtor, stack).build(&mut fixture.arena, None);
         }
         let root = sk::SHole(stack).build(&mut fixture.arena, None);
-        let build = fixture.lower_raw::<Explicit>(root, false, LocalUnboxing::default());
+        let build = fixture.lower_raw(root, false, LocalUnboxing::default());
         Self::check(&build, Self::DEPTH * 2 + 1);
         let mut id = build.root;
         for index in 0..Self::DEPTH {
@@ -69,7 +69,7 @@ impl Deep {
         let ambient = sk::StackVar.build(&mut fixture.arena, None);
         let stack = sk::Cons(value, ambient).build(&mut fixture.arena, None);
         let root = sk::SHole(stack).build(&mut fixture.arena, None);
-        let build = fixture.lower_raw::<Explicit>(root, false, LocalUnboxing::default());
+        let build = fixture.lower_raw(root, false, LocalUnboxing::default());
         Self::check(&build, if abandon { 1 } else { Self::DEPTH * 2 + 2 });
     }
 
@@ -85,7 +85,7 @@ impl Deep {
         let bindee = fixture.integer(1);
         let tail = fixture.terminal();
         let root = sk::LetValue { binder: pattern, bindee, tail }.build(&mut fixture.arena, None);
-        let build = fixture.lower_raw::<Explicit>(root, false, unboxing);
+        let build = fixture.lower_raw(root, false, unboxing);
         Self::check(&build, 3);
     }
 
@@ -99,7 +99,7 @@ impl Deep {
             root = sk::SCoMatch { scrut, arms }.build(&mut fixture.arena, None);
         }
         // Every level waits for a child ID before it can construct its branch table.
-        let build = fixture.lower_raw::<Explicit>(root, false, LocalUnboxing::default());
+        let build = fixture.lower_raw(root, false, LocalUnboxing::default());
         Self::check(&build, Self::DEPTH + 1);
         assert_eq!(build.arena.symbols.len(), Self::DEPTH);
         assert_eq!(build.arena.labels.len(), Self::DEPTH);
@@ -125,7 +125,7 @@ impl Deep {
             );
             root = sk::SHole(package).build(&mut fixture.arena, None);
         }
-        let build = fixture.lower_raw::<Explicit>(root, native, LocalUnboxing::default());
+        let build = fixture.lower_raw(root, native, LocalUnboxing::default());
         Self::check(&build, Self::DEPTH * if native { 4 } else { 5 } + 1);
         assert_eq!(build.arena.symbols.len(), Self::DEPTH);
         assert_eq!(build.arena.frame_entries.len(), if native { Self::DEPTH + 1 } else { 0 });

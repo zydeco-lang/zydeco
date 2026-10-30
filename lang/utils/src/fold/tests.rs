@@ -74,19 +74,18 @@ impl Folder for Evaluation<'_> {
     }
 }
 
-fn evaluate<D: Driver>(nodes: &[Node]) -> (Result<usize, Rejected>, Vec<Event>, Vec<usize>) {
+fn evaluate(nodes: &[Node]) -> (Result<usize, Rejected>, Vec<Event>, Vec<usize>) {
     let mut folder = Evaluation { nodes, events: Vec::new(), errors: Vec::new() };
-    let result = D::run(&mut folder, 0);
+    let result = Explicit::run(&mut folder, 0);
     (result, folder.events, folder.errors)
 }
 
 #[test]
-fn drivers_preserve_dependent_calls_sharing_and_return_order() {
+fn dependent_calls_preserve_sharing_and_return_order() {
     // The left child's result selects node 4; the same node is visited again on the right.
     let nodes =
         [Node::Add(1, 4), Node::Indirect(2), Node::Value(4), Node::Rejected, Node::Value(9)];
-    let explicit = evaluate::<Explicit>(&nodes);
-    assert_eq!(explicit, evaluate::<Recursive>(&nodes));
+    let explicit = evaluate(&nodes);
     assert_eq!(explicit.0, Ok(18));
     assert!(explicit.2.is_empty());
     assert_eq!(
@@ -109,15 +108,13 @@ fn drivers_preserve_dependent_calls_sharing_and_return_order() {
 #[test]
 fn rejection_returns_to_the_parent_and_independent_errors_accumulate() {
     let mut nodes = [Node::Add(1, 2), Node::Rejected, Node::Rejected];
-    let explicit = evaluate::<Explicit>(&nodes);
-    assert_eq!(explicit, evaluate::<Recursive>(&nodes));
+    let explicit = evaluate(&nodes);
     assert_eq!(explicit.0, Err(Rejected));
     assert_eq!(explicit.2, vec![1, 2]);
     assert_eq!(explicit.1.last(), Some(&Event::Return(0)));
     nodes[1] = Node::Value(3);
     nodes[2] = Node::Value(5);
-    assert_eq!(evaluate::<Explicit>(&nodes), evaluate::<Recursive>(&nodes));
-    assert_eq!(evaluate::<Explicit>(&nodes).0, Ok(8));
+    assert_eq!(evaluate(&nodes).0, Ok(8));
 }
 
 struct Depth;
@@ -140,7 +137,7 @@ impl Folder for Depth {
 }
 
 #[test]
-fn explicit_driver_handles_deep_calls_on_a_small_native_stack() {
+fn deep_calls_run_on_a_small_native_stack() {
     std::thread::Builder::new()
         .stack_size(128 * 1024)
         .spawn(|| {
@@ -183,12 +180,11 @@ impl Folder for TailCalls {
 }
 
 #[test]
-fn tail_calls_preserve_the_parent_without_growing_either_driver_stack() {
+fn tail_calls_preserve_the_parent_without_growing_the_stack() {
     std::thread::Builder::new()
         .stack_size(128 * 1024)
         .spawn(|| {
             assert_eq!(Explicit::run(&mut TailCalls(0), TailInput::Root(100_000)), 100_001);
-            assert_eq!(Recursive::run(&mut TailCalls(0), TailInput::Root(100_000)), 100_001);
         })
         .unwrap()
         .join()

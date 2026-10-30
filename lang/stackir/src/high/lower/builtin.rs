@@ -1,4 +1,4 @@
-//! Materialize Builtin package plans through the shared folder drivers.
+//! Materialize Builtin package plans through the shared resumable folder.
 
 use super::*;
 use zydeco_utils::fold::{Folder, Step};

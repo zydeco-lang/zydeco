@@ -13,7 +13,7 @@ use zydeco_machine::closure::Closure;
 use zydeco_stackir::{SpsLowProgram, arena::DefinitionNames as _, low::syntax as sk};
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::scoped::arena::ScopedArena;
-use zydeco_utils::fold::{Driver, Step};
+use zydeco_utils::fold::{Explicit, Step};
 
 mod folder;
 use folder::*;
@@ -67,9 +67,9 @@ impl<'a> Lowerer<'a> {
         self
     }
 
-    pub(crate) fn run_with_driver<D: Driver>(mut self) -> AssemblyBuild {
+    pub(crate) fn run(mut self) -> AssemblyBuild {
         let root = self.root;
-        let root = D::run(&mut Lowering::new(&mut self), Work::Start(root));
+        let root = Explicit::run(&mut Lowering::new(&mut self), Work::Start(root));
         AssemblyBuild { arena: self.arena, root }
     }
 }

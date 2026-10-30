@@ -413,8 +413,8 @@ or memory claims additionally require measurements that include callback work an
 ### Resumable Folder Execution
 
 A folder that rebuilds a parent after visiting its children must retain the unfinished parent.
-The shared [folder execution interface](../../lang/utils/src/fold.rs) separates
-that continuation from the choice of where to store it.
+The shared [folder execution interface](../../lang/utils/src/fold.rs) stores that continuation
+in an explicit vector, so input depth does not consume the native stack.
 It supports mutable compiler state without retaining a mutable borrow of the folder across child execution.
 
 `Folder` defines `Input`, `Output`, and an owned `Frame` for the unfinished parent.
@@ -422,38 +422,34 @@ It supports mutable compiler state without retaining a mutable borrow of the fol
 Both return `Step::Call { input, frame }`, `Step::TailCall(input)`, or `Step::Return(output)`.
 A leaf returns directly without constructing a continuation frame.
 A tail call transfers to another operation without retaining the current one;
-both drivers execute these transfers in a loop while preserving the caller's unfinished parent.
+the driver executes these transfers in a loop while preserving the caller's unfinished parent.
 A parent may select its next child using an earlier child's result and the current compiler state.
 Frames contain owned local state, arena IDs, or references to stable external inputs;
 they cannot borrow the mutable folder itself.
 
-`Explicit::run(&mut folder, root)` stores unfinished parents in a vector and executes through a loop.
-`Recursive::run(&mut folder, root)` retains the same frames in Rust recursive calls.
-Both implement `Driver`, so a caller can select `D: Driver` statically without changing the folder.
-Production residual lowering, Builtin packed value materialization, SPS normalization,
-closure conversion, and CPS assembly lowering use `Explicit`; `Recursive` supports bounded comparisons
-and consumes native stack proportional to pending calls.
+The driver, `Explicit::run(&mut folder, root)`, stores unfinished parents in a vector and executes through a loop.
+Residual lowering, Builtin packed value materialization, SPS normalization, closure conversion,
+SPSLow traversal, and CPS assembly lowering all run through it.
 The driver introduces no boxed callbacks or individual heap allocation for each continuation.
 Frame payloads and outputs may allocate according to the folder's representation.
 
 The folder owns child order, scope transitions, allocation, provenance, sharing, caching, and recovery.
 An error-valued output returns to its parent through the same protocol as a successful result;
 the parent decides whether independent siblings remain visitable.
-Drivers neither short-circuit errors nor implicitly deduplicate shared inputs.
+The driver neither short-circuits errors nor implicitly deduplicates shared inputs.
 A folder may retain separate typed result stacks when its domain operations produce different categories of syntax.
 Its `Output = ()` then signals completion, and each reconstruction frame consumes exactly its own completed children.
 The driver still owns the suspended calls; these result stacks retain domain data rather than pending work.
-An explicit driver bounds only its own call depth: recursive semantic helpers and destruction
+The driver bounds only its own call depth: recursive semantic helpers and destruction
 of nested frame payloads retain their separate stack requirements.
 
-Driver regressions compare dependent child selection, repeated occurrences, event order, and independent rejection.
-A 100,000-level non-tail fixture executes on a 128 KiB stack through `Explicit`.
-A separate 100,000-step tail-call fixture uses the same small stack through both drivers
-and checks that the original parent resumes.
+Driver regressions check dependent child selection, repeated occurrences, event order, and independent rejection.
+A 100,000-level non-tail fixture executes on a 128 KiB stack,
+and a separate 100,000-step tail-call fixture uses the same small stack and checks that the original parent resumes.
 The [Builtin packed value folder](../../lang/stackir/src/high/lower/builtin.rs) is a production client:
 its product frame accumulates fields in input order and transfers the completed vector into the output node.
-Its tests compare both drivers' materialized syntax and arena counts, retain the empty-product rejection,
-and construct and destroy 16,384 nested products on a 512 KiB stack through `Explicit`.
+Its tests check product order and materialization, retain the empty-product rejection,
+and construct and destroy 16,384 nested products on a 512 KiB stack.
 These checks establish behavior and depth robustness, without claiming a compilation-time speedup.
 
 The [SPS pattern folder](../../lang/stackir/src/high/normalize/pattern.rs) copies one owned pattern layer
@@ -462,8 +458,8 @@ Constructor payloads, alias components, and product fields retain their structur
 The completed layer moves into the target arena with its original definition IDs,
 source site, product layout, and protocol evidence.
 This avoids a separate result stack and transfers child vectors directly into rebuilt nodes.
-Pattern depth uses the selected driver independently of the normalizer's consumer schedule.
-Driver comparisons cover these invariants and empty field vectors with nonzero physical arity;
+Pattern depth uses the driver independently of the normalizer's consumer schedule.
+Regressions cover these invariants and empty field vectors with nonzero physical arity;
 the normalization depth regression retains 8,192 nested alias patterns on a 512 KiB stack.
 
 ### Surface Structural Rebuilding
@@ -1617,9 +1613,8 @@ Static composition can produce thousands of nested bindings from a small authore
 The [lowering folder](../../lang/stackir/src/high/lower/fold.rs) uses the shared
 [resumable folder driver](#resumable-folder-execution) for patterns, values, computations,
 and ordered match decisions together; thunk bodies and branch tails resume through the same driver.
-`RootLowerer::run_with_driver::<D>` selects continuation storage for this folder
-and Builtin packed value materialization.
-Production lowering selects `Explicit`, so residual reconstruction depth does not consume the Rust call stack.
+Builtin packed value materialization uses the same driver,
+so residual reconstruction depth does not consume the Rust call stack.
 `Lowerer` retains allocation, provenance, product layout, protocol extraction, and diagnostic state.
 
 Domain frames retain the next reconstruction operation, while typed result stacks hold completed patterns,
@@ -1652,9 +1647,9 @@ Successful reconstruction validates lexical ownership and branch joins before re
 [Depth regressions](../../lang/stackir/src/high/lower/tests.rs) construct and drop residual fixtures
 on a 512 KiB worker stack, covering mixed computation and thunk nesting, value lets,
 structural aliases, literal fallthrough, and Builtin products.
-Driver comparisons cover mixed reconstruction and ordered literal fallthrough,
-including generated syntax, raw allocation slots, arena counts, and source provenance.
-Separate assertions cover fresh ownership and protocols; independent rejected values accumulate under both drivers.
+A mixed reconstruction with ordered literal fallthrough lowers to a valid fragment.
+Separate assertions cover fresh ownership and protocols, and independent rejected values accumulate
+before any program is published.
 This guarantee concerns residual reconstruction; classifier protocol extraction, normalization analyses,
 and subsequent conversion have their own traversal contracts.
 
@@ -1697,9 +1692,8 @@ count entries and exits on shared syntax, and cover binders and cycles with inde
 
 After residual lowering, the unoptimized lexical tree can still contain long binding and closure chains.
 The [normalization folder](../../lang/stackir/src/high/normalize/fold.rs) reconstructs values, computations,
-and stacks through the shared [resumable folder driver](#resumable-folder-execution).
-`Normalizer::run_with_driver::<D>` selects continuation storage for this reconstruction, pattern copying,
-and [pattern decisions](#pattern-decisions-and-validation); production normalization selects `Explicit`.
+and stacks through the shared [resumable folder driver](#resumable-folder-execution),
+which also runs pattern copying and [pattern decisions](#pattern-decisions-and-validation).
 Frames retain unfinished consumers and their producer environments,
 while typed result stacks retain completed syntax and its consumer demands.
 Product and branch cursors request one child at a time; split-binding iterators resume their components
@@ -1724,10 +1718,9 @@ in forwarding and exclusive body movement.
 Reconstruction preserves definition identities, source sites, applicable protocol evidence,
 and the lexical ownership and branch-join validation boundary.
 
-The bounded normalization behavior fixtures run through both drivers and compare generated syntax,
-raw allocation slots, arena counts, source provenance, and protocol evidence.
-They cover sharing, branch demands, primitive folding, and preservation of potentially trapping operations.
-Additional comparisons cover empty and wide product, match, and comatch child sequences.
+The bounded normalization behavior fixtures check generated syntax, source provenance, and protocol evidence.
+They cover sharing, branch demands, primitive folding, and preservation of potentially trapping operations,
+along with empty and wide product, match, and comatch child sequences.
 [Depth tests](../../lang/stackir/src/high/normalize/depth_tests.rs) use a 512 KiB stack for discarded
 and retained bindings, suspended bodies, ambient substitutions, argument stacks, alias parameters, and unknown branches.
 The [CLI regression](../../cli/tests/source_build.rs) builds the factorial source through the Wasm backend
@@ -1918,8 +1911,7 @@ Source library wrappers that return `Bool` still use the ordinary return and cop
 The [comparison regressions](../../cli/tests/comparisons.rs) cover all numeric widths, NaNs, infinities,
 signed zero, escaping functions, argument stacks, shared continuations, and generated instruction/import checks.
 Native code and the Wasm backend execute with normalization enabled and disabled.
-Folder regressions compare reconstruction under both drivers, preserve trap ordering,
-and pair valid branches with ownership and protocol errors.
+Folder regressions preserve trap ordering and pair valid branches with ownership and protocol errors.
 
 ### Address Calculations
 
@@ -2002,7 +1994,7 @@ Alias members and product fields are considered in source order.
 The first false or uncertain child ends that decision; a later mismatch does not override earlier uncertainty.
 Unknown product shape remains uncertain, while distinct known constructor tags decide false.
 
-The folder uses the normalizer's selected execution driver.
+The folder runs through the normalizer's driver.
 Requests retain pattern IDs and borrowed fact views; product suffixes are slices of the existing physical fields.
 They create no temporary product fact or reference-counted field copies.
 Constructor payloads transfer directly to the next decision; alias and product cursors retain the next position.
@@ -2119,7 +2111,6 @@ The implementation departs from `SPS_l` in these respects:
 [Closure conversion](../../lang/stackir/src/low/convert/fold.rs) uses the shared
 [resumable execution interface](#resumable-folder-execution) for mutually dependent value,
 stack, and computation translation.
-`SpsLowConverter::run_with_driver::<D>` selects execution statically; the compiler pass selects `Explicit`.
 Requests carry source IDs and indices into the conversion's renaming environments.
 Frames retain ordered captures, translated binders, and branch positions
 while typed result vectors hold completed children until their parent can be allocated.
@@ -2133,8 +2124,7 @@ and assignments in structural order.
 Pattern syntax has no edge back to values, stacks, or computations, so this subwalk does not retain a recursive cycle
 through the conversion folder.
 
-Bounded regressions compare `Explicit` and `Recursive` syntax, binder order, allocation slots,
-origins, layouts, entry protocols, and continuation capture metadata.
+Bounded regressions check syntax, binder order, origins, layouts, entry protocols, and continuation capture metadata.
 Pattern regressions also cover empty field vectors and rejected layouts that cannot publish their parent.
 An 8,192-level alias fixture constructs, translates, and drops on a 512 KiB stack.
 Direct conversion fixtures additionally reconstruct and drop 4,096 nested bindings
@@ -2150,7 +2140,7 @@ of the [shared traversal](#sps-analysis-traversal) describes the executable chil
 of blocks, packages, jumps, labels, and openings once.
 Its resumable folder retains a borrowed node and the next child position.
 Each child selection takes constant time, including wide products and branch vectors; frames do not copy those vectors.
-`Traversal::run_with_driver::<D>` selects the shared execution driver, with `Explicit` as the default.
+`Traversal::run` executes through the shared driver.
 
 Every incoming edge produces an entry event marked first, shared, or cyclic.
 Only the first occurrence expands children and receives an exit event.
@@ -2173,8 +2163,8 @@ The temporary summaries are dropped before entry-contract and protocol validatio
 Validation still returns one error;
 broader diagnostic recovery remains [unfinished work](../proposals/traversals.md#diagnostic-collection-and-recovery).
 
-Driver comparisons cover event order, sharing, cycles, entry words, lexical binders,
-empty and wide fields, and rejection without publishing an invalid program.
+Traversal regressions compare composed and separate analyses and cover event order, sharing, cycles,
+entry words, lexical binders, empty and wide fields, and rejection without publishing an invalid program.
 Direct fixtures analyze and drop 16,384 nested bindings on a 512 KiB stack,
 including a block whose capture check reuses those summaries.
 Entry-contract and protocol validation remain separate semantic traversals with their own depth requirements.
@@ -2455,15 +2445,14 @@ its return frame fills that symbol and records the label after receiving the ent
 Native resume lowering allocates capture bindings before its child call, then creates the resume symbol,
 records frame-entry metadata, and emits `RetainFrame` followed by the code address.
 
-`LoweringPipeline` selects `Explicit` by default.
-`with_driver::<D>()` statically changes CPS execution for both portable lowering and `with_native_frames()`;
+`LoweringPipeline` runs CPS lowering through the driver for both portable lowering and `with_native_frames()`;
 representation analysis, stack analysis, and checked native preparation keep their own phase boundaries.
-The [lowering tests](../../lang/assembly/src/lower/tests.rs) compare both drivers across all representation policies,
+The [lowering tests](../../lang/assembly/src/lower/tests.rs) cover all representation policies,
 recursive symbols, context resets, literals, primitives, external discovery, alias and branch order,
 abandoned consumers, and rejected multiple irrefutable arms.
-A saved trace from before defunctionalization additionally fixes allocation slots, publication order,
-definition associations, contexts, successor links, and native entry metadata, erasing only per-run key spaces.
-Pipeline comparisons include the finished native activation layouts, owners, slots, and liveness maps.
+A saved trace from before defunctionalization fixes allocation slots, publication order, definition associations,
+contexts, successor links, and native entry metadata, erasing only per-run key spaces.
+Native pipeline tests prepare checked activation layouts, owners, slots, and liveness maps under every policy.
 
 The [depth regression](../../lang/assembly/src/lower/tests/depth.rs) lowers and drops 16,384-level argument/tag stacks,
 constructors, unboxed patterns, nested branch tables, and portable/native continuation entries on a 256 KiB stack.
@@ -2496,16 +2485,15 @@ closed blocks and binding patterns are boundaries, while immediate projection
 and closure-opening children receive their respective use roles.
 Other value uses are escapes, including captures carried by closure environments and continuation residuals.
 This preserves the closed-block rule without duplicating structural child enumeration.
-`LocalUnboxing::with_policy_and_driver::<D>` selects execution for both walks;
-ordinary policy entry points select `Explicit`.
+Both walks run through the shared driver.
 The use folder does not invoke the collector, so a candidate's subwalk introduces no recursive callback cycle.
 
-Bounded tests compare both drivers across static and dynamic policies, accepted expansions,
-escaping counterparts, and the order of calls to a stateful policy.
+Bounded tests cover static and dynamic policies, accepted expansions, escaping counterparts,
+and the order of calls to a stateful policy.
 Small-stack fixtures collect through 16,384 bindings and classify a 16,384-level nested escaping value,
 including destruction of the arena and results.
 The latter fixture isolates classification from semantic validation.
-Variable candidates still require their own use scans; driver selection does not claim to remove those scans.
+Variable candidates still require their own use scans.
 Alias uses and escaping or unknown consumers retain the ordinary boxed representation.
 Escape classification follows occurrences of the candidate variable through values and residual stacks;
 an unrelated primitive, constructor, or closed block does not constitute an escape.

@@ -1,6 +1,5 @@
 use super::*;
 use zydeco_statics::arena::StaticsScope;
-use zydeco_utils::fold::Recursive;
 use zydeco_utils::prelude::IdAllocator;
 
 struct Fixture {
@@ -45,73 +44,11 @@ impl Fixture {
             .unwrap()
     }
 
-    fn snapshot<D: Driver>(&self, root: ss::CompuId) -> Snapshot {
-        let scoped = ScopedArena::default();
-        let program =
-            RootLowerer { scoped: &scoped, statics: &self.statics, scheme: SpsScheme::BranchJoin }
-                .run_with_driver::<D>(root, None)
-                .unwrap()
-                .into_program();
-        let arena = program.arena();
-        let formatter =
-            super::super::fmt::Formatter::new(&arena.admin, &arena.inner, &scoped, &self.statics);
-        // Independent output arenas have distinct identity domains. Retain raw slots so
-        // a changed allocation schedule still fails the comparison.
-        let rendered = program
-            .root()
-            .ugly(&formatter)
-            .replace(&format!("[{:?}#", program.root().key_space()), "[output#")
-            .replace(&format!("[{:?}#", arena.admin.definition_key_space()), "[definition#");
-        let mut terms = arena
-            .inner
-            .values
-            .iter()
-            .map(|(id, _)| TermId::Value(*id))
-            .chain(arena.inner.compus.iter().map(|(id, _)| TermId::Compu(*id)))
-            .chain(arena.inner.stacks.iter().map(|(id, _)| TermId::Stack(*id)))
-            .map(|id| {
-                let slot = match id {
-                    | TermId::Value(id) => id.raw().into_u32(),
-                    | TermId::Compu(id) => id.raw().into_u32(),
-                    | TermId::Stack(id) => id.raw().into_u32(),
-                };
-                (slot, arena.admin.terms.back(&id).copied())
-            })
-            .collect::<Vec<_>>();
-        terms.sort_by_key(|(slot, _)| *slot);
-        let mut patterns = arena
-            .inner
-            .vpats
-            .iter()
-            .map(|(id, _)| (id.raw().into_u32(), arena.admin.pats.back(id).copied()))
-            .collect::<Vec<_>>();
-        patterns.sort_by_key(|(slot, _)| *slot);
-        Snapshot {
-            rendered,
-            counts: [
-                arena.inner.vpats.len(),
-                arena.inner.values.len(),
-                arena.inner.stacks.len(),
-                arena.inner.compus.len(),
-            ],
-            terms,
-            patterns,
-        }
-    }
-
     // Construct and destroy the fixtures on the same small stack. This isolates
     // residual lowering from parsing, checking, and later optimization passes.
     fn small_stack(test: impl FnOnce() + Send + 'static) {
         std::thread::Builder::new().stack_size(512 * 1024).spawn(test).unwrap().join().unwrap();
     }
-}
-
-#[derive(Debug, PartialEq, Eq)]
-struct Snapshot {
-    rendered: String,
-    counts: [usize; 4],
-    terms: Vec<(u32, Option<ss::TermId>)>,
-    patterns: Vec<(u32, Option<ss::PatId>)>,
 }
 
 #[test]
@@ -141,7 +78,7 @@ fn only_structural_payloads_use_direct_constructor_arms() {
 }
 
 #[test]
-fn residual_drivers_preserve_mixed_reconstruction_and_ordered_match_plans() {
+fn mixed_reconstruction_and_ordered_match_plans_lower_to_a_valid_fragment() {
     let mut fixture = Fixture::new();
     let unit = fixture.value(Triv);
     let hole = fixture.pattern(Hole);
@@ -163,7 +100,7 @@ fn residual_drivers_preserve_mixed_reconstruction_and_ordered_match_plans() {
             arms: vec![Matcher { binder, tail: root }, Matcher { binder: hole, tail: returned }],
         });
     }
-    assert_eq!(fixture.snapshot::<Explicit>(root), fixture.snapshot::<Recursive>(root));
+    fixture.lower(root);
 }
 
 #[test]
@@ -316,21 +253,12 @@ fn independent_invalid_values_are_collected_without_publishing_a_program() {
         RootLowerer { scoped: &scoped, statics: &fixture.statics, scheme: SpsScheme::BranchJoin }
             .run(root)
             .unwrap_err();
-    let recursive =
-        RootLowerer { scoped: &scoped, statics: &fixture.statics, scheme: SpsScheme::BranchJoin }
-            .run_with_driver::<Recursive>(root, None)
-            .unwrap_err();
-    assert_eq!(
-        errors.iter().map(SpsLoweringError::value).collect::<Vec<_>>(),
-        recursive.iter().map(SpsLoweringError::value).collect::<Vec<_>>()
-    );
     assert!(
         matches!(errors.as_slice(), [SpsLoweringError::ResidualStaticValue { value: a }, SpsLoweringError::ResidualStaticValue { value: b }] if *a == first && *b == second)
     );
     fixture.statics.values[&first] = ss::Value::Triv(Triv);
     fixture.statics.values[&second] = ss::Value::Triv(Triv);
     fixture.lower(root);
-    assert_eq!(fixture.snapshot::<Explicit>(root), fixture.snapshot::<Recursive>(root));
 }
 
 #[test]
@@ -350,74 +278,49 @@ fn deeply_nested_builtin_products_lower_on_a_small_stack() {
 }
 
 #[test]
-fn builtin_folder_drivers_preserve_product_order_and_materialization() {
-    fn materialize<D: Driver>() -> (String, [usize; 4]) {
-        use zydeco_syntax::{BuiltinValueRole, IntegerOperation, IntegerType};
-        let scoped = ScopedArena::default();
-        let statics = StaticsArena::default();
-        let mut lowerer = Lowerer::new(&scoped, &statics, SpsScheme::BranchJoin);
-        let input = BuiltinPackageValue::Product(vec![
-            BuiltinPackageValue::Unit,
-            BuiltinPackageValue::Operation(BuiltinValueRole::Integer(
-                IntegerType::Int,
-                IntegerOperation::Eq,
-            )),
-            BuiltinPackageValue::Product(vec![
-                BuiltinPackageValue::Unit,
-                BuiltinPackageValue::Unit,
-            ]),
-        ]);
-        let value = D::run(&mut BuiltinPackageFolder { lowerer: &mut lowerer }, input);
-        let arena = &lowerer.arena;
-        let Value::VCons(VCons { items, layout }) = &arena.inner.values[&value] else {
-            panic!("package product")
-        };
-        assert_eq!(layout.arity, 3);
-        assert!(matches!(&arena.inner.values[&items[0]], Value::Triv(_)));
-        assert!(matches!(&arena.inner.values[&items[1]], Value::Ext(ValueExt::Closure(_))));
-        assert!(
-            matches!(&arena.inner.values[&items[2]], Value::VCons(VCons { items, .. }) if items.len() == 2 && items[0] != items[1])
-        );
-        let formatter =
-            super::super::fmt::Formatter::new(&arena.admin, &arena.inner, &scoped, &statics);
-        (
-            value
-                .ugly(&formatter)
-                .replace(&format!("[{:?}#", value.key_space()), "[output#")
-                .replace(&format!("[{:?}#", arena.admin.definition_key_space()), "[definition#"),
-            [
-                arena.inner.vpats.len(),
-                arena.inner.values.len(),
-                arena.inner.stacks.len(),
-                arena.inner.compus.len(),
-            ],
-        )
-    }
-    assert_eq!(materialize::<Explicit>(), materialize::<zydeco_utils::fold::Recursive>());
+fn builtin_folder_preserves_product_order_and_materialization() {
+    use zydeco_syntax::{BuiltinValueRole, IntegerOperation, IntegerType};
+    let scoped = ScopedArena::default();
+    let statics = StaticsArena::default();
+    let mut lowerer = Lowerer::new(&scoped, &statics, SpsScheme::BranchJoin);
+    let input = BuiltinPackageValue::Product(vec![
+        BuiltinPackageValue::Unit,
+        BuiltinPackageValue::Operation(BuiltinValueRole::Integer(
+            IntegerType::Int,
+            IntegerOperation::Eq,
+        )),
+        BuiltinPackageValue::Product(vec![BuiltinPackageValue::Unit, BuiltinPackageValue::Unit]),
+    ]);
+    let value = Explicit::run(&mut BuiltinPackageFolder { lowerer: &mut lowerer }, input);
+    let arena = &lowerer.arena;
+    let Value::VCons(VCons { items, layout }) = &arena.inner.values[&value] else {
+        panic!("package product")
+    };
+    assert_eq!(layout.arity, 3);
+    assert!(matches!(&arena.inner.values[&items[0]], Value::Triv(_)));
+    assert!(matches!(&arena.inner.values[&items[1]], Value::Ext(ValueExt::Closure(_))));
+    assert!(
+        matches!(&arena.inner.values[&items[2]], Value::VCons(VCons { items, .. }) if items.len() == 2 && items[0] != items[1])
+    );
 }
 
 #[test]
-fn builtin_folder_drivers_reject_empty_product_plans() {
-    fn reject<D: Driver>() {
+fn builtin_folder_rejects_empty_product_plans() {
+    let rejected = std::panic::catch_unwind(|| {
         let scoped = ScopedArena::default();
         let statics = StaticsArena::default();
         let mut lowerer = Lowerer::new(&scoped, &statics, SpsScheme::BranchJoin);
-        D::run(
+        Explicit::run(
             &mut BuiltinPackageFolder { lowerer: &mut lowerer },
             BuiltinPackageValue::Product(vec![]),
         );
-    }
-    for rejected in [
-        std::panic::catch_unwind(reject::<Explicit>),
-        std::panic::catch_unwind(reject::<zydeco_utils::fold::Recursive>),
-    ] {
-        let error = rejected.expect_err("an empty product plan violates the IR invariant");
-        let message = error
-            .downcast_ref::<String>()
-            .map(String::as_str)
-            .or_else(|| error.downcast_ref::<&str>().copied());
-        assert_eq!(message, Some("assertion failed: layout.arity > 0"));
-    }
+    });
+    let error = rejected.expect_err("an empty product plan violates the IR invariant");
+    let message = error
+        .downcast_ref::<String>()
+        .map(String::as_str)
+        .or_else(|| error.downcast_ref::<&str>().copied());
+    assert_eq!(message, Some("assertion failed: layout.arity > 0"));
 }
 
 #[test]

@@ -1,8 +1,7 @@
 //! Reconstruction frames preserve forward facts and backward consumer demands.
 
 use super::*;
-use std::marker::PhantomData;
-use zydeco_utils::fold::{Folder, Step};
+use zydeco_utils::fold::{Explicit, Folder, Step};
 
 /// A memory step's operand besides its address: the fresh result binder of a load or the stored
 /// value of a store.
@@ -231,20 +230,18 @@ pub(super) enum Work {
     },
 }
 
-pub(super) struct NormalizationFolder<'a, D> {
+pub(super) struct NormalizationFolder<'a> {
     norm: &'a mut Normalization,
-    driver: PhantomData<D>,
     values: Vec<Residual<ValueId>>,
     stacks: Vec<StackResidual>,
     computations: Vec<Residual<CompuId>>,
     arms: Vec<(Matcher<VPatId, CompuId>, Demands, Demand)>,
 }
 
-impl<'a, D: Driver> NormalizationFolder<'a, D> {
+impl<'a> NormalizationFolder<'a> {
     pub(super) fn new(norm: &'a mut Normalization) -> Self {
         Self {
             norm,
-            driver: PhantomData,
             values: Vec::new(),
             stacks: Vec::new(),
             computations: Vec::new(),
@@ -253,7 +250,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
     }
 
     pub(super) fn run(mut self, root: CompuId) -> CompuId {
-        D::run(&mut self, Work::Computation(root, Scope { values: EnvId(0), stack: None }));
+        Explicit::run(&mut self, Work::Computation(root, Scope { values: EnvId(0), stack: None }));
         assert!(self.values.is_empty() && self.stacks.is_empty() && self.arms.is_empty());
         let root = self.computation().node;
         assert!(self.computations.is_empty());
@@ -455,7 +452,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
                 let env = scope.values;
                 let (next, values, frame) = match step {
                     | MemoryStep::Load { scalar, address, result, next } => {
-                        let (result, values) = self.norm.load_pattern::<D>(result, env);
+                        let (result, values) = self.norm.load_pattern(result, env);
                         let operand = MemoryOperand::Load { result };
                         (next, values, MemoryFrame { source: id, env, scalar, address, operand })
                     }
@@ -669,7 +666,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
         let known = self.norm.shared(scrut, scope.values);
         if selectable {
             for arm in &arms {
-                match self.norm.matches::<D>(arm.binder, &known) {
+                match self.norm.matches(arm.binder, &known) {
                     | Some(true) => {
                         let value = ScopedValue { node: scrut, env: scope.values };
                         // A known tag does not expose a payload stored in a variable.
@@ -915,7 +912,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
         for def in binder.vars(&self.norm.source) {
             body.demands.remove(&def);
         }
-        let binder = self.norm.pattern::<D>(binder);
+        let binder = self.norm.pattern(binder);
         let site = self.norm.source.admin.term_site(source);
         let node = Kont { binder, body: body.node }.build(self.norm, site);
         self.stacks.push(StackResidual { node, spine: Vec::new(), demands: body.demands });
@@ -1036,7 +1033,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
                 let tail = self.computation();
                 let bindee = self.stack();
                 let (bindee, spine, demands) = self.consumed(bindee);
-                let binder = Cons(self.norm.pattern::<D>(binder), StackVar);
+                let binder = Cons(self.norm.pattern(binder), StackVar);
                 self.finish_computation(
                     source,
                     Let { binder, bindee, tail: tail.node },
@@ -1184,7 +1181,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
 
     fn resume_finish_binding(&mut self, binder: VPatId, site: Option<ss::TermId>) -> Step<Self> {
         let bindee = self.value();
-        let binder = self.norm.pattern::<D>(binder);
+        let binder = self.norm.pattern(binder);
         let tail = self.computation();
         let node = Let { binder, bindee: bindee.node, tail: tail.node }.build(self.norm, site);
         self.computations.push(Residual { node, demands: tail.demands.join(bindee.demands) });
@@ -1301,7 +1298,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
         for def in binder.vars(&self.norm.source) {
             tail.demands.remove(&def);
         }
-        let binder = self.norm.pattern::<D>(binder);
+        let binder = self.norm.pattern(binder);
         self.arms.push((Matcher { binder, tail: tail.node }, tail.demands, demand));
         Step::Return(())
     }
@@ -1476,7 +1473,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
     }
 }
 
-impl<D: Driver> Folder for NormalizationFolder<'_, D> {
+impl Folder for NormalizationFolder<'_> {
     type Input = Work;
     type Frame = Work;
     type Output = ();

@@ -3,7 +3,6 @@ use crate::representation::RepresentationStrategy;
 use std::fmt::Write as _;
 use zydeco_stackir::{SpsScheme, arena::Construct as _};
 use zydeco_statics::arena::StaticsScope;
-use zydeco_utils::fold::{Explicit, Recursive};
 
 mod depth;
 
@@ -297,7 +296,7 @@ impl Fixture {
     }
 
     /// Isolate lowering from the separate entry/protocol validators for depth and rejection fixtures.
-    fn lower_raw<D: Driver>(
+    fn lower_raw(
         &self, root: sk::CompuId, native_frames: bool, unboxing: crate::unbox::LocalUnboxing,
     ) -> AssemblyBuild {
         Lowerer {
@@ -313,17 +312,17 @@ impl Fixture {
             labels: HashMap::new(),
             native_frames,
         }
-        .run_with_driver::<D>()
+        .run()
     }
 
-    fn lower<D: Driver>(
+    fn lower(
         program: &SpsLowProgram, native: bool, policy: RepresentationStrategy,
     ) -> AssemblyBuild {
         let scoped = ScopedArena::default();
         let statics = StaticsArena::default();
         let mut lowerer = Lowerer::with_policy(&scoped, &statics, program, &policy);
         lowerer.native_frames = native;
-        lowerer.run_with_driver::<D>()
+        lowerer.run()
     }
 
     /// Keep allocation slots and publication order, erasing only per-run key spaces.
@@ -388,29 +387,15 @@ impl Fixture {
         text
     }
 
-    fn native<D: Driver>(
+    fn native(
         program: &SpsLowProgram, policy: RepresentationStrategy,
     ) -> crate::frames::NativeProgram {
         use zydeco_utils::pass::CompilerPass as _;
         crate::LoweringPipeline::new(&ScopedArena::default(), &StaticsArena::default())
-            .with_driver::<D>()
             .with_representation(policy)
             .with_native_frames()
             .run(program)
             .unwrap()
-    }
-
-    fn frame_snapshot(plan: &crate::frames::FramePlan) -> String {
-        let owners = plan
-            .owners
-            .iter()
-            .map(|(id, layout)| (id.raw().into_u32(), layout))
-            .collect::<Vec<_>>();
-        let slots =
-            plan.slots.iter().map(|(id, slot)| (id.raw().into_u32(), slot)).collect::<Vec<_>>();
-        let live =
-            plan.live.iter().map(|(id, slots)| (id.raw().into_u32(), slots)).collect::<Vec<_>>();
-        format!("{:?}\n{owners:?}\n{slots:?}\n{live:?}", plan.layouts)
     }
 }
 
@@ -421,13 +406,7 @@ fn allocation_and_publication_baseline() {
         [("branches", Fixture::branches()), ("continuation", Fixture::continuation())]
     {
         for native in [false, true] {
-            let build = Fixture::lower::<Explicit>(&program, native, RepresentationStrategy::Boxed);
-            let recursive =
-                Fixture::lower::<Recursive>(&program, native, RepresentationStrategy::Boxed);
-            assert_eq!(
-                Fixture::snapshot(&build, program.arena()),
-                Fixture::snapshot(&recursive, program.arena())
-            );
+            let build = Fixture::lower(&program, native, RepresentationStrategy::Boxed);
             writeln!(baseline, "{name}, native={native}").unwrap();
             baseline.push_str(&Fixture::snapshot(&build, program.arena()));
         }
@@ -436,32 +415,27 @@ fn allocation_and_publication_baseline() {
 }
 
 #[test]
-fn drivers_preserve_field_order_aliases_and_all_representation_policies() {
+fn lowering_preserves_field_order_aliases_under_all_representation_policies() {
     for aliases in [false, true] {
         let program = Fixture::product(32, aliases);
         for &policy in RepresentationStrategy::ALL {
             for native in [false, true] {
-                let explicit = Fixture::lower::<Explicit>(&program, native, policy);
-                let recursive = Fixture::lower::<Recursive>(&program, native, policy);
-                assert_eq!(
-                    Fixture::snapshot(&explicit, program.arena()),
-                    Fixture::snapshot(&recursive, program.arena())
-                );
-                let mut id = explicit.root;
+                let lowered = Fixture::lower(&program, native, policy);
+                let mut id = lowered.root;
                 for expected in (0..32).rev() {
                     let Program::Instruction(
                         Instruction::PushArg(Push(Atom::Imm(Imm::Integer(IntegerLiteral::Int(
                             value,
                         ))))),
                         next,
-                    ) = explicit.arena.programs[&id]
+                    ) = lowered.arena.programs[&id]
                     else {
                         panic!("product fields must be pushed before packing or binding")
                     };
                     assert_eq!(value, expected);
                     id = next;
                 }
-                let mut fields = explicit
+                let mut fields = lowered
                     .arena
                     .variables
                     .iter()
@@ -482,17 +456,12 @@ fn drivers_preserve_field_order_aliases_and_all_representation_policies() {
 }
 
 #[test]
-fn drivers_preserve_recursive_symbols_closure_words_and_context_resets() {
+fn lowering_preserves_recursive_symbols_closure_words_and_context_resets() {
     let program = Fixture::closure_jump();
     for &policy in RepresentationStrategy::ALL {
         for native in [false, true] {
-            let explicit = Fixture::lower::<Explicit>(&program, native, policy);
-            let recursive = Fixture::lower::<Recursive>(&program, native, policy);
-            assert_eq!(
-                Fixture::snapshot(&explicit, program.arena()),
-                Fixture::snapshot(&recursive, program.arena())
-            );
-            let jumps = explicit
+            let lowered = Fixture::lower(&program, native, policy);
+            let jumps = lowered
                 .arena
                 .programs
                 .iter()
@@ -500,10 +469,10 @@ fn drivers_preserve_recursive_symbols_closure_words_and_context_resets() {
                 .collect::<Vec<_>>();
             assert_eq!(jumps.len(), 2);
             for (id, _) in jumps {
-                assert!(explicit.arena.contexts[id].0.is_empty());
+                assert!(lowered.arena.contexts[id].0.is_empty());
             }
             assert!(
-                explicit
+                lowered
                     .arena
                     .symbols
                     .iter()
@@ -514,16 +483,11 @@ fn drivers_preserve_recursive_symbols_closure_words_and_context_resets() {
 }
 
 #[test]
-fn drivers_preserve_observation_tables_literals_primitives_and_external_discovery() {
+fn lowering_preserves_observation_tables_literals_primitives_and_external_discovery() {
     let (fixture, root) = Fixture::observations();
-    let explicit = fixture.lower_raw::<Explicit>(root, false, Default::default());
-    let recursive = fixture.lower_raw::<Recursive>(root, false, Default::default());
-    assert_eq!(
-        Fixture::snapshot(&explicit, &fixture.arena),
-        Fixture::snapshot(&recursive, &fixture.arena)
-    );
+    let lowered = fixture.lower_raw(root, false, Default::default());
     let Program::Terminator(Terminator::PopBranch(PopBranch(arms))) =
-        &explicit.arena.programs[&explicit.root]
+        &lowered.arena.programs[&lowered.root]
     else {
         panic!("observation table expected")
     };
@@ -532,7 +496,7 @@ fn drivers_preserve_observation_tables_literals_primitives_and_external_discover
         let Program::Instruction(
             Instruction::PushArg(Push(Atom::Imm(Imm::Integer(IntegerLiteral::Int(value))))),
             _,
-        ) = explicit.arena.programs[entry]
+        ) = lowered.arena.programs[entry]
         else {
             panic!("operand expected")
         };
@@ -540,7 +504,7 @@ fn drivers_preserve_observation_tables_literals_primitives_and_external_discover
     }
     // Arm entries are reserved in source order; their queued bodies finish last to first.
     assert!(matches!(
-        explicit.arena.externs.as_slice(),
+        lowered.arena.externs.as_slice(),
         [
             Extern::Foreign(_),
             Extern::Host { role: BuiltinValueRole::Stdin, .. },
@@ -550,25 +514,13 @@ fn drivers_preserve_observation_tables_literals_primitives_and_external_discover
 }
 
 #[test]
-fn comparisons_lower_identically_under_both_drivers() {
+fn comparisons_lower_and_prepare_native_frames() {
     for (first, second, operand_traps) in [(1, 2, false), (3, 2, false), (1, 2, true)] {
         let program = Fixture::comparison(first, second, operand_traps);
         for native in [false, true] {
-            let explicit =
-                Fixture::lower::<Explicit>(&program, native, RepresentationStrategy::Local);
-            let recursive =
-                Fixture::lower::<Recursive>(&program, native, RepresentationStrategy::Local);
-            assert_eq!(
-                Fixture::snapshot(&explicit, program.arena()),
-                Fixture::snapshot(&recursive, program.arena())
-            );
+            Fixture::lower(&program, native, RepresentationStrategy::Local);
         }
-        let explicit = Fixture::native::<Explicit>(&program, RepresentationStrategy::Local);
-        let recursive = Fixture::native::<Recursive>(&program, RepresentationStrategy::Local);
-        assert_eq!(
-            Fixture::frame_snapshot(explicit.frames()),
-            Fixture::frame_snapshot(recursive.frames())
-        );
+        Fixture::native(&program, RepresentationStrategy::Local);
     }
 }
 
@@ -584,7 +536,7 @@ fn constructor_patterns_outside_match_arms_are_rejected() {
     let tail = fixture.terminal();
     let root = sk::LetValue { binder, bindee, tail }.build(&mut fixture.arena, None);
     let program = SpsLowProgram::try_new(fixture.arena, root, SpsScheme::BranchJoin).unwrap();
-    Fixture::lower::<Explicit>(&program, false, RepresentationStrategy::Local);
+    Fixture::lower(&program, false, RepresentationStrategy::Local);
 }
 
 #[test]
@@ -600,34 +552,24 @@ fn empty_and_single_fallback_matches_keep_their_behavior_and_multiple_fallbacks_
             .collect();
         let scrut = fixture.integer(1);
         let root = sk::SCoprodMatch { scrut, arms }.build(&mut fixture.arena, None);
-        let explicit = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            fixture.lower_raw::<Explicit>(root, false, Default::default())
-        }));
-        let recursive = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            fixture.lower_raw::<Recursive>(root, false, Default::default())
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            fixture.lower_raw(root, false, Default::default())
         }));
         if count < 2 {
-            let explicit = explicit.unwrap();
-            let recursive = recursive.unwrap();
-            assert_eq!(
-                Fixture::snapshot(&explicit, &fixture.arena),
-                Fixture::snapshot(&recursive, &fixture.arena)
-            );
-            assert_eq!(explicit.arena.programs.len(), 2 + count);
-            assert!(explicit.arena.programs.iter().all(|(_, program)| !matches!(
+            let lowered = result.unwrap();
+            assert_eq!(lowered.arena.programs.len(), 2 + count);
+            assert!(lowered.arena.programs.iter().all(|(_, program)| !matches!(
                 program,
                 Program::Instruction(Instruction::UnpackProduct(_), _)
             )));
         } else {
-            for result in [explicit, recursive] {
-                let error = result.err().expect("invalid branch shape cannot produce assembly");
-                let message = error
-                    .downcast_ref::<String>()
-                    .map(String::as_str)
-                    .or_else(|| error.downcast_ref::<&str>().copied())
-                    .unwrap();
-                assert!(message.contains("Irrefutable pattern matcher must be unique in ZASM"));
-            }
+            let error = result.err().expect("invalid branch shape cannot produce assembly");
+            let message = error
+                .downcast_ref::<String>()
+                .map(String::as_str)
+                .or_else(|| error.downcast_ref::<&str>().copied())
+                .unwrap();
+            assert!(message.contains("Irrefutable pattern matcher must be unique in ZASM"));
         }
     }
 }
@@ -643,16 +585,11 @@ fn a_value_hole_abandons_the_remaining_sequence_without_compiling_it() {
     let ambient = sk::StackVar.build(&mut fixture.arena, None);
     let stack = sk::Cons(value, ambient).build(&mut fixture.arena, None);
     let root = sk::SHole(stack).build(&mut fixture.arena, None);
-    let explicit = fixture.lower_raw::<Explicit>(root, false, Default::default());
-    let recursive = fixture.lower_raw::<Recursive>(root, false, Default::default());
-    assert_eq!(
-        Fixture::snapshot(&explicit, &fixture.arena),
-        Fixture::snapshot(&recursive, &fixture.arena)
-    );
-    assert_eq!(explicit.arena.programs.len(), 1);
-    assert_eq!(explicit.arena.symbols.len(), 0);
+    let lowered = fixture.lower_raw(root, false, Default::default());
+    assert_eq!(lowered.arena.programs.len(), 1);
+    assert_eq!(lowered.arena.symbols.len(), 0);
     assert!(matches!(
-        explicit.arena.programs[&explicit.root],
+        lowered.arena.programs[&lowered.root],
         Program::Terminator(Terminator::Abort(_))
     ));
 }
@@ -671,23 +608,18 @@ fn empty_unboxed_sequences_continue_into_the_computation_body() {
         RepresentationStrategy::Local,
         RepresentationStrategy::Shared,
     ] {
-        let explicit = Fixture::lower::<Explicit>(&program, false, policy);
-        let recursive = Fixture::lower::<Recursive>(&program, false, policy);
-        assert_eq!(
-            Fixture::snapshot(&explicit, program.arena()),
-            Fixture::snapshot(&recursive, program.arena())
-        );
-        assert_eq!(explicit.arena.programs.len(), 1);
+        let lowered = Fixture::lower(&program, false, policy);
+        assert_eq!(lowered.arena.programs.len(), 1);
         assert!(matches!(
-            explicit.arena.programs[&explicit.root],
+            lowered.arena.programs[&lowered.root],
             Program::Terminator(Terminator::Abort(_))
         ));
-        assert!(explicit.arena.contexts[&explicit.root].0.is_empty());
+        assert!(lowered.arena.contexts[&lowered.root].0.is_empty());
     }
 }
 
 #[test]
-fn pipeline_driver_selection_preserves_checked_native_frame_plans() {
+fn native_pipeline_prepares_checked_frame_plans_under_all_policies() {
     for program in [
         Fixture::branches(),
         Fixture::continuation(),
@@ -695,24 +627,7 @@ fn pipeline_driver_selection_preserves_checked_native_frame_plans() {
         Fixture::product(4, true),
     ] {
         for &policy in RepresentationStrategy::ALL {
-            let explicit = Fixture::native::<Explicit>(&program, policy);
-            let recursive = Fixture::native::<Recursive>(&program, policy);
-            assert_eq!(
-                Fixture::arena_snapshot(
-                    explicit.assembly().arena(),
-                    explicit.assembly().root(),
-                    program.arena()
-                ),
-                Fixture::arena_snapshot(
-                    recursive.assembly().arena(),
-                    recursive.assembly().root(),
-                    program.arena()
-                ),
-            );
-            assert_eq!(
-                Fixture::frame_snapshot(explicit.frames()),
-                Fixture::frame_snapshot(recursive.frames())
-            );
+            Fixture::native(&program, policy);
         }
     }
 }
@@ -721,13 +636,8 @@ fn pipeline_driver_selection_preserves_checked_native_frame_plans() {
 fn labels_lower_to_static_jumps_that_keep_or_leave_the_frame() {
     for kind in [sk::LabelKind::Local, sk::LabelKind::Closed] {
         let program = Fixture::labels(kind);
-        let explicit = Fixture::native::<Explicit>(&program, RepresentationStrategy::Local);
-        let recursive = Fixture::native::<Recursive>(&program, RepresentationStrategy::Local);
-        assert_eq!(
-            Fixture::frame_snapshot(explicit.frames()),
-            Fixture::frame_snapshot(recursive.frames())
-        );
-        let arena = explicit.assembly().arena();
+        let lowered = Fixture::native(&program, RepresentationStrategy::Local);
+        let arena = lowered.assembly().arena();
         let targets = arena
             .programs
             .iter()
@@ -749,6 +659,6 @@ fn labels_lower_to_static_jumps_that_keep_or_leave_the_frame() {
         // A local label keeps the binding frame; a closed label is a frame entry of its own.
         let closed = kind == sk::LabelKind::Closed;
         assert_eq!(fresh_contexts, if closed { 2 } else { 0 });
-        assert_eq!(explicit.frames().entries.contains_key(&targets[0]), closed);
+        assert_eq!(lowered.frames().entries.contains_key(&targets[0]), closed);
     }
 }

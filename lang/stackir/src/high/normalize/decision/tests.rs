@@ -1,15 +1,11 @@
 use super::*;
-use zydeco_utils::fold::Recursive;
 
 struct Fixture;
 
 impl Fixture {
     fn decide(arena: &SpsInnerArena, binder: VPatId, known: &KnownValue) -> Option<bool> {
         let input = (binder, KnownView::Value(known));
-        let explicit = Explicit::run(&mut DecisionFolder { source: arena }, input);
-        let recursive = Recursive::run(&mut DecisionFolder { source: arena }, input);
-        assert_eq!(explicit, recursive);
-        explicit
+        Explicit::run(&mut DecisionFolder { source: arena }, input)
     }
 
     fn tag() -> CtorIdx {

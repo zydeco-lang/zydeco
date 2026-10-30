@@ -6,7 +6,7 @@
 
 use crate::syntax::*;
 use rustc_hash::FxHashMap;
-use zydeco_utils::fold::{Driver, Explicit, Folder, Step};
+use zydeco_utils::fold::{Explicit, Folder, Step};
 
 /// A node of one phase, by sort.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -209,13 +209,7 @@ pub struct Traversal<'a, N: Nodes> {
 
 impl<N: Nodes> Traversal<'_, N> {
     pub fn run(&self, root: EntityId<N::Phase>, visitor: &mut impl Visitor<N::Phase>) {
-        self.run_with_driver::<Explicit>(root, visitor);
-    }
-
-    pub fn run_with_driver<D: Driver>(
-        &self, root: EntityId<N::Phase>, visitor: &mut impl Visitor<N::Phase>,
-    ) {
-        D::run(
+        Explicit::run(
             &mut AnalysisFolder { arena: self.arena, visitor, states: FxHashMap::default() },
             (root, Edge::Root),
         );

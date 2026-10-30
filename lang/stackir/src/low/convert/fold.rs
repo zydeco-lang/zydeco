@@ -1,8 +1,7 @@
 //! Resumable closure conversion with occurrence-local capture and renaming state.
 
 use super::*;
-use std::marker::PhantomData;
-use zydeco_utils::fold::{Folder, Step};
+use zydeco_utils::fold::{Explicit, Folder, Step};
 
 pub(super) struct Captures {
     env: RenameEnvId,
@@ -221,27 +220,20 @@ pub(super) enum Work {
     },
 }
 
-pub(super) struct ConversionFolder<'a, 'source, D> {
+pub(super) struct ConversionFolder<'a, 'source> {
     conversion: &'a mut ClosureConversion<'source>,
-    driver: PhantomData<D>,
     values: Vec<low::ValueId>,
     stacks: Vec<low::StackId>,
     computations: Vec<low::CompuId>,
 }
 
-impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
+impl<'a, 'source> ConversionFolder<'a, 'source> {
     pub(super) fn new(conversion: &'a mut ClosureConversion<'source>) -> Self {
-        Self {
-            conversion,
-            driver: PhantomData,
-            values: Vec::new(),
-            stacks: Vec::new(),
-            computations: Vec::new(),
-        }
+        Self { conversion, values: Vec::new(), stacks: Vec::new(), computations: Vec::new() }
     }
 
     pub(super) fn run(mut self, root: high::CompuId) -> low::CompuId {
-        D::run(&mut self, Work::Computation(root, RenameEnvId(0)));
+        Explicit::run(&mut self, Work::Computation(root, RenameEnvId(0)));
         assert!(self.values.is_empty() && self.stacks.is_empty());
         let root = self.computation();
         assert!(self.computations.is_empty());
@@ -293,7 +285,7 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
     }
 
     fn pattern(&mut self, source: high::VPatId) -> PatternTranslation {
-        D::run(&mut pattern::PatternFolder { conversion: self.conversion }, source)
+        Explicit::run(&mut pattern::PatternFolder { conversion: self.conversion }, source)
     }
 
     fn captures(
@@ -1057,7 +1049,7 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
     }
 }
 
-impl<D: Driver> Folder for ConversionFolder<'_, '_, D> {
+impl Folder for ConversionFolder<'_, '_> {
     type Input = Work;
     type Frame = Work;
     type Output = ();
