@@ -106,6 +106,10 @@ A callback passed to a host operation needs an explicit callee contract before a
 The [related work](#cps-compilation) supports this distinction between local control flow and general closures.
 It does not replace native frame validation or the separate ownership analysis for destination storage.
 
+[Join-point optimization](join-point-optimization.md) owns the separate transformation
+of existing nonescaping procedure calls and shared return dispatches.
+It does not establish the host-callback or common-continuation conditions needed by the contification proposed here.
+
 Start by following one small destination encoder through lowering and execution.
 Inspect whether its local success and failure paths need callback closures,
 and measure executed closure allocations and retained frame storage separately from payload allocations and copies.

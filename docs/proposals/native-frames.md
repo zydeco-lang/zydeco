@@ -8,6 +8,8 @@ This proposal keeps the alternatives that remain to be compared and the decision
 The remaining work compares storage choices and integrates stronger lifetime or relocation mechanisms.
 [Escape analysis](escape-unboxing.md) owns individual value representation selection;
 [reachability regions](reachability-regions.typ) proposes support typing and explicit retirement.
+[Procedure environment sharing](procedure-environments.md) separately proposes using proven activation ownership
+to remove capture transport at second-class procedure calls; it does not select another frame storage scheme.
 The [runtime study](../evaluations/2026-09-08-cbpv-runtime/README.md) keeps dated evidence and measurement limits.
 No new default or source control restriction follows from these experiments.
 

@@ -1,0 +1,36 @@
+-- Run with two Boolean arguments (0 = false, 1 = true): `1 1`, `1 0`, or `0 ...`.
+-- An argument is read and checked only when its test runs. In particular,
+-- `0 invalid` and `0` reach M5 without evaluating the second test.
+param (/args; /string; /stdio; /process; builtin) : @(import("../../std/builtin.zy")) in
+begin
+  let (/Bool) = @(import("../../std/data/bool.zy")) in
+  let ! read_bool (index : Int) : Ret Bool =
+    do number <- ! args/at (Ret Int) index { ret -1 } {
+      fn text => ! string/parse_int (Ret Int) text { ret -1 } { fn number => ret number }
+    };
+    match number
+    | 0 => ret +False()
+    | _ =>
+      @[partial]
+      let 1 = number in
+      ret +True()
+    end
+  in
+  let ! f1 : Ret Bool = ! read_bool 0 in
+  let ! f2 : Ret Bool = ! read_bool 1 in
+  let ! f4 : OS = ! stdio/write_line "M4" { ! process/exit 0 } in
+  let ! f5 : OS = ! stdio/write_line "M5" { ! process/exit 1 } in
+  -- Manual case-of-case conversion of short-circuit.zy. Only the small dispatch
+  -- is copied; the two false paths call one shared f5. The compiler can localize
+  -- that thunk to the paper's p5, without allocating a closure package for it.
+  do z1 <- ! f1;
+  match z1
+  | +True() =>
+    do z <- ! f2;
+    match z
+    | +True() => ! f4
+    | +False() => ! f5
+    end
+  | +False() => ! f5
+  end
+end

@@ -13,6 +13,9 @@ as current behavior.
 
 | Proposal | Remaining work | Implemented starting point |
 | --- | --- | --- |
+| [Constructor-aware normalization](constructor-normalization.md) | Safe branch selection through aliases, trivial or unused payloads, and evaluated payload recovery | [Local reductions](../references/compiler.md#local-reductions) and [sharing](../references/compiler.md#sharing-and-discardability) |
+| [Join-point optimization](join-point-optimization.md) | Sharing-preserving case-of-case conversion, stack abstraction, and selective procedure expansion | [Second-class procedures](../references/compiler.md#second-class-procedures) and the short-circuit fixtures |
+| [Procedure environment sharing](procedure-environments.md) | Proven same-activation native entries without repeated capture transport | [Procedure labels](../references/compiler.md#correspondence-with-sps_l) and [native preparation](../references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission) |
 | [Foreign interfaces](c-ffi.md) | Code pointers, pointer results/exports, callbacks, and richer ABI shapes | [C imports and exports](../references/language.md#14-foreign-interfaces) |
 | [Zydeco ABI](zydeco-abi.md) | Richer unit interfaces, shared initialization, and host bindings including optional UniFFI integration | [Native units](../references/language.md#native-zydeco-units) and [unit artifacts](../references/compiler.md#native-unit-artifacts) |
 | [Escape and representation](escape-unboxing.md) | Contification, interprocedural constraints, frame cells, allocation reuse, and layout-directed calls | [Local policies](../references/compiler.md#policy-selection) and [source stored calls](../references/language.md#stored-call-interfaces) |
@@ -25,3 +28,12 @@ as current behavior.
 
 Historical measurements retained by proposals are evidence for their open comparisons, with their original limits.
 Their presence does not establish current performance or select a new default.
+
+## Short-circuit implementation order
+
+Start with constructor-aware normalization, then use it to simplify the dispatch exposed by join-point optimization.
+Together these should make the original short-circuit source produce the shared direct false target already achieved
+by its manually commuted control.
+Procedure environment sharing is a separate, later cost improvement for captured values;
+it is not a prerequisite for obtaining that control-flow shape.
+These are proposed implementation directions, not adopted changes to the current reference contracts or default plan.
