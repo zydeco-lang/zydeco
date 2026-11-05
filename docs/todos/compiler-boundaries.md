@@ -176,3 +176,45 @@ This difference is not reported.
   Accepted dependent payload annotations must keep working,
   so the [existential cases](../../lang/tests/cases/existential) establish intended uses.
   Any semantic change belongs in the package-introduction account, not in this item.
+
+## Unused non-query source lifecycle
+
+Observed at `e2dd8979` on 2026-11-05; unchanged at `c6c90588`.
+[C3 query and checker ownership](../references/compiler.md#query-and-checker-ownership)
+gives allocation-producing judgments producer queries with immutable outcomes
+and keeps the coarse source query as the single owner of the mutable checker pipeline.
+The checker also exposes a second source lifecycle:
+[driver.rs](../../lang/statics/src/check/driver.rs) defines `run_source` at line 76,
+`check_source` at line 124, and `check_source_outcome` at line 131.
+Those methods re-implement the orchestration
+that the [coarse source request](../../lang/statics/src/query/source.rs) performs at lines 152-190,
+including judgment execution, finalization, and static elaboration.
+The two entry points form a closed leaf: `check_source` calls `check_source_outcome`,
+which calls `run_source`, and no caller outside that trio exists in the tree.
+The methods remain public on `Tycker`, so external use cannot be ruled out from the tree alone.
+
+Repair: confirm whether an external consumer depends on the `Tycker` source methods,
+then remove the trio or absorb its orchestration into the coarse query.
+Preserve the rejected-analysis path: the query retains static facts after a judgment failure,
+while `run_source` returns early on that failure.
+
+- [ ] Confirm no external consumer depends on `Tycker::{run_source, check_source, check_source_outcome}`.
+- [ ] Remove the duplicate lifecycle or absorb it into the coarse query, keeping the rejected outcome
+  and one orchestration point.
+
+## Host-call arity above the SysV register limit
+
+Observed at `e2dd8979` on 2026-11-05; unchanged at `c6c90588`.
+[C14 foreign calls](../references/compiler.md#foreign-calls)
+and [C11 native emission](../references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission)
+govern host calls.
+The host-call loop in the [AMD64 emitter](../../lang/amd64/src/emit.rs) at `emit.rs:927-938` pops arguments
+into SysV registers for indices 1 through 6 and reaches `todo!()` at `emit.rs:936` for index 7 and above.
+The arity comes from the builtin role:
+[lower.rs:373-378](../../lang/assembly/src/lower.rs) records `arity: role.arity()`,
+and the [role table](../../lang/syntax/src/lib.rs) caps source arguments at five (`lib.rs:738`).
+The hidden spare box can occupy the sixth register, so the panic is unreachable today but unvalidated.
+
+Repair: reject an over-limit host role when the role or its extern is constructed,
+or pass overflowing arguments on the stack; keep a regression for either choice.
+A future role with six source arguments would also need a spare-box index beyond the register map.

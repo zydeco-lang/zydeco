@@ -9,6 +9,8 @@ Remove resolved entries once their repair and durable rationale have reached the
 - [Compiler boundaries](compiler-boundaries.md): product inference, computation-witness diagnostics,
   higher-order value-function inference, source-load error locations, monadic closure validation,
   partial-annotation scope during formatting, and package-introduction payload annotations.
+- [Tooling boundaries](tooling-boundaries.md): duplicate runtime digest and platform computation
+  in the CLI native build path, and installed-binary standard-library resolution through the build checkout.
 
 ## Work that needs a new baseline
 
