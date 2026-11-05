@@ -7,21 +7,19 @@
 
 | Fact | Value |
 | --- | --- |
-| Revision | `e2dd8979` (`incr: reject non-amd64 native builds before compiling and document amd64 compilation`), 2026-10-30 |
-| Working tree | Dirty: three new proposals, two modified proposals, untracked short-circuit demo/test sources |
+| Revision | Code snapshot documented: `e2dd8979` (`incr: reject non-amd64 native builds before compiling and document amd64 compilation`), 2026-10-30 |
+| Working tree | Clean. The short-circuit test/demo and proposal work that was uncommitted during writing landed in `6b0aafcd` |
 | Host | arm64 macOS, Rust 1.98.1, Node.js 24.15 |
 | CLI | Installed `zydeco` on `PATH` is stale (fails on current `lib/std/builtin.zy`); use `cargo run --quiet --bin zydeco --` or `target/debug/zydeco` |
-| Manual home | `docs/logs/re-onboarding/`, temporary scratch under [AGENTS.md](../../../AGENTS.md); not canonical, not committed |
+| Manual home | `docs/logs/re-onboarding/`, temporary scratch under [AGENTS.md](../../../AGENTS.md); committed at `c6c90588`, still not canonical |
 
-The repository is a call-by-push-value (CBPV) language prototype: a source language with
-type checking and static elimination, a reference interpreter, a native AMD64 compiler,
+The repository is a call-by-push-value (CBPV) language prototype: a source language
+with type checking and static elimination, a reference interpreter, a native AMD64 compiler,
 a structured WebAssembly backend, a standard library, and editor/REPL tooling.
-The project's yardstick is two papers: the OOPSLA relative-monad paper and the
-stack-passing-style (SPS) paper. The
-[cleanup audit](../../evaluations/2026-10-21-cleanup-audit/README.md#yardstick) states the resulting
-obligations precisely; the [size analysis](../../evaluations/2026-10-25-size-analysis/README.md#yardstick)
-applies them to every subsystem. Keeping this yardstick in view is the difference between
-"large" and "redundant" when judging code.
+The project's yardstick is two papers: the OOPSLA relative-monad paper and the stack-passing-style (SPS) paper.
+The [artifact boundary memo](../../proposals/artifact-boundary.md#yardstick) distills the resulting obligations
+precisely; the [size analysis](../../proposals/artifact-boundary.md#yardstick) applies them to every subsystem.
+Keeping this yardstick in view is the difference between "large" and "redundant" when judging code.
 
 ## Three Coordinate Systems
 
@@ -38,9 +36,9 @@ The bridges are explicit:
 - [Rule Ownership](../../references/README.md#rule-ownership) maps each source rule to its implementation account.
 - [C1 Architecture](../../references/compiler.md#c1-architecture-and-a-programs-path-through-the-compiler)
   maps each phase to the `Program` product it publishes and to its consumer.
-- [DESIGN.md](../../../DESIGN.md#implementation-architecture) maps responsibilities to crates but
-  restates some reference material; the [reference-drift todo](../../todos/reference-drift.md)
-  tracks that duplication.
+- [DESIGN.md](../../../DESIGN.md#implementation-architecture) maps responsibilities to crates
+  but restates some reference material; the [reference-drift todo](../../todos/reference-drift.md) tracks
+  that duplication.
 
 ## A Program's Path
 
@@ -63,8 +61,8 @@ flowchart TD
     Native --> AMD64["AMD64 emission and runtime linking<br/>amd64 + runtime + cli/native.rs"]
 ```
 
-Each arrow crosses a typed product boundary, not just a function call. Use these products as
-signposts when reading code:
+Each arrow crosses a typed product boundary, not just a function call.
+Use these products as signposts when reading code:
 
 | Product | Establishing entry point | Consumer | C chapter |
 | --- | --- | --- | --- |
@@ -78,15 +76,16 @@ signposts when reading code:
 | `AssemblyProgram` | `lang/assembly/src/pipeline.rs` | ZASM rendering, frame validation | [C10](../../references/compiler.md#c10-zasm-stack-analysis-and-local-representation-choices) |
 | `NativeProgram` | `LoweringPipeline::with_native_frames` | AMD64 emitter and linker | [C11](../../references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission) |
 
-Nine syntax families appear in the pipeline: textual, bitter, scoped, statics, dynamics,
-high SPS, SPSLow, ZASM, and AMD64. Most carry their own identifier, arena, printer, span, and
-traversal modules; the [size analysis](../../evaluations/2026-10-25-size-analysis/README.md#representation-multiplication)
-counts that support code, and it is the largest single structural cost in the repository.
+Nine syntax families appear in the pipeline: textual, bitter, scoped, statics,
+dynamics, high SPS, SPSLow, ZASM, and AMD64.
+Most carry their own identifier, arena, printer, span, and traversal modules;
+the [size analysis](../../proposals/artifact-boundary.md#representation-multiplication) counts that support code,
+and it is the largest single structural cost in the repository.
 
 ## Crate Map
 
-The workspace has 14 crates under `lang/` plus `cli`, `tui`, `editor/cajun`, `xtask`, and the
-non-workspace `runtime/`. Dependencies flow down the table.
+The workspace has 14 crates under `lang/` plus `cli`, `tui`, `editor/cajun`, `xtask`, and the non-workspace `runtime/`.
+Dependencies flow down the table.
 
 | Crate | Owns | Depends on (workspace) | Reference |
 | --- | --- | --- | --- |
@@ -110,39 +109,49 @@ non-workspace `runtime/`. Dependencies flow down the table.
 | `xtask` | Resumable test runner and repository tasks | — | [CONTRIBUTING](../../../CONTRIBUTING.md#run-tests) |
 | `runtime/` | Native runtime sources: launcher, allocation, collection, stubs; built per executable | (non-workspace; consumes `zydeco-machine`) | [C12](../../references/compiler.md#c12-shared-native-model-allocation-and-collection) |
 
-`lang/frontend/` exists on disk as an empty directory; it is not a workspace crate. Do not mistake
-it for a phase.
+`lang/frontend/` exists on disk as an empty directory; it is not a workspace crate.
+Do not mistake it for a phase.
 
 ## Where the Weight Is
 
-The dated evaluations measured older revisions. The same
-[size-analysis script](../../evaluations/2026-10-25-size-analysis/measure.py) run on a clean
-`git archive` of `e2dd8979` prints this crate table (Rust lines; the script then fails in its
-support-module section at this revision, so only the crate table is reproduced here):
+The retired studies measured older revisions.
+The table below applies their line accounting to a clean `git archive` of `e2dd8979`; the method
+and its limits are recorded in [Where the weight is](../../proposals/artifact-boundary.md#where-the-weight-is).
+The study scripts themselves left the tree with their retirement.
 
-| Crate | Production | Test | | Crate | Production | Test |
-| --- | ---: | ---: | --- | --- | ---: | ---: |
-| `statics` | 26,327 | 3,320 | | `session` | 4,498 | 3,921 |
-| `surface` | 15,122 | 8,376 | | `cli` | 3,691 | 6,283 |
-| `stackir` | 12,786 | 6,304 | | `tui` | 1,140 | 411 |
-| `assembly` | 2,789 | 1,555 | | `cajun` | 4,124 | 3,922 |
-| `dynamics` | 2,778 | 603 | | `xtask` | 1,898 | 463 |
-| `syntax` | 2,930 | 626 | | `runtime` | 1,737 | 447 |
-| `amd64` | 2,173 | 0 | | `tests` | 0 | 7,633 |
-| `utils` | 2,687 | 1,031 | | `wasm-sps` | 1,221 | 115 |
-| `machine` | 1,019 | 280 | | `wasm-common` | 874 | 0 |
-| `machine` | 1,019 | 280 | | `derive` | 297 | 171 |
+| Crate | Production | Test |
+| --- | ---: | ---: |
+| `statics` | 26,327 | 3,320 |
+| `surface` | 15,122 | 8,376 |
+| `stackir` | 12,786 | 6,304 |
+| `session` | 4,498 | 3,921 |
+| `cli` | 3,691 | 6,283 |
+| `cajun` | 4,124 | 3,922 |
+| `syntax` | 2,930 | 626 |
+| `assembly` | 2,789 | 1,555 |
+| `dynamics` | 2,778 | 603 |
+| `utils` | 2,687 | 1,031 |
+| `amd64` | 2,173 | 0 |
+| `xtask` | 1,898 | 463 |
+| `runtime` | 1,737 | 447 |
+| `wasm-sps` | 1,221 | 115 |
+| `tui` | 1,140 | 411 |
+| `machine` | 1,019 | 280 |
+| `wasm-common` | 874 | 0 |
+| `derive` | 297 | 171 |
+| `tests` | 0 | 7,633 |
 
-Totals: 88,091 production, 45,461 test, 133,552 Rust lines. Production code lines excluding blanks
-and comments: 76,775. The two dated evaluations agree with this scale but not every number:
-the [cleanup audit](../../evaluations/2026-10-21-cleanup-audit/README.md#where-the-weight-is) measured
-123,426 Rust lines at `7e5ee4c1`, and the
-[size analysis](../../evaluations/2026-10-25-size-analysis/README.md#where-the-weight-is) measured
-93,400 production plus 45,691 test at `6aae43d0`. Treat all figures as dated snapshots, not invariants.
+Totals: 88,091 production, 45,461 test, 133,552 Rust lines.
+Production code lines excluding blanks and comments: 76,775.
+The two retired studies agree with this scale but not every number:
+the retired cleanup audit measured 123,426 Rust lines at `7e5ee4c1`,
+and the retired size analysis measured 93,400 production plus 45,691 test at `6aae43d0`.
+Treat all figures as dated snapshots, not invariants.
 
 Outside Rust: 16,326 tracked Markdown lines and 31,647 tracked lines under `docs/evaluations/`
-(data, scripts, and reports). The size analysis measured 90,248 evaluation lines at `6aae43d0`;
-the difference is mostly removed measurement data.
+before the two retired studies left the tree (data, scripts, and reports).
+The retired size analysis measured 90,248 evaluation lines at `6aae43d0`;
+the difference is mostly measurement data removed by later cleanup.
 
 ## Documentation Map
 
@@ -154,7 +163,7 @@ the difference is mostly removed measurement data.
 | Project overview | [DESIGN.md](../../../DESIGN.md) | Orientation, repository map, current limitations |
 | Proposals | [proposals/README.md](../../proposals/README.md) | Concrete unfinished designs; not implemented contracts |
 | Ideas | [ideas/README.md](../../ideas/README.md) | Open research questions |
-| Evaluations | [evaluations/README.md](../../evaluations/README.md) | Dated measurements with reproduction scripts |
+| Evaluations | [evaluations/README.md](../../evaluations/README.md) | Dated measurements and their reproduction evidence; retired studies remain in version history |
 | Todos | [todos/README.md](../../todos/README.md) | Observed implementation/documentation drift |
 | Literate chapters | [docs/spell](../../spell) | Executable narrative from the toplevel language to CPS and call-by-need |
 | Style | [docs/style.md](../../style.md) | Naming and composition conventions for source code |
@@ -163,25 +172,25 @@ the difference is mostly removed measurement data.
 ## Navigation Conventions
 
 - **One home per rule.** A rule lives in the reference section that owns its semantic boundary.
-  When code and docs disagree, the disagreement belongs in [todos/](../../todos/README.md), not
-  in a second explanation.
-- **Product boundaries are the seams.** If you cannot name the input and output product, you are
-  probably looking at two phases at once.
+  When code and docs disagree, the disagreement belongs in [todos/](../../todos/README.md), not in a second explanation.
+- **Product boundaries are the seams.** If you cannot name the input and output product,
+  you are probably looking at two phases at once.
 - **Source, checked, residual.** "Source" means user syntax; "checked"/"typed" means the statics arena;
   "residual" means what survives static elimination for interpretation or lowering.
 - **High/low.** In `stackir`, *high* means lexical SPS and *low* means first-order SPSLow.
   "ZIR" in code and old prose usually refers to the Stack IR family.
 - **Runtime metadata vs meta annotations.** Runtime metadata is carried with a runtime value (lengths, vtables).
   Compiler `@[meta]` forms are meta annotations or compile-time metadata.
-- **Commands.** From the repository root, `cargo run --quiet --bin zydeco -- <args>`; once built,
-  `target/debug/zydeco <args>` is faster. The installed `zydeco` may be stale.
-- **Anchors.** GitHub-style anchors from headings are stable enough for links; `path:line` is a
-  snapshot at `e2dd8979` and drifts with edits.
+- **Commands.** From the repository root, `cargo run --quiet --bin zydeco -- <args>`;
+  once built, `target/debug/zydeco <args>` is faster.
+  The installed `zydeco` may be stale.
+- **Anchors.** GitHub-style anchors from headings are stable enough for links;
+  `path:line` is a snapshot at `e2dd8979` and drifts with edits.
 
 ## Current Working-Tree State
 
-`git status --short` at the time of writing shows uncommitted work that a re-learner should
-separate from settled design:
+`git status --short` is clean at publication.
+While this manual was written, the tree held work that a re-learner should still separate from settled design:
 
 - New proposals: `docs/proposals/constructor-normalization.md`, `join-point-optimization.md`,
   `procedure-environments.md`.
@@ -189,8 +198,10 @@ separate from settled design:
 - New tests and demos: `lang/tests/tests/short_circuit.rs`, `lib/tests/demos/short-circuit.zy`,
   `lib/tests/demos/short-circuit-commuted.zy`.
 
-Read these as work in progress. Settled, implemented design belongs in the references, and moving
-it there needs the owner's approval under [AGENTS.md](../../../AGENTS.md).
+Those changes landed in `6b0aafcd` (`test: cover runtime short-circuiting and propose compiler improvements`).
+Read the new proposals as work in progress.
+Settled, implemented design belongs in the references, and moving it there needs the owner's approval
+under [AGENTS.md](../../../AGENTS.md).
 
 ## Reading Route
 
@@ -199,6 +210,6 @@ it there needs the owner's approval under [AGENTS.md](../../../AGENTS.md).
    [stack IR](cards/03-stackir.md), [native backend](cards/04-native-backend.md),
    [execution backends](cards/05-execution.md), [tooling](cards/06-tooling.md).
 3. [03 — Glossary](03-glossary.md) as a lookup, not a read-through.
-4. [04 — Cleanup Lens](04-cleanup-lens.md) and the
-   [candidate inventory](appendix-cleanup-candidates.md) once the pipeline is familiar.
+4. [04 — Cleanup Lens](04-cleanup-lens.md)
+   and the [candidate inventory](appendix-cleanup-candidates.md) once the pipeline is familiar.
 5. [05 — Question Bank](05-question-bank.md) to test yourself before trusting the map.
