@@ -13,6 +13,8 @@ as current behavior.
 
 | Proposal | Remaining work | Implemented starting point |
 | --- | --- | --- |
+| [Artifact boundary and mainline admission](artifact-boundary.md) | Owner decision on the core workspace, extras destination, and admission rule, then the staged split itself | [C1 architecture](../references/compiler.md#c1-architecture-and-a-programs-path-through-the-compiler) and the [reference ownership map](../references/README.md#rule-ownership) |
+| [Checker query retirement](checker-query-retirement.md) | Re-measure the checker overhead, then remove the per-judgment producers and decide the derived-identifier registry separately | [Query ownership](../references/compiler.md#query-and-checker-ownership) and [inference and reuse](../references/compiler.md#inference-and-reuse) |
 | [Constructor-aware normalization](constructor-normalization.md) | Safe branch selection through aliases, trivial or unused payloads, and evaluated payload recovery | [Local reductions](../references/compiler.md#local-reductions) and [sharing](../references/compiler.md#sharing-and-discardability) |
 | [Join-point optimization](join-point-optimization.md) | Sharing-preserving case-of-case conversion, stack abstraction, and selective procedure expansion | [Second-class procedures](../references/compiler.md#second-class-procedures) and the short-circuit fixtures |
 | [Procedure environment sharing](procedure-environments.md) | Proven same-activation native entries without repeated capture transport | [Procedure labels](../references/compiler.md#correspondence-with-sps_l) and [native preparation](../references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission) |
