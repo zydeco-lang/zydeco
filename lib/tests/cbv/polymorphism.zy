@@ -1,0 +1,86 @@
+-- Polymorphism and type operators in a call-by-value region, run end to end.
+--
+-- Every observation below is a value the region computed through a type-level
+-- construct: a quantifier written inside the region, a type operator bound inside
+-- it, an operator passed as a type argument, a sealed parameterized type, and
+-- binders that take their kinds from what is expected.
+-- Each answer distinguishes the construct working from a plausible wrong reading.
+-- Each region binds the built-in types and the kind it names, as `apply.zy`
+-- explains.
+begin
+  param (/Thk; /Ret; /Int; /Unit; /OS; /int; /process) : @(import("../../std/builtin.zy")) that
+  def ! require (want : Int) (got : Int) (k : Thk OS) : OS =
+    ! int/eq OS want got k { ! process/exit 1 }
+  that
+
+  -- a quantifier written inside the region, and a type abstraction checked
+  -- against it, instantiated at a function type: the argument must be
+  -- translated before it is substituted, or the identity would not type
+  do a <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let id : forall (X : VType) . X -> X = fn (X : VType) => fn (x : X) => x that
+    let f = id (Int -> Int) (fn (n : Int) => 4) that
+    f 0
+  );
+  ! require 4 a {
+
+  -- a type operator bound inside the region and applied twice
+  do b <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Pair : VType -> VType = fn (X : VType) => X * X that
+    let p : Pair Int = (5, 6) that
+    let (m, n) = p that n
+  );
+  ! require 6 b {
+
+  -- an operator passed as a type argument; the host supplies the polymorphic
+  -- function, so the instantiation crosses the region's boundary, at a type the
+  -- region writes
+  do c <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Id : VType -> VType = fn (X : VType) => X that
+    param (ap : forall (F : VType -> VType) . F Int -> F Int) that
+    let g = ap Id that g 7
+  );
+  do c' <- ! c { fn F => ret { fn x => ret x } };
+  ! require 7 c' {
+
+  -- a sealed parameterized type, built and taken apart; `+None` would give 0
+  do d <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Unit : VType = @(intrinsic(unit)) that
+    def Opt (X : VType) : VType = data | +None : Unit | +Some : X end that
+    let o : Opt Int = +Some(8) that
+    match o | +None(_) => 0 | +Some(v) => v end
+  );
+  ! require 8 d {
+
+  -- an existential written inside the region, packed and opened; the payload
+  -- leaves only through the operation packed with it
+  do e <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let s = ((Int, 9, fn (v : Int) => v) : exists (X : VType) . X * (X -> Int)) that
+    let (X, v, k) = s that k v
+  );
+  ! require 9 e {
+
+  -- operators whose binders take their kinds from what is expected: one bound
+  -- under a declared kind, and one written at the head of an application
+  do f <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Pair : VType -> VType = fn X => X * X that
+    let p : ((fn X => Pair X) : VType -> VType) Int = (10, 11) that
+    let (m, n) = p that n
+  );
+  ! require 11 f {
+
+  -- a type abstraction whose binder takes its kind from a written quantifier
+  do g <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let id : forall (X : VType) . X -> X = fn X => fn (x : X) => x that
+    id Int 12
+  );
+  ! require 12 g {
+
+  ! process/exit 0 }}}}}}}
+end

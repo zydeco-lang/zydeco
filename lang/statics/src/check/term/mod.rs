@@ -1,7 +1,7 @@
 //! Term checking dispatch, expected-type preparation, and source fact recording.
 
 use super::*;
-use crate::check::binding::{Assign, FixPoint};
+use crate::check::binding::{Assign, BindingCycle, FixPoint};
 use crate::check::functions::{
     ComputationPiFormation, PackPiElimination, PackPiIntroduction, PackageSignature,
     PackageWitnessProjectionBuilder, ValuePiFormation, ValuePiInstantiation, ValuePiPatternSkolems,
@@ -22,6 +22,7 @@ mod abstraction;
 mod application;
 mod atomic;
 mod boundary;
+mod cbv;
 mod classifiers;
 mod computation;
 mod data;
@@ -203,6 +204,7 @@ impl TermChecker<'_> {
                 self.check_rec_group(tycker, term, switch, prepared_environment)?
             }
             | Tm::MoBlock(term) => self.check_mo_block(tycker, *term, switch)?,
+            | Tm::CbvBlock(term) => self.check_cbv_block(tycker, term, switch)?,
             | Tm::Data(term) => self.check_data(tycker, term, switch)?,
             | Tm::CoData(term) => self.check_co_data(tycker, term, switch)?,
             | Tm::Ctor(term) => self.check_ctor(tycker, term, switch)?,

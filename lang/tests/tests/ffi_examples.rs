@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 use zydeco_cli::CompileError;
 use zydeco_statics::TyckDiagnosticCode;
-use zydeco_tests::utils::{CaseError, SourceCase};
+use zydeco_tests::utils::{CaseError, SourceCase, SourceLiteral};
 
 struct ForeignExamples;
 
@@ -55,7 +55,7 @@ match memory/product UInt8 UInt32 memory/uint8 memory/uint32
   {body}
 end
 "#,
-            library = library.display(),
+            library = SourceLiteral::escape(&library),
         )
     }
 }
@@ -158,7 +158,7 @@ do foreign <- ! bytes/from_string "{literal}";
             "param (/VType; /CType; /Thk; /Ret; /OS; /UInt8; /UInt32; \
              /numeric; /process; builtin) : @(import(\"{}/std/builtin.zy\")) in \
              let exit = process/exit in {source}",
-            ForeignExamples::library().display()
+            SourceLiteral::escape(&ForeignExamples::library())
         ),
     )
     .unwrap();

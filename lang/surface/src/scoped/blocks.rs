@@ -158,6 +158,10 @@ impl<'a> BlockCandidateCollector<'a> {
                     .flatten()
                     .collect()
             }
+            | Term::CbvBlock(term) => {
+                let b::CbvBlock { body } = term;
+                [self.term(*body)].into_iter().flatten().collect()
+            }
             | Term::Ann(b::Ann { tm, ty }) => {
                 [self.term(*tm), self.term(*ty)].into_iter().flatten().collect()
             }

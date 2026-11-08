@@ -89,6 +89,8 @@ pub mod bitter {
     pub mod fmt;
     /// Span lookup for bitter IDs.
     mod span;
+    /// The call-by-value block: its printing and its construction.
+    pub mod cbv;
 }
 
 pub mod scoped {

@@ -10,6 +10,7 @@ system-xxhash = []
 zydeco-machine = { workspace = true }
 zydeco-session = { workspace = true }
 zydeco-statics = { workspace = true }
+zydeco-syntax = { workspace = true }
 zydeco-cli = { workspace = true }
 zydeco-stackir = { workspace = true }
 thiserror = { workspace = true }

@@ -1,0 +1,112 @@
+-- Call-by-value regions inside monadic blocks that declare recursive data types
+-- and recur over them, run end to end.
+--
+-- The block translates a declaration with the rest of its payload, so the
+-- recursion runs under the carrier. Under `State Int` the final state says which
+-- element was written last, so the walk is checked beside its counterfactual:
+-- the same two steps the other way round, which must flip it.
+begin
+  let (/Monad; /Algebra) = @(import("../../std/effect/monad.zy")) that
+  param (/VType; /CType; /Thk; /Ret; /Unit; /OS; /Int; /int; /process; builtin) : @(import(
+    "../../std/builtin.zy"
+  )) that
+  let (/State; /instance; /run_state) = builtin |> (@(import("../../std/effect/state.zy"))) in
+  let (_, state_instance) = instance Int in
+  begin
+    def ! require (want : Int) (got : Int) (k : Thk OS) : OS =
+      ! int/eq OS want got k { ! process/exit 1 }
+    that
+
+    -- writes each element and then recurs: the last element written is `2`
+    def ! forward =
+      @[monadic] begin
+        fn (put : Thk (Int -> Ret Unit)) =>
+          do walk <- @[cbv] (
+            let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+            let Unit : VType = @(intrinsic(unit)) that
+            def List : VType = data | +Nil : Unit | +Cons : Int * List end that
+            fn (write : Int -> Unit) =>
+              let fix go (l : List) : Unit =
+                match l
+                | +Nil _ => ()
+                | +Cons (x, rest) => let _ = write x in go rest
+                end
+              in
+              go (+Cons (1, +Cons (2, +Nil ())))
+          );
+          do _ <- ! walk put;
+          ret 0
+      end
+    that
+
+    -- the counterfactual: recurs and then writes, so `1` comes last
+    def ! backward =
+      @[monadic] begin
+        fn (put : Thk (Int -> Ret Unit)) =>
+          do walk <- @[cbv] (
+            let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+            let Unit : VType = @(intrinsic(unit)) that
+            def List : VType = data | +Nil : Unit | +Cons : Int * List end that
+            fn (write : Int -> Unit) =>
+              let fix go (l : List) : Unit =
+                match l
+                | +Nil _ => ()
+                | +Cons (x, rest) => let _ = go rest in write x
+                end
+              in
+              go (+Cons (1, +Cons (2, +Nil ())))
+          );
+          do _ <- ! walk put;
+          ret 0
+      end
+    that
+
+    -- two declarations that mention each other, walked the same way
+    def ! mutual =
+      @[monadic] begin
+        fn (put : Thk (Int -> Ret Unit)) =>
+          do walk <- @[cbv] (
+            let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+            let Unit : VType = @(intrinsic(unit)) that
+            def Label : VType = data | +Stop : Unit | +Label : Int * Link end that
+            def Link : VType = data | +Link : Label end that
+            fn (write : Int -> Unit) =>
+              let fix go (l : Label) : Unit =
+                match l
+                | +Stop _ => ()
+                | +Label (x, link) =>
+                  let _ = write x in
+                  let +Link next = link in
+                  go next
+                end
+              in
+              go (+Label (3, +Link (+Label (4, +Link (+Stop ())))))
+          );
+          do _ <- ! walk put;
+          ret 0
+      end
+    that
+
+    let ! final (program : Thk (Thk (Int -> State Int Unit) -> State Int Int)) (k : Thk (Int -> OS))
+    : OS =
+        ! run_state Int Int OS 0 { ! program { fn value => ! state_instance/state .put value } } {
+          fn s _ => ! k s
+        }
+    in
+    ! final { ! forward (State Int) state_instance/monad } {
+      fn s =>
+        ! require 2 s {
+          ! final { ! backward (State Int) state_instance/monad } {
+            fn s =>
+              ! require 1 s {
+                ! final { ! mutual (State Int) state_instance/monad } {
+                  fn s =>
+                    ! require 4 s {
+                      ! process/exit 0 }
+                }
+              }
+          }
+        }
+    }
+  end
+end

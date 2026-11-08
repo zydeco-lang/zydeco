@@ -7,12 +7,12 @@ use crate::check::pattern::{PatternAction, ValuePatternShape};
 pub struct Assign<Br, Be>(pub Br, pub Be);
 pub struct FixPoint<T>(pub T);
 
-struct BindingCycle;
+pub(super) struct BindingCycle;
 
 impl BindingCycle {
     /// Recognize value introductions before checking a recursive header whose
     /// annotations may themselves refer to not-yet-established group members.
-    fn has_value_body(tycker: &Tycker<'_>, mut term: su::TermId) -> bool {
+    pub(super) fn has_value_body(tycker: &Tycker<'_>, mut term: su::TermId) -> bool {
         loop {
             term = match &tycker.scoped.terms[&term] {
                 | su::Term::Ann(su::Ann { tm, .. })

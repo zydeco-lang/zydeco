@@ -121,6 +121,10 @@ impl Node<'_> {
                     child(basis.algebra.into());
                     child((*body).into());
                 }
+                | Term::CbvBlock(inner) => {
+                    let CbvBlock { body } = inner;
+                    child((*body).into());
+                }
                 | Term::Data(Data { arms }) => {
                     arms.iter().for_each(|DataArm { name: _, param }| child((*param).into()));
                 }

@@ -83,6 +83,7 @@ pub enum TyckError {
     PackageWitnessesUnavailable { package: ValueId },
     PackageWitnessArityMismatch { expected: usize, found: usize },
     EscapingExistential { witnesses: Vec<AbstId>, result: TypeId },
+    EscapingDeclaration { declarations: Vec<AbstId>, result: TypeId },
     InvalidBuiltinAttachment { role: BuiltinRole, expected: &'static str },
     InvalidBuiltinSignature(BuiltinSignatureError),
     ConflictingBuiltinRole { existing: BuiltinRole, found: BuiltinRole },
@@ -184,6 +185,8 @@ pub enum TyckDiagnosticCode {
     PackageWitnessArityMismatch,
     #[strum(serialize = "tyck.escaping-existential")]
     EscapingExistential,
+    #[strum(serialize = "tyck.escaping-declaration")]
+    EscapingDeclaration,
     #[strum(serialize = "tyck.invalid-builtin-attachment")]
     InvalidBuiltinAttachment,
     #[strum(serialize = "tyck.invalid-builtin-signature")]
@@ -267,6 +270,7 @@ impl From<&TyckError> for TyckDiagnosticCode {
             | TyckError::PackageWitnessesUnavailable { .. } => Self::PackageWitnessesUnavailable,
             | TyckError::PackageWitnessArityMismatch { .. } => Self::PackageWitnessArityMismatch,
             | TyckError::EscapingExistential { .. } => Self::EscapingExistential,
+            | TyckError::EscapingDeclaration { .. } => Self::EscapingDeclaration,
             | TyckError::InvalidBuiltinAttachment { .. } => Self::InvalidBuiltinAttachment,
             | TyckError::InvalidBuiltinSignature(_) => Self::InvalidBuiltinSignature,
             | TyckError::ConflictingBuiltinRole { .. } => Self::ConflictingBuiltinRole,
@@ -497,6 +501,10 @@ impl<'a> Tycker<'a> {
             }
             | TyckError::EscapingExistential { result, .. } => format!(
                 "Existential witness escapes through result type {}",
+                self.pretty_statics_nested(*result, "")
+            ),
+            | TyckError::EscapingDeclaration { result, .. } => format!(
+                "A type declared in a call-by-value block escapes through result type {}",
                 self.pretty_statics_nested(*result, "")
             ),
             | TyckError::InvalidBuiltinAttachment { role, expected } => {

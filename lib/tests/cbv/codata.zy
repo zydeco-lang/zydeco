@@ -1,0 +1,42 @@
+-- Call-by-value regions over codata, run end to end.
+--
+-- A codata type is negative, so its translation keeps the shift outside and
+-- every field becomes a suspended computation. That puts a by-name corner
+-- inside a call-by-value source language, and the last observation below is
+-- what witnesses it.
+--
+-- Each region binds the built-in types it names, as `apply.zy` explains, and
+-- writes the codata types it uses in its own syntax: a field is a source type,
+-- and the translation supplies the `Ret` and the `Thk`.
+begin
+  param (/Thk; /Ret; /Int; /Unit; /OS; /int; /process) : @(import("../../std/builtin.zy")) that
+  def ! require (want : Int) (got : Int) (k : Thk OS) : OS =
+    ! int/eq OS want got k { ! process/exit 1 }
+  that
+
+  do a <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Pair : VType = codata | .fst : Int | .snd : Int end that
+    let p : Pair = comatch | .fst => 3 | .snd => 4 end in p.fst);
+  ! require 3 a {
+  do b <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Pair : VType = codata | .fst : Int | .snd : Int end that
+    let p : Pair = comatch | .fst => 3 | .snd => 4 end in p.snd);
+  ! require 4 b {
+  -- a field taking an argument, written un-interleaved
+  do c <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Fn : VType = codata | .at : Int -> Int end that
+    let p : Fn = comatch | .at => fn (n : Int) => n end in (p.at) 7);
+  ! require 7 c {
+  -- the by-name corner: `.snd` diverges and is never observed, so it never runs
+  do d <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Pair : VType = codata | .fst : Int | .snd : Int end that
+    let fix diverge (x : Int) : Int = diverge x in
+    let p : Pair = comatch | .fst => 5 | .snd => diverge 1 end in
+    p.fst);
+  ! require 5 d {
+  ! process/exit 0 }}}}
+end

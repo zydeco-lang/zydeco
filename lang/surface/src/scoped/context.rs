@@ -331,6 +331,11 @@ impl ContextCollector {
                     + self.coctxs_term_local[&basis.algebra].to_owned();
                 self.coctxs_term_local.insert_new(term, co_body + co_basis);
             }
+            | Term::CbvBlock(inner) => {
+                let CbvBlock { body } = inner;
+                let co_body = self.coctxs_term_local[body].to_owned();
+                self.coctxs_term_local.insert_new(term, co_body);
+            }
             | Term::Data(inner) => {
                 let Data { arms } = inner;
                 let co_arms =

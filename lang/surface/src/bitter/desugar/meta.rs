@@ -2,8 +2,8 @@
 
 use super::*;
 use crate::metadata::{
-    BuiltinMeta, CorePrelude, FfiMeta, IntrinsicMeta, MetadataKind, MonadicMeta, PartialMeta,
-    PreludeMeta, TypeOfMeta,
+    BuiltinMeta, CbvMeta, CorePrelude, FfiMeta, IntrinsicMeta, MetadataKind, MonadicMeta,
+    PartialMeta, PreludeMeta, TypeOfMeta,
 };
 use zydeco_syntax::{BuiltinRole, SpecializeMeta};
 
@@ -12,6 +12,7 @@ enum MetaAction {
     Intrinsic(IntrinsicRole),
     TypeOf,
     Monadic,
+    Cbv,
     Prelude { view: b::VarName, source: t::MetaId },
     Partial { meta: t::Meta, binders: Vec<t::PatId> },
 }
@@ -92,6 +93,15 @@ impl MetaRules<'_> {
                 })?;
                 Ok(MetaAction::Monadic)
             }
+            | Some(MetadataKind::Cbv) => {
+                CbvMeta::from_arguments(meta.arguments())
+                    .map_err(|source| DesugarError::InvalidCbvMeta { term: annotation, source })?;
+                Ok(MetaAction::Cbv)
+            }
+            // Registered so that it is not an unrecognized annotation, which the
+            // host accepts and ignores: a body written for call-by-name would
+            // otherwise run as plain call-by-push-value without a word.
+            | Some(MetadataKind::Cbn) => Err(DesugarError::CbnNotImplemented(annotation)),
             | Some(
                 MetadataKind::Doc
                 | MetadataKind::Import
@@ -220,6 +230,10 @@ impl DesugarFolder<'_> {
             | MetaAction::Monadic => {
                 let body = self.term(payload)?;
                 Ok(self.builder.monadic(body, id.into()))
+            }
+            | MetaAction::Cbv => {
+                let body = self.term(payload)?;
+                Ok(self.builder.cbv(body, id.into()))
             }
             | MetaAction::Preserve(meta) => {
                 let payload = self.term(payload)?;

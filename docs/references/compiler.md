@@ -1228,7 +1228,7 @@ The outer wrapper is a carrier-parameterized type abstraction, a carrier-and-dic
 or the existing carrier-and-dictionary computation abstraction, respectively.
 Kinds are rejected before nominal preparation.
 It translates the retained checked payload rather than rechecking its source under unrelated expectations.
-[L11](language.md#11-relative-monads) specifies the source translation and basis;
+[L11](language.md#relative-monads) specifies the source translation and basis;
 generated code must satisfy the same finalization and residual representation boundaries as ordinary terms.
 The [closed translation boundary](language.md#closed-translation-boundary) requires explicit function
 and type parameters for external dependencies.

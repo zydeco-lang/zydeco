@@ -1,0 +1,111 @@
+-- A small program written entirely in call-by-value, run end to end: a list
+-- library, a queue behind an abstract type, and a breadth-first traversal of a
+-- rose tree that works with any implementation of that queue.
+--
+-- `foldl` and `reverse` are the ones in `lib/tests/oopsla/data.zydeco`, where
+-- each step is a `do` and each function a thunk. Here the evaluation order is
+-- the language's, and the translation writes those in.
+--
+-- Arithmetic is a host operation, so the region takes it as parameters.
+begin
+  param (/Thk; /Ret; /Int; /Unit; /OS; /int; /process) : @(import("../../std/builtin.zy")) that
+  def ! require (want : Int) (got : Int) (k : Thk OS) : OS =
+    ! int/eq OS want got k { ! process/exit 1 }
+  that
+
+  do program <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that
+    let Int : VType = @(intrinsic(int)) that
+    let Unit : VType = @(intrinsic(unit)) that
+    param (add : Int -> Int -> Int) that
+    param (mul : Int -> Int -> Int) that
+
+    def Option (A : VType) : VType = data | +None : Unit | +Some : A end that
+    def List (A : VType) : VType = data | +Nil : Unit | +Cons : A * List A end that
+    def Tree : VType = data | +Node : Int * List Tree end that
+
+    let fix foldl (A : VType) (R : VType) (xs : List A) (f : A -> R -> R) (r : R) : R =
+      match xs
+      | +Nil _ => r
+      | +Cons (x, rest) => foldl A R rest f (f x r)
+      end
+    in
+    let reverse = fn (A : VType) => fn (xs : List A) =>
+      foldl A (List A) xs (fn (x : A) => fn (acc : List A) => +Cons (x, acc)) (+Nil ())
+    in
+
+    -- what a queue is, for any element type, with its representation hidden
+    let Queue : VType =
+      exists (Q : VType -> VType) .
+        (#empty :: forall (A : VType) . Q A,
+         #push :: forall (A : VType) . A -> Q A -> Q A,
+         #pop :: forall (A : VType) . Q A -> Option (A * Q A))
+    in
+
+    -- first in, first out: a front list and a reversed back list
+    let twoLists : Queue =
+      (fn (A : VType) => List A * List A,
+       #empty = fn (A : VType) => (+Nil (), +Nil ()),
+       #push = fn (A : VType) => fn (x : A) => fn ((front, back) : List A * List A) =>
+         (front, +Cons (x, back)),
+       #pop = fn (A : VType) => fn ((front, back) : List A * List A) =>
+         match front
+         | +Cons (x, rest) => +Some (x, (rest, back))
+         | +Nil _ =>
+           match reverse A back
+           | +Nil _ => +None ()
+           | +Cons (x, rest) => +Some (x, (rest, +Nil ()))
+           end
+         end)
+    in
+
+    -- last in, first out, behind the same type
+    let stack : Queue =
+      (fn (A : VType) => List A,
+       #empty = fn (A : VType) => +Nil (),
+       #push = fn (A : VType) => fn (x : A) => fn (q : List A) => +Cons (x, q),
+       #pop = fn (A : VType) => fn (q : List A) =>
+         match q
+         | +Nil _ => +None ()
+         | +Cons (x, rest) => +Some (x, rest)
+         end)
+    in
+
+    -- the client sees only the operations, so it works with either
+    let traverse = fn (queue : Queue) => fn (root : Tree) =>
+      let (Q, = empty, = push, = pop) = queue in
+      let fix go (q : Q Tree) (seen : List Int) : List Int =
+        match pop Tree q
+        | +None _ => reverse Int seen
+        | +Some (t, rest) =>
+          let +Node (label, children) = t in
+          go (foldl Tree (Q Tree) children (push Tree) rest) (+Cons (label, seen))
+        end
+      in
+      go (push Tree root (empty Tree)) (+Nil ())
+    in
+
+    let digits = fn (xs : List Int) =>
+      foldl Int Int xs (fn (x : Int) => fn (acc : Int) => add (mul acc 10) x) 0
+    in
+
+    --      1
+    --     / \
+    --    2   3
+    --    |   |
+    --    4   5
+    let leaf = fn (n : Int) => (+Node (n, +Nil ()) : Tree) in
+    let tree : Tree =
+      +Node (1, +Cons (+Node (2, +Cons (leaf 4, +Nil ())), +Cons (+Node (3, +Cons (leaf 5, +Nil ())), +Nil ())))
+    in
+    (digits (traverse twoLists tree), digits (traverse stack tree)));
+
+  -- the host adapts its operations to the translation of `Int -> Int -> Int`
+  do program <- ! program { fn a => ret { fn b => ! int/add a b } };
+  do result <- ! program { fn a => ret { fn b => ! int/mul a b } };
+  let (fifo, lifo) = result in
+  ! require 12345 fifo {
+  ! require 13524 lifo {
+
+  ! process/exit 0 }}
+end

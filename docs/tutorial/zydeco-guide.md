@@ -502,7 +502,7 @@ Here `Top` is empty codata. The extra `Thk Top` supplies the structure needed fo
 The effect library's `raise` and `catch` adapters accept that structure argument
 after their packed effect input, introduced below.
 More general polymorphic translation is described
-in [the relative-monad reference](../references/language.md#11-relative-monads).
+in [the relative-monad reference](../references/language.md#relative-monads).
 
 ## 9. Effect modules
 
