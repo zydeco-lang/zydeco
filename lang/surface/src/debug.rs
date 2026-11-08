@@ -148,6 +148,7 @@ impl<'a, P: DebugArena> Pretty<'a, Formatter<'a, P>> for TermId {
             | Term::Block(t) => t.pretty(f),
             | Term::RecGroup(t) => t.pretty(f),
             | Term::MoBlock(t) => t.pretty(f),
+            | Term::CbvBlock(t) => t.pretty(f),
             | Term::Data(t) => t.pretty(f),
             | Term::CoData(t) => t.pretty(f),
             | Term::Ctor(t) => t.pretty(f),

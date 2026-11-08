@@ -200,6 +200,11 @@ impl<R> Term<R> {
                 MoBlock { body: body?, basis: MonadicBasis { monad: monad?, algebra: algebra? } }
                     .into()
             }
+            | Self::CbvBlock(term) => {
+                let CbvBlock { body } = term;
+                let body = folder.fold_term(body);
+                CbvBlock { body: body? }.into()
+            }
             | Self::Data(Data { arms }) => Data {
                 arms: folder.fold_items(arms, |folder, DataArm { name, param }| {
                     Ok(DataArm { name, param: folder.fold_term(param)? })

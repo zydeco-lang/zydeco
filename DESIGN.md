@@ -518,7 +518,7 @@ The module exports a value function from Builtin to the packed value containing 
 so importing and opening it requires neither a thunk nor a returned computation.
 Zydeco also implements *monadic blocks*, a generalized do-notation selected by the `@[monadic]` meta annotation.
 The implemented payload is a computation;
-the [language reference](docs/references/language.md#11-relative-monads) owns its closed-term boundary,
+the [language reference](docs/references/language.md#closed-translation-boundary) owns its closed-term boundary,
 parameter-passing interface, and deferred root sorts.
 During type checking, its payload undergoes the algebra translation implemented
 in `lang/statics/src/elaborate/monadic/mod.rs` and invoked from `lang/statics/src/check/monadic.rs`.

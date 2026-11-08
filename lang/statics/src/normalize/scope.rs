@@ -49,6 +49,18 @@ impl TypeId {
         });
         Ok(())
     }
+
+    /// Whether this type mentions `declaration`, a seal or another abstract
+    /// type that is not an existential witness.
+    ///
+    /// The type's support is read without unfolding a seal, so a declaration
+    /// mentioned only inside another declaration's definition does not count;
+    /// the other declaration does.
+    pub(crate) fn mentions_declaration(
+        &self, tycker: &mut Tycker<'_>, declaration: AbstId,
+    ) -> Result<bool> {
+        Ok(TypeSupport::of(*self, tycker)?.declarations.contains(&declaration))
+    }
 }
 
 #[derive(Default)]
@@ -59,6 +71,10 @@ pub(super) struct TypeSupport {
     /// A shared hole may occur under different package binders, so the
     /// admissible local scope is the intersection of those occurrences.
     pub(super) fills: HashMap<FillId, SkolemScope>,
+    /// Abstract types mentioned and bound nowhere inside: seals and opaque
+    /// declarations, which unlike existential witnesses have no scope the
+    /// host enforces.
+    pub(super) declarations: HashSet<AbstId>,
 }
 
 impl TypeSupport {
@@ -173,13 +189,14 @@ impl TypeSupportCollector {
                         }
                     }
                 }
-                | Type::Abst(abst) => {
-                    if tycker.statics.existential_skolems.get(&abst).is_some()
-                        && !self.bound.contains(&abst)
-                    {
+                | Type::Abst(abst) if !self.bound.contains(&abst) => {
+                    if tycker.statics.existential_skolems.get(&abst).is_some() {
                         self.support.skolems.insert(abst);
+                    } else {
+                        self.support.declarations.insert(abst);
                     }
                 }
+                | Type::Abst(_) => {}
                 | Type::Abs(TypeAbstraction { binder, body }) => {
                     let newly_bound = self.bound.insert(binder.witness);
                     let result = self.visit(body, tycker);

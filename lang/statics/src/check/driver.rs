@@ -29,6 +29,7 @@ impl<'a> Tycker<'a> {
             intrinsics,
             tasks: rpds::VectorSync::new_sync(),
             check_counts: ArenaAssoc::default(),
+            settled_pattern_annotations: ArenaAssoc::default(),
             checked_terms: CheckedTermRepository::default(),
             metas: rpds::VectorSync::new_sync(),
             field_materializations: DeferredEnvMaterializationCache::default(),

@@ -15,7 +15,8 @@ pub mod utils {
         RepresentationStrategy, SpsPlan, SpsScheme, SpsSelection, TestInteraction,
     };
     use zydeco_session::{AnalysisError, DesugarError};
-    use zydeco_statics::{TyckDiagnosticCode, syntax::TermAnnId};
+    use zydeco_statics::{TyckDiagnosticCode, TyckObservation, syntax::TermAnnId};
+    use zydeco_syntax::Ugly;
 
     #[derive(Debug, Error)]
     pub enum CaseError {
@@ -181,6 +182,63 @@ pub mod utils {
         Monadic,
     }
 
+    /// A path written into zydeco source as a string literal.
+    ///
+    /// A namespace rather than a value: there is one operation and it has no
+    /// state.
+    pub struct SourceLiteral;
+
+    impl SourceLiteral {
+        /// Escape a path so it can be interpolated into a zydeco string
+        /// literal.
+        ///
+        /// A prelude names library files inside `@(import("…"))`, and the
+        /// lexer reads a backslash there as the start of an escape sequence.
+        /// An absolute Windows path therefore failed to lex before any case
+        /// ran, and **every** test whose prelude names a path this way failed
+        /// on such a host — which is how a case asserting the opposite of its
+        /// neighbour survived two commits unnoticed.
+        ///
+        /// This is not a Windows workaround: a POSIX path may legally contain
+        /// a backslash or a double quote, so an unescaped path is wrong
+        /// everywhere and merely harmless on most hosts.
+        ///
+        /// Backslashes are escaped before quotes, so that the backslash this
+        /// introduces in front of a quote is not doubled in turn.
+        pub fn escape(path: &std::path::Path) -> String {
+            path.display().to_string().replace('\\', "\\\\").replace('"', "\\\"")
+        }
+    }
+
+    /// Call-by-value regions in case sources.
+    ///
+    /// A namespace rather than a value, as [`SourceLiteral`] is.
+    pub struct CbvRegion;
+
+    impl CbvRegion {
+        /// The source built-ins, bound inside a region.
+        ///
+        /// A region is closed over types and kinds as it is over terms, so
+        /// `Int` and `VType` named outside it are not the region's to name: an
+        /// outside type enters by type abstraction, and a built-in one is
+        /// written with its intrinsic. A case that opens its regions with these
+        /// bindings reads as though the built-ins were the source language's
+        /// own names.
+        pub const BUILTINS: &str = "let VType = @(intrinsic(vtype)) that
+  let CType = @(intrinsic(ctype)) that
+  let Int : VType = @(intrinsic(int)) that
+  let Int64 : VType = @(intrinsic(i64)) that
+  let Unit : VType = @(intrinsic(unit)) that
+  let String : VType = @(intrinsic(string)) that
+  ";
+
+        /// `source` with every region in it, written `@[cbv] (…)`, opening
+        /// with [`Self::BUILTINS`].
+        pub fn closed(source: &str) -> String {
+            source.replace("@[cbv] (", &format!("@[cbv] ({}", Self::BUILTINS))
+        }
+    }
+
     /// A temporary root-source fixture with explicit core and host dependencies.
     pub struct SourceCase;
 
@@ -216,6 +274,130 @@ pub mod utils {
                     .checked_program(&analysis)
                     .expect("successful analysis must be checked");
                 Ok(((*checked.statics).clone(), checked.root))
+            })
+        }
+
+        /// What each `@[debug]` annotation in a checked source observed, in order:
+        /// the observed term and its classifier, on one line each.
+        pub fn debug_observations(source: &str) -> Result<Vec<String>, CaseError> {
+            Self::with_source(SourceCasePrelude::Core, source, |path| {
+                let compiler = CommandCompiler::default();
+                let analysis = compiler.analyze(path).map_err(CaseError::Compile)?;
+                let checked = compiler
+                    .checked_program(&analysis)
+                    .expect("successful analysis must be checked");
+                let formatter =
+                    zydeco_statics::fmt::Formatter::new(analysis.scoped(), &checked.statics);
+                Ok(analysis
+                    .observations()
+                    .iter()
+                    .filter_map(|observation| match observation {
+                        | TyckObservation::Debug { result: TermAnnId::Compu(term, ty), .. } => {
+                            Some(format!("{} : {}", term.ugly(&formatter), ty.ugly(&formatter)))
+                        }
+                        | TyckObservation::Debug { result: TermAnnId::Value(term, ty), .. } => {
+                            Some(format!("{} : {}", term.ugly(&formatter), ty.ugly(&formatter)))
+                        }
+                        | _ => None,
+                    })
+                    .collect())
+            })
+        }
+
+        /// The checked body a source records for each type definition named
+        /// `name`, as the editor's definition query reads it.
+        pub fn type_definition_bodies(source: &str, name: &str) -> Result<Vec<String>, CaseError> {
+            Self::with_source(SourceCasePrelude::Core, source, |path| {
+                let compiler = CommandCompiler::default();
+                let analysis = compiler.analyze(path).map_err(CaseError::Compile)?;
+                let checked = compiler
+                    .checked_program(&analysis)
+                    .expect("successful analysis must be checked");
+                let formatter =
+                    zydeco_statics::fmt::Formatter::new(analysis.scoped(), &checked.statics);
+                Ok(analysis
+                    .statics()
+                    .type_definitions
+                    .iter()
+                    .filter(|(def, _)| analysis.scoped().defs[*def].0 == name)
+                    .map(|(_, body)| body.ugly(&formatter))
+                    .collect())
+            })
+        }
+
+        /// The source terms whose node is printed with one of the `shapes`
+        /// prefixes, such as `"Pi("`, and which carry no recorded annotation:
+        /// the source facts an editor reads, missing.
+        pub fn unannotated_terms(source: &str, shapes: &[&str]) -> Result<Vec<String>, CaseError> {
+            Self::with_source(SourceCasePrelude::Core, source, |path| {
+                let analysis =
+                    CommandCompiler::default().analyze(path).map_err(CaseError::Compile)?;
+                Ok(analysis
+                    .scoped()
+                    .terms
+                    .iter()
+                    .map(|(id, term)| (id, format!("{term:?}")))
+                    .filter(|(id, shape)| {
+                        shapes.iter().any(|prefix| shape.starts_with(prefix))
+                            && analysis.statics().term_annotation(*id).is_none()
+                    })
+                    .map(|(_, shape)| shape)
+                    .collect())
+            })
+        }
+
+        /// The annotated source patterns that no checked pattern records as its
+        /// source, and the number of definitions named `name` with no recorded
+        /// annotation: the pattern facts an editor reads, missing.
+        pub fn unrecorded_pattern_facts(
+            source: &str, name: &str,
+        ) -> Result<(Vec<String>, usize), CaseError> {
+            Self::with_source(SourceCasePrelude::Core, source, |path| {
+                let compiler = CommandCompiler::default();
+                let analysis = compiler.analyze(path).map_err(CaseError::Compile)?;
+                let checked = compiler
+                    .checked_program(&analysis)
+                    .expect("successful analysis must be checked");
+                let statics = &checked.statics;
+                let recorded = statics
+                    .tpats
+                    .iter()
+                    .map(|(typed, _)| statics.pats.source(&(*typed).into()))
+                    .chain(
+                        statics
+                            .kpats
+                            .iter()
+                            .map(|(typed, _)| statics.pats.source(&(*typed).into())),
+                    )
+                    .chain(
+                        statics
+                            .vpats
+                            .iter()
+                            .map(|(typed, _)| statics.pats.source(&(*typed).into())),
+                    )
+                    .flatten()
+                    .collect::<std::collections::HashSet<_>>();
+                let patterns = analysis
+                    .scoped()
+                    .pats
+                    .iter()
+                    .map(|(id, pattern)| (id, format!("{pattern:?}")))
+                    .filter(|(id, shape)| shape.starts_with("Ann(") && !recorded.contains(id))
+                    .map(|(_, shape)| shape)
+                    .collect();
+                let annotated = analysis
+                    .statics()
+                    .annotations_var
+                    .iter()
+                    .map(|(def, _)| *def)
+                    .collect::<std::collections::HashSet<_>>();
+                let definitions = analysis
+                    .scoped()
+                    .defs
+                    .iter()
+                    .filter(|(def, var)| var.0 == name && !annotated.contains(*def))
+                    .count();
+                Ok((patterns, definitions))
             })
         }
 
@@ -293,6 +475,34 @@ pub mod utils {
             );
         }
 
+        /// [`Self::assert_rejected`], with a diagnostic of the expected code
+        /// whose primary span covers exactly `site` in the source: the
+        /// rejection points at what it refuses.
+        pub fn assert_rejected_at(
+            result: Result<(), CaseError>, expected: TyckDiagnosticCode, site: &str,
+        ) {
+            let Err(CaseError::Compile(CompileError::Rejected(analysis))) = &result else {
+                panic!("expected a rejection with `{expected}`, found: {result:?}")
+            };
+            let source_map = analysis.spans().source_map().unwrap();
+            let sites = analysis
+                .outcome()
+                .diagnostics()
+                .unwrap()
+                .iter()
+                .filter(|diagnostic| diagnostic.code == expected)
+                .filter_map(|diagnostic| diagnostic.primary.as_ref())
+                .map(|primary| {
+                    let (file, range) = source_map.range(primary.span).unwrap();
+                    file.source()[range].to_owned()
+                })
+                .collect::<Vec<_>>();
+            assert!(
+                sites.iter().any(|found| found == site),
+                "expected `{expected}` at `{site}`, found it at: {sites:?}"
+            );
+        }
+
         /// Assert a case rejected during desugaring, before checking runs.
         ///
         /// The predicate identifies the expected desugaring error variant;
@@ -337,7 +547,10 @@ pub mod utils {
                 | SourceCasePrelude::Core => String::new(),
                 | SourceCasePrelude::Monadic => {
                     let basis = library.join("effect/monad.zy").canonicalize().unwrap();
-                    format!(concat!("let monadic_basis = @(import(\"{}\")) in\n",), basis.display())
+                    format!(
+                        concat!("let monadic_basis = @(import(\"{}\")) in\n",),
+                        SourceLiteral::escape(&basis)
+                    )
                 }
             };
             let open_monadic = match prelude {
@@ -367,7 +580,7 @@ let Top : CType = codata end in
 let triv : Thk Top = {{ comatch end }} in
 {source}
 "#,
-                builtin = builtin.display(),
+                builtin = SourceLiteral::escape(&builtin),
             )
         }
     }

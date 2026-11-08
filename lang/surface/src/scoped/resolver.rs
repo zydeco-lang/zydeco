@@ -327,6 +327,11 @@ impl<O: ResolutionObserver> ResolveFolder<'_, O> {
                 Residual(term.tail).into()
             }
             | Term::Block(Block(body)) => self.resolve_block(id, body, env)?,
+            | Term::CbvBlock(term) => {
+                let body = self.term(term.body, env);
+                body?;
+                term.into()
+            }
             | Term::MoBlock(term) => {
                 let monad = self.term(term.basis.monad, env.clone());
                 let algebra = self.term(term.basis.algebra, env.clone());

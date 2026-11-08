@@ -141,6 +141,16 @@ pub struct MoBlock {
     pub basis: MonadicBasis,
 }
 
+/// Call-by-value block body kept as a single node until type checking.
+///
+/// Unlike [`MoBlock`], the target of this translation is the CBPV core itself,
+/// so there is no basis to carry: `Thk` and `Ret` are the only structure the
+/// elaboration needs.
+#[derive(Clone, Debug)]
+pub struct CbvBlock {
+    pub body: TermId,
+}
+
 /// A term whose nested `that` forms contribute to one block context.
 #[derive(Clone, Debug)]
 pub struct Block(pub TermId);
@@ -257,6 +267,7 @@ pub enum Term<Ref> {
     Block(Block),
     RecGroup(RecGroup),
     MoBlock(Box<MoBlock>),
+    CbvBlock(CbvBlock),
     Data(Data),
     CoData(CoData),
     Ctor(Ctor<CtorName, TermId>),
