@@ -27,6 +27,7 @@
           pkgs.cargo-nextest
           pkgs.rust-analyzer
           pkgs.clippy
+          pkgs.prek
           pkgs.pkg-config pkgs.openssl
         ];
         RUST_BACKTRACE = "1";

@@ -144,7 +144,8 @@ Cargo writes to `target/doc/`; the chapter build uses `zsh` and `jq` and writes 
 
 Review the diff, summarize the change and validation performed,
 and follow the [commit convention](AGENTS.md#commit-messages).
-Enable optional formatting and check hooks with `pre-commit install`.
+The optional formatting and check hooks live in [prek.toml](prek.toml) and run through [prek](https://prek.j178.dev).
+Enable them with `prek install`; run them on demand with `prek run --all-files`.
 
 For releases, update the workspace version and lockfile, commit, and push a matching `v*` tag.
 The [release workflow](.github/workflows/release.yml) publishes the release and generated notes.
