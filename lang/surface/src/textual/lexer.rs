@@ -87,7 +87,7 @@ pub enum Tok<'input> {
     #[regex(r"[\+-]?[0-9]+")]
     IntLit(&'input str),
     #[regex(r"[\+-]?[0-9]+(?:\.[0-9]+)?(?:[eE][\+-]?[0-9]+)?[A-Za-z_][A-Za-z0-9_]*", priority = 1)]
-    #[regex(r"[\+-]?[0-9]+(?:\.[0-9]+)?[eE][\+-]?", priority = 2)]
+    #[regex(r"[\+-]?[0-9]+(?:\.[0-9]+)?[eE][\+-]?")]
     #[token_metadata(skip)]
     MalformedNumber(&'input str),
     #[regex(r#""(?&string_char)*""#)]
