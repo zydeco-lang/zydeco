@@ -71,6 +71,7 @@
 //! question being hard.
 
 use super::*;
+use crate::traverse::CheckedNode;
 use std::ops::ControlFlow;
 use zydeco_surface::scoped::traverse::{Node, Traversal, Visitor};
 
@@ -2059,13 +2060,13 @@ impl TermChecker<'_> {
         &self, tycker: &mut Tycker<'db>, scope: &CbvScope, rest: &[su::TermId], body_ty: ss::TypeId,
     ) -> Result<ss::ValueId> {
         let (payload, payload_ty) = if let [only] = rest {
-            self.cbv_value(tycker, scope, *only, Some(body_ty))?
+            self.cbv_value_at(tycker, scope, *only, Some(body_ty))?
         } else {
             let wanted = self.cbv_expected_components(tycker, Some(body_ty), rest.len());
             let mut values = Vec::with_capacity(rest.len());
             let mut types = Vec::with_capacity(rest.len());
             for (component, wanted) in rest.iter().zip(wanted) {
-                let (value, ty) = self.cbv_value(tycker, scope, *component, wanted)?;
+                let (value, ty) = self.cbv_value_at(tycker, scope, *component, wanted)?;
                 values.push(value);
                 types.push(ty);
             }
@@ -2322,7 +2323,7 @@ impl TermChecker<'_> {
                         | _ => None,
                     }
                 });
-                let (value, value_ty) = self.cbv_value(tycker, scope, inner, wanted)?;
+                let (value, value_ty) = self.cbv_value_at(tycker, scope, inner, wanted)?;
                 let vtype = ss::VType.build(tycker, &scope.env);
                 let ty = Alloc::alloc(tycker, ss::Label(name.clone(), value_ty), vtype, &scope.env);
                 let value = Alloc::alloc(tycker, ss::Named(name, value), ty, &scope.env);
@@ -3330,35 +3331,28 @@ impl TermChecker<'_> {
         }
     }
 
-    /// Every definition a checked binder brings into scope.
+    /// Every term variable a checked binder brings into scope.
     ///
-    /// The closedness rule asks whether a region bound a variable, so a product
-    /// binder has to contribute all of its components and not just a head.
-    fn cbv_pattern_bindings(&self, tycker: &mut Tycker<'_>, pattern: ss::VPatId) -> Vec<DefId> {
+    /// The closedness rule asks whether a region bound a variable, so every
+    /// variable anywhere in the checked pattern counts. The walk follows the
+    /// checked pattern's own children, [`CheckedNode::children`], rather than a
+    /// list of shapes kept here, so a shape the checker builds on its own, such
+    /// as the alias a projection through nested packages produces, is covered
+    /// as soon as the shared traversal knows it. Type children are skipped:
+    /// an unpack's telescope binds types, which the leaf rule on each type
+    /// governs instead.
+    fn cbv_pattern_bindings(&self, tycker: &Tycker<'_>, pattern: ss::VPatId) -> Vec<DefId> {
         let mut defs = Vec::new();
         let mut pending = vec![pattern];
         while let Some(pattern) = pending.pop() {
-            match tycker.statics.vpats[&pattern].to_owned() {
-                | ss::ValuePattern::Var(def) => defs.push(def),
-                | ss::ValuePattern::VCons(components) => pending.extend(components),
-                // A match arm's binder, which is the one refutable shape the
-                // source grammar has. Its payload binds, and the closedness
-                // rule has to see that it did.
-                | ss::ValuePattern::Ctor(ss::Ctor(_, payload)) => pending.push(payload),
-                // An unpack's binder. Its telescope entries bind *types*, which
-                // the closedness rule does not track — it asks about term
-                // variables, and a type variable is admitted or refused by the
-                // leaf rule on the type it denotes. The payload binds a term,
-                // and without this arm it was invisible: `let (X, v) = p in v`
-                // was refused as a reference to a variable bound outside the
-                // region, naming the one variable the region had just bound.
-                | ss::ValuePattern::SCons(ConsN(_, body)) => pending.push(body),
-                // A named field's binder. Its payload binds, and the
-                // closedness rule has to see that it did, for the reason the
-                // product arm above gives.
-                | ss::ValuePattern::Named(ss::Named(_, inner)) => pending.push(inner),
-                | _ => {}
+            if let ss::ValuePattern::Var(def) = tycker.statics.vpats[&pattern] {
+                defs.push(def);
             }
+            CheckedNode::Pattern(pattern).children(&tycker.statics, |child| {
+                if let CheckedNode::Pattern(child) = child {
+                    pending.push(child);
+                }
+            });
         }
         defs
     }

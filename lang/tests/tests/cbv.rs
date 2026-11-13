@@ -2014,6 +2014,22 @@ fn records_source_facts_for_a_composite_kind() {
     assert_eq!(region, Vec::<String>::new());
 }
 
+/// A value inside a named field or a package's payload records its source
+/// facts, as a component of an ordinary tuple does: an editor reads them to
+/// show a lambda's type.
+#[test]
+fn records_source_facts_for_named_field_and_package_payloads() {
+    for source in [
+        "@[cbv] ((fn (x : Int) => x, 1))",
+        "@[cbv] ((#f = fn (x : Int) => x, 1))",
+        "@[cbv] (((Int, fn (x : Int) => x) : exists (X : VType) . X -> X))",
+        "@[cbv] (((Int, fn (x : Int) => x, 1) : exists (X : VType) . (X -> X) * Int))",
+    ] {
+        let missing = RegionCase::unannotated_terms(&RegionCase::block(source), &["Abs("]).unwrap();
+        assert_eq!(missing, Vec::<String>::new(), "{source}");
+    }
+}
+
 /// A declaration that writes no kind takes its parameters' kinds over `VType`.
 /// Desugaring writes an omitted classifier as a hole, which was read as an
 /// authored kind and refused, so the inference never ran.
@@ -3656,6 +3672,26 @@ fn a_package_at_a_labeled_kind_written_in_place_computes() {
 fn writes_an_abstract_package_at_a_labeled_kind_in_place() {
     RegionCase::accept(
         "@[cbv] (fn (p : exists (#C = (X : VType)) . (#zero :: X)) => let (= C, = zero) = p in 0)",
+    );
+}
+
+/// A field reached through a package nested under a label is bound by the
+/// projection, so the region may use it. The checker joins that route with an
+/// alias pattern, which the closedness rule has to see through. A variable the
+/// projection did not bind is still refused.
+#[test]
+fn uses_a_field_projected_through_a_labeled_nested_package() {
+    let package =
+        "exists (#I = (Item : VType)) . (#box :: exists (#T = (Token : VType)) . (#value :: Int))";
+    RegionCase::accept(&format!("@[cbv] (fn (p : {package}) => let (/value) = p in value)"));
+    RegionCase::accept(&format!("@[cbv] (fn (p : {package}) => let (/I, /value) = p in value)"));
+    SourceCase::assert_rejected(
+        RegionCase::check(&format!(
+            "let other = 7 in
+             do case_result <- @[cbv] (fn (p : {package}) => let (/value) = p in other);
+             ret ()"
+        )),
+        TyckDiagnosticCode::Expressivity,
     );
 }
 
