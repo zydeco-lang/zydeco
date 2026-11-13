@@ -360,9 +360,9 @@ struct CbvDeclaredSeal {
 
 /// A `let fix` header, in the shape desugaring gives it.
 ///
-/// `let fix f (x : A) : B = M` becomes
-/// `Ann(Thunk(Fix(g, Abs(x, M))), App(Internal(Thk), Pi(x', B)))`, where `g`
-/// and `x'` are *freshened* copies of the names beside them.
+/// `let fix f p1 … pn : B = M` becomes
+/// `Ann(Thunk(Fix(g, Abs([p1 … pn], M))), App(Internal(Thk), [Pi([p1' … pn'], B)]))`,
+/// where `g` and each `pi'` are *freshened* copies of the names beside them.
 ///
 /// **This shape does not establish provenance**, and review found why: the
 /// `let !` header produces the same one, so
@@ -375,36 +375,22 @@ struct CbvDeclaredSeal {
 /// translated and compared, so the mismatched signature review's input carried
 /// is now a type error rather than silently ignored.
 ///
-/// Reading the telescope rather than translating it as a source type is what
-/// makes this clause possible at all. `Pi(x', B)` binds its domain, and a
-/// region's arrow rule refuses that — rightly, since the scope of such a binder
-/// is a question this version has not answered. Here a term binder's name binds
-/// nothing a source type can mention, so its annotation is read for the domain
-/// and the name discarded, at the first parameter and at every later one; a type
-/// binder is opened as a quantifier's (see
-/// [`TermChecker::cbv_fix_signature`]).
+/// The signature sits under the `Thk` desugaring writes, which no source type
+/// spells, so its telescope is read directly, by the rule every `pi` takes
+/// ([`TermChecker::cbv_function_computation`]): a term binder is read for its
+/// domain and otherwise checked as a parameter, binding nothing, since nothing
+/// in a source type can mention its name, and a type binder is opened as a
+/// quantifier's.
 struct CbvFixHeader {
     /// The `fix` binder. A recursive occurrence in the body resolves to this
     /// one, not to the outer name, which is the `f ↦ g` the derivation notes.
     recursive: su::PatId,
-    /// The first parameter with its annotation, which a type parameter is
-    /// opened from whole.
-    annotated_parameter: su::PatId,
-    parameter: su::PatId,
-    /// The telescope's first binder, whose names the rest of the signature
-    /// is in scope of.
-    signature_binder: su::PatId,
-    /// The source domain as the **parameter** declares it.
-    domain: su::TermId,
-    /// The source domain as the **telescope** declares it. Desugaring freshens
-    /// one pattern into both, so a header has them equal; reading only one is
-    /// what let a mismatched `let !` signature through.
-    declared_domain: su::TermId,
-    /// The whole signature telescope, `pi (x' : A) . B`, which a signature
-    /// whose first parameter is a type is read from.
-    telescope: su::TermId,
-    /// The source codomain: the telescope's body, which is the return type the
-    /// author wrote — `B`, not `Ret B`. The shifts are the translation's.
+    /// The parameters as the abstraction writes them.
+    parameters: Vec<su::PatId>,
+    /// The parameters as the signature writes them. Desugaring freshens one
+    /// pattern into both, and the `let !` spelling writes them apart.
+    signature_binders: Vec<su::PatId>,
+    /// What the signature says the function returns.
     codomain: su::TermId,
     body: su::TermId,
 }
@@ -473,8 +459,8 @@ impl TermChecker<'_> {
         use su::Term as Tm;
         match tycker.scoped.terms[&term].to_owned() {
             // [[M N]]v = do f <- [[M]]v; do a <- [[N]]v; ! f a
-            | Tm::App(su::App(source_func, source_arg)) => {
-                self.cbv_app(tycker, scope, source_func, source_arg, expected)
+            | Tm::App(su::App(source_func, source_args)) => {
+                self.cbv_app(tycker, scope, source_func, source_args, expected)
             }
             // An annotation, which desugaring inserts whether or not the source
             // wrote one: a binding's bindee is always wrapped, with a hole
@@ -906,122 +892,83 @@ impl TermChecker<'_> {
         let Tm::Thunk(su::Thunk(fixed)) = tycker.scoped.terms[&tm] else { return None };
         let Tm::Fix(ref fixed) = tycker.scoped.terms[&fixed] else { return None };
         let su::Fix(recursive, abstraction) = *fixed;
-        let Tm::Abs(su::Abs(annotated_parameter, body)) = tycker.scoped.terms[&abstraction] else {
+        let Tm::Abs(su::Abs(parameters, body)) = &tycker.scoped.terms[&abstraction] else {
             return None;
         };
-        let (parameter, domain) =
-            self.cbv_optional_binder_annotation(tycker, annotated_parameter)?;
-        let Tm::App(su::App(function, telescope)) = tycker.scoped.terms[&ty] else { return None };
-        if !matches!(tycker.scoped.terms[&function], Tm::Internal(su::Internal::Thk)) {
+        let Tm::App(su::App(function, arguments)) = &tycker.scoped.terms[&ty] else { return None };
+        let [telescope] = arguments[..] else { return None };
+        if !matches!(tycker.scoped.terms[function], Tm::Internal(su::Internal::Thk)) {
             return None;
         }
-        let Tm::Pi(su::Pi(signature_binder, codomain)) = tycker.scoped.terms[&telescope] else {
+        let Tm::Pi(su::Pi(signature_binders, codomain)) = &tycker.scoped.terms[&telescope] else {
             return None;
         };
-        let (_, declared_domain) = self.cbv_optional_binder_annotation(tycker, signature_binder)?;
         Some(CbvFixHeader {
             recursive,
-            annotated_parameter,
-            parameter,
-            signature_binder,
-            domain,
-            declared_domain,
-            telescope,
-            codomain,
-            body,
+            parameters: parameters.clone(),
+            signature_binders: signature_binders.clone(),
+            codomain: *codomain,
+            body: *body,
         })
     }
 
     /// The recursion clause:
-    /// `[[let fix f (x : A) : B = M in N]]v = do f <- ret { fix g => fn (x : [[A]]v) => [[M]]v }; [[N]]v`.
+    /// `[[let fix f p1 … pn : B = M in N]]v = do f <- ret { fix g => fn p1' … pn' => [[M]]v }; [[N]]v`
     ///
-    /// No coercion is needed anywhere in it, and that is not a coincidence:
-    /// `[[A -> B]]v` is already a thunk type and call-by-push-value's `fix`
-    /// binds a thunk, so the source's recursive name maps straight onto the
-    /// `fix` binder. Both facts have one cause — variables range over values,
-    /// and a call-by-value function is a value.
+    /// No coercion is needed anywhere in it: a function's type is already a
+    /// thunk type and call-by-push-value's `fix` binds a thunk, so the source's
+    /// recursive name maps straight onto the `fix` binder.
     ///
     /// The signature is settled **before** the body is read, and the body is
     /// checked at the declared codomain rather than at anything the
     /// surrounding expectation suggests. Recovering a recursive function's type
     /// from its own body is inference, and this judgment does not do inference.
-    ///
-    /// A first parameter that is a type makes the fixed point a type
-    /// abstraction, `fix g => fn X => …`, which
-    /// [`Self::cbv_fix_type_abstraction`] builds.
     fn cbv_fix_binding<'db>(
         &self, tycker: &mut Tycker<'db>, scope: &CbvScope, binder: su::PatId, header: CbvFixHeader,
         tail: su::TermId, expected: Option<ss::TypeId>,
     ) -> Result<(ss::CompuId, ss::TypeId)> {
-        let CbvFixHeader {
-            recursive,
-            annotated_parameter,
-            parameter,
-            signature_binder,
-            domain,
-            declared_domain,
-            telescope,
-            codomain,
-            body,
-        } = header;
+        let CbvFixHeader { recursive, parameters, signature_binders, codomain, body } = header;
         self.cbv_require_plain_binder(tycker, binder)?;
         self.cbv_require_plain_binder(tycker, recursive)?;
-        // The `let !` spelling writes the parameter under the `fix`, so its
+        // The `let !` spelling writes the parameters under the `fix`, so an
         // annotation can name the recursive binder, which is bound below.
-        self.cbv_require_binder_unmentioned(tycker, recursive, domain)?;
-        // Whether the first parameter binds a type is asked of both its
-        // declarations. In a real header they are one freshened pattern; the
-        // `let !` spelling writes them apart, and a type abstraction under a
-        // signature whose first binder is a term reached the quantifier
-        // destructors below with an arrow, and panicked.
-        let parameter_kind = self.cbv_annotation_kind(tycker, scope, domain)?;
-        let declared_kind = self.cbv_annotation_kind(tycker, scope, declared_domain)?;
+        for parameter in &parameters {
+            if let Some((_, domain)) = self.cbv_optional_binder_annotation(tycker, *parameter) {
+                self.cbv_require_binder_unmentioned(tycker, recursive, &[], domain)?;
+            }
+        }
+        self.cbv_require_same_first_sort(tycker, scope, &parameters, &signature_binders)?;
+        let computation =
+            self.cbv_function_computation(tycker, scope, &signature_binders, codomain)?;
+        let signature = cs::Thk(computation).build(tycker, &scope.env);
+        let (recursive, recursive_scope) =
+            self.cbv_fix_recursive_name(tycker, scope, recursive, signature)?;
+        let abstraction =
+            self.cbv_abstraction(tycker, &recursive_scope, &parameters, body, Some(computation))?;
+        let actual = tycker.statics.annotations_compu[&abstraction];
+        Lub::lub(computation, actual, tycker)?;
+        let fixed = Alloc::alloc(tycker, ss::Fix(recursive, abstraction), computation, &scope.env);
+        self.cbv_fix_continue(tycker, scope, binder, fixed, tail, expected)
+    }
+
+    /// Whether the first parameter binds a type is asked of both its
+    /// declarations. In a real header they are one freshened pattern; the
+    /// `let !` spelling writes them apart. Only the first can be read here, since
+    /// a later annotation may name an earlier parameter, which is not bound yet;
+    /// the later ones are compared when the abstraction meets its signature.
+    fn cbv_require_same_first_sort<'db>(
+        &self, tycker: &mut Tycker<'db>, scope: &CbvScope, parameters: &[su::PatId],
+        signature_binders: &[su::PatId],
+    ) -> Result<()> {
+        let domains = [parameters, signature_binders]
+            .map(|binders| self.cbv_optional_binder_annotation(tycker, binders[0]));
+        let [Some((_, parameter)), Some((_, declared))] = domains else { return Ok(()) };
+        let parameter_kind = self.cbv_annotation_kind(tycker, scope, parameter)?;
+        let declared_kind = self.cbv_annotation_kind(tycker, scope, declared)?;
         if parameter_kind.is_some() != declared_kind.is_some() {
             tycker.err(TyckError::SortMismatch)?
         }
-        if parameter_kind.is_some() {
-            let signature = self.cbv_fix_signature(tycker, scope, telescope)?;
-            let (recursive, recursive_scope) =
-                self.cbv_fix_recursive_name(tycker, scope, recursive, signature)?;
-            let (abstraction, forall) = self.cbv_fix_type_abstraction(
-                tycker,
-                &recursive_scope,
-                annotated_parameter,
-                signature,
-                body,
-            )?;
-            let fixed = Alloc::alloc(tycker, ss::Fix(recursive, abstraction), forall, &scope.env);
-            return self.cbv_fix_continue(tycker, scope, binder, fixed, tail, expected);
-        }
-        // The parameter becomes the emitted abstraction's binder, so it takes a
-        // lambda's shapes; the two names bind the function's thunk, which no
-        // constructor pattern matches.
-        self.cbv_require_binding_pattern(tycker, parameter)?;
-        let source_parameter = parameter;
-        let domain = self.cbv_type(tycker, scope, domain)?;
-        // Both declarations of the domain are translated and compared. They
-        // come from one freshened pattern in a real header, so this is a
-        // tautology there; it is the only thing standing between the `let !`
-        // spelling and a signature that disagrees with its own parameter.
-        let declared_domain = self.cbv_type(tycker, scope, declared_domain)?;
-        Lub::lub(declared_domain, domain, tycker)?;
-        self.cbv_require_binder_unmentioned(tycker, signature_binder, codomain)?;
-        let codomain = self.cbv_fix_signature(tycker, scope, codomain)?;
-        let arrow = self.cbv_computation_arrow(tycker, scope, domain, codomain)?;
-        let signature = cs::Thk(arrow).build(tycker, &scope.env);
-        let (recursive, recursive_scope) =
-            self.cbv_fix_recursive_name(tycker, scope, recursive, signature)?;
-        self.cbv_settle_pattern_annotations(tycker, &recursive_scope, parameter)?;
-        let bound = TyEnvT::new(recursive_scope.env.clone(), parameter)
-            .tyck(tycker, PatternAction::ana(domain.into()))?;
-        let (parameter, _) = bound.inner.as_value();
-        ValuePatternShape::require_binding(tycker, source_parameter, parameter)?;
-        let defs = self.cbv_pattern_bindings(tycker, parameter);
-        let body_scope = recursive_scope.binding(bound.info.clone(), defs);
-        let (body, _returner) = self.cbv_term(tycker, &body_scope, body, Some(codomain))?;
-        let lambda = Abs(parameter, |_: ss::VPatId| body).build(tycker, &recursive_scope.env);
-        let fixed = Alloc::alloc(tycker, ss::Fix(recursive, lambda), arrow, &scope.env);
-        self.cbv_fix_continue(tycker, scope, binder, fixed, tail, expected)
+        Ok(())
     }
 
     /// Bind a `let fix`'s recursive name at its signature, giving the scope
@@ -1041,50 +988,6 @@ impl TermChecker<'_> {
         let (recursive, _) = bound.inner.as_value();
         let defs = self.cbv_pattern_bindings(tycker, recursive);
         Ok((recursive, scope.binding(bound.info.clone(), defs)))
-    }
-
-    /// The type abstraction `fn X => [[M]]v` that a `let fix` whose first
-    /// parameter is a type takes the fixed point of: polymorphic recursion.
-    /// Returns it with the quantifier it inhabits.
-    ///
-    /// The signature is `Thk (forall (X : K) . Ret B')`, read from the whole
-    /// telescope, and the abstraction opens its own binder. Its body is
-    /// expected at the quantifier's body with the signature's variable replaced
-    /// by the abstraction's, as an instantiation would replace it, and the
-    /// abstraction's type is compared with the quantifier at the end, which is
-    /// what checks the two declarations of the binder's kind against each
-    /// other, as the domain comparison does for a term parameter.
-    fn cbv_fix_type_abstraction<'db>(
-        &self, tycker: &mut Tycker<'db>, recursive_scope: &CbvScope, parameter: su::PatId,
-        signature: ss::TypeId, body: su::TermId,
-    ) -> Result<(ss::CompuId, ss::TypeId)> {
-        let Some(forall) = signature.destruct_thk_app(tycker) else {
-            unreachable!("a signature whose first parameter is a type translates to a thunk")
-        };
-        let Some((quantifier, quantified)) = forall.destruct_forall_binder(tycker) else {
-            unreachable!("a signature whose first parameter is a type translates to a quantifier")
-        };
-        let opened = self.cbv_open_type_binder(
-            tycker,
-            recursive_scope,
-            parameter,
-            None,
-            CbvTypeBinderSite::Abstraction,
-        )?;
-        let variable: ss::TypeId =
-            Alloc::alloc(tycker, opened.witness, opened.kind, &opened.scope.env);
-        let argument = quantifier.pattern.bind_argument(tycker, variable)?;
-        let instance = quantified.subst_abst(tycker, (quantifier.witness, argument))?;
-        let Some(codomain) = instance.destruct_ret_app(tycker) else {
-            unreachable!("a quantifier's body in a signature carries a returner")
-        };
-        let (body, _returner) = self.cbv_term(tycker, &opened.scope, body, Some(codomain))?;
-        let witness = opened.witness;
-        let abs = Abs(cs::Ty(witness), move |_: Option<DefId>, _: ss::AbstId| body)
-            .build(tycker, &recursive_scope.env);
-        let abs_ty = tycker.statics.annotations_compu[&abs];
-        Lub::lub(forall, abs_ty, tycker)?;
-        Ok((abs, forall))
     }
 
     /// `do f <- ret { fixed }; [[N]]v`: bind the fixed point under the
@@ -1108,45 +1011,7 @@ impl TermChecker<'_> {
         Ok((compu, tail_ty))
     }
 
-    /// What a `let fix` signature's telescope denotes: the source type its
-    /// parameters curry into. It is read after the first parameter when that
-    /// one is a term, and whole when it is a type.
-    ///
-    /// `let fix f (x : A) (y : B) : C = M` desugars to the signature
-    /// `pi (x : A) . pi (y : B) . C` and the body `fn (y : B) => M`. A source
-    /// arrow may not bind its domain, but a source type may not mention a
-    /// parameter's name, which [`Self::cbv_require_binder_unmentioned`]
-    /// enforces, so `pi (y : B) . C` is read as the source arrow `B -> C`, and
-    /// `f` is the curried `A -> B -> C`. A type parameter is a
-    /// quantifier, read the same way below it. The body is then an ordinary
-    /// abstraction checked against the translation, which compares its
-    /// annotations with the signature's.
-    ///
-    /// The refusal this replaces confused a second parameter with a returned
-    /// function, whose `pi` is over a hole, and told them apart only to reject
-    /// the parameter.
-    fn cbv_fix_signature<'db>(
-        &self, tycker: &mut Tycker<'db>, scope: &CbvScope, telescope: su::TermId,
-    ) -> Result<ss::TypeId> {
-        let su::Term::Pi(su::Pi(binder, rest)) = tycker.scoped.terms[&telescope].to_owned() else {
-            return self.cbv_type(tycker, scope, telescope);
-        };
-        if self.cbv_type_binder_kind(tycker, scope, binder)?.is_some() {
-            return self.cbv_forall(tycker, scope, binder, rest, Self::cbv_fix_signature);
-        }
-        match self.cbv_optional_binder_annotation(tycker, binder) {
-            | Some((bare, domain)) if !matches!(tycker.scoped.pats[&bare], su::Pattern::Hole(_)) => {
-                let domain = self.cbv_type(tycker, scope, domain)?;
-                self.cbv_require_binder_unmentioned(tycker, binder, rest)?;
-                let codomain = self.cbv_fix_signature(tycker, scope, rest)?;
-                let arrow = self.cbv_computation_arrow(tycker, scope, domain, codomain)?;
-                Ok(cs::Thk(arrow).build(tycker, &scope.env))
-            }
-            | _ => self.cbv_type(tycker, scope, telescope),
-        }
-    }
-
-    /// Refuse an annotation `rest` that names something `binder` binds.
+    /// Refuse a later binder or a body that names something `binder` binds.
     ///
     /// Desugaring puts the rest of a signature in the scope of each parameter,
     /// and a `fix` around its own parameter, so a name there resolves, but it
@@ -1154,20 +1019,30 @@ impl TermChecker<'_> {
     /// the binder has not been checked yet, and reading the name would reach
     /// it ahead of its binder, which the checker refuses by panicking.
     fn cbv_require_binder_unmentioned<'db>(
-        &self, tycker: &mut Tycker<'db>, binder: su::PatId, rest: su::TermId,
+        &self, tycker: &mut Tycker<'db>, binder: su::PatId, later: &[su::PatId], body: su::TermId,
     ) -> Result<()> {
         let names = self.cbv_pattern_definitions(tycker, binder);
-        let mention = Traversal::new(tycker.scoped)
-            .run(rest.into(), &mut CbvMentions { defs: &names })
-            .expect("resolved source syntax is acyclic");
-        match mention {
-            | ControlFlow::Break(CbvMention::Found(name)) => self.cbv_sourced(
+        let found = later
+            .iter()
+            .map(|later| su::EntityId::from(*later))
+            .chain(std::iter::once(body.into()))
+            .find_map(|entity| {
+                match Traversal::new(tycker.scoped)
+                    .run(entity, &mut CbvMentions { defs: &names })
+                    .expect("resolved source syntax is acyclic")
+                {
+                    | ControlFlow::Break(CbvMention::Found(name)) => Some(name),
+                    | _ => None,
+                }
+            });
+        match found {
+            | Some(name) => self.cbv_sourced(
                 tycker,
                 name,
                 |tycker| tycker.err(TyckError::SortMismatch),
                 |_tycker, ()| None,
             ),
-            | _ => Ok(()),
+            | None => Ok(()),
         }
     }
 
@@ -1684,8 +1559,8 @@ impl TermChecker<'_> {
         let mut ascriptions = Vec::new();
         let declaration = loop {
             match tycker.scoped.terms[&body].to_owned() {
-                | Tm::Abs(su::Abs(binder, inner)) => {
-                    parameters.push(binder);
+                | Tm::Abs(su::Abs(binders, inner)) => {
+                    parameters.extend(binders);
                     body = inner;
                 }
                 | Tm::Ann(su::Ann { tm, .. })
@@ -1727,48 +1602,51 @@ impl TermChecker<'_> {
         };
         match tycker.scoped.terms[&classifier].to_owned() {
             | su::Term::Hole(_) => self.cbv_parameter_kinds(tycker, scope, parameters),
-            | su::Term::Pi(su::Pi(binder, codomain))
+            | su::Term::Pi(su::Pi(binders, codomain))
                 if Self::cbv_result_inferred(tycker, codomain) =>
             {
                 self.cbv_sourced(
                     tycker,
                     classifier,
                     |tycker| {
-                        if self.cbv_optional_binder_annotation(tycker, binder).is_none() {
-                            return tycker.err(
-                                TyckError::Expressivity(
-                                    "a sealed definition inside a call-by-value block needs its kind, written or given by its parameters' kinds",
-                                ));
-                        }
-                        // The binder is checked whole, through the entrance
-                        // every type binder in a region goes through, which
-                        // guards and settles each annotation in it. Reading its
-                        // outermost annotation and handing the rest to the
-                        // pattern rule admitted an inner one unguarded:
-                        // `pi ((X : @[typeof] (@[typeof] outside)) : VType) . _`
-                        // read a term bound outside the region.
-                        //
-                        // It is checked before the rest of the telescope is
-                        // read, so a later domain that names it, as `(Y : X)`
-                        // does, meets a checked type variable and is refused
-                        // by sort; read first, it reached the name ahead of
-                        // its binder, which the checker refuses by panicking.
-                        let (_, domain, _) = self.cbv_check_type_binder(
-                            tycker,
-                            scope,
-                            binder,
-                            None,
-                            CbvTypeBinderSite::Abstraction,
-                        )?;
-                        let rest = parameters.get(1..).unwrap_or_default();
-                        let codomain = self.cbv_definition_kind(tycker, scope, Some(codomain), rest)?;
-                        Ok(Arrow(domain, codomain).build(tycker, &scope.env))
+                        self.cbv_definition_telescope(tycker, scope, &binders, codomain, parameters)
                     },
                     |_tycker, kind| Some(TermAnnId::Kind(*kind)),
                 )
             }
             | _ => self.cbv_require_annotation_kind(tycker, scope, classifier),
         }
+    }
+
+    /// The kind arrows of a definition's telescope, one per binder.
+    fn cbv_definition_telescope<'db>(
+        &self, tycker: &mut Tycker<'db>, scope: &CbvScope, binders: &[su::PatId],
+        codomain: su::TermId, parameters: &[su::PatId],
+    ) -> Result<ss::KindId> {
+        let Some((binder, later)) = binders.split_first() else {
+            return self.cbv_definition_kind(tycker, scope, Some(codomain), parameters);
+        };
+        let binder = *binder;
+        if self.cbv_optional_binder_annotation(tycker, binder).is_none() {
+            return tycker.err(TyckError::Expressivity(
+                "a sealed definition inside a call-by-value block needs its kind, written or given by its parameters' kinds",
+            ));
+        }
+        // The binder is checked whole, through the entrance every type binder
+        // in a region goes through, which guards and settles each annotation in
+        // it. It is checked before the rest of the telescope is read, so a later
+        // domain that names it, as `(Y : X)` does, meets a checked type variable
+        // and is refused by sort.
+        let (_, domain, _) = self.cbv_check_type_binder(
+            tycker,
+            scope,
+            binder,
+            None,
+            CbvTypeBinderSite::Abstraction,
+        )?;
+        let rest = parameters.get(1..).unwrap_or_default();
+        let codomain = self.cbv_definition_telescope(tycker, scope, later, codomain, rest)?;
+        Ok(Arrow(domain, codomain).build(tycker, &scope.env))
     }
 
     /// Whether a classifier's result is left to inference: a hole, possibly
@@ -1838,9 +1716,10 @@ impl TermChecker<'_> {
     /// annotation of the name it binds. Its annotation is settled first, so it
     /// is not synthesized a second time.
     ///
-    /// Only for a binder `p : K` whose `p` is a name or a wildcard, as the
-    /// caller has established, so that `annotation` is all the pattern rule
-    /// reads. A binder that may carry more goes through
+    /// Only for a binder `p : K` whose `p` is a name or a wildcard, possibly
+    /// under annotations the caller has settled, as the caller has established,
+    /// so that the pattern rule reads no annotation it would have to
+    /// synthesize. A binder that may carry more goes through
     /// [`Self::cbv_check_type_binder`], which guards each annotation.
     fn cbv_record_kind_binder<'db>(
         &self, tycker: &mut Tycker<'db>, scope: &CbvScope, binder: su::PatId,
@@ -2108,60 +1987,6 @@ impl TermChecker<'_> {
         Ok(())
     }
 
-    /// The two halves of an expected source arrow, `Thk ([[A]]v -> Ret [[B]]v)`.
-    ///
-    /// `None` for either half means the expectation did not have that shape,
-    /// which is not an error here: the clause falls back to synthesis and the
-    /// net above reports the disagreement against the whole type rather than
-    /// against a piece of it.
-    fn cbv_expected_arrow<'db>(
-        &self, tycker: &mut Tycker<'db>, expected: ss::TypeId,
-    ) -> Result<(Option<ss::TypeId>, Option<ss::TypeId>)> {
-        let Some(arrow) = expected.destruct_thk_app(tycker) else { return Ok((None, None)) };
-        let Some((domain, codomain)) = arrow.destruct_arrow(tycker) else {
-            return Ok((None, None));
-        };
-        Ok((Some(domain), codomain.destruct_ret_app(tycker)))
-    }
-
-    /// The binder kind of an expected quantifier, `Thk (forall (X : K) . Ret
-    /// [[A]]v)`, which a type abstraction that declares no kind takes as its
-    /// own.
-    ///
-    /// `None` when the expectation is not a quantifier, for the same reason as
-    /// the arrow above.
-    fn cbv_expected_forall_kind(
-        &self, tycker: &mut Tycker<'_>, expected: Option<ss::TypeId>,
-    ) -> Option<ss::KindId> {
-        let forall = expected?.destruct_thk_app(tycker)?;
-        let (binder, _) = forall.destruct_forall_binder(tycker)?;
-        Some(binder.domain_kind(tycker))
-    }
-
-    /// What an expected `Thk (forall (X : K) . Ret [[A]]v)` asks of the body of
-    /// an abstraction over `witness`: `[[A]]v`, with `X` read as `witness`.
-    ///
-    /// `None` when the expectation is not a quantifier, for the same reason as
-    /// the arrow above. The kinds are compared first, because the substitution
-    /// means something only between binders of one kind.
-    fn cbv_expected_forall_body<'db>(
-        &self, tycker: &mut Tycker<'db>, scope: &CbvScope, expected: Option<ss::TypeId>,
-        witness: ss::AbstId, kind: ss::KindId,
-    ) -> Result<Option<ss::TypeId>> {
-        let Some(forall) = expected.and_then(|expected| expected.destruct_thk_app(tycker)) else {
-            return Ok(None);
-        };
-        let Some((binder, body)) = forall.destruct_forall_binder(tycker) else {
-            return Ok(None);
-        };
-        let domain = binder.domain_kind(tycker);
-        Lub::lub(domain, kind, tycker)?;
-        let argument: ss::TypeId = Alloc::alloc(tycker, witness, kind, &scope.env);
-        let payload = binder.pattern.bind_argument(tycker, argument)?;
-        let body = body.subst_abst(tycker, (binder.witness, payload))?;
-        Ok(body.destruct_ret_app(tycker))
-    }
-
     /// Peel an expected existential telescope, translating each leading
     /// component as a **source type**.
     ///
@@ -2367,81 +2192,89 @@ impl TermChecker<'_> {
         Ok((compu, returner))
     }
 
-    /// The application clause.
+    /// The application clause: `[[M N1 … Nn]]v`, one call for each function the
+    /// arguments reach.
     ///
-    /// Both operands are evaluated before the call, which is what makes this a
-    /// call-by-value translation, and the function is evaluated before the
-    /// argument. Nothing in CBPV forces that order; it is a choice, and it is
-    /// observable once the fragment has effects.
-    ///
-    /// The shape checks below are not defensive duplication. `Construct`'s
-    /// `Bind`, `Force` and `App` are trusted recipes that reach `unreachable!()`
-    /// on a malformed shape or a mismatched argument, so a source program such
-    /// as `1 2` or `(fn (x : Int) => x) ()` has to be rejected *before* they are
-    /// invoked, not by them.
+    /// The surrounding expectation describes the *result*, and turning it into
+    /// an expectation for the function would mean inventing a domain to pair it
+    /// with, so it is left to the net in `cbv_term`.
     fn cbv_app<'db>(
         &self, tycker: &mut Tycker<'db>, scope: &CbvScope, source_func: su::TermId,
-        source_arg: su::TermId, expected: Option<ss::TypeId>,
+        source_args: Vec<su::TermId>, expected: Option<ss::TypeId>,
     ) -> Result<(ss::CompuId, ss::TypeId)> {
-        // The surrounding expectation describes the *result*, and turning it
-        // into an expectation for the function would mean inventing a domain to
-        // pair it with. So it is left to the net in `cbv_term`.
-        //
-        // The **function's domain**, on the other hand, is pushed into the
-        // argument, which is why the function is read first. A constructor
-        // argument needs it: nothing about `+Succ` says which declaration it
-        // belongs to, so `count (+Succ(n))` would otherwise fail for want of
-        // an annotation the source should not have to write.
         let _ = expected;
-        let (func, func_ty) = self.cbv_term(tycker, scope, source_func, None)?;
+        let mut call = self.cbv_term(tycker, scope, source_func, None)?;
+        let mut arguments = std::collections::VecDeque::from(source_args);
+        while !arguments.is_empty() {
+            let (func, func_ty) = call;
+            call = self.cbv_call(tycker, scope, func, func_ty, &mut arguments)?;
+        }
+        Ok(call)
+    }
 
-        // `func_ty` is `Ret [[A -> B]]v` = `Ret (Thk ([[A]]v -> Ret [[B]]v))`.
+    /// One call: `do f <- [[M]]v; do a1 <- [[N1]]v; …; ! f a1 … an`.
+    ///
+    /// The function's type says how many arguments the call takes, and what
+    /// each one is: `Thk (p1 … pn . Ret B)` takes one for each `p`, a `forall`
+    /// taking a source type and an arrow a source term. Nothing about an
+    /// argument's own syntax decides it, since the host spells both as one
+    /// application. A function's domain is pushed into its argument, which is
+    /// why the function is read first: nothing about `+Succ` says which
+    /// declaration it belongs to.
+    ///
+    /// Arguments are taken from the front of `arguments`, and any left over
+    /// apply to what the call returns.
+    fn cbv_call<'db>(
+        &self, tycker: &mut Tycker<'db>, scope: &CbvScope, func: ss::CompuId, func_ty: ss::TypeId,
+        arguments: &mut std::collections::VecDeque<su::TermId>,
+    ) -> Result<(ss::CompuId, ss::TypeId)> {
         let not_a_function = TyckError::Expressivity(
             "only a call-by-value function can be applied inside a call-by-value block",
         );
         let Some(payload) = func_ty.destruct_ret_app(tycker) else { tycker.err(not_a_function)? };
-        let Some(arrow) = payload.destruct_thk_app(tycker) else { tycker.err(not_a_function)? };
-        // [[M [T]]]v = do f <- [[M]]v; ! f [[T]]v
-        //
-        // Instantiation and application are the same clause with a different
-        // thing pushed on the stack, and the **function's** type is what says
-        // which: a `forall` means the argument is a source type, an arrow means
-        // it is a source term. Nothing about the argument's own syntax decides
-        // it, since the host spells both as one application.
-        if let Some((binder, _)) = arrow.destruct_forall_binder(tycker) {
-            // The recipe below reaches `unreachable!()` on a kind mismatch, so
-            // the kinds are compared here rather than by it; the binder's kind
-            // is also what an operator argument written without its own binder
-            // kind takes it from.
-            let domain = binder.domain_kind(tycker);
-            let argument = self.cbv_type_against(tycker, scope, source_arg, domain)?;
-            let compu = Bind {
-                binder: "f",
-                bindee: func,
-                tail: move |f: DefId| App(Force(f), cs::Ty(argument)),
-            }
-            .build(tycker, &scope.env);
-            let ty = tycker.statics.annotations_compu[&compu];
-            return Ok((compu, ty));
-        }
-        let Some((domain, codomain)) = arrow.destruct_arrow(tycker) else {
+        let Some(mut residual) = payload.destruct_thk_app(tycker) else {
             tycker.err(not_a_function)?
         };
-        let (arg, arg_ty) = self.cbv_term(tycker, scope, source_arg, Some(domain))?;
-        let Some(argument) = arg_ty.destruct_ret_app(tycker) else { tycker.err(not_a_function)? };
-        Lub::lub(domain, argument, tycker)?;
-
-        let compu = Bind {
-            binder: "f",
-            bindee: func,
-            tail: |f: DefId| Bind {
-                binder: "a",
-                bindee: arg,
-                tail: move |a: DefId| App(Force(f), a),
-            },
+        let function_binder: ss::VPatId = cs::Pat("f", payload).build(tycker, &scope.env);
+        let (function, _) = function_binder.try_destruct_def(tycker);
+        let function = function.expect("a named binder is a definition");
+        let mut call: ss::CompuId = Force(function).build(tycker, &scope.env);
+        let mut bindings = vec![(function_binder, func)];
+        while residual.destruct_ret_app(tycker).is_none() {
+            let Some(argument) = arguments.pop_front() else {
+                tycker.err(TyckError::Expressivity(
+                    "a call-by-value function must be applied to all of its parameters at once",
+                ))?
+            };
+            if let Some((binder, _)) = residual.destruct_forall_binder(tycker) {
+                // The recipe below reaches `unreachable!()` on a kind mismatch,
+                // so the kinds are compared here rather than by it; the
+                // binder's kind is also what an operator argument written
+                // without its own binder kind takes it from.
+                let domain = binder.domain_kind(tycker);
+                let argument = self.cbv_type_against(tycker, scope, argument, domain)?;
+                call = App(call, cs::Ty(argument)).build(tycker, &scope.env);
+            } else {
+                let Some((domain, _)) = residual.destruct_arrow(tycker) else {
+                    tycker.err(not_a_function)?
+                };
+                let (bindee, bindee_ty) = self.cbv_term(tycker, scope, argument, Some(domain))?;
+                let Some(argument_ty) = bindee_ty.destruct_ret_app(tycker) else {
+                    tycker.err(not_a_function)?
+                };
+                Lub::lub(domain, argument_ty, tycker)?;
+                let binder: ss::VPatId = cs::Pat("a", argument_ty).build(tycker, &scope.env);
+                let (variable, _) = binder.try_destruct_def(tycker);
+                let variable = variable.expect("a named binder is a definition");
+                bindings.push((binder, bindee));
+                call = App(call, variable).build(tycker, &scope.env);
+            }
+            residual = tycker.statics.annotations_compu[&call];
         }
-        .build(tycker, &scope.env);
-        Ok((compu, codomain))
+        let compu = bindings.into_iter().rev().fold(call, |tail, (binder, bindee)| {
+            Alloc::alloc(tycker, ss::Bind { binder, bindee, tail }, residual, &scope.env)
+        });
+        Ok((compu, residual))
     }
 
     /// Value judgment: a source value of source type `A` becomes a value of
@@ -2464,104 +2297,10 @@ impl TermChecker<'_> {
             // requiring one on the strength of `{ fn X => ret 0 }` failing,
             // which is the kind being absent and not the expectation being
             // needed.
-            | Tm::Abs(su::Abs(source_binder, source_body))
-                if self.cbv_type_binder_kind(tycker, scope, source_binder)?.is_some() =>
-            {
-                self.cbv_type_abstraction(tycker, scope, source_binder, source_body, None, expected)
-            }
-            | Tm::Abs(su::Abs(source_binder, source_body)) => {
-                // `fn X => M` against an expected `Thk (forall (X : K) . Ret A')`.
-                // A binder that declares nothing takes its kind from the
-                // quantifier, as the host reads it, and as an unannotated value
-                // binder takes its type from an expected arrow below. The body
-                // still synthesizes, and the abstraction is compared with the
-                // expectation like any value.
-                if self.cbv_optional_binder_annotation(tycker, source_binder).is_none()
-                    && let Some(kind) = self.cbv_expected_forall_kind(tycker, expected)
-                {
-                    return self.cbv_type_abstraction(
-                        tycker,
-                        scope,
-                        source_binder,
-                        source_body,
-                        Some(kind),
-                        expected,
-                    );
-                }
-                // The expectation is `[[A -> B]]v = Thk ([[A]]v -> Ret [[B]]v)`,
-                // so it carries both halves: a domain for a binder that did not
-                // declare one, and a codomain to push into the body.
-                let (wanted_domain, wanted_codomain) = match expected {
-                    | Some(expected) => self.cbv_expected_arrow(tycker, expected)?,
-                    | None => (None, None),
-                };
-                let (bare_binder, domain) =
-                    match self.cbv_optional_binder_annotation(tycker, source_binder) {
-                        // `(x : _)` asks for the domain the way `x` does. The
-                        // hole was handed to the leaf guard, which refused it,
-                        // so `fn (x : _) => x` failed where `fn x => x` and
-                        // `let x : _ = 5` both checked — two spellings of one
-                        // binder with opposite verdicts.
-                        | Some((bare, source_domain))
-                            if matches!(tycker.scoped.terms[&source_domain], Tm::Hole(_)) =>
-                        {
-                            match wanted_domain {
-                                | Some(domain) => (bare, domain),
-                                | None => tycker.err(
-                                    TyckError::Expressivity(
-                                        "a call-by-value parameter needs an explicit type annotation, or an expected type to take one from",
-                                    ))?,
-                            }
-                        }
-                        | Some((bare, source_domain)) => {
-                            let domain = self.cbv_type(tycker, scope, source_domain)?;
-                            // Required here because a binder need not check it:
-                            // a name compares its kind with the domain's, and a
-                            // wildcard binds nothing and compares nothing.
-                            self.cbv_require_value_type(tycker, scope, domain)?;
-                            if let Some(wanted) = wanted_domain {
-                                Lub::lub(wanted, domain, tycker)?;
-                            }
-                            (bare, domain)
-                        }
-                        // An unannotated binder is admissible exactly when the
-                        // expectation supplies its type. Without one there is
-                        // nothing to synthesize from, which is what requiring
-                        // the annotation stood in for before the judgment had a
-                        // direction.
-                        | None => match wanted_domain {
-                            | Some(domain) => (source_binder, domain),
-                            | None => tycker.err(
-                                TyckError::Expressivity(
-                                    "a call-by-value parameter needs an explicit type annotation, or an expected type to take one from",
-                                ))?,
-                        },
-                    };
-                self.cbv_require_binding_pattern(tycker, bare_binder)?;
-                self.cbv_settle_pattern_annotations(tycker, scope, bare_binder)?;
-                let binder = TyEnvT::new(scope.env.clone(), bare_binder)
-                    .tyck(tycker, PatternAction::ana(domain.into()))?;
-                let (pattern, _domain) = binder.inner.as_value();
-                ValuePatternShape::require_binding(tycker, bare_binder, pattern)?;
-                let defs = self.cbv_pattern_bindings(tycker, pattern);
-                let body_scope = scope.binding(binder.info.clone(), defs);
-                let (body, returner) =
-                    self.cbv_term(tycker, &body_scope, source_body, wanted_codomain)?;
-                // **A witness this binder opened may not outlive it**, exactly as
-                // in the `let` and `match` clauses. This clause was given the
-                // other half of the same change -- the opened witnesses enter the
-                // body's scope, so `[[X]]v = X` holds for them -- and not this
-                // one, so `fn ((X, v) : Boxed) => v` built an ordinary arrow whose
-                // codomain mentioned a free `X`. The host's abstraction answers
-                // the same program with a `PackPi`, which binds the witness; the
-                // table excludes `PackPi` by construction, so the free-witness
-                // arrow was not that translation either, just an ill-formed one
-                // that the arena invariants did not object to.
-                let Some(result) = returner.destruct_ret_app(tycker) else {
-                    unreachable!("the term judgment always produces a returner")
-                };
-                binder.close_scope(tycker, result)?;
-                let abs = Abs(pattern, |_: ss::VPatId| body).build(tycker, &scope.env);
+            | Tm::Abs(su::Abs(source_binders, source_body)) => {
+                let wanted = expected.and_then(|expected| expected.destruct_thk_app(tycker));
+                let abs =
+                    self.cbv_abstraction(tycker, scope, &source_binders, source_body, wanted)?;
                 let thunk = Thunk(abs).build(tycker, &scope.env);
                 let ty = tycker.statics.annotations_value[&thunk];
                 Ok((thunk, ty))
@@ -2901,34 +2640,8 @@ impl TermChecker<'_> {
             // codomain is read, since reading `forall (X : VType) . X -> X`
             // as a kind would synthesize `X` ahead of its binder, which the
             // checker refuses by panicking.
-            | Tm::Pi(su::Pi(binder, codomain)) => {
-                let Some((bare, domain)) = self.cbv_optional_binder_annotation(tycker, binder)
-                else {
-                    return Ok(None);
-                };
-                match tycker.scoped.pats[&bare] {
-                    | su::Pattern::Hole(_) => {}
-                    | su::Pattern::Var(def) => {
-                        let defs = std::collections::HashSet::from([def]);
-                        let mention = Traversal::new(tycker.scoped)
-                            .run(codomain.into(), &mut CbvMentions { defs: &defs })
-                            .expect("resolved source syntax is acyclic");
-                        if mention.is_break() {
-                            return Ok(None);
-                        }
-                    }
-                    | _ => return Ok(None),
-                }
-                let Some(domain_kind) = self.cbv_annotation_kind(tycker, scope, domain)? else {
-                    return Ok(None);
-                };
-                let Some(codomain) = self.cbv_annotation_kind(tycker, scope, codomain)? else {
-                    return Ok(None);
-                };
-                // A kind arrow formed, so its binder is one: it gets the facts
-                // ordinary checking would have recorded for it.
-                self.cbv_record_kind_binder(tycker, scope, binder, domain, domain_kind)?;
-                Ok(Some(Arrow(domain_kind, codomain).build(tycker, &scope.env)))
+            | Tm::Pi(su::Pi(binders, codomain)) => {
+                self.cbv_kind_telescope(tycker, scope, &binders, codomain)
             }
             // `#C :: K`, a named kind, recognized by its payload as an arrow is
             // by its sides: `#f :: A` writes a field *type* with the same node,
@@ -2943,32 +2656,64 @@ impl TermChecker<'_> {
         }
     }
 
-    /// The type-abstraction clause.
-    ///
-    /// The skolem is allocated here rather than by the recipe, because the body
-    /// has to be translated *under* it: the body's occurrences of the source
-    /// name resolve to the skolem through the environment, and the skolem has
-    /// to be admissible as a classifier while they do.
-    fn cbv_type_abstraction<'db>(
-        &self, tycker: &mut Tycker<'db>, scope: &CbvScope, binder: su::PatId, body: su::TermId,
-        expected_kind: Option<ss::KindId>, expected: Option<ss::TypeId>,
-    ) -> Result<(ss::ValueId, ss::TypeId)> {
-        let opened = self.cbv_open_type_binder(
-            tycker,
-            scope,
-            binder,
-            expected_kind,
-            CbvTypeBinderSite::Abstraction,
-        )?;
-        let witness = opened.witness;
-        let wanted_body =
-            self.cbv_expected_forall_body(tycker, &opened.scope, expected, witness, opened.kind)?;
-        let (body, _returner) = self.cbv_term(tycker, &opened.scope, body, wanted_body)?;
-        let abs = Abs(cs::Ty(witness), move |_: Option<DefId>, _: ss::AbstId| body)
-            .build(tycker, &scope.env);
-        let thunk = Thunk(abs).build(tycker, &scope.env);
-        let ty = tycker.statics.annotations_value[&thunk];
-        Ok((thunk, ty))
+    /// The kind arrows of a telescope, or `None` if it does not read as one.
+    fn cbv_kind_telescope<'db>(
+        &self, tycker: &mut Tycker<'db>, scope: &CbvScope, binders: &[su::PatId],
+        codomain: su::TermId,
+    ) -> Result<Option<ss::KindId>> {
+        let Some((binder, later)) = binders.split_first() else {
+            return self.cbv_annotation_kind(tycker, scope, codomain);
+        };
+        let binder = *binder;
+        let Some((mut bare, domain)) = self.cbv_optional_binder_annotation(tycker, binder) else {
+            return Ok(None);
+        };
+        // An annotation inside the binder leaves it the binder it annotates, as
+        // at every binder, and is one more kind the domain must agree with.
+        let mut inner_annotations = Vec::new();
+        while let su::Pattern::Ann(su::Ann { tm, ty }) = tycker.scoped.pats[&bare] {
+            inner_annotations.push(ty);
+            bare = tm;
+        }
+        match tycker.scoped.pats[&bare] {
+            | su::Pattern::Hole(_) => {}
+            | su::Pattern::Var(def) => {
+                let defs = std::collections::HashSet::from([def]);
+                let mentioned = std::iter::once(su::EntityId::from(codomain))
+                    .chain(later.iter().map(|later| su::EntityId::from(*later)))
+                    .any(|entity| {
+                        Traversal::new(tycker.scoped)
+                            .run(entity, &mut CbvMentions { defs: &defs })
+                            .expect("resolved source syntax is acyclic")
+                            .is_break()
+                    });
+                if mentioned {
+                    return Ok(None);
+                }
+            }
+            | _ => return Ok(None),
+        }
+        let Some(domain_kind) = self.cbv_annotation_kind(tycker, scope, domain)? else {
+            return Ok(None);
+        };
+        let mut inner_kinds = Vec::with_capacity(inner_annotations.len());
+        for annotation in inner_annotations {
+            let Some(kind) = self.cbv_annotation_kind(tycker, scope, annotation)? else {
+                return Ok(None);
+            };
+            inner_kinds.push((annotation, kind));
+        }
+        let Some(codomain) = self.cbv_kind_telescope(tycker, scope, later, codomain)? else {
+            return Ok(None);
+        };
+        // A kind arrow formed, so its binder is one: it gets the facts
+        // ordinary checking would have recorded for it, and each annotation in
+        // it is settled for the pattern rule, which compares them.
+        for (annotation, kind) in inner_kinds {
+            let _ = tycker.settled_pattern_annotations.upsert(annotation, kind.into());
+        }
+        self.cbv_record_kind_binder(tycker, scope, binder, domain, domain_kind)?;
+        Ok(Some(Arrow(domain_kind, codomain).build(tycker, &scope.env)))
     }
 
     /// Open a type binder: guard its shape, check that its kind is a source
@@ -3083,48 +2828,210 @@ impl TermChecker<'_> {
         Ok(())
     }
 
-    /// The computation arrow a source arrow translates to, `A' -> Ret B'`,
-    /// before the `Thk` that makes it a value type, with T-ARROW's premises
-    /// checked.
+    /// `[[pi p1 … pn . B]]v = Thk (p1' … pn' . Ret [[B]]v)`: the computation type
+    /// inside the thunk.
     ///
-    /// **Shared by the arrow clause and the `let fix` header**, which builds a
-    /// source arrow's translation from a signature rather than from an arrow
-    /// node. Both sides were value types by construction while the image test
-    /// admitted only value types. Once it admitted type operators the arrow
-    /// clause gained these checks and the header, which had its own copy of the
-    /// construction, did not: `let fix f (x : Int) : Opt = f x in 0` was
-    /// accepted with `Ret Opt` in the arena, and only the arena invariants objected,
-    /// by panicking.
-    fn cbv_computation_arrow<'db>(
-        &self, tycker: &mut Tycker<'db>, scope: &CbvScope, domain: ss::TypeId, codomain: ss::TypeId,
+    /// A telescope is one function, so its binders sit together with a single
+    /// returner after the last. A binder that declares a kind is a quantifier
+    /// and a binder that declares a type is an arrow, which is how the host
+    /// reads `pi` as well; `A -> B` and `forall (X : K) . A` are the telescopes
+    /// of one binder. A value binder may name its parameter, as a function
+    /// header's signature does, but a source type never mentions a term, so a
+    /// later binder or the result that mentions the name is refused by sort and
+    /// an unmentioned name denotes what `_` does. Below its outermost
+    /// annotation the binder is checked as a parameter is, so each annotation
+    /// inside it is translated and compared with the domain, though nothing it
+    /// names enters scope.
+    fn cbv_function_computation<'db>(
+        &self, tycker: &mut Tycker<'db>, scope: &CbvScope, binders: &[su::PatId], body: su::TermId,
     ) -> Result<ss::TypeId> {
+        let Some((binder, later)) = binders.split_first() else {
+            let result = self.cbv_type(tycker, scope, body)?;
+            self.cbv_require_value_type(tycker, scope, result)?;
+            return Ok(cs::Ret(result).build(tycker, &scope.env));
+        };
+        let binder = *binder;
+        if self.cbv_type_binder_kind(tycker, scope, binder)?.is_some() {
+            let opened = self.cbv_open_type_binder(
+                tycker,
+                scope,
+                binder,
+                None,
+                CbvTypeBinderSite::Abstraction,
+            )?;
+            let inner = self.cbv_function_computation(tycker, &opened.scope, later, body)?;
+            let ctype = ss::CType.build(tycker, &scope.env);
+            let binder = ss::TypeBinder { pattern: opened.pattern, witness: opened.witness };
+            return Ok(Alloc::alloc(tycker, ss::Forall(binder, inner), ctype, &scope.env));
+        }
+        let (bare, source_domain) = self.cbv_annotated_binder(tycker, binder)?;
+        self.cbv_require_binder_unmentioned(tycker, binder, later, body)?;
+        let domain = self.cbv_type(tycker, scope, source_domain)?;
         self.cbv_require_value_type(tycker, scope, domain)?;
-        self.cbv_require_value_type(tycker, scope, codomain)?;
-        let returner = cs::Ret(codomain).build(tycker, &scope.env);
-        Ok(Arrow(domain, returner).build(tycker, &scope.env))
+        self.cbv_require_binding_pattern(tycker, bare)?;
+        self.cbv_settle_pattern_annotations(tycker, scope, bare)?;
+        let checked =
+            TyEnvT::new(scope.env.clone(), bare).tyck(tycker, PatternAction::ana(domain.into()))?;
+        let (pattern, _domain) = checked.inner.as_value();
+        ValuePatternShape::require_binding(tycker, bare, pattern)?;
+        let inner = self.cbv_function_computation(tycker, scope, later, body)?;
+        Ok(Arrow(domain, inner).build(tycker, &scope.env))
     }
 
-    /// `[[forall (X : K) . A]]v = Thk (forall (X : K) . Ret [[A]]v)`.
+    /// `fn p1 … pn => M` as the computation inside its thunk, against the
+    /// computation type it is expected at, if any.
     ///
-    /// A quantifier's body is a computation-type position, so it carries a
-    /// returner, and the quantifier is wrapped in `Thk` to be a value type.
+    /// A binder that declares a kind is a type parameter, and so is one that
+    /// declares nothing where a quantifier is expected; any other is a value
+    /// parameter, which takes its type from an annotation or the expected arrow.
     ///
-    /// `body_type` reads the body: the type clause, or, inside a `let fix`
-    /// signature, [`Self::cbv_fix_signature`], so that parameters after a
-    /// type parameter are still read as parameters.
-    fn cbv_forall<'db>(
-        &self, tycker: &mut Tycker<'db>, scope: &CbvScope, binder: su::PatId, body: su::TermId,
-        body_type: impl FnOnce(&Self, &mut Tycker<'db>, &CbvScope, su::TermId) -> Result<ss::TypeId>,
-    ) -> Result<ss::TypeId> {
-        let opened =
-            self.cbv_open_type_binder(tycker, scope, binder, None, CbvTypeBinderSite::Abstraction)?;
-        let body = body_type(self, tycker, &opened.scope, body)?;
-        self.cbv_require_value_type(tycker, &opened.scope, body)?;
-        let body = cs::Ret(body).build(tycker, &opened.scope.env);
-        let ctype = ss::CType.build(tycker, &scope.env);
-        let binder = ss::TypeBinder { pattern: opened.pattern, witness: opened.witness };
-        let forall: ss::TypeId = Alloc::alloc(tycker, ss::Forall(binder, body), ctype, &scope.env);
-        Ok(cs::Thk(forall).build(tycker, &scope.env))
+    /// The group and its expected type take their parameters together, so when
+    /// one of them runs out first the two disagree on arity. That is reported
+    /// where it happens, as a call with too few arguments is, and names the
+    /// side with more parameters; otherwise an unannotated binder past the end
+    /// of the expected type would be blamed for having no type to take.
+    fn cbv_abstraction<'db>(
+        &self, tycker: &mut Tycker<'db>, scope: &CbvScope, binders: &[su::PatId], body: su::TermId,
+        wanted: Option<ss::TypeId>,
+    ) -> Result<ss::CompuId> {
+        let Some((binder, later)) = binders.split_first() else {
+            let takes_more = wanted.is_some_and(|wanted| {
+                wanted.destruct_arrow(tycker).is_some()
+                    || wanted.destruct_forall_binder(tycker).is_some()
+            });
+            if takes_more {
+                tycker.err(TyckError::Expressivity(
+                    "the expected type takes more parameters at once than this call-by-value function; group them, as in `fn x y => e`",
+                ))?
+            }
+            let wanted = wanted.and_then(|wanted| wanted.destruct_ret_app(tycker));
+            let (body, _returner) = self.cbv_term(tycker, scope, body, wanted)?;
+            return Ok(body);
+        };
+        if wanted.is_some_and(|wanted| wanted.destruct_ret_app(tycker).is_some()) {
+            tycker.err(TyckError::Expressivity(
+                "the expected type takes fewer parameters at once than this call-by-value function; nest the rest, as in `fn x => fn y => e`",
+            ))?
+        }
+        let binder = *binder;
+        let quantifier = wanted.and_then(|wanted| wanted.destruct_forall_binder(tycker));
+        let undeclared = self.cbv_optional_binder_annotation(tycker, binder).is_none();
+        if self.cbv_type_binder_kind(tycker, scope, binder)?.is_some()
+            || (undeclared && quantifier.is_some())
+        {
+            return self.cbv_type_parameter(tycker, scope, binder, later, body, quantifier);
+        }
+        self.cbv_value_parameter(tycker, scope, binder, later, body, wanted)
+    }
+
+    /// A type parameter. The skolem is allocated here rather than by the recipe,
+    /// because what follows has to be translated *under* it: its occurrences of
+    /// the source name resolve to the skolem through the environment.
+    fn cbv_type_parameter<'db>(
+        &self, tycker: &mut Tycker<'db>, scope: &CbvScope, binder: su::PatId, later: &[su::PatId],
+        body: su::TermId, quantifier: Option<(ss::TypeBinder, ss::TypeId)>,
+    ) -> Result<ss::CompuId> {
+        let expected_kind = quantifier.as_ref().map(|(binder, _)| binder.domain_kind(tycker));
+        let opened = self.cbv_open_type_binder(
+            tycker,
+            scope,
+            binder,
+            expected_kind,
+            CbvTypeBinderSite::Abstraction,
+        )?;
+        let witness = opened.witness;
+        let wanted = match quantifier {
+            | Some((quantifier, quantified)) => {
+                Lub::lub(quantifier.domain_kind(tycker), opened.kind, tycker)?;
+                let argument: ss::TypeId =
+                    Alloc::alloc(tycker, witness, opened.kind, &opened.scope.env);
+                let payload = quantifier.pattern.bind_argument(tycker, argument)?;
+                Some(quantified.subst_abst(tycker, (quantifier.witness, payload))?)
+            }
+            | None => None,
+        };
+        let inner = self.cbv_abstraction(tycker, &opened.scope, later, body, wanted)?;
+        Ok(Abs(cs::Ty(witness), move |_: Option<DefId>, _: ss::AbstId| inner)
+            .build(tycker, &scope.env))
+    }
+
+    /// A value parameter, whose type comes from its outermost annotation, from
+    /// the expected arrow, or from the annotations inside it when they give the
+    /// type of every part. Otherwise there is nothing to take it from: a part
+    /// with no annotation would need inference, which this judgment does not do.
+    fn cbv_value_parameter<'db>(
+        &self, tycker: &mut Tycker<'db>, scope: &CbvScope, source_binder: su::PatId,
+        later: &[su::PatId], body: su::TermId, wanted: Option<ss::TypeId>,
+    ) -> Result<ss::CompuId> {
+        const NEEDS_TYPE: &str = "a call-by-value parameter needs an explicit type annotation, or an expected type to take one from";
+        let (wanted_domain, wanted_rest) =
+            match wanted.and_then(|wanted| wanted.destruct_arrow(tycker)) {
+                | Some((domain, rest)) => (Some(domain), Some(rest)),
+                | None => (None, None),
+            };
+        let (bare_binder, domain) = match self.cbv_optional_binder_annotation(tycker, source_binder)
+        {
+            // `(x : _)` asks for the domain the way `x` does.
+            | Some((bare, source_domain))
+                if matches!(tycker.scoped.terms[&source_domain], su::Term::Hole(_)) =>
+            {
+                (bare, wanted_domain)
+            }
+            | Some((bare, source_domain)) => {
+                let domain = self.cbv_type(tycker, scope, source_domain)?;
+                // Required here because a binder need not check it: a name
+                // compares its kind with the domain's, and a wildcard binds
+                // nothing and compares nothing.
+                self.cbv_require_value_type(tycker, scope, domain)?;
+                if let Some(wanted) = wanted_domain {
+                    Lub::lub(wanted, domain, tycker)?;
+                }
+                (bare, Some(domain))
+            }
+            | None => (source_binder, wanted_domain),
+        };
+        if domain.is_none() && !Self::cbv_binder_determines_its_type(tycker, bare_binder) {
+            tycker.err(TyckError::Expressivity(NEEDS_TYPE))?
+        }
+        self.cbv_require_binding_pattern(tycker, bare_binder)?;
+        self.cbv_settle_pattern_annotations(tycker, scope, bare_binder)?;
+        // With no domain the binder gives its own, by the host's synthesis over
+        // the annotations just settled, each of them a translated value type.
+        let action = match domain {
+            | Some(domain) => PatternAction::ana(domain.into()),
+            | None => PatternAction::syn(),
+        };
+        let binder = TyEnvT::new(scope.env.clone(), bare_binder).tyck(tycker, action)?;
+        let (pattern, _domain) = binder.inner.as_value();
+        ValuePatternShape::require_binding(tycker, bare_binder, pattern)?;
+        let defs = self.cbv_pattern_bindings(tycker, pattern);
+        let body_scope = scope.binding(binder.info.clone(), defs);
+        let inner = self.cbv_abstraction(tycker, &body_scope, later, body, wanted_rest)?;
+        // A witness this binder opened may not outlive it, exactly as in the
+        // `let` and `match` clauses.
+        let result = tycker.statics.annotations_compu[&inner];
+        binder.close_scope(tycker, result)?;
+        Ok(Abs(pattern, |_: ss::VPatId| inner).build(tycker, &scope.env))
+    }
+
+    /// Whether a binder's own annotations give its type: every part of it is
+    /// annotated, or is `()`, or is a product or a named field of such parts.
+    ///
+    /// This is where the host's pattern synthesis finds a type without
+    /// inference. It also gives a bare variable a stand-in for inference to
+    /// solve, which a region does not do, and it finds none for a wildcard, a
+    /// constructor tag or a field projection.
+    fn cbv_binder_determines_its_type(tycker: &Tycker<'_>, binder: su::PatId) -> bool {
+        match &tycker.scoped.pats[&binder] {
+            | su::Pattern::Ann(_) | su::Pattern::Triv(_) => true,
+            | su::Pattern::Cons(components) => components
+                .iter()
+                .all(|component| Self::cbv_binder_determines_its_type(tycker, *component)),
+            | su::Pattern::Named(su::Named(_, inner)) => {
+                Self::cbv_binder_determines_its_type(tycker, *inner)
+            }
+            | _ => false,
+        }
     }
 
     /// `[[exists (X : K) . A]]v = exists (X : K) . [[A]]v`.
@@ -3160,7 +3067,17 @@ impl TermChecker<'_> {
         &self, tycker: &mut Tycker<'db>, scope: &CbvScope, term: su::TermId,
         su::ManifestExists { binder, definition, body }: su::ManifestExists,
     ) -> Result<ss::TypeId> {
-        let definition = self.cbv_type(tycker, scope, definition)?;
+        // The kind the binder declares for its payload is known before the
+        // definition is read, as at a pack, so an operator definition may
+        // leave its own binder's kind unwritten.
+        let payload_binder = match tycker.scoped.pats[&binder] {
+            | su::Pattern::Named(su::Named(_, inner)) => inner,
+            | _ => binder,
+        };
+        let definition = match self.cbv_type_binder_kind(tycker, scope, payload_binder)? {
+            | Some(kind) => self.cbv_type_against(tycker, scope, definition, kind)?,
+            | None => self.cbv_type(tycker, scope, definition)?,
+        };
         let definition_kind = tycker.statics.type_kind(definition);
         let (pattern, _kind, env) = self.cbv_check_type_binder(
             tycker,
@@ -3214,9 +3131,16 @@ impl TermChecker<'_> {
     /// unwritten, and the body is translated against the codomain, so a curried
     /// operator needs its kinds written nowhere.
     fn cbv_type_operator<'db>(
-        &self, tycker: &mut Tycker<'db>, scope: &CbvScope, binder: su::PatId, body: su::TermId,
+        &self, tycker: &mut Tycker<'db>, scope: &CbvScope, binders: &[su::PatId], body: su::TermId,
         against: Option<(ss::KindId, ss::KindId)>,
     ) -> Result<ss::TypeId> {
+        let (binder, later) = binders.split_first().expect("a telescope has a binder");
+        let binder = *binder;
+        if against.is_none() && self.cbv_optional_binder_annotation(tycker, binder).is_none() {
+            return tycker.err(TyckError::Expressivity(
+                "a type operator's binder needs its kind, written or taken from an expected arrow kind",
+            ));
+        }
         let opened = self.cbv_open_type_binder(
             tycker,
             scope,
@@ -3224,11 +3148,21 @@ impl TermChecker<'_> {
             against.map(|(domain, _)| domain),
             CbvTypeBinderSite::Abstraction,
         )?;
-        let body = match against {
-            | Some((_, codomain)) => {
+        let body = match (later, against) {
+            | ([], Some((_, codomain))) => {
                 self.cbv_type_against(tycker, &opened.scope, body, codomain)?
             }
-            | None => self.cbv_type(tycker, &opened.scope, body)?,
+            | ([], None) => self.cbv_type(tycker, &opened.scope, body)?,
+            | (_, Some((_, codomain))) => {
+                let ss::Kind::Arrow(Arrow(next_domain, next_codomain)) =
+                    tycker.kind_filled(&codomain)?.to_owned()
+                else {
+                    return tycker.err(TyckError::KindMismatch);
+                };
+                let against = Some((next_domain, next_codomain));
+                self.cbv_type_operator(tycker, &opened.scope, later, body, against)?
+            }
+            | (_, None) => self.cbv_type_operator(tycker, &opened.scope, later, body, None)?,
         };
         let body_kind = tycker.statics.type_kind(body);
         let arrow: ss::KindId = Arrow(opened.kind, body_kind).build(tycker, &scope.env);
@@ -3457,8 +3391,9 @@ impl TermChecker<'_> {
     ///
     /// It is used wherever a kind is known before the type is translated: a
     /// type binding's declared kind, a quantifier's binder at an instantiation,
-    /// an existential's binder at a pack, an operator's domain at an
-    /// application, and an ascription. Without it the
+    /// an existential's binder at a pack, a manifest existential's binder at
+    /// its definition, an operator's domain at an application, and an
+    /// ascription. Without it the
     /// host's spelling of an operator under a declared kind was refused with a
     /// complaint about how a source type may be built.
     fn cbv_type_against<'db>(
@@ -3486,31 +3421,34 @@ impl TermChecker<'_> {
             return Ok(translated);
         }
         let operator = match tycker.scoped.terms[&ty].to_owned() {
-            | su::Term::Abs(su::Abs(binder, body)) => match tycker.kind_filled(&expected)? {
-                | ss::Kind::Arrow(Arrow(domain, codomain))
-                    if self.cbv_optional_binder_annotation(tycker, binder).is_none()
-                        || self.cbv_type_binder_kind(tycker, scope, binder)?.is_some() =>
-                {
-                    Some((binder, body, domain, codomain))
+            | su::Term::Abs(su::Abs(binders, body)) => {
+                let binder = binders[0];
+                match tycker.kind_filled(&expected)? {
+                    | ss::Kind::Arrow(Arrow(domain, codomain))
+                        if self.cbv_optional_binder_annotation(tycker, binder).is_none()
+                            || self.cbv_type_binder_kind(tycker, scope, binder)?.is_some() =>
+                    {
+                        Some((binders, body, domain, codomain))
+                    }
+                    // A binder that declares nothing makes this an operator, and the
+                    // expectation is not an arrow kind: an operator stands where a
+                    // non-operator is expected. That is a kind error; synthesizing it
+                    // instead reported a binder missing its kind, which was not what
+                    // went wrong.
+                    | _ if self.cbv_optional_binder_annotation(tycker, binder).is_none() => {
+                        return tycker.err(TyckError::KindMismatch);
+                    }
+                    | _ => None,
                 }
-                // A binder that declares nothing makes this an operator, and the
-                // expectation is not an arrow kind: an operator stands where a
-                // non-operator is expected. That is a kind error; synthesizing it
-                // instead reported a binder missing its kind, which was not what
-                // went wrong.
-                | _ if self.cbv_optional_binder_annotation(tycker, binder).is_none() => {
-                    return tycker.err(TyckError::KindMismatch);
-                }
-                | _ => None,
-            },
+            }
             | _ => None,
         };
         let translated = match operator {
-            | Some((binder, body, domain, codomain)) => self.cbv_sourced(
+            | Some((binders, body, domain, codomain)) => self.cbv_sourced(
                 tycker,
                 ty,
                 |tycker| {
-                    self.cbv_type_operator(tycker, scope, binder, body, Some((domain, codomain)))
+                    self.cbv_type_operator(tycker, scope, &binders, body, Some((domain, codomain)))
                 },
                 |tycker, translated| {
                     let kind = tycker.statics.type_kind(*translated);
@@ -3562,10 +3500,10 @@ impl TermChecker<'_> {
             // makes it a quantifier. Structural, so it needs no seal and no
             // query: a region could only *name* a `forall` declared outside
             // until this clause, although nothing about the former required it.
-            | Tm::Pi(su::Pi(binder, body))
-                if self.cbv_type_binder_kind(tycker, scope, binder)?.is_some() =>
-            {
-                self.cbv_forall(tycker, scope, binder, body, Self::cbv_type)
+            | Tm::Pi(su::Pi(binders, body)) => {
+                let computation =
+                    self.cbv_function_computation(tycker, scope, &binders, body)?;
+                Ok(cs::Thk(computation).build(tycker, &scope.env))
             }
             // [[exists (X : K) . A]]v = exists (X : K) . [[A]]v
             //
@@ -3577,41 +3515,24 @@ impl TermChecker<'_> {
             {
                 self.cbv_exists(tycker, scope, binder, body)
             }
-            // [[A -> B]]v = Thk ([[A]]v -> Ret [[B]]v)
-            //
-            // `A -> B` desugars to `Pi` over a hole pattern annotated with `A`,
-            // and so does `pi (_ : A) . B`; the two denote the same type. A
-            // named binder is rejected rather than translated, which keeps this
-            // version clear of the question of what its scope would mean.
-            | Tm::Pi(su::Pi(binder, body)) => {
-                let (bare, source_domain) = self.cbv_annotated_binder(tycker, binder)?;
-                if !matches!(tycker.scoped.pats[&bare], su::Pattern::Hole(_)) {
-                    tycker.err(
-                        TyckError::Expressivity("a call-by-value arrow may not bind its domain"))?
-                }
-                let domain = self.cbv_type(tycker, scope, source_domain)?;
-                let codomain = self.cbv_type(tycker, scope, body)?;
-                let arrow = self.cbv_computation_arrow(tycker, scope, domain, codomain)?;
-                Ok(cs::Thk(arrow).build(tycker, &scope.env))
-            }
             // [[fn (X : K) => T]]v = fn (X : K) => [[T]]v
             //
             // A binder that declares a kind makes this a type operator. One that
             // declares a type is a value lambda, which no type position admits,
             // and is left to the leaf guard to refuse; one that declares nothing
             // is the next arm's.
-            | Tm::Abs(su::Abs(binder, body))
-                if self.cbv_type_binder_kind(tycker, scope, binder)?.is_some() =>
+            | Tm::Abs(su::Abs(ref binders, body))
+                if self.cbv_type_binder_kind(tycker, scope, binders[0])?.is_some() =>
             {
-                self.cbv_type_operator(tycker, scope, binder, body, None)
+                self.cbv_type_operator(tycker, scope, binders, body, None)
             }
             // A binder that declares nothing makes an operator only against an
             // expected arrow kind, which `cbv_type_against` supplies; reached
             // here, there was none to take the kind from. The leaf guard would
             // have refused it too, but by describing how a source type may be
             // built, which is not what went wrong.
-            | Tm::Abs(su::Abs(binder, _))
-                if self.cbv_optional_binder_annotation(tycker, binder).is_none() =>
+            | Tm::Abs(su::Abs(ref binders, _))
+                if self.cbv_optional_binder_annotation(tycker, binders[0]).is_none() =>
             {
                 tycker.err(
                     TyckError::Expressivity(
@@ -3833,9 +3754,8 @@ impl TermChecker<'_> {
     ) -> Result<ss::TypeId> {
         let mut arguments = Vec::new();
         let mut head = ty;
-        while let su::Term::App(su::App(function, argument)) = tycker.scoped.terms[&head].to_owned()
-        {
-            arguments.push(argument);
+        while let su::Term::App(su::App(function, group)) = tycker.scoped.terms[&head].to_owned() {
+            arguments.extend(group.into_iter().rev());
             head = function;
         }
         arguments.reverse();
@@ -3898,9 +3818,11 @@ impl TermChecker<'_> {
         match tycker.scoped.terms[&ty].to_owned() {
             | Tm::Var(def) => self.cbv_require_region_name(tycker, scope, ty, def),
             | Tm::Internal(_) => Ok(()),
-            | Tm::App(su::App(function, argument)) => {
+            | Tm::App(su::App(function, arguments)) => {
                 self.cbv_classifier_shape(tycker, scope, function)?;
-                self.cbv_classifier_shape(tycker, scope, argument)
+                arguments
+                    .into_iter()
+                    .try_for_each(|argument| self.cbv_classifier_shape(tycker, scope, argument))
             }
             | Tm::Ann(su::Ann { tm, ty }) => {
                 self.cbv_classifier_shape(tycker, scope, tm)?;
@@ -3924,8 +3846,10 @@ impl TermChecker<'_> {
             // which read a term variable bound outside the region and still
             // produced a well-formed core term, so the arena invariants had nothing
             // to object to.
-            | Tm::Pi(su::Pi(binder, body)) => {
-                self.cbv_classifier_binder_shape(tycker, scope, binder)?;
+            | Tm::Pi(su::Pi(binders, body)) => {
+                binders.into_iter().try_for_each(|binder| {
+                    self.cbv_classifier_binder_shape(tycker, scope, binder)
+                })?;
                 self.cbv_classifier_shape(tycker, scope, body)
             }
             | Tm::SourceBoundary(_) => self.cbv_reject_import(tycker),

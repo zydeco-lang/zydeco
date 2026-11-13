@@ -171,17 +171,22 @@ impl<'a> BlockCandidateCollector<'a> {
             | Term::Dtor(b::Dtor(inner, _))
             | Term::Proj(b::Proj(inner, _)) => self.term(*inner),
             | Term::Cons(items) => items.iter().flat_map(|item| self.term(*item)).collect(),
-            | Term::Abs(b::Abs(pattern, body))
+            | Term::Abs(b::Abs(patterns, body)) | Term::Pi(b::Pi(patterns, body)) => patterns
+                .iter()
+                .flat_map(|pattern| self.pattern(*pattern))
+                .chain(self.term(*body))
+                .collect(),
             | Term::ValAbs(b::Abs(pattern, body))
             | Term::Fix(b::Fix(pattern, body))
-            | Term::Pi(b::Pi(pattern, body))
             | Term::ValPi(b::ValPi(pattern, body))
             | Term::Sigma(b::Sigma(pattern, body)) => {
                 [self.pattern(*pattern), self.term(*body)].into_iter().flatten().collect()
             }
-            | Term::App(b::App(function, argument)) => {
-                [self.term(*function), self.term(*argument)].into_iter().flatten().collect()
-            }
+            | Term::App(b::App(function, arguments)) => self
+                .term(*function)
+                .into_iter()
+                .chain(arguments.iter().flat_map(|argument| self.term(*argument)))
+                .collect(),
             | Term::ManifestExists(term) => {
                 let b::ManifestExists { binder, definition, body } = &**term;
                 [self.pattern(*binder), self.term(*definition), self.term(*body)]
@@ -325,7 +330,7 @@ impl ContextElaboration<'_> {
                 | ContextNode::Acyclic(binding) => {
                     let term = match binding.inner {
                         | BindingForm::Parameter(Parameter { flavor, binder }) => match flavor {
-                            | ParameterFlavor::Plain => b::Abs(binder, tail).into(),
+                            | ParameterFlavor::Plain => b::Abs(vec![binder], tail).into(),
                             | ParameterFlavor::Value => b::Term::ValAbs(b::Abs(binder, tail)),
                         },
                         | BindingForm::Definition(Definition { binder, bindee }) => {

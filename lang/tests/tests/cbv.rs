@@ -455,11 +455,33 @@ ret ()",
     );
 }
 
+/// A function type's binder may name its parameter, since no source type
+/// mentions a term: `pi (y : Int) . Int` is `Int -> Int`. A later binder or a
+/// result that mentions the name is refused by sort, at any position of a
+/// group.
 #[test]
-fn rejects_an_arrow_that_binds_its_domain() {
+fn admits_a_named_arrow_binder_that_nothing_mentions() {
+    RegionCase::accept("@[cbv] (fn (f : pi (y : Int) . Int) => f 1)");
+    RegionCase::accept("@[cbv] (fn (f : pi (x : Int) (y : Int) . Int) => f 1 2)");
+    for mention in ["pi (y : Int) . y", "pi (x : Int) (y : x) . Int", "pi (x : Int) (y : Int) . x"]
+    {
+        RegionCase::reject(
+            &format!("@[cbv] (fn (f : {mention}) => 0)"),
+            TyckDiagnosticCode::SortMismatch,
+        );
+    }
+}
+
+/// Below its outermost annotation, a telescope's binder is checked as a
+/// parameter is: an annotation inside it is translated and compared with the
+/// domain, and how deep an annotation sits decides nothing.
+#[test]
+fn checks_every_annotation_of_a_telescope_binder() {
+    RegionCase::accept("@[cbv] (fn (f : pi ((_ : Int) : Int) . Int) => 0)");
+    RegionCase::accept("@[cbv] (fn (f : pi ((y : Int) : Int) . Int) => 0)");
     RegionCase::reject(
-        "@[cbv] (fn (x : pi (y : Int) . Int) => x)",
-        TyckDiagnosticCode::Expressivity,
+        "@[cbv] (fn (f : pi ((_ : Unit) : Int) . Int) => 0)",
+        TyckDiagnosticCode::TypeMismatch,
     );
 }
 
@@ -468,6 +490,40 @@ fn rejects_an_arrow_that_binds_its_domain() {
 #[test]
 fn rejects_an_unannotated_binder() {
     RegionCase::reject("@[cbv] (fn x => x)", TyckDiagnosticCode::Expressivity);
+}
+
+/// A parameter's type may come from the annotations inside it, when they give
+/// the type of every part, as the host's synthesis reads them:
+/// `fn ((x : Int), (y : Int)) => x` takes `Int * Int`, in any position of a
+/// group. A part with no annotation would need inference, which a region does
+/// not do, so it is refused as a bare parameter is; and each annotation is
+/// translated and guarded as any is.
+#[test]
+fn takes_a_parameter_type_from_the_annotations_inside_it() {
+    for accepted in [
+        "(fn ((x : Int), (y : Int)) => x) (1, 2)",
+        "(fn ((x : Int) : _) => x) 1",
+        "(fn () => 0) ()",
+        "(fn (z : Int) ((x : Int), (y : Int)) => z) 0 (1, 2)",
+    ] {
+        RegionCase::accept(&format!("@[cbv] ({accepted})"));
+    }
+    RegionCase::reject(
+        "@[cbv] ((fn ((x : Int), (y : Int)) => x) (1, ()))",
+        TyckDiagnosticCode::TypeMismatch,
+    );
+    for refused in ["fn ((x : Int), y) => x", "fn ((x : Int), _) => x", "fn (z : Int) (x, y) => z"]
+    {
+        RegionCase::reject(&format!("@[cbv] ({refused})"), TyckDiagnosticCode::Expressivity);
+    }
+    SourceCase::assert_rejected(
+        SourceCase::check(&CbvRegion::closed(
+            "let outside = 0 in
+do case_result <- @[cbv] (fn ((x : @[typeof] outside), (y : Int)) => y);
+ret ()",
+        )),
+        TyckDiagnosticCode::Expressivity,
+    );
 }
 
 /// The ordinary abstraction rule rejects a refutable binder with
@@ -2247,28 +2303,93 @@ fn rejects_a_thunked_fix_that_is_not_a_header() {
     );
 }
 
-/// Several parameters curry: `let fix f (x : A) (y : B) : C = M` is
-/// `A -> B -> C`. The signature desugars to `pi (x : A) . pi (y : B) . C`, and
-/// the second binder is only a parameter's name, which nothing in a source type
-/// can mention, so it is read as the source arrow `B -> C`. This was refused,
-/// the name taken for an arrow binding its domain.
+/// A header is recognized by its shape alone. A first parameter written without
+/// a type is then refused for missing it, as a later one is, at the binding;
+/// recognition used to require the type, and the header fell through to the term
+/// rules, which refused the `Thk` desugaring writes into its classifier. In the
+/// `let !` spelling the signature supplies the parameter's type, as an expected
+/// arrow does, and is still compared with the body.
+#[test]
+fn recognizes_a_header_whose_first_parameter_has_no_type() {
+    for header in ["let fix g x : Int = 0 in 0", "let fix g (x : Int) y : Int = 0 in 0"] {
+        SourceCase::assert_rejected_at(
+            RegionCase::check(&RegionCase::block(&format!("@[cbv] ({header})"))),
+            TyckDiagnosticCode::Expressivity,
+            header,
+        );
+    }
+    RegionCase::accept("@[cbv] (let ! f : Int -> Int = fix g => fn x => x in f 1)");
+    RegionCase::reject(
+        "@[cbv] (let ! f : Int -> Int = fix g => fn x => (x : Unit) in f 1)",
+        TyckDiagnosticCode::TypeMismatch,
+    );
+}
+
+/// A function header that does not recur is the host's own: desugaring gives it
+/// a signature whose binders name the parameters, and nothing reads the names.
+/// A signature that mentions one is refused by sort.
+#[test]
+fn translates_a_function_header() {
+    RegionCase::accept("@[cbv] (let f (x : Int) : Int = x in f 1)");
+    RegionCase::accept("@[cbv] (let f (x : Int) (y : Int) : Int = y in f 1 2)");
+    RegionCase::accept("@[cbv] (let f (X : VType) (x : X) : X = x in f Int 3)");
+    RegionCase::reject(
+        "@[cbv] (let f (x : Int) : Int = () in 0)",
+        TyckDiagnosticCode::TypeMismatch,
+    );
+    RegionCase::reject("@[cbv] (let f (x : Int) : x = x in 0)", TyckDiagnosticCode::SortMismatch);
+}
+
+/// The `let !` spelling writes a signature's binders apart from the
+/// parameters, so each is checked as a parameter is: every annotation inside it
+/// is translated, guarded and compared with its domain, and its shape is a
+/// binder's, in any position of the group. They were read for their outermost
+/// annotation alone, which let a conflicting annotation, a literal, and a
+/// classifier reading outside the region through.
+#[test]
+fn checks_a_let_bang_signature_binder_as_a_parameter() {
+    const ONE: &str = "fix g => fn (x : Int) => x in f 0";
+    const TWO: &str = "fix g => fn (x : Int) (y : Int) => y in f 0 1";
+    RegionCase::accept(&format!("@[cbv] (let ! f : pi ((x : Int) : Int) . Int = {ONE})"));
+    RegionCase::accept(&format!("@[cbv] (let ! f : pi (x : Int) ((y : Int) : Int) . Int = {TWO})"));
+    for (signature, body, expected) in [
+        ("pi ((x : Unit) : Int) . Int", ONE, TyckDiagnosticCode::TypeMismatch),
+        ("pi (x : Int) ((y : Unit) : Int) . Int", TWO, TyckDiagnosticCode::TypeMismatch),
+        ("pi (0 : Int) . Int", ONE, TyckDiagnosticCode::Expressivity),
+        ("pi ((x : @[typeof] outside) : Int) . Int", ONE, TyckDiagnosticCode::Expressivity),
+    ] {
+        SourceCase::assert_rejected(
+            SourceCase::check(&CbvRegion::closed(&format!(
+                "let outside = 0 in
+do case_result <- @[cbv] (let ! f : {signature} = {body});
+ret ()"
+            ))),
+            expected,
+        );
+    }
+}
+
+/// Several parameters are one function: `let fix f (x : A) (y : B) : C = M` is
+/// `pi (_ : A) (_ : B) . C`, and a call passes all of them. The signature's
+/// binders are only parameters' names, which nothing in a source type can
+/// mention, so they are read for their domains.
 #[test]
 fn translates_a_recursive_binding_with_several_parameters() {
     RegionCase::accept("@[cbv] (let fix f (x : Int) (y : Int) : Int = y in f 1 2)");
-    RegionCase::accept(
-        "@[cbv] (let fix f (x : Int) (y : Int) (z : Int) : Int = z in let g = f 1 in g 2 3)",
-    );
+    RegionCase::accept("@[cbv] (let fix f (x : Int) (y : Int) (z : Int) : Int = z in f 1 2 3)");
     RegionCase::accept("@[cbv] (let fix f (x : Int) (X : VType) (y : X) : X = y in f 1 Int 2)");
 }
 
-/// A recursive call is an ordinary curried application, so a call with fewer
-/// arguments than parameters returns a function. This program witnessed the old
-/// refusal of a second parameter; it is refused now for what is wrong with it.
+/// Consecutive parameters are one function, so a call passes all of them.
 #[test]
-fn refuses_a_recursive_body_returning_a_partial_application() {
+fn refuses_a_recursive_call_with_too_few_arguments() {
     RegionCase::reject(
-        "@[cbv] (let fix f (x : Int) (y : Int) : Int = f x in f 1)",
-        TyckDiagnosticCode::TypeMismatch,
+        "@[cbv] (let fix f (x : Int) (y : Int) : Int = f x in 0)",
+        TyckDiagnosticCode::Expressivity,
+    );
+    RegionCase::reject(
+        "@[cbv] (let fix f (x : Int) (y : Int) : Int = y in f 1)",
+        TyckDiagnosticCode::Expressivity,
     );
 }
 
@@ -2409,6 +2530,23 @@ fn names_an_abstract_existential() {
 #[test]
 fn names_a_manifest_existential() {
     RegionCase::accept_with_exists("@[cbv] (param p : Clear that 7)");
+}
+
+/// A manifest binder declares its kind before its definition is read, so an
+/// operator definition takes its binder's kind from it, as a pack's witness
+/// does; under a field name the definition is the payload's.
+#[test]
+fn reads_a_manifest_definition_against_its_declared_kind() {
+    RegionCase::accept(
+        "@[cbv] (let P : VType = exists (F as (fn X => X) : VType -> VType) . F Int in 0)",
+    );
+    RegionCase::accept(
+        "@[cbv] (let P : VType = exists (#C = ((F as (fn X => X)) : VType -> VType)) . F Int in 0)",
+    );
+    RegionCase::reject(
+        "@[cbv] (let P : VType = exists (F as (fn X => X) : VType) . F in 0)",
+        TyckDiagnosticCode::KindMismatch,
+    );
 }
 
 /// `[[(T, V)]]v = ([[T]]v, [[V]]v)`. The same `Cons` node as a tuple: the
@@ -2930,6 +3068,19 @@ fn refuses_a_written_existential_whose_body_is_an_operator() {
 #[test]
 fn admits_an_arrow_kind_written_at_a_type_binder() {
     RegionCase::accept("@[cbv] (fn (F : VType -> VType) => fn (x : F Int) => x)");
+}
+
+/// A kind arrow's binder may carry an annotation inside its outermost one, as
+/// any binder may, and each is a kind the domain must agree with.
+#[test]
+fn reads_a_kind_arrow_whose_binder_is_annotated_twice() {
+    RegionCase::accept(
+        "@[cbv] (let K = pi ((_ : VType) : VType) . VType in fn (F : K) => fn (x : F Int) => x)",
+    );
+    RegionCase::reject(
+        "@[cbv] (let K = pi ((_ : VType -> VType) : VType) . VType in 0)",
+        TyckDiagnosticCode::KindMismatch,
+    );
 }
 
 /// The same kind at a type binding, which the same probe decides.
@@ -3645,13 +3796,18 @@ const OPERATOR: &str = "let F : VType -> VType = fn (X : VType) => X that";
 
 impl RegionCase {
     /// Every place a parameter is written, for one binder and one classifier.
-    fn parameter_sites(binder: &str, operator: &str, applied: &str) -> [String; 7] {
+    /// A group of parameters is checked one binder at a time, so its first,
+    /// middle, and last positions are separate sites.
+    fn parameter_sites(binder: &str, operator: &str, applied: &str) -> [String; 10] {
         [
             format!("fn ({binder} : {operator}) => 0"),
             format!("param ({binder} : {operator}) that 0"),
             format!("let fix g ({binder} : {operator}) : Int = 0 in 0"),
             format!("let fix g (y : Int) ({binder} : {operator}) : Int = 0 in 0"),
+            format!("let fix g ({binder} : {operator}) (y : Int) : Int = 0 in 0"),
             format!("fn (y : Int) ({binder} : {operator}) => 0"),
+            format!("fn ({binder} : {operator}) (y : Int) => 0"),
+            format!("fn (y : Int) ({binder} : {operator}) (z : Int) => 0"),
             format!("fn (G : VType -> VType) => fn ({binder} : {applied}) => 0"),
             format!("let ({binder} : {operator}) = (0 : {operator}) in 0"),
         ]
@@ -3837,7 +3993,8 @@ fn a_type_abstraction_takes_the_expected_quantifiers_body() {
     for program in [
         "((fn X => fn x => x) : forall (X : VType) . X -> X)",
         "((fn (X : VType) => fn x => x) : forall (Y : VType) . Y -> Y)",
-        "((fn X => fn Y => fn x => fn y => y) : forall (A : VType) (B : VType) . A -> B -> B)",
+        "((fn X => fn Y => fn x => fn y => y) : forall (A : VType) . forall (B : VType) . A -> B -> B)",
+        "((fn X Y => fn x => fn y => y) : forall (A : VType) (B : VType) . A -> B -> B)",
         "let O : VType -> VType = fn (X : VType) => (X * Int) that ((fn X => fn x => (x, 0)) : forall (A : VType) . A -> O A)",
     ] {
         RegionCase::accept(&format!("@[cbv] ({program})"));
@@ -3859,10 +4016,10 @@ fn a_constructor_under_a_type_abstraction_takes_its_type_from_the_quantifier() {
 #[test]
 fn a_type_abstractions_expected_body_avoids_capture() {
     RegionCase::accept(
-        "@[cbv] (((fn Y => fn X => fn (a : Y) => fn (b : X) => a) : forall (X : VType) (Y : VType) . X -> Y -> X))",
+        "@[cbv] (((fn Y => fn X => fn (a : Y) => fn (b : X) => a) : forall (X : VType) . forall (Y : VType) . X -> Y -> X))",
     );
     RegionCase::reject(
-        "@[cbv] (((fn Y => fn X => fn (a : Y) => fn (b : X) => b) : forall (X : VType) (Y : VType) . X -> Y -> X))",
+        "@[cbv] (((fn Y => fn X => fn (a : Y) => fn (b : X) => b) : forall (X : VType) . forall (Y : VType) . X -> Y -> X))",
         TyckDiagnosticCode::TypeMismatch,
     );
 }
@@ -3899,4 +4056,184 @@ fn rejects_a_named_type_that_disagrees_with_its_named_kind() {
         "@[cbv] (let F : (#D :: (VType -> VType)) = (#C = fn (X : VType) => X) that 0)",
         TyckDiagnosticCode::NamedLabelMismatch,
     );
+}
+
+/* ------------------------ multi-argument functions ------------------------ */
+
+// Consecutive parameters are one function and consecutive arguments one call;
+// nesting either one spells the curried form instead. Desugaring keeps both
+// shapes and the translation decides between them, so the tables below cross
+// every spelling of a function with every spelling of what meets it.
+
+/// A function of `Int`s in each spelling, beside the calls it accepts. `f 1 2`
+/// is one call and `(f 1) 2` two; a call passes exactly the parameters of one
+/// group, and arguments left over apply to what it returns.
+#[test]
+fn a_call_passes_exactly_the_parameters_of_one_group() {
+    const CALLS: [&str; 5] = ["f 1 2", "f 1", "(f 1) 2", "f 1 2 3", "(f 1 2) 3"];
+    for (function, accepted) in [
+        ("fn (x : Int) (y : Int) => y", [true, false, false, false, false]),
+        ("fn (x : Int) => fn (y : Int) => y", [true, true, true, false, false]),
+        ("fn (x : Int) (y : Int) => fn (z : Int) => z", [true, false, false, true, true]),
+        ("fn (x : Int) => fn (y : Int) (z : Int) => z", [false, true, false, true, false]),
+    ] {
+        for (call, accepted) in CALLS.into_iter().zip(accepted) {
+            let program = format!("@[cbv] (let f = {function} in {call})");
+            if accepted {
+                RegionCase::accept(&program);
+            } else {
+                RegionCase::reject(&program, TyckDiagnosticCode::Expressivity);
+            }
+        }
+    }
+}
+
+/// A type argument belongs to the call of its group like any other, though it
+/// is not evaluated.
+#[test]
+fn a_type_argument_is_passed_with_its_group() {
+    const CALLS: [&str; 4] = ["f Int 1", "f Int", "(f Int) 1", "f Int 1 2"];
+    for (function, accepted) in [
+        ("fn (X : VType) (x : X) => x", [true, false, false, false]),
+        ("fn (X : VType) => fn (x : X) => x", [true, true, true, false]),
+    ] {
+        for (call, accepted) in CALLS.into_iter().zip(accepted) {
+            let program = format!("@[cbv] (let f = {function} in {call})");
+            if accepted {
+                RegionCase::accept(&program);
+            } else {
+                RegionCase::reject(&program, TyckDiagnosticCode::Expressivity);
+            }
+        }
+    }
+}
+
+/// A source telescope is one function type, and a chain of them is curried.
+#[test]
+fn a_telescope_translates_to_one_function_type() {
+    for (source, translated) in [
+        ("pi (_ : Int) (_ : Int) . Int", "Thk (Int -> Int -> Ret Int)"),
+        ("Int -> Int -> Int", "Thk (Int -> Ret (Thk (Int -> Ret Int)))"),
+        ("pi (_ : Int) . pi (_ : Int) . Int", "Thk (Int -> Ret (Thk (Int -> Ret Int)))"),
+    ] {
+        let bodies = RegionCase::type_definition_bodies(
+            &RegionCase::block(&format!("@[cbv] (let T : VType = {source} in 0)")),
+            "T",
+        )
+        .unwrap();
+        assert_eq!(bodies, [translated], "{source}");
+    }
+}
+
+/// A function meets an expected type that groups its parameters alike. Where
+/// one of the two runs out of parameters first they disagree on arity, which is
+/// refused at the function whether or not its binders carry their types.
+#[test]
+fn a_function_meets_an_expected_type_that_groups_its_parameters_alike() {
+    const TELESCOPE: &str = "pi (_ : Int) (_ : Int) . Int";
+    const CHAINS: [&str; 3] =
+        ["Int -> Int -> Int", "pi (_ : Int) . pi (_ : Int) . Int", "pi (_ : Int) . Int -> Int"];
+    for (group, chain) in [
+        ("fn (x : Int) (y : Int) => y", "fn (x : Int) => fn (y : Int) => y"),
+        ("fn x y => y", "fn x => fn y => y"),
+        ("fn (x : _) (y : _) => y", "fn (x : _) => fn (y : _) => y"),
+    ] {
+        RegionCase::accept(&format!("@[cbv] (({group}) : {TELESCOPE})"));
+        SourceCase::assert_rejected_at(
+            RegionCase::check(&RegionCase::block(&format!("@[cbv] (({chain}) : {TELESCOPE})"))),
+            TyckDiagnosticCode::Expressivity,
+            chain,
+        );
+        for curried in CHAINS {
+            RegionCase::accept(&format!("@[cbv] (({chain}) : {curried})"));
+            SourceCase::assert_rejected_at(
+                RegionCase::check(&RegionCase::block(&format!("@[cbv] (({group}) : {curried})"))),
+                TyckDiagnosticCode::Expressivity,
+                group,
+            );
+        }
+    }
+}
+
+/// Type parameters group as value parameters do: with the quantifiers of one
+/// `forall`, or with the binders of a `pi` that mixes the two.
+#[test]
+fn a_type_parameter_groups_with_the_binders_it_meets() {
+    for (function, accepted, refused) in [
+        (
+            "fn X Y => fn (x : X) => x",
+            "forall (A : VType) (B : VType) . A -> A",
+            "forall (A : VType) . forall (B : VType) . A -> A",
+        ),
+        (
+            "fn X => fn Y => fn (x : X) => x",
+            "forall (A : VType) . forall (B : VType) . A -> A",
+            "forall (A : VType) (B : VType) . A -> A",
+        ),
+        ("fn X x => x", "pi (A : VType) (_ : A) . A", "forall (A : VType) . A -> A"),
+        ("fn X => fn x => x", "forall (A : VType) . A -> A", "pi (A : VType) (_ : A) . A"),
+    ] {
+        RegionCase::accept(&format!("@[cbv] (({function}) : {accepted})"));
+        RegionCase::reject(
+            &format!("@[cbv] (({function}) : {refused})"),
+            TyckDiagnosticCode::Expressivity,
+        );
+    }
+}
+
+/// The `let !` spelling writes a group's parameters apart from its signature,
+/// so a later pair may disagree. Only the first pair is compared before the
+/// parameters are bound, since a later annotation may name an earlier
+/// parameter; a later pair is compared when the function meets its signature.
+#[test]
+fn compares_every_parameter_of_a_let_bang_group_with_its_signature() {
+    RegionCase::accept(
+        "@[cbv] (let ! f : pi (X : VType) (_ : X) . Int = fix g => fn (X : VType) (y : X) => 5 in f Int 1)",
+    );
+    for (signature, parameters) in [
+        ("pi (x : Int) (Y : VType) . Int", "(x : Int) (y : Int)"),
+        ("pi (x : Int) (_ : Int) . Int", "(x : Int) (Y : VType)"),
+        ("pi (X : VType) (_ : X) . Int", "(X : VType) (y : Int)"),
+    ] {
+        RegionCase::reject(
+            &format!("@[cbv] (let ! f : {signature} = fix g => fn {parameters} => 5 in 0)"),
+            TyckDiagnosticCode::TypeMismatch,
+        );
+    }
+}
+
+/// Every binder of a group passes the guards the first one does: an annotation
+/// that reads a term bound outside the block is refused in any position, and
+/// the same annotation written inside is not.
+#[test]
+fn refuses_an_annotation_reading_outside_in_any_position_of_a_group() {
+    const TYPE: &str = "(@[typeof] outside)";
+    const KIND: &str = "(@[typeof] (@[typeof] outside))";
+    for (site, inside) in [
+        (format!("fn (x : {TYPE}) (y : Int) => 0"), "Int"),
+        (format!("fn (x : Int) (y : {TYPE}) => 0"), "Int"),
+        (format!("fn (x : Int) (y : {TYPE}) (z : Int) => 0"), "Int"),
+        (format!("let fix g (x : Int) (y : {TYPE}) : Int = 0 in 0"), "Int"),
+        (format!("let T : VType = pi (_ : Int) (_ : {TYPE}) . Int in 0"), "Int"),
+        (format!("fn (X : VType) ((Y : {KIND}) : VType) => 0"), "VType"),
+        (format!("let T : VType = forall (X : VType) ((Y : {KIND}) : VType) . X in 0"), "VType"),
+    ] {
+        RegionCase::reject_beside_outside(
+            RegionCase::block(&format!("@[cbv] ({site})")),
+            TyckDiagnosticCode::Expressivity,
+        );
+        let inside = site.replace(KIND, inside).replace(TYPE, inside);
+        RegionCase::accept(&format!("@[cbv] ({inside})"));
+    }
+}
+
+/// A telescope's domains are value types in every position, as a parameter's
+/// are.
+#[test]
+fn rejects_a_type_operator_in_any_position_of_a_telescope() {
+    for telescope in ["pi (_ : F) (_ : Int) . Int", "pi (_ : Int) (_ : F) . Int"] {
+        let program = format!("@[cbv] ({OPERATOR} let T : VType = {telescope} in 0)");
+        RegionCase::reject(&program, TyckDiagnosticCode::KindMismatch);
+        RegionCase::accept(&program.replace("(_ : F)", "(_ : F Int)"));
+    }
 }

@@ -29,7 +29,7 @@ begin
           do h <- @[cbv] (
             let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
             let Unit : VType = @(intrinsic(unit)) that
-            fn (a : Unit -> Int) (b : Unit -> Int) => (a (), b ()));
+            fn (a : Unit -> Int) => fn (b : Unit -> Int) => (a (), b ()));
           do h <- ! h {
             fn (u : Unit) =>
               do _ <- ! put 1;
@@ -50,7 +50,7 @@ begin
           do h <- @[cbv] (
             let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
             let Unit : VType = @(intrinsic(unit)) that
-            fn (a : Unit -> Int) (b : Unit -> Int) => (b (), a ()));
+            fn (a : Unit -> Int) => fn (b : Unit -> Int) => (b (), a ()));
           do h <- ! h {
             fn (u : Unit) =>
               do _ <- ! put 1;
@@ -71,7 +71,7 @@ begin
           do h <- @[cbv] (
             let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
             let Unit : VType = @(intrinsic(unit)) that
-            fn (f : Unit -> Int -> Int) (x : Unit -> Int) => f () (x ()));
+            fn (f : Unit -> Int -> Int) => fn (x : Unit -> Int) => f () (x ()));
           do h <- ! h {
             fn (u : Unit) =>
               do _ <- ! put 1;
@@ -94,7 +94,7 @@ begin
             @[cbv] (
               let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
               let Unit : VType = @(intrinsic(unit)) that
-              fn (f : Unit -> Int -> Int) (x : Unit -> Int) => (fn (n : Int) => f () n) (x ()));
+              fn (f : Unit -> Int -> Int) => fn (x : Unit -> Int) => (fn (n : Int) => f () n) (x ()));
           do h <- ! h {
             fn (u : Unit) =>
               do _ <- ! put 1;

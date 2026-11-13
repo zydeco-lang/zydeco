@@ -35,9 +35,13 @@ impl ParameterTelescope {
     pub(super) fn quantify(
         self, quantifier: Quantifier, body: b::TermId, builder: &mut BitterBuilder,
     ) -> b::TermId {
+        // A `pi` keeps its telescope as written, and checking walks it.
+        if let Quantifier::Pi = quantifier {
+            return Alloc::alloc(builder, b::Pi(self.parameters, body).into(), self.source);
+        }
         self.parameters.into_iter().rev().fold(body, |body, parameter| {
             let term = match quantifier {
-                | Quantifier::Pi => b::Pi(parameter, body).into(),
+                | Quantifier::Pi => unreachable!("a `pi` telescope is not folded"),
                 | Quantifier::ValPi => b::ValPi(parameter, body).into(),
                 | Quantifier::Sigma => b::Sigma(parameter, body).into(),
             };

@@ -1,0 +1,5 @@
+-- stage: run
+
+let f : Thk (pi (x : Int) . pi (y : Int) . Ret Int) = { fn x y => ret x } in
+do r <- ! f 0 1;
+! exit r

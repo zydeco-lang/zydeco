@@ -1,0 +1,7 @@
+do _ <- @[cbv] (
+  let VType = @(intrinsic(vtype)) that
+  let Int : VType = @(intrinsic(int)) that
+  let f = fn (x : Int) (y : Int) => fn (z : Int) => z in
+  f 1 2 3
+);
+ret ()

@@ -1314,6 +1314,7 @@ by one kind judgment, so each place a region writes a kind admits the same kinds
 | Source type | Core |
 | --- | --- |
 | `A -> B` | `Thk (A' -> Ret B')` |
+| `pi p1 ... pn . B`, `forall p1 ... pn . B` | `Thk (p1' ... pn' . Ret B')`, one function of all `n` parameters, where a binder that declares a kind becomes `forall (X : K) .` and one that declares a type `A' ->`; `A -> B` and `forall (X : K) . A` are the telescopes of one binder |
 | `A1 * ... * An` | `A1' * ... * An'` |
 | `forall (X : K) . A` | `Thk (forall (X : K) . Ret A')`, with `K` a source kind |
 | `exists (X : K) . A` | `exists (X : K) . A'`, with `K` a source kind |
@@ -1342,6 +1343,7 @@ A value has its own translation:
 | `+C v` | `+C v'`, which needs the expected type |
 | `(T, v)` | `(T', v')`, a package, which needs the expected type |
 | `fn (x : A) => e` | `{ fn (x : A') => e' }` |
+| `fn p1 ... pn => e` | `{ fn p1' ... pn' => e' }`, one function of all `n` parameters |
 | `fn (X : K) => e` | `{ fn (X : K) => e' }`, a type abstraction; synthesizes when the kind is written, and takes it from an expected quantifier when it is not; an expected quantifier's body is pushed into `e` |
 | `comatch \| .di => ei end` | `{ comatch \| .di => ei' end }`, which needs the expected type |
 
@@ -1349,6 +1351,7 @@ A value has its own translation:
 | --- | --- |
 | a value `v` | `ret v'` |
 | `e1 e2` | `do f <- e1'; do a <- e2'; ! f a` |
+| `e e1 ... en` | `do f <- e'; do a1 <- e1'; ...; ! f a1 ... an`, one call taking as many arguments as `f`'s telescope has parameters; a type argument is not sequenced, arguments left over apply to the result, and too few are refused |
 | `e A` | `do f <- e'; ! f A'`, an instantiation |
 | `e.d` | `do o <- e'; ! o .d` |
 | `e/f` | `do v <- e'; ret (v/f)` |
@@ -1359,7 +1362,7 @@ A value has its own translation:
 | `let p = e1 in e2` | `do p <- e1'; e2'` |
 | `let (X, x) = e1 in e2` | `do (X, x) <- e1'; e2'`, an unpack; `X` may not appear in the type of `e2'` |
 | `match e \| +Ci pi => ei end` | `do s <- e'; match s \| +Ci pi => ei' end` |
-| `let fix f (x : A) : B = e1 in e2` | `do f <- ret { fix g => fn (x : A') => e1' }; e2'`, with `f` resolving to `g` |
+| `let fix f p1 ... pn : B = e1 in e2` | `do f <- ret { fix g => fn p1' ... pn' => e1' }; e2'`, with `f` resolving to `g` |
 | `(e : A)` | `e'`, with `A'` pushed inward |
 | `@[doc] e`, `@[debug] e`, `@[format] e` | `e'`; `@[debug]` prints it |
 | `let X : K = A in e` | `e'`, with `X` denoting `A'` |
@@ -1410,9 +1413,27 @@ Any part of a binder may carry an annotation, `(p : A)`, as in `let (f : Int -> 
 before the binder is checked, and it is then compared with the type its position expects.
 Since that happens before the binder binds anything,
 an annotation may not mention a variable the same binder introduces, as `X` in `(X, (x : X))`.
-A parameter needs its type, from its own annotation or from an expected type as below.
-An arrow may not bind its domain, so `A -> B` and `pi (_ : A) . B` are accepted and `pi (x : A) . B` is not,
-although all three denote one type.
+A parameter needs its type: from an annotation around it, from an expected type as below,
+or from the annotations inside it when they give the type of every part,
+so `fn ((x : Int), (y : Int)) => x` takes `Int * Int`.
+A part with no annotation would need inference, which a region does not do.
+A function type's binder may name its parameter, but no source type mentions a term: `A -> B`, `pi (_ : A) . B`
+and `pi (x : A) . B` denote one type, and a type that mentions `x`, as `pi (x : A) . x` would, is refused by sort.
+So a function may be bound with the host's header, `let f (x : A) : B = e`,
+whose desugared signature names the parameter.
+
+Consecutive parameters are one function.
+`fn (x : A) (y : B) => e` takes both arguments in one call, at `pi (_ : A) (_ : B) . C`,
+while `fn (x : A) => fn (y : B) => e` takes one and returns a function, at `A -> B -> C`, and the two types differ.
+A call passes all of a telescope's arguments together: `f a b` is one call, and `(f a) b` applies what `f a` returns,
+which for a function of two parameters is refused as too few arguments.
+Likewise, a function checked against an expected type groups its parameters as the type does:
+the grouped function at `A -> B -> C` is refused for taking more parameters at once than its type,
+and the nested one at `pi (_ : A) (_ : B) . C` for taking fewer.
+Every argument is evaluated, left to right, before the body runs,
+whereas a curried function runs what lies between its parameters as soon as the first arrives.
+The grouped form is the shape a call-by-push-value library has, so such a function crosses the region's boundary
+in either direction without an adapter.
 
 An authored classifier is **pushed inward** rather than compared with what the body produced.
 That is what a source ascription is for: `(5 : Int64)` has to reach the literal,
@@ -1421,8 +1442,8 @@ The same expectation supplies an abstraction's domain, so `((fn x => x) : Int ->
 while `fn x => x` alone still does — there is nothing to take the domain from.
 A type binder's kind is supplied the same way: an expected quantifier gives a type abstraction its kind,
 and a kind known first — a binding's declared kind, a quantifier's binder at an instantiation,
-an existential's binder at a pack, an operator's domain — gives a type operator its own,
-so `let F : VType -> VType = fn X => X * X` is read as the host reads it.
+an existential's binder at a pack, a manifest existential's binder at its definition, an operator's domain —
+gives a type operator its own, so `let F : VType -> VType = fn X => X * X` is read as the host reads it.
 An expectation that no clause could use is checked against the whole term instead,
 so `((fn (x : Int) => x) : Int)` is a mismatch rather than an unchecked abstraction.
 An application's expectation describes its *result*: recovering a function's type from its argument
@@ -1567,12 +1588,9 @@ The `Thk`, the `Ret` and the force are the translation's, and no coercion is nee
 so the source's recursive name maps straight onto the `fix` binder.
 The signature is settled before the body is read, and the body is checked against the declared return type rather
 than against the expectation around the binding.
-Several parameters curry: `let fix f (x : A) (y : B) : C = M` binds `f` at `A -> B -> C`.
-A source type may not mention a term parameter's name, which is refused by sort,
-so each of the signature's later binders is read as a source arrow rather than
-as an arrow binding its domain, and the body continues as `fn (y : B) => M`.
-Any parameter may be a type, read as a quantifier.
-When the first is one, the fixed point is a type abstraction, `fix g => fn X => …`, and since the recursive name stands
+Several parameters are one function: `let fix f (x : A) (y : B) : C = M` binds `f`
+at `pi (_ : A) (_ : B) . C`, and a recursive call passes both.
+Any parameter may be a type, read as a quantifier in the same telescope, and since the recursive name stands
 at the whole quantified signature, a recursive call may instantiate it at another type:
 `let fix pick (X : VType) (n : Nest X) : X = … pick (X * X) m …` recurses through a nested data type.
 This is polymorphic recursion, and it needs no inference, because the signature is written.
@@ -1585,8 +1603,9 @@ distinguishing the two entries would mean carrying the binding's flavor past des
 Data and recursion together are what let a region compute: a declaration
 with a decreasing structure makes a terminating recursive function writable with nothing else.
 Arithmetic, like any host operation, is not reachable from inside, so a region takes it as a parameter:
-`param (add : Int -> Int -> Int) that add 2 3` returns a function, which the host applies
-to `int/add` curried to the translation of the source arrow, `Thk (Int -> Ret (Thk (Int -> Ret Int)))`.
+`param (add : pi (_ : Int) (_ : Int) . Int) that add 2 3` returns a function, which the host applies
+to `int/add` directly, since the parameter's type translates to `Thk (Int -> Int -> Ret Int)`.
+A curried `add : Int -> Int -> Int` would instead need `int/add` curried to `Thk (Int -> Ret (Thk (Int -> Ret Int)))`.
 
 Effects arrive the same way, as parameters, and a monadic block is what supplies them.
 A returner is observably pure by the core's [convention](#ret-and-explicit-cps), so a region alone has no effect

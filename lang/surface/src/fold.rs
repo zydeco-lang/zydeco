@@ -100,30 +100,30 @@ impl<R> Term<R> {
             | Self::Named(Named(name, term)) => Named(name, folder.fold_term(term)?).into(),
             | Self::Label(Label(name, term)) => Label(name, folder.fold_term(term)?).into(),
             | Self::Cons(terms) => Term::Cons(folder.fold_items(terms, F::fold_term)?),
-            | Self::Abs(Abs(pat, body)) => {
-                let pat = folder.fold_pat(pat);
+            | Self::Abs(Abs(pats, body)) => {
+                let pats = folder.fold_items(pats, F::fold_pat);
                 let body = folder.fold_term(body);
-                Abs(pat?, body?).into()
+                Abs(pats?, body?).into()
             }
             | Self::ValAbs(Abs(pat, body)) => {
                 let pat = folder.fold_pat(pat);
                 let body = folder.fold_term(body);
                 Term::ValAbs(Abs(pat?, body?))
             }
-            | Self::App(App(a, b)) => {
-                let a = folder.fold_term(a);
-                let b = folder.fold_term(b);
-                App(a?, b?).into()
+            | Self::App(App(head, arguments)) => {
+                let head = folder.fold_term(head);
+                let arguments = folder.fold_items(arguments, F::fold_term);
+                App(head?, arguments?).into()
             }
             | Self::Fix(Fix(pat, body)) => {
                 let pat = folder.fold_pat(pat);
                 let body = folder.fold_term(body);
                 Fix(pat?, body?).into()
             }
-            | Self::Pi(Pi(pat, body)) => {
-                let pat = folder.fold_pat(pat);
+            | Self::Pi(Pi(pats, body)) => {
+                let pats = folder.fold_items(pats, F::fold_pat);
                 let body = folder.fold_term(body);
-                Pi(pat?, body?).into()
+                Pi(pats?, body?).into()
             }
             | Self::ValPi(ValPi(pat, body)) => {
                 let pat = folder.fold_pat(pat);

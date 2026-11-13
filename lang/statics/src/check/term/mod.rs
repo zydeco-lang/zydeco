@@ -34,6 +34,74 @@ struct TermChecker<'site> {
     site: &'site TyEnvT<su::TermId>,
 }
 
+/// Which rule a telescope's binders are checked by.
+#[derive(Clone, Copy, Debug)]
+enum TelescopeForm {
+    Abs,
+    Pi,
+}
+
+/// What follows one binder of a telescope: the binders after it, then its body.
+///
+/// A source telescope is one term, so its later binders have no term of their
+/// own. They are checked as further occurrences of the telescope's term, each
+/// entering a site of its own, which is what keeps the core layers they produce
+/// distinct.
+#[derive(Clone, Debug)]
+pub(in crate::check) struct TelescopeTail {
+    term: su::TermId,
+    form: TelescopeForm,
+    binders: Vec<su::PatId>,
+    body: su::TermId,
+}
+
+impl TelescopeTail {
+    /// Split a telescope into its first binder and what follows it.
+    fn split(
+        term: su::TermId, form: TelescopeForm, binders: Vec<su::PatId>, body: su::TermId,
+    ) -> (su::PatId, Self) {
+        let (first, rest) = binders.split_first().expect("a telescope has a binder");
+        (*first, Self { term, form, binders: rest.to_vec(), body })
+    }
+}
+
+impl<'a> Tyck<'a> for TyEnvT<TelescopeTail> {
+    type Out = TermAnnId;
+    type Action = Action<AnnId>;
+
+    fn tyck(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> Result<Self::Out> {
+        if self.inner.binders.is_empty() {
+            return self.mk(self.inner.body).tyck(tycker, action);
+        }
+        let switch = action.switch;
+        tycker.guarded(|tycker| {
+            tycker.tasks.push_back_mut(TyckTask::Term(self.inner.term, switch));
+            tycker.enter_site(su::EntityId::Term(self.inner.term));
+            let result = self.tyck_inner(tycker, action);
+            tycker.allocator.exit();
+            result
+        })
+    }
+
+    fn tyck_inner(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> Result<Self::Out> {
+        let TelescopeTail { term, form, binders, body } = self.inner.clone();
+        let site = self.mk(term);
+        let checker = TermChecker { site: &site };
+        let synthesize = |tycker: &mut Tycker<'a>| self.tyck(tycker, Action::syn());
+        let (switch, _) = match checker.prepare_expected(tycker, action, synthesize)? {
+            | ControlFlow::Break(out_ann) => return Ok(out_ann),
+            | ControlFlow::Continue(prepared) => prepared,
+        };
+        let (binder, tail) = TelescopeTail::split(term, form, binders, body);
+        let out_ann = match form {
+            | TelescopeForm::Abs => checker.check_abs_binder(tycker, binder, tail, switch)?,
+            | TelescopeForm::Pi => checker.check_pi_binder(tycker, binder, tail, switch)?,
+        };
+        checker.record_layer_source(tycker, out_ann);
+        Ok(out_ann)
+    }
+}
+
 impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
     type Out = TermAnnId;
     type Action = Action<AnnId>;
@@ -52,10 +120,12 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
 
     fn tyck_inner(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> Result<Self::Out> {
         let checker = TermChecker { site: self };
-        let (switch, prepared_environment) = match checker.prepare_expected(tycker, action)? {
-            | ControlFlow::Break(out_ann) => return Ok(out_ann),
-            | ControlFlow::Continue(prepared) => prepared,
-        };
+        let synthesize = |tycker: &mut Tycker<'a>| self.tyck(tycker, Action::syn());
+        let (switch, prepared_environment) =
+            match checker.prepare_expected(tycker, action, synthesize)? {
+                | ControlFlow::Break(out_ann) => return Ok(out_ann),
+                | ControlFlow::Continue(prepared) => prepared,
+            };
         // the switch should contain no unfilled from here on
 
         tycker.observe_completion(self.inner, switch);
@@ -83,20 +153,25 @@ impl TermChecker<'_> {
     /// the classifier with the result, which completes the check. Analysis
     /// against a type substitutes and normalizes it under the current
     /// environment unless an enclosing check already prepared it.
-    fn prepare_expected(
-        &self, tycker: &mut Tycker<'_>, action: Action<AnnId>,
+    fn prepare_expected<'db>(
+        &self, tycker: &mut Tycker<'db>, action: Action<AnnId>,
+        synthesize: impl FnOnce(&mut Tycker<'db>) -> Result<TermAnnId>,
     ) -> Result<ControlFlow<TermAnnId, (Switch<AnnId>, Option<ss::TyEnv>)>> {
         let Action { switch, prepared_environment } = action;
         match switch {
             | Switch::Syn | Switch::Ana(AnnId::Set) => {}
             | Switch::Ana(AnnId::Kind(kd)) => {
                 if let Fillable::Fill(fill) = tycker.statics.kinds_pre[&kd].to_owned() {
-                    return self.fill_expected_kind(tycker, switch, fill).map(ControlFlow::Break);
+                    return self
+                        .fill_expected_kind(tycker, switch, fill, synthesize)
+                        .map(ControlFlow::Break);
                 }
             }
             | Switch::Ana(AnnId::Type(ty)) => match tycker.statics.types_pre[&ty].to_owned() {
                 | Fillable::Fill(fill) => {
-                    return self.fill_expected_type(tycker, switch, fill).map(ControlFlow::Break);
+                    return self
+                        .fill_expected_type(tycker, switch, fill, synthesize)
+                        .map(ControlFlow::Break);
                 }
                 | _ => {
                     let preparation_is_valid = prepared_environment
@@ -116,11 +191,12 @@ impl TermChecker<'_> {
     }
 
     /// Synthesize a type and fill the expected kind with its kind.
-    fn fill_expected_kind(
-        &self, tycker: &mut Tycker<'_>, switch: Switch<AnnId>, fill: FillId,
+    fn fill_expected_kind<'db>(
+        &self, tycker: &mut Tycker<'db>, switch: Switch<AnnId>, fill: FillId,
+        synthesize: impl FnOnce(&mut Tycker<'db>) -> Result<TermAnnId>,
     ) -> Result<TermAnnId> {
         tycker.observe_completion(self.inner, switch);
-        match self.tyck(tycker, Action::syn())? {
+        match synthesize(tycker)? {
             | TermAnnId::Type(ty, kd) => {
                 let kd = fill.fill(tycker, kd.into())?.as_kind();
                 Ok(TermAnnId::Type(ty, kd))
@@ -134,11 +210,12 @@ impl TermChecker<'_> {
 
     /// Synthesize a value or computation and fill the expected type with its
     /// type.
-    fn fill_expected_type(
-        &self, tycker: &mut Tycker<'_>, switch: Switch<AnnId>, fill: FillId,
+    fn fill_expected_type<'db>(
+        &self, tycker: &mut Tycker<'db>, switch: Switch<AnnId>, fill: FillId,
+        synthesize: impl FnOnce(&mut Tycker<'db>) -> Result<TermAnnId>,
     ) -> Result<TermAnnId> {
         tycker.observe_completion(self.inner, switch);
-        match self.tyck(tycker, Action::syn())? {
+        match synthesize(tycker)? {
             | TermAnnId::Value(v, ty) => {
                 let ty = fill.fill(tycker, ty.into())?.as_type();
                 Ok(TermAnnId::Value(v, ty))
@@ -238,6 +315,15 @@ impl TermChecker<'_> {
         };
 
         self.mk(tm).tyck(tycker, Action::ana_prepared(ann, &self.info))
+    }
+
+    /// Record a later layer of a grouped term as coming from that term, so a
+    /// diagnostic about the layer points at the source that wrote it. The
+    /// term's own facts belong to its outermost layer.
+    fn record_layer_source(&self, tycker: &mut Tycker<'_>, out_ann: TermAnnId) {
+        if let Some(out) = out_ann.as_term() {
+            tycker.statics.terms.record(self.inner, out);
+        }
     }
 
     /// Record the source facts of a checked term: its back mapping, its final

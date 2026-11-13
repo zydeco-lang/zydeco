@@ -136,6 +136,15 @@ impl ContextCollector {
         }
     }
 
+    /// Record what a telescope leaves free: each binder scopes over the binders after it
+    /// and the body.
+    fn telescope_coctx(&mut self, term: TermId, pats: &[PatId], body: &TermId) {
+        let co = pats.iter().rev().fold(self.coctxs_term_local[body].to_owned(), |co, pat| {
+            co - self.ctxs_pat_local[pat].to_owned() + self.coctxs_pat_local[pat].to_owned()
+        });
+        self.coctxs_term_local.insert_new(term, co);
+    }
+
     /// Updates [`Self::coctxs_term_local`].
     // Remaining worklist: split local co-context collection by term form.
     #[allow(clippy::too_many_lines)]
@@ -206,18 +215,21 @@ impl ContextCollector {
                 });
                 self.coctxs_term_local.insert_new(term, colocal);
             }
-            | Term::Abs(inner) | Term::ValAbs(inner) => {
+            | Term::Abs(Abs(pats, body)) => self.telescope_coctx(term, pats, body),
+            | Term::ValAbs(inner) => {
                 let Abs(pat, body) = inner;
                 let co_body = self.coctxs_term_local[body].to_owned();
                 let cx_pat = self.ctxs_pat_local[pat].to_owned();
                 let co_pat = self.coctxs_pat_local[pat].to_owned();
                 self.coctxs_term_local.insert_new(term, co_body - cx_pat + co_pat);
             }
-            | Term::App(inner) => {
-                let App(a, b) = inner;
-                let co_a = self.coctxs_term_local[a].to_owned();
-                let co_b = self.coctxs_term_local[b].to_owned();
-                self.coctxs_term_local.insert_new(term, co_a + co_b);
+            | Term::App(App(head, arguments)) => {
+                let co = arguments
+                    .iter()
+                    .fold(self.coctxs_term_local[head].to_owned(), |co, argument| {
+                        co + self.coctxs_term_local[argument].to_owned()
+                    });
+                self.coctxs_term_local.insert_new(term, co);
             }
             | Term::Fix(inner) => {
                 let Fix(pat, body) = inner;
@@ -226,13 +238,7 @@ impl ContextCollector {
                 let co_pat = self.coctxs_pat_local[pat].to_owned();
                 self.coctxs_term_local.insert_new(term, co_body - cx_pat + co_pat);
             }
-            | Term::Pi(inner) => {
-                let Pi(pat, body) = inner;
-                let co_body = self.coctxs_term_local[body].to_owned();
-                let cx_pat = self.ctxs_pat_local[pat].to_owned();
-                let co_pat = self.coctxs_pat_local[pat].to_owned();
-                self.coctxs_term_local.insert_new(term, co_body - cx_pat + co_pat);
-            }
+            | Term::Pi(Pi(pats, body)) => self.telescope_coctx(term, pats, body),
             | Term::ValPi(inner) => {
                 let ValPi(pat, body) = inner;
                 let co_body = self.coctxs_term_local[body].to_owned();
