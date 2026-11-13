@@ -53,22 +53,13 @@
 //! Every expectation originates **inside** the region, from a source
 //! ascription or annotation, and is therefore in the translation's image by
 //! construction. The host's own expectation is not pushed inward: it is
-//! reconciled with what the region synthesized, exactly as before.
+//! reconciled with what the region synthesized.
 //!
 //! That is a decision, and it stands on the region's interface rather than on
 //! anything about the translation's image: a region **synthesizes
 //! independently and the host compares afterwards**, which is one direction in
 //! types as the translation is one direction in terms, and it is what makes a
 //! region's classifier a consequence of its body rather than of its position.
-//!
-//! An earlier version of this paragraph argued it differently — that `[[·]]v`
-//! is not surjective, so admitting a host expectation would mean deciding
-//! whether a host type has a source preimage, which the leaf rule answered
-//! with the opposite polarity. That argument dissolved when the leaf rule's
-//! test became image membership, which decides the preimage question, and the
-//! test itself is gone now that a region names only its own types. The
-//! decision survives both, because the reason above never depended on the
-//! question being hard.
 
 use super::*;
 use crate::traverse::CheckedNode;
@@ -88,33 +79,6 @@ where
         let value_ty = tycker.statics.annotations_value[&value];
         let (env, returner) = cs::Ret(value_ty).construct(tycker, env)?;
         let compu = Alloc::alloc(tycker, Return(value), returner, &env);
-        Ok((env, compu))
-    }
-}
-
-/// `do x <- M; N`, naming the binder and giving it `M`'s payload type.
-impl<B, F, R> Construct<ss::TyEnv, ss::CompuId> for Bind<&str, B, F>
-where
-    B: Construct<ss::TyEnv, ss::CompuId>,
-    F: FnOnce(DefId) -> R,
-    R: Construct<ss::TyEnv, ss::CompuId>,
-{
-    fn construct(
-        self, tycker: &mut Tycker<'_>, env: ss::TyEnv,
-    ) -> Result<(ss::TyEnv, ss::CompuId)> {
-        let Bind { binder, bindee, tail } = self;
-        let (env, bindee) = bindee.construct(tycker, env)?;
-        let bindee_ty = tycker.statics.annotations_compu[&bindee];
-        let Some(payload) = bindee_ty.destruct_ret_app(tycker) else {
-            unreachable!("a region sequences only returners")
-        };
-        let name: VarName = binder.into_name();
-        let annotation: AnnId = payload.into();
-        let def: DefId = Alloc::alloc(tycker, name, annotation, &());
-        let binder = Alloc::alloc(tycker, def, payload, &env);
-        let (env, tail) = tail(def).construct(tycker, env)?;
-        let tail_ty = tycker.statics.annotations_compu[&tail];
-        let compu = Alloc::alloc(tycker, Bind { binder, bindee, tail }, tail_ty, &env);
         Ok((env, compu))
     }
 }
@@ -365,16 +329,14 @@ struct CbvDeclaredSeal {
 /// `Ann(Thunk(Fix(g, Abs([p1 … pn], M))), App(Internal(Thk), [Pi([p1' … pn'], B)]))`,
 /// where `g` and each `pi'` are *freshened* copies of the names beside them.
 ///
-/// **This shape does not establish provenance**, and review found why: the
-/// `let !` header produces the same one, so
-/// `let ! f : pi (x : A) . B = fix g => fn (x : A) => M` is recognized as a
-/// header too, and the `fix` the region means to refuse is reachable through
-/// that spelling. The binding flavor, which would settle it, is erased at
-/// desugaring, and type checking has no textual arena to recover it from — so
-/// closing the leak means carrying the fact forward rather than reading harder
-/// here. What *is* closed is the damage: both copies of the domain are
-/// translated and compared, so the mismatched signature review's input carried
-/// is now a type error rather than silently ignored.
+/// **This shape does not establish provenance**: the `let !` header produces
+/// the same one, so `let ! f : pi (x : A) . B = fix g => fn (x : A) => M` is
+/// recognized as a header too, and the `fix` the region refuses is reachable
+/// through that spelling. The binding flavor that would tell the two apart is
+/// erased at desugaring, and type checking has no textual arena to recover it
+/// from, so telling them apart means carrying that fact forward. Both copies of
+/// the domain are translated and compared, so a `let !` signature that
+/// disagrees with its parameters is a type error.
 ///
 /// The signature sits under the `Thk` desugaring writes, which no source type
 /// spells, so its telescope is read directly, by the rule every `pi` takes
@@ -481,10 +443,9 @@ impl TermChecker<'_> {
                     expected
                 } else {
                     let authored = self.cbv_type(tycker, scope, ty)?;
-                    // A term's type is a value type. Without this an operator
-                    // here became `Ret Opt` inside the net and was refused only
-                    // because nothing has that type, as a type mismatch rather
-                    // than the kind error it is.
+                    // A term's type is a value type, so an operator here is a
+                    // kind error and is reported as one. Left to the net, it
+                    // would become `Ret Opt` and fail as a type mismatch.
                     self.cbv_require_value_type(tycker, scope, authored)?;
                     if let Some(outer) = expected {
                         Lub::lub(outer, authored, tycker)?;
@@ -558,9 +519,7 @@ impl TermChecker<'_> {
                         std::collections::VecDeque::with_capacity(components.len());
                     for (component, wanted) in components.into_iter().zip(wanted) {
                         let (compu, ty) = self.cbv_term(tycker, scope, component, wanted)?;
-                        let Some(payload) = ty.destruct_ret_app(tycker) else {
-                            unreachable!("the term judgment always produces a returner")
-                        };
+                        let payload = Self::cbv_returned(tycker, ty);
                         translated.push_back((compu, payload));
                     }
                     self.cbv_sequence(tycker, scope, translated)
@@ -572,11 +531,8 @@ impl TermChecker<'_> {
             }
             // [[#f = M]]v_term = do a <- [[M]]v; ret (#f = a)
             //
-            // The term row the value row above lacked: a field whose payload
-            // is a computation has to be sequenced, and the label is put back
-            // on the bound result. The `Bind` is allocated by hand so the
-            // label can be built around the bound variable, which no recipe
-            // offers.
+            // A field whose payload is a computation is sequenced, and the
+            // label is put back on the bound result.
             | Tm::Named(su::Named(name, inner)) => {
                 let wanted = expected.and_then(|expected| {
                     match tycker.type_filled(&expected).ok().map(|ty| ty.to_owned()) {
@@ -587,23 +543,20 @@ impl TermChecker<'_> {
                     }
                 });
                 let (bindee, bindee_ty) = self.cbv_term(tycker, scope, inner, wanted)?;
-                let Some(payload_ty) = bindee_ty.destruct_ret_app(tycker) else {
-                    unreachable!("the term judgment always produces a returner")
-                };
-                let binder: ss::VPatId = cs::Pat("field", payload_ty).build(tycker, &scope.env);
-                let (def, _) = binder.try_destruct_def(tycker);
-                let def = def.expect("a named binder is a definition");
-                let payload: ss::ValueId = def.build(tycker, &scope.env);
-                let vtype = ss::VType.build(tycker, &scope.env);
-                let ty =
-                    Alloc::alloc(tycker, ss::Label(name.clone(), payload_ty), vtype, &scope.env);
-                let named: ss::ValueId =
-                    Alloc::alloc(tycker, ss::Named(name, payload), ty, &scope.env);
-                let tail = Return(named).build(tycker, &scope.env);
-                let returner = tycker.statics.annotations_compu[&tail];
-                let compu =
-                    Alloc::alloc(tycker, ss::Bind { binder, bindee, tail }, returner, &scope.env);
-                Ok((compu, returner))
+                let payload_ty = Self::cbv_returned(tycker, bindee_ty);
+                Self::cbv_bind_fresh(tycker, scope, "field", bindee, payload_ty, |tycker, def| {
+                    let payload: ss::ValueId = def.build(tycker, &scope.env);
+                    let vtype = ss::VType.build(tycker, &scope.env);
+                    let ty = Alloc::alloc(
+                        tycker,
+                        ss::Label(name.clone(), payload_ty),
+                        vtype,
+                        &scope.env,
+                    );
+                    let named: ss::ValueId =
+                        Alloc::alloc(tycker, ss::Named(name, payload), ty, &scope.env);
+                    Ok(Return(named).build(tycker, &scope.env))
+                })
             }
             // [[M/f]]v_term = do a <- [[M]]v; ret (a/f)
             //
@@ -616,33 +569,24 @@ impl TermChecker<'_> {
             // a field that is missing or reachable by more than one route.
             | Tm::Proj(su::Proj(head, name)) => {
                 let (bindee, bindee_ty) = self.cbv_term(tycker, scope, head, None)?;
-                let Some(head_ty) = bindee_ty.destruct_ret_app(tycker) else {
-                    unreachable!("the term judgment always produces a returner")
-                };
+                let head_ty = Self::cbv_returned(tycker, bindee_ty);
                 let candidate =
                     FieldProjectionResolver::value_term(tycker, &scope.env, head_ty, &name)?;
                 let target = FieldProjectionResolver::value_target(&candidate);
                 let projected_ty = candidate.projected;
-                let binder: ss::VPatId = cs::Pat("record", head_ty).build(tycker, &scope.env);
-                let (def, _) = binder.try_destruct_def(tycker);
-                let def = def.expect("a named binder is a definition");
-                let record: ss::ValueId = def.build(tycker, &scope.env);
-                let field = ss::ResolvedField { name, target };
-                let projected: ss::ValueId =
-                    Alloc::alloc(tycker, ss::Proj(record, field), projected_ty, &scope.env);
-                let tail = Return(projected).build(tycker, &scope.env);
-                let returner = tycker.statics.annotations_compu[&tail];
-                let compu =
-                    Alloc::alloc(tycker, ss::Bind { binder, bindee, tail }, returner, &scope.env);
-                Ok((compu, returner))
+                Self::cbv_bind_fresh(tycker, scope, "record", bindee, head_ty, |tycker, def| {
+                    let record: ss::ValueId = def.build(tycker, &scope.env);
+                    let field = ss::ResolvedField { name, target };
+                    let projected: ss::ValueId =
+                        Alloc::alloc(tycker, ss::Proj(record, field), projected_ty, &scope.env);
+                    Ok(Return(projected).build(tycker, &scope.env))
+                })
             }
             // [[+C M]]v_term = do a <- [[M]]v; ret (+C a)
             //
             // A constructor of a source value is itself one, and its term
-            // clause is `ret [[V]]v`; dispatching here is what keeps the value
-            // clause reachable. The tuple rows needed the same guard, and
-            // without it the value clause is dead code that reads as though it
-            // were in use.
+            // clause is `ret [[V]]v`; dispatching here keeps the value clause
+            // reachable, as the same guard on the tuple rows does.
             | Tm::Ctor(_) if self.cbv_is_source_value(tycker, term) => {
                 self.cbv_value_as_term(tycker, scope, term, expected)
             }
@@ -650,25 +594,18 @@ impl TermChecker<'_> {
                 let Some(expected) = expected else { tycker.err(TyckError::MissingAnnotation)? };
                 let (data_id, arm) = self.cbv_data_arm(tycker, scope, expected, &name)?;
                 let (bindee, ty) = self.cbv_term(tycker, scope, payload, Some(arm))?;
-                let Some(arm) = ty.destruct_ret_app(tycker) else {
-                    unreachable!("the term judgment always produces a returner")
-                };
-                let binder: ss::VPatId = cs::Pat("payload", arm).build(tycker, &scope.env);
-                let (def, _) = binder.try_destruct_def(tycker);
-                let def = def.expect("a named binder is a definition");
-                let payload = def.build(tycker, &scope.env);
-                let value = Alloc::alloc(
-                    tycker,
-                    ss::Value::Ctor(ss::Ctor(name, payload)),
-                    expected,
-                    &scope.env,
-                );
-                let _ = tycker.statics.data_hints.upsert(value, data_id);
-                let tail = Return(value).build(tycker, &scope.env);
-                let returner = tycker.statics.annotations_compu[&tail];
-                let compu =
-                    Alloc::alloc(tycker, ss::Bind { binder, bindee, tail }, returner, &scope.env);
-                Ok((compu, returner))
+                let arm = Self::cbv_returned(tycker, ty);
+                Self::cbv_bind_fresh(tycker, scope, "payload", bindee, arm, |tycker, def| {
+                    let payload = def.build(tycker, &scope.env);
+                    let value = Alloc::alloc(
+                        tycker,
+                        ss::Value::Ctor(ss::Ctor(name, payload)),
+                        expected,
+                        &scope.env,
+                    );
+                    let _ = tycker.statics.data_hints.upsert(value, data_id);
+                    Ok(Return(value).build(tycker, &scope.env))
+                })
             }
             // [[M.d]]v_term = do o <- [[M]]v; ! o .d
             //
@@ -677,38 +614,32 @@ impl TermChecker<'_> {
             // value was built.
             | Tm::Dtor(su::Dtor(body, dtor)) => {
                 let (bindee, ty) = self.cbv_term(tycker, scope, body, None)?;
-                let Some(payload) = ty.destruct_ret_app(tycker) else {
-                    unreachable!("the term judgment always produces a returner")
-                };
+                let payload = Self::cbv_returned(tycker, ty);
                 let (codata_id, fields, observed) = self.cbv_codata(tycker, scope, payload)?;
                 let Some(field) = fields.get(&dtor) else {
                     tycker.err(TyckError::UnknownCoDataDestructor(dtor.clone()))?
                 };
-                let binder: ss::VPatId = cs::Pat("observed", payload).build(tycker, &scope.env);
-                let (def, _) = binder.try_destruct_def(tycker);
-                let def = def.expect("a named binder is a definition");
-                // `Force` is allocated rather than built: the recipe reads the
-                // thunk off the value's own type, and here that type is the
-                // *seal* the declaration gave it, whose `Thk` is one unrolling
-                // away. `cbv_codata` already did that unrolling, so the
-                // forced computation's type is what it returned.
-                let value: ss::ValueId = def.build(tycker, &scope.env);
-                let forced = Alloc::alloc(
-                    tycker,
-                    ss::Computation::Force(ss::Force(value)),
-                    observed,
-                    &scope.env,
-                );
-                let _ = tycker.statics.codata_hints.upsert(forced, codata_id);
-                let tail = Alloc::alloc(
-                    tycker,
-                    ss::Computation::Dtor(ss::Dtor(forced, dtor)),
-                    field,
-                    &scope.env,
-                );
-                let compu =
-                    Alloc::alloc(tycker, ss::Bind { binder, bindee, tail }, field, &scope.env);
-                Ok((compu, field))
+                Self::cbv_bind_fresh(tycker, scope, "observed", bindee, payload, |tycker, def| {
+                    // `Force` is allocated rather than built: the recipe reads
+                    // the thunk off the value's own type, and here that type is
+                    // the *seal* the declaration gave it, whose `Thk` is one
+                    // unrolling away. `cbv_codata` already did that unrolling,
+                    // so the forced computation's type is what it returned.
+                    let value: ss::ValueId = def.build(tycker, &scope.env);
+                    let forced = Alloc::alloc(
+                        tycker,
+                        ss::Computation::Force(ss::Force(value)),
+                        observed,
+                        &scope.env,
+                    );
+                    let _ = tycker.statics.codata_hints.upsert(forced, codata_id);
+                    Ok(Alloc::alloc(
+                        tycker,
+                        ss::Computation::Dtor(ss::Dtor(forced, dtor)),
+                        field,
+                        &scope.env,
+                    ))
+                })
             }
             // [[match M | +Ci pi => Ni end]]v = do s <- [[M]]v; match s | +Ci pi => [[Ni]]v end
             | Tm::Match(term) => self.cbv_match(tycker, scope, term, expected),
@@ -752,9 +683,7 @@ impl TermChecker<'_> {
                 }
                 self.cbv_require_binding_pattern(tycker, binder)?;
                 let (bindee, bindee_ty) = self.cbv_term(tycker, scope, bindee, None)?;
-                let Some(payload) = bindee_ty.destruct_ret_app(tycker) else {
-                    unreachable!("the term judgment always produces a returner")
-                };
+                let payload = Self::cbv_returned(tycker, bindee_ty);
                 self.cbv_settle_pattern_annotations(tycker, scope, binder)?;
                 let bound = TyEnvT::new(scope.env.clone(), binder)
                     .tyck(tycker, PatternAction::ana(payload.into()))?;
@@ -1112,12 +1041,8 @@ impl TermChecker<'_> {
     ) -> Result<(ss::CompuId, ss::TypeId)> {
         let su::Match { scrut, arms } = term;
         let (bindee, scrut_ty) = self.cbv_term(tycker, scope, scrut, None)?;
-        let Some(payload) = scrut_ty.destruct_ret_app(tycker) else {
-            unreachable!("the term judgment always produces a returner")
-        };
-        let binder: ss::VPatId = cs::Pat("scrutinee", payload).build(tycker, &scope.env);
-        let (def, _) = binder.try_destruct_def(tycker);
-        let def = def.expect("a named binder is a definition");
+        let payload = Self::cbv_returned(tycker, scrut_ty);
+        let (binder, def) = Self::cbv_fresh_binder(tycker, scope, "scrutinee", payload);
         let scrutinee: ss::ValueId = def.build(tycker, &scope.env);
         // The hint is what associates a bound scrutinee with its declaration,
         // as the ordinary judgment does; without it a later pass has to
@@ -1217,9 +1142,8 @@ impl TermChecker<'_> {
     /// requires a value type, and is recorded in
     /// `Tycker::settled_pattern_annotations`; the rule then compares the
     /// translation with the type its position expects, as it would have
-    /// compared its own synthesis. Before this, an annotation anywhere below a
-    /// binder's top level was refused by the shape guard, which had no way to
-    /// read it safely.
+    /// compared its own synthesis. So an annotation may sit anywhere inside a
+    /// binder, not only at its top level.
     ///
     /// The translation runs in the binder's scope, before the pattern binds
     /// anything, so an annotation may not mention a variable the same binder
@@ -1592,8 +1516,8 @@ impl TermChecker<'_> {
     /// telescope when the definition writes `: _` after them — and it is read
     /// as the kinds of the parameters it covers over `VType`, the kind a
     /// source `data` or `codata` has. Every part written before the hole is
-    /// read and guarded as any kind is: a classifier ending in a hole was once
-    /// taken for an omitted one whole, and `CType -> _` was accepted unread.
+    /// read and guarded as any kind is, so `CType -> _` is refused rather than
+    /// taken for an omitted classifier.
     fn cbv_definition_kind<'db>(
         &self, tycker: &mut Tycker<'db>, scope: &CbvScope, classifier: Option<su::TermId>,
         parameters: &[su::PatId],
@@ -2048,14 +1972,13 @@ impl TermChecker<'_> {
     /// **The payload is checked against the body, and the check cannot be left to
     /// the net.** Elsewhere a clause synthesizes a type and the net compares it
     /// with the expectation; the pack clause instead *stamps* the expected
-    /// existential onto the value it builds, so the net compares the expectation
-    /// with itself and passes whatever the payload was. Review found the
-    /// consequence: `((Int, fn (x : Int) => x) : exists (X as Int) . X)` was
-    /// accepted, the arena invariants had no objection because their witness-prefix
-    /// validation is deferred, and unpacking the alleged `Int` into `int/add`
-    /// reached `unreachable!()` in the interpreter. Excess components went the
-    /// same way, because [`Self::cbv_expected_components`] degrades to no
-    /// expectation when the arity disagrees rather than rejecting.
+    /// existential onto the value it builds, so the net would compare the
+    /// expectation with itself and pass any payload, such as the function in
+    /// `((Int, fn (x : Int) => x) : exists (X as Int) . X)`. The arena
+    /// invariants defer their witness-prefix validation and would not catch it
+    /// either. Excess components need the same check, because
+    /// [`Self::cbv_expected_components`] degrades to no expectation when the
+    /// arity disagrees rather than rejecting.
     fn cbv_pack_payload<'db>(
         &self, tycker: &mut Tycker<'db>, scope: &CbvScope, rest: &[su::TermId], body_ty: ss::TypeId,
     ) -> Result<ss::ValueId> {
@@ -2096,32 +2019,24 @@ impl TermChecker<'_> {
             let mut translated = std::collections::VecDeque::with_capacity(rest.len());
             for (component, wanted) in rest.iter().zip(wanted) {
                 let (compu, ty) = self.cbv_term(tycker, scope, *component, wanted)?;
-                let Some(payload) = ty.destruct_ret_app(tycker) else {
-                    unreachable!("the term judgment always produces a returner")
-                };
+                let payload = Self::cbv_returned(tycker, ty);
                 translated.push_back((compu, payload));
             }
             self.cbv_sequence(tycker, scope, translated)?
         };
-        let Some(payload_ty) = bindee_ty.destruct_ret_app(tycker) else {
-            unreachable!("the term judgment always produces a returner")
-        };
+        let payload_ty = Self::cbv_returned(tycker, bindee_ty);
         // As on the value side: the pack is labelled with the expectation, so the
         // net cannot see a payload that disagrees with the body. A single payload
         // is already checked by the term judgment's own net, but a sequenced
         // product is not -- `cbv_sequence` assembles whatever it was given.
         self.cbv_meets_expectation(tycker, scope, payload_ty, Some(body_ty), false)?;
-        let binder: ss::VPatId = cs::Pat("payload", payload_ty).build(tycker, &scope.env);
-        let (def, _) = binder.try_destruct_def(tycker);
-        let def = def.expect("a named binder is a definition");
-        let payload: ss::ValueId = def.build(tycker, &scope.env);
-        let witnesses = witnesses.into_iter().map(ss::StaticTermId::from).collect::<Vec<_>>();
-        let pack: ss::ValueId =
-            Alloc::alloc(tycker, ConsN(witnesses, payload), expected, &scope.env);
-        let tail = Return(pack).build(tycker, &scope.env);
-        let returner = tycker.statics.annotations_compu[&tail];
-        let compu = Alloc::alloc(tycker, ss::Bind { binder, bindee, tail }, returner, &scope.env);
-        Ok((compu, returner))
+        Self::cbv_bind_fresh(tycker, scope, "payload", bindee, payload_ty, |tycker, def| {
+            let payload: ss::ValueId = def.build(tycker, &scope.env);
+            let witnesses = witnesses.into_iter().map(ss::StaticTermId::from).collect::<Vec<_>>();
+            let pack: ss::ValueId =
+                Alloc::alloc(tycker, ConsN(witnesses, payload), expected, &scope.env);
+            Ok(Return(pack).build(tycker, &scope.env))
+        })
     }
 
     /// The components of an expected product, one per source component.
@@ -2145,16 +2060,48 @@ impl TermChecker<'_> {
         }
     }
 
+    /// The type `A` that a translated term of type `Ret A` returns. The term
+    /// judgment always produces a returner.
+    fn cbv_returned(tycker: &mut Tycker<'_>, returner: ss::TypeId) -> ss::TypeId {
+        let Some(returned) = returner.destruct_ret_app(tycker) else {
+            unreachable!("the term judgment always produces a returner")
+        };
+        returned
+    }
+
+    /// A fresh variable named `name` at type `ty`: the binder that introduces
+    /// it and the definition it binds.
+    fn cbv_fresh_binder(
+        tycker: &mut Tycker<'_>, scope: &CbvScope, name: &str, ty: ss::TypeId,
+    ) -> (ss::VPatId, DefId) {
+        let binder: ss::VPatId = cs::Pat(name, ty).build(tycker, &scope.env);
+        let (def, _) = binder.try_destruct_def(tycker);
+        (binder, def.expect("a named binder is a definition"))
+    }
+
+    /// `do x <- bindee; tail`, with `x` a fresh variable named `name` at
+    /// `returned`, the type `bindee` returns. `tail` builds the rest from `x`,
+    /// and the binding has the tail's type.
+    fn cbv_bind_fresh<'db>(
+        tycker: &mut Tycker<'db>, scope: &CbvScope, name: &str, bindee: ss::CompuId,
+        returned: ss::TypeId, tail: impl FnOnce(&mut Tycker<'db>, DefId) -> Result<ss::CompuId>,
+    ) -> Result<(ss::CompuId, ss::TypeId)> {
+        let (binder, def) = Self::cbv_fresh_binder(tycker, scope, name, returned);
+        let tail = tail(tycker, def)?;
+        let ty = tycker.statics.annotations_compu[&tail];
+        let compu = Alloc::alloc(tycker, ss::Bind { binder, bindee, tail }, ty, &scope.env);
+        Ok((compu, ty))
+    }
+
     /// Bind a list of translated components left to right, then build the
     /// tuple of their results.
     ///
     /// The nesting of the `do`s *is* the evaluation order — the leftmost
     /// component's effects happen first — so the chain is built from its tail
     /// outward. It is built by iteration and not by recursion over the
-    /// components: review found that one frame per component overflowed the
-    /// process stack on a flat tuple of twelve thousand, an input with no
-    /// nesting in it at all, where every other depth limit in the checker is a
-    /// limit on nesting. A source program's *width* must not be a limit.
+    /// components, because one frame per component would make a flat tuple's
+    /// *width* a stack limit, where every other depth limit in the checker is a
+    /// limit on nesting.
     fn cbv_sequence<'db>(
         &self, tycker: &mut Tycker<'db>, scope: &CbvScope,
         pending: std::collections::VecDeque<(ss::CompuId, ss::TypeId)>,
@@ -2166,10 +2113,8 @@ impl TermChecker<'_> {
         let mut binders = Vec::with_capacity(pending.len());
         let mut bound = Vec::with_capacity(pending.len());
         for (index, (bindee, payload)) in pending.into_iter().enumerate() {
-            let name = format!("component{index}");
-            let binder: ss::VPatId = cs::Pat(name, payload).build(tycker, &scope.env);
-            let (def, _) = binder.try_destruct_def(tycker);
-            let def = def.expect("a named binder is a definition");
+            let (binder, def) =
+                Self::cbv_fresh_binder(tycker, scope, &format!("component{index}"), payload);
             binders.push((binder, bindee));
             bound.push((def, payload));
         }
@@ -2236,9 +2181,7 @@ impl TermChecker<'_> {
         let Some(mut residual) = payload.destruct_thk_app(tycker) else {
             tycker.err(not_a_function)?
         };
-        let function_binder: ss::VPatId = cs::Pat("f", payload).build(tycker, &scope.env);
-        let (function, _) = function_binder.try_destruct_def(tycker);
-        let function = function.expect("a named binder is a definition");
+        let (function_binder, function) = Self::cbv_fresh_binder(tycker, scope, "f", payload);
         let mut call: ss::CompuId = Force(function).build(tycker, &scope.env);
         let mut bindings = vec![(function_binder, func)];
         while residual.destruct_ret_app(tycker).is_none() {
@@ -2264,9 +2207,7 @@ impl TermChecker<'_> {
                     tycker.err(not_a_function)?
                 };
                 Lub::lub(domain, argument_ty, tycker)?;
-                let binder: ss::VPatId = cs::Pat("a", argument_ty).build(tycker, &scope.env);
-                let (variable, _) = binder.try_destruct_def(tycker);
-                let variable = variable.expect("a named binder is a definition");
+                let (binder, variable) = Self::cbv_fresh_binder(tycker, scope, "a", argument_ty);
                 bindings.push((binder, bindee));
                 call = App(call, variable).build(tycker, &scope.env);
             }
@@ -2294,10 +2235,8 @@ impl TermChecker<'_> {
             // Written `fn (X : K) => M`, the same `fn` as a value lambda: the
             // binder's *sort* is what distinguishes them, which is how the host
             // reads `pi` as well. With the kind written the clause synthesizes,
-            // so it needs no expectation — the table marked this row as
-            // requiring one on the strength of `{ fn X => ret 0 }` failing,
-            // which is the kind being absent and not the expectation being
-            // needed.
+            // so it needs no expectation; `{ fn X => ret 0 }` fails for want of
+            // the kind, not of an expectation.
             | Tm::Abs(su::Abs(source_binders, source_body)) => {
                 let wanted = expected.and_then(|expected| expected.destruct_thk_app(tycker));
                 let abs =
@@ -2388,9 +2327,9 @@ impl TermChecker<'_> {
                 );
                 // The declaration a constructor belongs to, which the ordinary
                 // judgment records and the backend reads to find the tag's
-                // index. Without it a well-typed term the interpreter runs
-                // aborts the stack-IR lowering — which is how its absence was
-                // found, not by the checker and not by the arena invariants.
+                // index. Without it the stack-IR lowering of a well-typed term
+                // aborts, and neither the checker nor the arena invariants
+                // notice.
                 let _ = tycker.statics.data_hints.upsert(value, data_id);
                 Ok((value, expected))
             }
@@ -2441,12 +2380,10 @@ impl TermChecker<'_> {
                 let _ = tycker.statics.codata_hints.upsert(compu, codata_id);
                 // The thunk carries `Thk` of what the comatch carries, and the
                 // clause reports exactly that rather than the expectation it
-                // was given. The two differ when the expectation is a *seal*,
-                // and a seal's identity cannot be handed to a thunk — so a
-                // region names a codata type through a transparent alias, not
-                // through `def`. A check comparing a node's recorded annotation
-                // with a re-derivation is what established this, and neither
-                // the checker nor any test saw the difference.
+                // was given. For a `def` codata the comatch carries the seal
+                // applied to its arguments, which `cbv_codata` found inside the
+                // expectation's thunk, so the seal stays inside the thunk, where
+                // the declaration's name puts it.
                 let value = Thunk(compu).build(tycker, &scope.env);
                 let ty = tycker.statics.annotations_value[&value];
                 Ok((value, ty))
@@ -2569,9 +2506,7 @@ impl TermChecker<'_> {
     /// kind, a type binder's annotation and an ascription's classifier are all
     /// decided here, and a binder's kind is then recorded for the pattern
     /// rule rather than synthesized again by it, so the three places a region
-    /// writes a kind cannot disagree about which kinds it may write. They did
-    /// while each had its own route: a named kind recognized here was refused
-    /// by the shape guard the binder's own synthesis went through.
+    /// writes a kind cannot disagree about which kinds it may write.
     ///
     /// Only the **names** are handed to ordinary synthesis: one the region
     /// bound, and the intrinsics for `VType` and `CType`. A name is a leaf, so
@@ -2581,13 +2516,9 @@ impl TermChecker<'_> {
     /// arrow, ill-kinded in the host, whose synthesis would report an error
     /// instead of returning a sort. So `K1 -> K2`, which desugars as `A -> B`
     /// does to a `Pi` over a hole annotated with `K1`, is recognized by its
-    /// parts, and is a kind arrow exactly when both of them are kinds.
-    ///
-    /// An earlier version admitted a bare name alone, so the arrow kinds the
-    /// grammar writes as `K -> K` could be used only through a name declared
-    /// outside: `fn (F : VType -> VType) => 0` was refused as a sort mismatch,
-    /// its annotation read as a source arrow over `VType`, while the same
-    /// binder at a name for `VType -> VType` was accepted.
+    /// parts, and is a kind arrow exactly when both of them are kinds, so
+    /// `fn (F : VType -> VType) => 0` and the same binder at a name for
+    /// `VType -> VType` mean the same thing.
     fn cbv_annotation_kind<'db>(
         &self, tycker: &mut Tycker<'db>, scope: &CbvScope, annotation: su::TermId,
     ) -> Result<Option<ss::KindId>> {
@@ -2723,11 +2654,8 @@ impl TermChecker<'_> {
     /// **Shared by every type binder a region writes** — `fn (X : K) => M`
     /// over a term, `fn (X : K) => T` over a type, a quantifier and an
     /// existential — so that the two guards hold at every entrance by
-    /// construction. Each guard was found missing at one entrance in turn: the
-    /// shape guard at the term-level abstraction, where an inner annotation
-    /// read a term bound outside the region, and the kind check there too,
-    /// where `fn (R : CType) => 0` was admitted. A copy of this sequence for the
-    /// type-level clause would have been the third.
+    /// construction: an inner annotation may not read a term bound outside the
+    /// region, and `fn (R : CType) => 0` is refused, wherever the binder sits.
     ///
     /// A binder that declares no kind takes `expected`, as `fn x => M` takes
     /// its domain from an expected arrow; one that declares a kind is checked
@@ -2816,10 +2744,8 @@ impl TermChecker<'_> {
 
     /// Require a translated source type to be a **value** type.
     ///
-    /// Every position a core former fills with a value type has to be checked
-    /// once a type operator can be a source type. The image test used to
-    /// guarantee it, by admitting only value-typed formers; a type-level
-    /// abstraction is admitted now and has an arrow kind.
+    /// Every position a core former fills with a value type is checked,
+    /// because a source type may be a type operator, whose kind is an arrow.
     fn cbv_require_value_type<'db>(
         &self, tycker: &mut Tycker<'db>, scope: &CbvScope, ty: ss::TypeId,
     ) -> Result<()> {
@@ -3122,10 +3048,7 @@ impl TermChecker<'_> {
     /// The type-level STLC's abstraction, beside the application `F A` the
     /// region already translated. It is reached through a type binding whose
     /// kind is an arrow, `let F : VType -> VType = fn (X : VType) => X * X`,
-    /// as a type argument, or at the head of an application. An earlier
-    /// version recorded this row as having no reachable spelling, overlooking a
-    /// binding at a kind named outside; an arrow kind written in place reaches
-    /// it as well.
+    /// as a type argument, or at the head of an application.
     ///
     /// `against` is the expected arrow kind's domain and codomain, when
     /// [`Self::cbv_type_against`] has one: the binder may then leave its kind
@@ -3203,9 +3126,8 @@ impl TermChecker<'_> {
     /// The expectation is handed on, and for a literal it is not a refinement
     /// but the whole answer: a literal's representation is resolved when it is
     /// checked, so `(5 : Int64)` has to arrive at the literal. Synthesizing it
-    /// as `Int` and comparing afterwards rejected a program the host accepts,
-    /// which is the defect the analysis direction was first needed for — before
-    /// any of the formers it gates.
+    /// as `Int` and comparing afterwards would reject a program the host
+    /// accepts.
     fn cbv_reuse_check<'db>(
         &self, tycker: &mut Tycker<'db>, scope: &CbvScope, term: su::TermId,
         expected: Option<ss::TypeId>,
@@ -3233,11 +3155,11 @@ impl TermChecker<'_> {
     /// judgment records are recorded for it too.
     ///
     /// A recursive elaboration that calls its own judgments directly bypasses
-    /// everything `Tyck::tyck` does around its dispatch, and review found
-    /// three consequences in turn: a rejection deep inside a block blamed the
-    /// whole block, emitted nodes derived their identifiers from the block
-    /// rather than from the term they came from, and the source forms the
-    /// translation consumes carried no editor facts or reverse provenance.
+    /// everything `Tyck::tyck` does around its dispatch: a rejection deep inside
+    /// a block would blame the whole block, emitted nodes would derive their
+    /// identifiers from the block rather than from the term they came from, and
+    /// the source forms the translation consumes would carry no editor facts or
+    /// reverse provenance.
     ///
     /// Before the judgment runs, this installs what `tyck`'s preamble does: a
     /// task frame, which a diagnostic blames; an occurrence count, so
@@ -3288,14 +3210,12 @@ impl TermChecker<'_> {
     /// head through [`Self::cbv_require_arm_binder`]; a `let fix`'s names
     /// bind a thunk and take these alone.
     ///
-    /// Without this, the binder is handed to ordinary pattern checking, which
-    /// is permissive in ways the source grammar is not. Two consequences were
-    /// found by review: a refutable pattern such as `fn (0 : Int) => 1` is
-    /// accepted although the ordinary abstraction rule rejects it with
-    /// `tyck.refutable-binding`, and a view pattern can expose an existential
-    /// in the generated result, which the arena invariants report as a classifier
-    /// disagreement. Enforcing the grammar closes both, and keeps the emitted
-    /// term inside what the ordinary rules would have admitted.
+    /// Ordinary pattern checking is permissive in ways the source grammar is
+    /// not: it would accept a refutable pattern such as `fn (0 : Int) => 1`,
+    /// which the ordinary abstraction rule rejects with
+    /// `tyck.refutable-binding`, and a view pattern that exposes an existential
+    /// in the generated result. Enforcing the grammar keeps the emitted term
+    /// inside what the ordinary rules admit.
     fn cbv_require_plain_binder<'db>(
         &self, tycker: &mut Tycker<'db>, binder: su::PatId,
     ) -> Result<()> {
@@ -3387,9 +3307,8 @@ impl TermChecker<'_> {
     /// type binding's declared kind, a quantifier's binder at an instantiation,
     /// an existential's binder at a pack, a manifest existential's binder at
     /// its definition, an operator's domain at an application, and an
-    /// ascription. Without it the
-    /// host's spelling of an operator under a declared kind was refused with a
-    /// complaint about how a source type may be built.
+    /// ascription. So an operator written as the host writes it, under a
+    /// declared kind, is read as the host reads it.
     fn cbv_type_against<'db>(
         &self, tycker: &mut Tycker<'db>, scope: &CbvScope, ty: su::TermId, expected: ss::KindId,
     ) -> Result<ss::TypeId> {
@@ -3492,8 +3411,7 @@ impl TermChecker<'_> {
             //
             // The same `Pi` node as an arrow; a binder that declares a kind
             // makes it a quantifier. Structural, so it needs no seal and no
-            // query: a region could only *name* a `forall` declared outside
-            // until this clause, although nothing about the former required it.
+            // query.
             | Tm::Pi(su::Pi(binders, body)) => {
                 let computation =
                     self.cbv_function_computation(tycker, scope, &binders, body)?;
@@ -3724,14 +3642,10 @@ impl TermChecker<'_> {
     /// `[[F A1 … An]]v = [[F]]v [[A1]]v … [[An]]v`, then normalized.
     ///
     /// The translation is a homomorphism on the type-level STLC, so the head is
-    /// a source type like the arguments and is translated like them. It used to
-    /// go to ordinary checking as a name, which refused an operator written in
-    /// place: `(fn (X : VType) => X * X) Int` was rejected while `F Int`, with
-    /// `F` bound to the same operator, was accepted. Before that, the whole
-    /// application went to ordinary synthesis, which can resolve only host
-    /// types, so an argument that was not already one was refused:
-    /// `Id (Int * Int)` was rejected while `Id Pair` with `Pair = Int * Int`
-    /// was accepted — again two spellings of one type disagreeing.
+    /// a source type like the arguments and is translated like them. Two
+    /// spellings of one type therefore agree: `(fn (X : VType) => X * X) Int`
+    /// and `F Int`, with `F` bound to the same operator, and `Id (Int * Int)`
+    /// and `Id Pair`, with `Pair = Int * Int`.
     ///
     /// The spine is collected by iteration, so an operator's arity is not a
     /// limit on the stack, for the same reason the tuple clause is iterative.
@@ -3788,11 +3702,9 @@ impl TermChecker<'_> {
     /// resolved type; all this has to do is stop the subtree reaching outward.
     /// Pure type structure reaches nothing and is therefore admitted.
     ///
-    /// A first attempt admitted only a bare name, which refused a classifier
-    /// that merely *spelled* an admissible type differently:
-    /// `fn (x : Id Int) => x` was rejected while binding `Id Int` to a name
-    /// first and writing that name was accepted. Two spellings of one type must
-    /// not get opposite verdicts.
+    /// The test admits more than a bare name so that two spellings of one type
+    /// get the same verdict: `fn (x : Id Int) => x` is accepted exactly when
+    /// binding `Id Int` to a name and writing that name is.
     ///
     /// **The whitelist is still deliberately conservative**, and the cost is
     /// known: a classifier built from a type former other than application,
@@ -3824,22 +3736,20 @@ impl TermChecker<'_> {
             }
             // A label reaches only what its payload reaches. A classifier that
             // is not a kind passes through here before being refused by sort,
-            // so without this row `(S : (#C :: Int))` was reported as built
-            // from a forbidden form rather than as a type where a kind belongs.
+            // so `(S : (#C :: Int))` is reported as a type where a kind belongs
+            // rather than as built from a forbidden form.
             | Tm::Label(su::Label(_, inner)) => self.cbv_classifier_shape(tycker, scope, inner),
             // A `Pi` reaches this test as a kind arrow, in an ascription's
             // classifier or as a binder's kind; a source arrow is handled by
             // the arrow rule before the leaf rule runs.
             //
-            // The binder is guarded whole. Splitting off its outermost
-            // annotation and discarding the rest is what made this guard
-            // porous for a third time: the discarded pattern can itself be an
-            // annotation, and the ordinary pattern checker descends into it
-            // afterwards. Review's input was
-            // `(Id : pi ((X : @[typeof] (@[typeof] outside)) : VType) . VType) Int`,
-            // which read a term variable bound outside the region and still
-            // produced a well-formed core term, so the arena invariants had nothing
-            // to object to.
+            // The binder is guarded whole, because the pattern under its
+            // outermost annotation can itself be an annotation, which the
+            // ordinary pattern checker descends into afterwards. In
+            // `(Id : pi ((X : @[typeof] (@[typeof] outside)) : VType) . VType) Int`
+            // the inner one reads a term variable bound outside the region,
+            // and the result would still be a well-formed core term, so the
+            // arena invariants cannot catch it.
             | Tm::Pi(su::Pi(binders, body)) => {
                 binders.into_iter().try_for_each(|binder| {
                     self.cbv_classifier_binder_shape(tycker, scope, binder)
@@ -3884,14 +3794,14 @@ impl TermChecker<'_> {
     /// a **name**: one the region bound, or an intrinsic for a primitive.
     ///
     /// The classifier passes [`Self::cbv_classifier_shape`] before any of it
-    /// is synthesized. Handing a subtree to ordinary synthesis unexamined
-    /// defeats the closure a region claims, as review found twice: an
-    /// annotation wrapper smuggled an import past the import rule
-    /// (`(@(import("…")) : VType)`), and a classifier expression read a term
-    /// variable bound outside the region (`@[typeof] outside`). Both produced
-    /// a primitive, and the arena invariants had nothing to object to: the emitted
-    /// term was well formed, and only its *provenance* was forbidden. The guard
-    /// also refuses a name the region did not bind.
+    /// is synthesized. Handing a subtree to ordinary synthesis unexamined would
+    /// defeat the closure a region claims: an annotation wrapper could carry an
+    /// import past the import rule (`(@(import("…")) : VType)`), and a
+    /// classifier expression could read a term variable bound outside the
+    /// region (`@[typeof] outside`). Both would produce a primitive, and the
+    /// arena invariants cannot object: the emitted term is well formed, and
+    /// only its *provenance* is forbidden. The guard also refuses a name the
+    /// region did not bind.
     ///
     /// What a region-bound name resolves to needs no test of its own. A type
     /// binding's name denotes its translated bindee, a declaration's name its
@@ -3921,10 +3831,10 @@ impl TermChecker<'_> {
     /// written with its intrinsic.
     ///
     /// The refusal is raised at the name's own source site, so it points at the
-    /// name whichever judgment asked. The kind judgment asks about a binder's
-    /// annotation before anything has established a site for it, and the
-    /// refusal took the caller's instead: an outside kind in a definition's
-    /// parameter was reported at the declaration's body.
+    /// name whichever judgment asked. That matters for the kind judgment, which
+    /// asks about a binder's annotation before anything has established a site
+    /// for it: an outside kind in a definition's parameter is reported at the
+    /// parameter, not at the declaration's body.
     fn cbv_require_region_name<'db>(
         &self, tycker: &mut Tycker<'db>, scope: &CbvScope, name: su::TermId, def: DefId,
     ) -> Result<()> {
