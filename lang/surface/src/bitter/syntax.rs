@@ -85,9 +85,9 @@ impl CoPatternSpine {
 #[derive(Clone, Debug)]
 pub struct TypeOf(pub TermId);
 
-/// One binder of a desugared `pi` telescope.
+/// A `pi` telescope: its binders in source order, never empty, and the body they scope over.
 #[derive(Clone, Debug)]
-pub struct Pi(pub PatId, pub TermId);
+pub struct Pi(pub Vec<PatId>, pub TermId);
 
 /// One binder of a desugared `val pi` telescope.
 #[derive(Clone, Debug)]
@@ -242,10 +242,12 @@ pub enum Term<Ref> {
     Label(Label<FieldName, TermId>),
     Triv(Triv),
     Cons(Vec<TermId>),
-    Abs(Abs<PatId, TermId>),
+    /// An abstraction: its consecutive parameters in source order, never empty.
+    Abs(Abs<Vec<PatId>, TermId>),
     #[from(ignore)]
     ValAbs(Abs<PatId, TermId>),
-    App(App<TermId, TermId>),
+    /// An application: its head and its consecutive arguments, never empty.
+    App(App<TermId, Vec<TermId>>),
     Fix(Fix<PatId, TermId>),
     Pi(Pi),
     ValPi(ValPi),

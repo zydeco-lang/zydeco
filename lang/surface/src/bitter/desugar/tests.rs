@@ -1,5 +1,6 @@
 use super::*;
 use crate::textual::StrictParser;
+use zydeco_syntax::Ugly;
 
 struct Fixture;
 
@@ -210,4 +211,48 @@ fn prelude_accepts_exactly_one_exception_to_the_default() {
     Fixture::accepted("@[prelude(from(View))] ()");
     let errors = Fixture::errors("(@[prelude(core)] (), @[prelude(from(let))] ())");
     assert_eq!(errors.len(), 2);
+}
+
+impl Fixture {
+    /// The desugared program in the debug form, which prints a group of
+    /// parameters or arguments as one node.
+    fn desugared(source: &str) -> String {
+        let mut parser = t::Parser::new();
+        let unit = StrictParser::source(source, &mut parser).unwrap();
+        let result =
+            SourceUnitDesugarer { spans: &parser.spans, textual: &parser.arena }.run(unit).unwrap();
+        result.root.ugly(&crate::bitter::fmt::Formatter::new(&result.arena))
+    }
+}
+
+/// Consecutive parameters and arguments stay one node, and nested ones stay
+/// nested: a call-by-value block reads a group as one multi-argument function
+/// and a chain as a curried one, so desugaring may not merge or split either.
+#[test]
+fn groups_and_chains_keep_their_shape() {
+    for (source, desugared) in [
+        ("fn x y => x", "fn x y => x"),
+        ("fn x => fn y => x", "fn x => fn y => x"),
+        ("f a b c", "(f a b c)"),
+        ("(f a) b", "((f a) b)"),
+        ("(f a b) c", "((f a b) c)"),
+        ("forall (X : VType) (Y : VType) . X", "pi (X : VType) (Y : VType) . X"),
+        ("forall (X : VType) . forall (Y : VType) . X", "pi (X : VType) . pi (Y : VType) . X"),
+        ("pi (x : A) (y : B) . C", "pi (x : A) (y : B) . C"),
+        ("pi (x : A) . pi (y : B) . C", "pi (x : A) . pi (y : B) . C"),
+        ("A -> B -> C", "pi (_ : A) . pi (_ : B) . C"),
+        (
+            "let fix f (x : A) (y : B) : C = e in f",
+            "let f = ({ fix f => fn (x : A) (y : B) => e } : (Thk pi (x : A) (y : B) . C)) in f",
+        ),
+        (
+            "let f (x : A) (y : B) : C = e in f",
+            "let f = (fn (x : A) (y : B) => e : pi (x : A) (y : B) . C) in f",
+        ),
+        ("fn x y .read z w => x", "fn x y => comatch | .read => fn z w => x end"),
+        // A value function is outside the rule, and stays folded.
+        ("val (x : A) (y : B) => x", "val (x : A) => val (y : B) => x"),
+    ] {
+        assert_eq!(Fixture::desugared(source), desugared, "{source}");
+    }
 }

@@ -69,7 +69,7 @@ fn forall_bodies_preserve_prepared_expected_types() {
             let root: su::TermId = allocator.alloc();
             scoped.pats.insert_new(binder, su::Pattern::Var(binder_def));
             scoped.terms.insert_new(body, su::Hole.into());
-            scoped.terms.insert_new(root, su::Abs(binder, body).into());
+            scoped.terms.insert_new(root, su::Abs(vec![binder], body).into());
             (root, binder_def)
         },
         |tycker, binder_def| {

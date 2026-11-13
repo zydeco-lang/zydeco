@@ -13,4 +13,6 @@ e2e_sources!({
     breadth_first => "tests/cbv/breadth-first.zy",
     effects => "tests/cbv/effects.zy",
     effects_on_data => "tests/cbv/effects-on-data.zy",
+    multi_argument => "tests/cbv/multi-argument.zy",
+    multi_argument_effects => "tests/cbv/multi-argument-effects.zy",
 });

@@ -6,6 +6,7 @@ use crate::check::judgment::{Action, Switch, Tyck};
 use crate::check::pattern::CheckedPatternExt;
 use crate::check::pattern::{CheckedPattern, PatternAction, PatternSkolems, ValuePatternShape};
 use crate::check::projection::ExistentialProjectionPattern;
+use crate::check::term::TelescopeTail;
 
 /// Reify the package-opening structure of a checked value pattern without
 /// retaining source binders in its classifier.
@@ -20,7 +21,7 @@ pub(super) struct PackageWitnessProjectionBuilder;
 /// value-pattern domain.
 pub(super) struct ComputationPiFormation {
     pub(super) binder: CheckedPattern,
-    pub(super) codomain: su::TermId,
+    pub(super) codomain: TelescopeTail,
 }
 
 /// Formation input for a total value-function classifier.
@@ -72,7 +73,7 @@ struct PackPiInstantiationState<'a> {
 /// package-dependent computation arrow.
 pub(super) struct PackPiIntroduction {
     pub(super) binder: su::PatId,
-    pub(super) body: su::TermId,
+    pub(super) body: TelescopeTail,
     pub(super) signature: ss::PackPi,
 }
 

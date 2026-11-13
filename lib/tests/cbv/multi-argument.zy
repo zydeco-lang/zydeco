@@ -1,0 +1,97 @@
+-- Multi-argument functions in a call-by-value block, run end to end.
+--
+-- Consecutive parameters are one function: `fn x y => e` takes both at once, and
+-- `fn x => fn y => e` takes one and returns a function. The first translates to
+-- the shape a call-by-push-value library has, so functions cross the boundary of
+-- a block in either direction with no adapter.
+begin
+  param (/Thk; /Ret; /Int; /Unit; /OS; /int; /process) : @(import("../../std/builtin.zy")) that
+  def ! require (want : Int) (got : Int) (k : Thk OS) : OS =
+    ! int/eq OS want got k { ! process/exit 1 }
+  that
+
+  -- a library function goes straight in
+  do use <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that
+    let Int : VType = @(intrinsic(int)) that
+    fn (add : pi (_ : Int) (_ : Int) . Int) => add 1 2
+  );
+  do a <- ! use int/add;
+  ! require 3 a {
+
+    -- a function written in a block comes straight out
+    do pick <- @[cbv] (
+      let VType = @(intrinsic(vtype)) that
+      let Int : VType = @(intrinsic(int)) that
+      fn (x : Int) (y : Int) => y
+    );
+    let callback : Thk (Int -> Int -> Ret Int) = pick in
+    do b <- ! callback 5 6;
+    ! require 6 b {
+
+      -- type parameters belong to the group
+      do first <- @[cbv] (
+        let VType = @(intrinsic(vtype)) that
+        fn (X : VType) (Y : VType) (x : X) (y : Y) => x
+      );
+      let polymorphic : Thk (forall (X : VType) . forall (Y : VType) . X -> Y -> Ret X) = first in
+      do c <- ! polymorphic Int Unit 7 ();
+      ! require 7 c {
+
+        -- called inside a block, at a type argument and a value argument
+        do d <- @[cbv] (
+          let VType = @(intrinsic(vtype)) that
+          let Int : VType = @(intrinsic(int)) that
+          let id = fn (X : VType) (x : X) => x in
+          id Int 8
+        );
+        ! require 8 d {
+
+          -- a recursive function takes all of its parameters on each call
+          do e <- @[cbv] (
+            let VType = @(intrinsic(vtype)) that
+            let Int : VType = @(intrinsic(int)) that
+            let Unit : VType = @(intrinsic(unit)) that
+            def Nat : VType =
+              data
+              | +Zero : Unit
+              | +Succ : Nat
+              end
+            that
+            let fix count (n : Nat) (acc : Int) : Int =
+              match n
+              | +Zero(_) => acc
+              | +Succ(k) => count k acc
+              end
+            in
+            count +Succ(+Succ(+Zero(()))) 9
+          );
+          ! require 9 e {
+
+            -- a nested function is still curried, and may be applied a part at a time
+            do f <- @[cbv] (
+              let VType = @(intrinsic(vtype)) that
+              let Int : VType = @(intrinsic(int)) that
+              let curried = fn (x : Int) => fn (y : Int) => y in
+              let g = curried 1 in
+              g 10
+            );
+            ! require 10 f {
+
+              -- a function may return a function, which parentheses then apply
+              do g <- @[cbv] (
+                let VType = @(intrinsic(vtype)) that
+                let Int : VType = @(intrinsic(int)) that
+                let h = fn (x : Int) (y : Int) => fn (z : Int) => z in
+                (h 1 2) 11
+              );
+              ! require 11 g {
+
+                ! process/exit 0 }
+            }
+          }
+        }
+      }
+    }
+  }
+end

@@ -882,6 +882,7 @@ and candidate extensions remain an [open idea](../ideas/README.md#structural-com
 
 [Bitter desugaring](../../lang/surface/src/bitter/README.md) removes surface sugar while keeping unresolved names.
 It expands binding headers and telescopes, makes nominal sealing and CBPV introductions explicit,
+keeps the consecutive parameters of `fn`, `pi` and `forall` and the arguments of one juxtaposition as one node,
 and retains special boundaries such as classifier queries and monadic payloads.
 Source assembly has already resolved import and literal splices.
 Primitive terms have compiler-owned identities, and every generated node records its textual origin.
@@ -898,6 +899,11 @@ A rejected source returns all collected errors with their source context and pub
 
 The [telescope rules](../../lang/surface/src/bitter/desugar/telescopes.rs) lower parameter sequences,
 flatten consecutive existential layers, and construct quantifier and packed value layers.
+A `pi` telescope stays one node with its binders in order, as an abstraction's parameters
+and an application's arguments do, and checking walks it one binder at a time,
+each at an allocation site of its own, so in the core a group and its nested spelling elaborate alike;
+a call-by-value region translates the group as one function.
+`val pi` and `sigma` telescopes become one layer per binder.
 The [binding rules](../../lang/surface/src/bitter/desugar/bindings.rs) interpret binding flavors
 and build terms together with classifiers over the same parameter fold.
 Classifier state distinguishes absence, an annotation on the complete binding,
@@ -3458,7 +3464,9 @@ there is no second length threshold.
 Canonical textual printing folds adjacent scopes of the same form into one parameter telescope.
 Under `Preserve`, a source line break before the nested introducer stops the fold;
 under `BlankLinesOnly` only a blank line does.
-This rule applies to `fn`, `pi`, `forall`, `sigma`, and `exists`.
+This rule applies to `val`, `val pi`, `sigma`, and `exists`.
+A nested `fn`, `pi` or `forall` stays nested, because consecutive parameters form one group and a nested scope another,
+and an application whose head is itself an application keeps the parentheses that separate them, as in `(f x) y`.
 Consecutive existential nodes also normalize to one telescope during desugaring,
 so the compact and repeated spellings have the same elaboration.
 

@@ -1,0 +1,8 @@
+-- expect: reject(tyck.sort-mismatch)
+
+do _ <- @[cbv] (
+  let VType = @(intrinsic(vtype)) that
+  let Int : VType = @(intrinsic(int)) that
+  (fn (x : Int) (y : Int) => y : pi (x : Int) (y : Int) . x)
+);
+ret ()

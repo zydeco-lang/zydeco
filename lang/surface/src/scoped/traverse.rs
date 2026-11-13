@@ -68,18 +68,20 @@ impl Node<'_> {
                     child((*ty).into());
                 }
                 | Term::Cons(terms) => terms.iter().for_each(|term| child((*term).into())),
-                | Term::Abs(Abs(pattern, body))
+                | Term::Abs(Abs(patterns, body)) | Term::Pi(Pi(patterns, body)) => {
+                    patterns.iter().for_each(|pattern| child((*pattern).into()));
+                    child((*body).into());
+                }
                 | Term::ValAbs(Abs(pattern, body))
                 | Term::Fix(Fix(pattern, body))
-                | Term::Pi(Pi(pattern, body))
                 | Term::ValPi(ValPi(pattern, body))
                 | Term::Sigma(Sigma(pattern, body)) => {
                     child((*pattern).into());
                     child((*body).into());
                 }
-                | Term::App(App(function, argument)) => {
+                | Term::App(App(function, arguments)) => {
                     child((*function).into());
-                    child((*argument).into());
+                    arguments.iter().for_each(|argument| child((*argument).into()));
                 }
                 | Term::ManifestExists(inner) => {
                     let ManifestExists { binder, definition, body } = &**inner;
