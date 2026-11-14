@@ -1,11 +1,11 @@
--- Call-by-value regions over data types they declare, run end to end.
+-- Call-by-value blocks over data types they declare, run end to end.
 --
--- `data` is the route by which a region can finally compute: a decreasing
+-- `data` is the route by which a block can finally compute: a decreasing
 -- structure makes a terminating recursive function writable with nothing but
--- what the region already has, and no arithmetic appears anywhere below.
+-- what the block already has, and no arithmetic appears anywhere below.
 --
--- Each region binds the built-in types it names, as `apply.zy` explains, and
--- declares the data types it uses: a region is closed over types, so a type
+-- Each block binds the built-in types it names, as `apply.zy` explains, and
+-- declares the data types it uses: a block is closed over types, so a type
 -- declared outside it would have to enter by type abstraction.
 begin
   param (/Thk; /Ret; /Int; /Unit; /OS; /int; /process) : @(import("../../std/builtin.zy")) that

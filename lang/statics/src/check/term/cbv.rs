@@ -9,9 +9,9 @@
 //! It runs on the native stack rather than as an `Explicit` folder, because it
 //! is one of the checker's judgments and shares their recursion: it re-enters
 //! ordinary checking at leaves and binders, and a child's synthesized type
-//! selects the expectation of the next child. A region's depth therefore costs
-//! what an equally deep host term costs. The analyses that only read a region,
-//! `CbvRegionNames` and `CbvMentions`, use the shared scoped traversal.
+//! selects the expectation of the next child. A block's depth therefore costs
+//! what an equally deep host term costs. The analyses that only read a block,
+//! `CbvBlockNames` and `CbvMentions`, use the shared scoped traversal.
 //!
 //! Three judgments, following Levy's fine-grain split (HOSC 19(4) §7.3 Fig 9):
 //!
@@ -28,8 +28,8 @@
 //! ```
 //!
 //! That is the split, not the whole translation: the three tables, every
-//! source form a region translates, are in `docs/references/language.md`
-//! under *Call-by-Value Regions*.
+//! source form a block translates, are in `docs/references/language.md`
+//! under *Call-by-Value Blocks*.
 //!
 //! The block always exposes the *term* translation, so its classifier is
 //! `Ret [[A]]v` even when the body is a syntactic value. Selecting by
@@ -50,16 +50,16 @@
 //! kind unwritten, and an expected quantifier gives an unannotated type
 //! abstraction its kind; `cbv_type_against` is that judgment.
 //!
-//! Every expectation originates **inside** the region, from a source
+//! Every expectation originates **inside** the block, from a source
 //! ascription or annotation, and is therefore in the translation's image by
 //! construction. The host's own expectation is not pushed inward: it is
-//! reconciled with what the region synthesized.
+//! reconciled with what the block synthesized.
 //!
-//! That is a decision, and it stands on the region's interface rather than on
-//! anything about the translation's image: a region **synthesizes
+//! That is a decision, and it stands on the block's interface rather than on
+//! anything about the translation's image: a block **synthesizes
 //! independently and the host compares afterwards**, which is one direction in
 //! types as the translation is one direction in terms, and it is what makes a
-//! region's classifier a consequence of its body rather than of its position.
+//! block's classifier a consequence of its body rather than of its position.
 
 use super::*;
 use crate::traverse::CheckedNode;
@@ -83,7 +83,7 @@ where
     }
 }
 
-/// A computation abstraction over a type parameter whose witness the region
+/// A computation abstraction over a type parameter whose witness the block
 /// has already opened, so that the body could be translated under it.
 impl<F, T> Construct<ss::TyEnv, ss::CompuId> for Abs<cs::Ty<ss::AbstId>, F>
 where
@@ -124,7 +124,7 @@ where
         let (env, function) = function.construct(tycker, env)?;
         let function_ty = tycker.statics.annotations_compu[&function];
         let Some((binder, body_ty)) = function_ty.destruct_forall_binder(tycker) else {
-            unreachable!("a region instantiates only quantifiers")
+            unreachable!("a block instantiates only quantifiers")
         };
         let (env, argument) = argument.construct(tycker, env)?;
         let domain = binder.domain_kind(tycker);
@@ -147,21 +147,25 @@ struct CbvScope {
     env: ss::TyEnv,
     /// The term variables bound so far, for the term rule.
     bound: std::collections::HashSet<DefId>,
-    /// Every name the region's source binds, of any sort.
+    /// Every name the block's source binds, of any sort.
     ///
-    /// A region is closed over types and kinds as over terms, so a type or
+    /// A block is closed over types and kinds as over terms, so a type or
     /// kind name must be one of these; an outside type enters by type
     /// abstraction instead, and a built-in one is written with its intrinsic.
-    /// The set is read off the source once, where the region starts: a name
-    /// in scope inside the region is the region's own exactly when its binder
-    /// is part of the region's source, so no binding site has to remember to
+    /// The set is read off the source once, where the block starts: a name
+    /// in scope inside the block is the block's own exactly when its binder
+    /// is part of the block's source, so no binding site has to remember to
     /// add one.
-    region: std::rc::Rc<std::collections::HashSet<DefId>>,
+    block_names: std::rc::Rc<std::collections::HashSet<DefId>>,
 }
 
 impl CbvScope {
-    fn root(env: ss::TyEnv, region: std::collections::HashSet<DefId>) -> Self {
-        Self { env, bound: std::collections::HashSet::new(), region: std::rc::Rc::new(region) }
+    fn root(env: ss::TyEnv, block_names: std::collections::HashSet<DefId>) -> Self {
+        Self {
+            env,
+            bound: std::collections::HashSet::new(),
+            block_names: std::rc::Rc::new(block_names),
+        }
     }
 
     /// The scope inside a binder: its environment, and every term variable it
@@ -172,26 +176,26 @@ impl CbvScope {
     fn binding(&self, env: ss::TyEnv, defs: impl IntoIterator<Item = DefId>) -> Self {
         let mut bound = self.bound.clone();
         bound.extend(defs);
-        Self { env, bound, region: self.region.clone() }
+        Self { env, bound, block_names: self.block_names.clone() }
     }
 
     /// The scope inside a type or kind binder or binding, which contributes an
     /// entry to the typing environment and nothing to the term rule.
     fn type_binding(&self, env: ss::TyEnv) -> Self {
-        Self { env, bound: self.bound.clone(), region: self.region.clone() }
+        Self { env, bound: self.bound.clone(), block_names: self.block_names.clone() }
     }
 }
 
-/// The names a region's source binds: every variable pattern in it.
+/// The names a block's source binds: every variable pattern in it.
 ///
 /// Lifted `that` bindings, the parameters of a sealed definition and the
 /// copies desugaring makes of a telescope's binders are all part of the
-/// region's source, so they are all found here.
-struct CbvRegionNames {
+/// block's source, so they are all found here.
+struct CbvBlockNames {
     defs: std::collections::HashSet<DefId>,
 }
 
-impl Visitor for CbvRegionNames {
+impl Visitor for CbvBlockNames {
     type Break = std::convert::Infallible;
 
     fn enter(&mut self, node: Node<'_>) -> ControlFlow<Self::Break> {
@@ -252,7 +256,7 @@ struct CbvTypeBinder {
 /// introduce and project that field. A term-level type abstraction's binder is
 /// rebuilt from its witness when the core term is made — `Abs(cs::Ty(witness),
 /// …)` builds a plain binder at the witness's kind — so a field name there
-/// would vanish from the type the region builds. A quantifier's and a type
+/// would vanish from the type the block builds. A quantifier's and a type
 /// operator's binder keep the checked pattern, so the name would survive
 /// there; they are refused as well, as one restriction on every binder that
 /// abstracts rather than packages, because what instantiating or applying one
@@ -300,7 +304,7 @@ enum CbvSealIdentity {
     Group { index: u32 },
 }
 
-/// A `def` binding in a region: its binder, the term inside its seal, and
+/// A `def` binding in a block: its binder, the term inside its seal, and
 /// where the seal's identity comes from.
 struct CbvSealedBinding {
     binder: su::PatId,
@@ -331,7 +335,7 @@ struct CbvDeclaredSeal {
 ///
 /// **This shape does not establish provenance**: the `let !` header produces
 /// the same one, so `let ! f : pi (x : A) . B = fix g => fn (x : A) => M` is
-/// recognized as a header too, and the `fix` the region refuses is reachable
+/// recognized as a header too, and the `fix` the block refuses is reachable
 /// through that spelling. The binding flavor that would tell the two apart is
 /// erased at desugaring, and type checking has no textual arena to recover it
 /// from, so telling them apart means carrying that fact forward. Both copies of
@@ -374,7 +378,7 @@ impl TermChecker<'_> {
             let su::CbvBlock { body } = term;
             let environment = self.info.clone();
             let checked = tycker.synthesize_once(self.inner, &environment, |tycker| {
-                let mut names = CbvRegionNames { defs: std::collections::HashSet::new() };
+                let mut names = CbvBlockNames { defs: std::collections::HashSet::new() };
                 let ControlFlow::Continue(()) = Traversal::new(tycker.scoped)
                     .run(body.into(), &mut names)
                     .expect("resolved source syntax is acyclic");
@@ -458,7 +462,7 @@ impl TermChecker<'_> {
             // changing what the term means, are transparent here too: the body is
             // translated as though the annotation were absent, and `@[debug]`
             // records the host's observation of the *translation*, so what it
-            // prints is the core term this part of the region became. Every other
+            // prints is the core term this part of the block became. Every other
             // annotation stays refused, by the catch-all below.
             | Tm::Meta(annotated)
                 if matches!(
@@ -710,21 +714,22 @@ impl TermChecker<'_> {
                 );
                 Ok((compu, tail_ty))
             }
-            // A region's payload is wrapped in a block by desugaring, which is
-            // what makes the region a binding boundary: mobile bindings are
-            // owned by the nearest block, and the candidate collector stops at
-            // one. So this arm is not an extra feature — it is how the region's
-            // own body is reached.
+            // Desugaring wraps a call-by-value block's payload in a `Block`,
+            // which is what makes the call-by-value block a binding boundary:
+            // mobile bindings are owned by the nearest `Block`, and the
+            // candidate collector stops at one. So this arm is not an extra
+            // feature — it is how the call-by-value block's own body is reached.
             //
-            // Name resolution replaces a block's body with its elaborated form,
-            // so what arrives here already has the block's own bindings woven
-            // in. A region with no mobile bindings elaborates to its payload.
+            // Name resolution replaces a `Block`'s body with its elaborated
+            // form, so what arrives here already has the call-by-value block's
+            // own bindings woven in. One with no mobile bindings elaborates to
+            // its payload.
             //
             // The inference region is the boundary's other half, and it has to
             // be opened here rather than inherited. The elaboration dispatches
-            // on the block node itself and so never reaches `check_block`,
+            // on the `Block` node itself and so never reaches `check_block`,
             // which is where an ordinary block opens one; without this, a
-            // flexible metavariable created inside a region would be left for
+            // flexible metavariable created inside a call-by-value block would be left for
             // an enclosing boundary to solve.
             | Tm::Block(su::Block(body)) => {
                 let inference = InferenceRegion::enter(tycker);
@@ -979,7 +984,7 @@ impl TermChecker<'_> {
     /// The payload type a constructor carries, read off the data type the
     /// expectation names.
     ///
-    /// The arms are already translated types: a data type a region can name is
+    /// The arms are already translated types: a data type a block can name is
     /// one it wrote, whose arms it translated, so each arm is `[[A]]v` for the
     /// source arm type `A`. That is why a payload can be translated directly
     /// against one.
@@ -1002,7 +1007,7 @@ impl TermChecker<'_> {
     /// The declaration behind `Thk (codata …)`, and its fields.
     ///
     /// A codata type is negative, so its translation keeps the shift outside;
-    /// a region meets it as a thunk and has to look through that thunk before
+    /// a block meets it as a thunk and has to look through that thunk before
     /// the declaration is visible.
     fn cbv_codata<'db>(
         &self, tycker: &mut Tycker<'db>, scope: &CbvScope, ty: ss::TypeId,
@@ -1012,7 +1017,7 @@ impl TermChecker<'_> {
             found: ty,
         };
         // Unrolled before the thunk is destructured, not after: a declaration
-        // made outside the region is sealed, so the `Thk` is inside the seal
+        // made outside the block is sealed, so the `Thk` is inside the seal
         // and `destruct_thk_app` does not look through one.
         let outer = ty.unroll(tycker)?.subst_env(tycker, &scope.env)?;
         let Some(payload) = outer.destruct_thk_app(tycker) else { tycker.err(not_codata())? };
@@ -1111,7 +1116,7 @@ impl TermChecker<'_> {
     /// [`ValuePatternShape::require_binding`], as the host's `do` and
     /// abstraction do; `let +A x = t` at a type with a second constructor is
     /// refused there, with `tyck.refutable-binding`. Without that call the
-    /// region's hand-built `Bind` would carry a refutable binder the host never
+    /// block's hand-built `Bind` would carry a refutable binder the host never
     /// admits.
     fn cbv_require_binding_pattern<'db>(
         &self, tycker: &mut Tycker<'db>, binder: su::PatId,
@@ -1137,8 +1142,8 @@ impl TermChecker<'_> {
     ///
     /// That rule synthesizes the `A` of `(p : A)`, and here `A` is a source
     /// type: ordinary synthesis cannot read `Int -> Int`, and could reach
-    /// outside the region through `@[typeof]` or an import. So each annotation
-    /// is translated by the type clause, which applies the region's guards and
+    /// outside the block through `@[typeof]` or an import. So each annotation
+    /// is translated by the type clause, which applies the block's guards and
     /// requires a value type, and is recorded in
     /// `Tycker::settled_pattern_annotations`; the rule then compares the
     /// translation with the type its position expects, as it would have
@@ -1217,7 +1222,7 @@ impl TermChecker<'_> {
 
     /// The kind a binding declares, when it declares one.
     ///
-    /// A region's `let` has to choose between two judgments before it runs
+    /// A block's `let` has to choose between two judgments before it runs
     /// either: a type binding translates its bindee with `[[·]]v` on types, a
     /// term binding with `[[·]]v` on terms, and the two disagree about what the
     /// same syntax means. The host chooses by synthesizing the bindee and
@@ -1251,7 +1256,7 @@ impl TermChecker<'_> {
     /// before either term judgment runs, as a declared kind decides a type
     /// binding. A kind name is told from a term name by its recorded
     /// annotation, so a term variable is not synthesized here ahead of the term
-    /// judgment; one bound outside the region is refused by the kind judgment.
+    /// judgment; one bound outside the block is refused by the kind judgment.
     ///
     /// Desugaring writes an omitted classifier as an ascription to a hole,
     /// `let K = (VType : _)`, which says nothing and is looked through.
@@ -1280,8 +1285,8 @@ impl TermChecker<'_> {
     ///
     /// It emits nothing, as a type binding does, and binds as the host's kind
     /// alias binds: the binder is checked against the set of kinds, and the
-    /// name stands for the kind in the tail. A region closed over kinds needs
-    /// it, since `VType` named outside is not the region's to name.
+    /// name stands for the kind in the tail. A block closed over kinds needs
+    /// it, since `VType` named outside is not the block's to name.
     fn cbv_kind_binding<'db>(
         &self, tycker: &mut Tycker<'db>, scope: &CbvScope, binder: su::PatId, kind: ss::KindId,
         tail: su::TermId, expected: Option<ss::TypeId>,
@@ -1299,13 +1304,13 @@ impl TermChecker<'_> {
 
     /// The type-binding clause: `[[let X : K = A in M]]v = [[M]]v[[[A]]v/X]`.
     ///
-    /// A type binding emits nothing, so the region's computation is the tail's.
+    /// A type binding emits nothing, so the block's computation is the tail's.
     /// What it contributes is an entry in the typing environment, which is why
     /// this mirrors the host's type-alias path rather than the `do` the term
     /// binding compiles to: the name is *inlined*, and every occurrence in the
     /// tail resolves to the translated type.
     ///
-    /// This is the only way a region can name a source arrow. `Int -> Int` is
+    /// This is the only way a block can name a source arrow. `Int -> Int` is
     /// ill-kinded in the host, so no host binding can stand for it; here the
     /// arrow is translated first and the name stands for `Thk (Int -> Ret Int)`.
     fn cbv_type_binding<'db>(
@@ -1358,7 +1363,7 @@ impl TermChecker<'_> {
         let su::RecGroup { definitions, tail } = group;
         // These checks run member by member in the host's order, so each gets
         // the host's diagnostic, and for every member before what only a
-        // region requires of one, which `cbv_sealed_bindings` checks. The
+        // block requires of one, which `cbv_sealed_bindings` checks. The
         // kind has to be known before the group is, which is also what keeps
         // reading it from synthesizing the group's own name before its binder
         // has been checked.
@@ -1375,7 +1380,7 @@ impl TermChecker<'_> {
             });
             // A known name is not a known kind: the host requires the
             // annotation to denote one before it asks about the seal. One that
-            // reaches outside the region is still reported as that first.
+            // reaches outside the block is still reported as that first.
             let kind = match known {
                 | Some(annotation) => {
                     let kind = self.cbv_annotation_kind(tycker, scope, annotation)?;
@@ -1558,7 +1563,7 @@ impl TermChecker<'_> {
             ));
         }
         // The binder is checked whole, through the entrance every type binder
-        // in a region goes through, which guards and settles each annotation in
+        // in a block goes through, which guards and settles each annotation in
         // it. It is checked before the rest of the telescope is read, so a later
         // domain that names it, as `(Y : X)` does, meets a checked type variable
         // and is refused by sort.
@@ -1620,7 +1625,7 @@ impl TermChecker<'_> {
     /// Refuse a kind `annotation` when `within` mentions any of `names`. A kind
     /// mentions no type, so a mention makes the annotation the wrong sort; it
     /// is refused before anything is read, since reading it could reach a name
-    /// ahead of its binder. One that reaches outside the region is reported as
+    /// ahead of its binder. One that reaches outside the block is reported as
     /// that, by the shape guard, first.
     fn cbv_require_unmentioned<'db>(
         &self, tycker: &mut Tycker<'db>, scope: &CbvScope, annotation: su::TermId,
@@ -1656,7 +1661,7 @@ impl TermChecker<'_> {
     }
 
     /// The kind an annotation that must be one denotes. One that is not a kind
-    /// goes through the shape guard first, so one reaching outside the region
+    /// goes through the shape guard first, so one reaching outside the block
     /// is reported as that rather than as the wrong sort.
     fn cbv_require_annotation_kind<'db>(
         &self, tycker: &mut Tycker<'db>, scope: &CbvScope, annotation: su::TermId,
@@ -2404,14 +2409,14 @@ impl TermChecker<'_> {
                 // not left to a later pass.
                 //
                 // This is the rule for term position. A type or kind name is
-                // closed over by its twin, `cbv_require_region_name`, which
+                // closed over by its twin, `cbv_require_block_name`, which
                 // the leaf rule and the kind judgment run.
                 if !scope.bound.contains(&def) {
                     // A name denoting a type reaches here when a binding meant
                     // to be a type binding did not declare its kind, as in
                     // `let MyInt = Int that …`: with no kind the binding is a
                     // term binding, and `Int` is then a term-position use of a
-                    // type, bound in the region or outside it. The rejection
+                    // type, bound in the block or outside it. The rejection
                     // is right either way, and resolving a bare name is a leaf
                     // lookup that reaches nothing, so it is worth doing to say
                     // which of the two the author ran into.
@@ -2435,7 +2440,7 @@ impl TermChecker<'_> {
             // `Thk (Int -> Ret Int)`. Analysis only: with nothing expected the
             // report would be a fresh unknown, which says nothing, so a hole needs
             // an expectation as a constructor does. It is a leaf, so ordinary
-            // checking reaches nothing outside the region.
+            // checking reaches nothing outside the block.
             | Tm::Hole(_) => match expected {
                 | Some(_) => self.cbv_reuse_check(tycker, scope, term, expected),
                 | None => tycker.err(TyckError::MissingAnnotation),
@@ -2502,15 +2507,15 @@ impl TermChecker<'_> {
     /// The kind an annotation denotes, when it denotes one: a name for a kind,
     /// an arrow between kinds, or a named kind.
     ///
-    /// This is the region's **one kind judgment**. A type binding's declared
+    /// This is the block's **one kind judgment**. A type binding's declared
     /// kind, a type binder's annotation and an ascription's classifier are all
     /// decided here, and a binder's kind is then recorded for the pattern
-    /// rule rather than synthesized again by it, so the three places a region
+    /// rule rather than synthesized again by it, so the three places a block
     /// writes a kind cannot disagree about which kinds it may write.
     ///
-    /// Only the **names** are handed to ordinary synthesis: one the region
+    /// Only the **names** are handed to ordinary synthesis: one the block
     /// bound, and the intrinsics for `VType` and `CType`. A name is a leaf, so
-    /// delegating it reaches nothing a region may not reach, which is the
+    /// delegating it reaches nothing a block may not reach, which is the
     /// hazard the classifier guard exists for, and a name always resolves to
     /// something. An arrow is never delegated whole: it could be a *source*
     /// arrow, ill-kinded in the host, whose synthesis would report an error
@@ -2524,11 +2529,11 @@ impl TermChecker<'_> {
     ) -> Result<Option<ss::KindId>> {
         use su::Term as Tm;
         match tycker.scoped.terms[&annotation].to_owned() {
-            // A kind name is closed over as a type name is: the region must
+            // A kind name is closed over as a type name is: the block must
             // have bound it, so `VType` is written with its intrinsic or behind
-            // a kind binding of the region's own.
+            // a kind binding of the block's own.
             | Tm::Var(def) => {
-                self.cbv_require_region_name(tycker, scope, annotation, def)?;
+                self.cbv_require_block_name(tycker, scope, annotation, def)?;
                 let checked =
                     TyEnvT::new(scope.env.clone(), annotation).tyck(tycker, Action::syn())?;
                 Ok(match checked {
@@ -2651,11 +2656,11 @@ impl TermChecker<'_> {
     /// Open a type binder: guard its shape, check that its kind is a source
     /// kind, allocate its witness, and extend the scope with it.
     ///
-    /// **Shared by every type binder a region writes** — `fn (X : K) => M`
+    /// **Shared by every type binder a block writes** — `fn (X : K) => M`
     /// over a term, `fn (X : K) => T` over a type, a quantifier and an
     /// existential — so that the two guards hold at every entrance by
     /// construction: an inner annotation may not read a term bound outside the
-    /// region, and `fn (R : CType) => 0` is refused, wherever the binder sits.
+    /// block, and `fn (R : CType) => 0` is refused, wherever the binder sits.
     ///
     /// A binder that declares no kind takes `expected`, as `fn x => M` takes
     /// its domain from an expected arrow; one that declares a kind is checked
@@ -2687,7 +2692,7 @@ impl TermChecker<'_> {
     ///
     /// The binder's kind annotations are settled first, by
     /// [`Self::cbv_settle_type_binder`], so the pattern rule checks the
-    /// pattern against the kind the region decided and synthesizes none of
+    /// pattern against the kind the block decided and synthesizes none of
     /// them itself.
     fn cbv_check_type_binder<'db>(
         &self, tycker: &mut Tycker<'db>, scope: &CbvScope, binder: su::PatId,
@@ -2710,7 +2715,7 @@ impl TermChecker<'_> {
     /// The shape is a name or a wildcard, an annotation of one, and — at a
     /// package's binder — a field binder `#C = p` over one. Each annotation's
     /// kind comes from [`Self::cbv_annotation_kind`], and an annotation
-    /// that is not a kind is refused here. One that reaches outside the region
+    /// that is not a kind is refused here. One that reaches outside the block
     /// is reported as that, by the classifier guard, before it is reported as
     /// the wrong sort.
     fn cbv_settle_type_binder<'db>(
@@ -2946,7 +2951,7 @@ impl TermChecker<'_> {
     ///
     /// This is where the host's pattern synthesis finds a type without
     /// inference. It also gives a bare variable a stand-in for inference to
-    /// solve, which a region does not do, and it finds none for a wildcard, a
+    /// solve, which a block does not do, and it finds none for a wildcard, a
     /// constructor tag or a field projection.
     fn cbv_binder_determines_its_type(tycker: &Tycker<'_>, binder: su::PatId) -> bool {
         match &tycker.scoped.pats[&binder] {
@@ -2987,7 +2992,7 @@ impl TermChecker<'_> {
     /// and is refused by sort.
     ///
     /// The steps are the host's for a type definition, with each source part
-    /// read by the region: the definition by the type clause, the binder by
+    /// read by the block: the definition by the type clause, the binder by
     /// the same check every type binder takes, and the body under the
     /// assignment. The type is then built by the host's own judgment.
     fn cbv_manifest_exists<'db>(
@@ -3046,7 +3051,7 @@ impl TermChecker<'_> {
     /// The type-level abstraction: `[[fn (X : K) => T]]v = fn (X : K) => [[T]]v`.
     ///
     /// The type-level STLC's abstraction, beside the application `F A` the
-    /// region already translated. It is reached through a type binding whose
+    /// block already translated. It is reached through a type binding whose
     /// kind is an arrow, `let F : VType -> VType = fn (X : VType) => X * X`,
     /// as a type argument, or at the head of an application.
     ///
@@ -3140,7 +3145,7 @@ impl TermChecker<'_> {
         checked.try_as_value(tycker, TyckError::SortMismatch)
     }
 
-    /// Reject an import boundary anywhere inside the region.
+    /// Reject an import boundary anywhere inside the block.
     ///
     /// By the time the elaboration runs, `@(import(...))` is a
     /// `SourceBoundary` node and carries no metadata to search for, so this is
@@ -3253,7 +3258,7 @@ impl TermChecker<'_> {
 
     /// Every term variable a checked binder brings into scope.
     ///
-    /// The closedness rule asks whether a region bound a variable, so every
+    /// The closedness rule asks whether a block bound a variable, so every
     /// variable anywhere in the checked pattern counts. The walk follows the
     /// checked pattern's own children, [`CheckedNode::children`], rather than a
     /// list of shapes kept here, so a shape the checker builds on its own, such
@@ -3487,13 +3492,13 @@ impl TermChecker<'_> {
             // Structural rather than left to the leaf rule, which resolves
             // what it is given by ordinary synthesis — and a source type is
             // not a host type. `((Int -> Int) : VType)` came back as a host
-            // complaint about `val pi`, a diagnostic from outside the region
-            // about syntax the region had already accepted unascribed. Two
+            // complaint about `val pi`, a diagnostic from outside the block
+            // about syntax the block had already accepted unascribed. Two
             // spellings of one type must not get opposite verdicts.
             //
-            // The classifier is read by the region's kind judgment, as a
+            // The classifier is read by the block's kind judgment, as a
             // binder's kind is. A classifier that is not a kind goes through
-            // the shape guard first, so one reaching outside the region is
+            // the shape guard first, so one reaching outside the block is
             // reported as that rather than as the wrong sort.
             | Tm::Ann(su::Ann { tm, ty }) => {
                 let Some(declared) = self.cbv_annotation_kind(tycker, scope, ty)? else {
@@ -3506,7 +3511,7 @@ impl TermChecker<'_> {
             //
             // A data type written in place. Positive, so the arms are value-type
             // positions and the whole takes no shift. It is transparent, and the
-            // host compares transparent data by structure, so a region and its
+            // host compares transparent data by structure, so a block and its
             // host that write the same declaration agree on the type.
             | Tm::Data(su::Data { arms }) => {
                 let arms = arms
@@ -3651,9 +3656,9 @@ impl TermChecker<'_> {
     /// limit on the stack, for the same reason the tuple clause is iterative.
     ///
     /// The applied result needs no test of its own. The head and the arguments
-    /// are translations, every name in them the region's own, so the result is
-    /// the translation of the source application; an operator a region binds
-    /// cannot launder a type the region could not write. While a head could be
+    /// are translations, every name in them the block's own, so the result is
+    /// the translation of the source application; an operator a block binds
+    /// cannot launder a type the block could not write. While a head could be
     /// named outside, the result was tested for membership in the image, since
     /// an outside `fn (X : VType) => Thk (Ret X)` applied normalized to a type
     /// no source type translates to.
@@ -3692,10 +3697,10 @@ impl TermChecker<'_> {
     /// This is a whitelist, so a form nobody listed is refused. That direction
     /// is deliberate: the two defects it exists to prevent were both a subtree
     /// delegated to ordinary synthesis unexamined, and in both the subtree
-    /// reached something a region may not reach while still producing a
+    /// reached something a block may not reach while still producing a
     /// perfectly well-formed type. An annotation carried an import past the
     /// import rule, and a `@[typeof]` query read a term variable bound outside
-    /// the region past the closedness rule.
+    /// the block past the closedness rule.
     ///
     /// So this test is a **provenance guard, not a grammar of types**. Whether
     /// the classifier denotes an admissible type is decided afterwards, on the
@@ -3722,7 +3727,7 @@ impl TermChecker<'_> {
     ) -> Result<()> {
         use su::Term as Tm;
         match tycker.scoped.terms[&ty].to_owned() {
-            | Tm::Var(def) => self.cbv_require_region_name(tycker, scope, ty, def),
+            | Tm::Var(def) => self.cbv_require_block_name(tycker, scope, ty, def),
             | Tm::Internal(_) => Ok(()),
             | Tm::App(su::App(function, arguments)) => {
                 self.cbv_classifier_shape(tycker, scope, function)?;
@@ -3747,7 +3752,7 @@ impl TermChecker<'_> {
             // outermost annotation can itself be an annotation, which the
             // ordinary pattern checker descends into afterwards. In
             // `(Id : pi ((X : @[typeof] (@[typeof] outside)) : VType) . VType) Int`
-            // the inner one reads a term variable bound outside the region,
+            // the inner one reads a term variable bound outside the block,
             // and the result would still be a well-formed core term, so the
             // arena invariants cannot catch it.
             | Tm::Pi(su::Pi(binders, body)) => {
@@ -3791,27 +3796,27 @@ impl TermChecker<'_> {
     }
 
     /// A source type that none of the structural clauses translates, which is
-    /// a **name**: one the region bound, or an intrinsic for a primitive.
+    /// a **name**: one the block bound, or an intrinsic for a primitive.
     ///
     /// The classifier passes [`Self::cbv_classifier_shape`] before any of it
     /// is synthesized. Handing a subtree to ordinary synthesis unexamined would
-    /// defeat the closure a region claims: an annotation wrapper could carry an
+    /// defeat the closure a block claims: an annotation wrapper could carry an
     /// import past the import rule (`(@(import("…")) : VType)`), and a
     /// classifier expression could read a term variable bound outside the
-    /// region (`@[typeof] outside`). Both would produce a primitive, and the
+    /// block (`@[typeof] outside`). Both would produce a primitive, and the
     /// arena invariants cannot object: the emitted term is well formed, and
     /// only its *provenance* is forbidden. The guard also refuses a name the
-    /// region did not bind.
+    /// block did not bind.
     ///
-    /// What a region-bound name resolves to needs no test of its own. A type
+    /// What a block-bound name resolves to needs no test of its own. A type
     /// binding's name denotes its translated bindee, a declaration's name its
-    /// seal, and a type variable itself, so every type a region can name is the
-    /// translation of a source type by construction. While a region could name
+    /// seal, and a type variable itself, so every type a block can name is the
+    /// translation of a source type by construction. While a block could name
     /// a host declaration, the resolved type was tested for membership in the
     /// translation's image, row by row, which is what kept `Thk (Ret Int)` out.
-    /// An intrinsic is now the one name that is not the region's, and it is
+    /// An intrinsic is now the one name that is not the block's, and it is
     /// admitted only for a source primitive: `@(intrinsic(thk))` reaches
-    /// nothing outside the region, but the shift it denotes is no source type.
+    /// nothing outside the block, but the shift it denotes is no source type.
     fn cbv_leaf_type<'db>(
         &self, tycker: &mut Tycker<'db>, scope: &CbvScope, ty: su::TermId,
     ) -> Result<ss::TypeId> {
@@ -3824,9 +3829,9 @@ impl TermChecker<'_> {
         Ok(ty)
     }
 
-    /// Refuse a type or kind name the region did not bind.
+    /// Refuse a type or kind name the block did not bind.
     ///
-    /// The type-level twin of the term rule: an outside type enters a region
+    /// The type-level twin of the term rule: an outside type enters a block
     /// by type abstraction, which the host instantiates, and a built-in one is
     /// written with its intrinsic.
     ///
@@ -3835,10 +3840,10 @@ impl TermChecker<'_> {
     /// asks about a binder's annotation before anything has established a site
     /// for it: an outside kind in a definition's parameter is reported at the
     /// parameter, not at the declaration's body.
-    fn cbv_require_region_name<'db>(
+    fn cbv_require_block_name<'db>(
         &self, tycker: &mut Tycker<'db>, scope: &CbvScope, name: su::TermId, def: DefId,
     ) -> Result<()> {
-        if scope.region.contains(&def) {
+        if scope.block_names.contains(&def) {
             return Ok(());
         }
         self.cbv_sourced(

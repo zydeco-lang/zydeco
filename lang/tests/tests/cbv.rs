@@ -6,72 +6,72 @@
 //! because a rejection on its own does not show that the rule is narrow enough.
 
 use zydeco_statics::TyckDiagnosticCode;
-use zydeco_tests::utils::{CaseError, CbvRegion, SourceCase};
+use zydeco_tests::utils::{CaseError, CbvBlock, SourceCase};
 
-// Every region in this file opens with the source built-ins, by
-// `CbvRegion::closed`, and reads as though they were the source language's own
+// Every block in this file opens with the source built-ins, by
+// `CbvBlock::closed`, and reads as though they were the source language's own
 // names. The wrappers below close a case before handing it on; a test about the
 // closure itself calls `SourceCase` directly, so that what it names stays
 // outside.
 
 /// This file's case helpers, a namespace as `SourceCase` is.
-struct RegionCase;
+struct CbvCase;
 
-impl RegionCase {
+impl CbvCase {
     fn check(source: &str) -> Result<(), CaseError> {
-        SourceCase::check(&CbvRegion::closed(source))
+        SourceCase::check(&CbvBlock::closed(source))
     }
 
     fn check_invariants(source: &str) -> Result<(), CaseError> {
-        SourceCase::check_invariants(&CbvRegion::closed(source))
+        SourceCase::check_invariants(&CbvBlock::closed(source))
     }
 
     fn check_monadic(source: &str) -> Result<(), CaseError> {
-        SourceCase::check_monadic(&CbvRegion::closed(source))
+        SourceCase::check_monadic(&CbvBlock::closed(source))
     }
 
     fn check_with_import(source: &str, imported: &str) -> Result<(), CaseError> {
-        SourceCase::check_with_import(&CbvRegion::closed(source), imported)
+        SourceCase::check_with_import(&CbvBlock::closed(source), imported)
     }
 
     fn run(source: &str) -> Result<(), CaseError> {
-        SourceCase::run(&CbvRegion::closed(source))
+        SourceCase::run(&CbvBlock::closed(source))
     }
 
     fn debug_observations(source: &str) -> Result<Vec<String>, CaseError> {
-        SourceCase::debug_observations(&CbvRegion::closed(source))
+        SourceCase::debug_observations(&CbvBlock::closed(source))
     }
 
     fn type_definition_bodies(source: &str, name: &str) -> Result<Vec<String>, CaseError> {
-        SourceCase::type_definition_bodies(&CbvRegion::closed(source), name)
+        SourceCase::type_definition_bodies(&CbvBlock::closed(source), name)
     }
 
     fn unannotated_terms(source: &str, shapes: &[&str]) -> Result<Vec<String>, CaseError> {
-        SourceCase::unannotated_terms(&CbvRegion::closed(source), shapes)
+        SourceCase::unannotated_terms(&CbvBlock::closed(source), shapes)
     }
 
     fn unrecorded_pattern_facts(
         source: &str, name: &str,
     ) -> Result<(Vec<String>, usize), CaseError> {
-        SourceCase::unrecorded_pattern_facts(&CbvRegion::closed(source), name)
+        SourceCase::unrecorded_pattern_facts(&CbvBlock::closed(source), name)
     }
 
-    /// A block is a computation, so it needs a computation position.
+    /// A call-by-value block is a computation, so it needs a computation position.
     fn block(source: &str) -> String {
         format!("do case_result <- {source};\nret ()")
     }
 
     fn accept(source: &str) {
-        SourceCase::assert_accepted(RegionCase::check_invariants(&RegionCase::block(source)));
+        SourceCase::assert_accepted(CbvCase::check_invariants(&CbvCase::block(source)));
     }
 
-    /// `source` with every region in it opening with `declarations`, after the
+    /// `source` with every block in it opening with `declarations`, after the
     /// built-ins, each as a `that` binding, so a recursive one can name itself.
     ///
-    /// A region is closed over types, so a type a test needs is declared in the
-    /// region; an outside one would have to arrive by type abstraction. These
-    /// were declarations made outside the region and named inside it, which the
-    /// translation's image test admitted, until regions were closed.
+    /// A block is closed over types, so a type a test needs is declared in the
+    /// block; an outside one would have to arrive by type abstraction. These
+    /// were declarations made outside the block and named inside it, which the
+    /// translation's image test admitted, until blocks were closed.
     fn within(declarations: &[&str], source: &str) -> String {
         let declarations = declarations
             .iter()
@@ -80,13 +80,13 @@ impl RegionCase {
         source.replace("@[cbv] (", &format!("@[cbv] ({declarations}"))
     }
 
-    /// [`RegionCase::within`], for a region in a computation position.
+    /// [`CbvCase::within`], for a block in a computation position.
     fn declaring(declarations: &[&str], source: &str) -> String {
-        RegionCase::within(declarations, &RegionCase::block(source))
+        CbvCase::within(declarations, &CbvCase::block(source))
     }
 
     fn accept_declaring(declarations: &[&str], source: &str) {
-        SourceCase::assert_accepted(RegionCase::check_invariants(&RegionCase::declaring(
+        SourceCase::assert_accepted(CbvCase::check_invariants(&CbvCase::declaring(
             declarations,
             source,
         )));
@@ -94,13 +94,13 @@ impl RegionCase {
 
     fn reject_declaring(declarations: &[&str], source: &str, expected: TyckDiagnosticCode) {
         SourceCase::assert_rejected(
-            RegionCase::check(&RegionCase::declaring(declarations, source)),
+            CbvCase::check(&CbvCase::declaring(declarations, source)),
             expected,
         );
     }
 
     fn reject(source: &str, expected: TyckDiagnosticCode) {
-        SourceCase::assert_rejected(RegionCase::check(&RegionCase::block(source)), expected);
+        SourceCase::assert_rejected(CbvCase::check(&CbvCase::block(source)), expected);
     }
 }
 
@@ -110,18 +110,13 @@ const DATA: [&str; 2] = [
     "def Nat : VType = data | +Zero : Unit | +Succ : Nat end",
 ];
 
-impl RegionCase {
+impl CbvCase {
     fn accept_with_data(source: &str) {
-        SourceCase::assert_accepted(RegionCase::check_invariants(&RegionCase::declaring(
-            &DATA, source,
-        )));
+        SourceCase::assert_accepted(CbvCase::check_invariants(&CbvCase::declaring(&DATA, source)));
     }
 
     fn reject_with_data(source: &str, expected: TyckDiagnosticCode) {
-        SourceCase::assert_rejected(
-            RegionCase::check(&RegionCase::declaring(&DATA, source)),
-            expected,
-        );
+        SourceCase::assert_rejected(CbvCase::check(&CbvCase::declaring(&DATA, source)), expected);
     }
 }
 
@@ -131,22 +126,19 @@ const CODATA: [&str; 2] = [
     "let Fn : VType = codata | .at : Int -> Int end",
 ];
 
-impl RegionCase {
+impl CbvCase {
     fn accept_with_codata(source: &str) {
-        SourceCase::assert_accepted(RegionCase::check_invariants(&RegionCase::declaring(
+        SourceCase::assert_accepted(CbvCase::check_invariants(&CbvCase::declaring(
             &CODATA, source,
         )));
     }
 
     fn reject_with_codata(source: &str, expected: TyckDiagnosticCode) {
-        SourceCase::assert_rejected(
-            RegionCase::check(&RegionCase::declaring(&CODATA, source)),
-            expected,
-        );
+        SourceCase::assert_rejected(CbvCase::check(&CbvCase::declaring(&CODATA, source)), expected);
     }
 }
 
-/// Existential types, abstract and manifest, bound to names. A region may also
+/// Existential types, abstract and manifest, bound to names. A block may also
 /// write both forms where it uses them; the tests that do are in the section on
 /// named fields and packages written in place.
 const EXISTS: [&str; 3] = [
@@ -155,18 +147,15 @@ const EXISTS: [&str; 3] = [
     "let Showable : VType = exists (X : VType) . (X * (X -> Int))",
 ];
 
-impl RegionCase {
+impl CbvCase {
     fn accept_with_exists(source: &str) {
-        SourceCase::assert_accepted(RegionCase::check_invariants(&RegionCase::declaring(
+        SourceCase::assert_accepted(CbvCase::check_invariants(&CbvCase::declaring(
             &EXISTS, source,
         )));
     }
 
     fn reject_with_exists(source: &str, expected: TyckDiagnosticCode) {
-        SourceCase::assert_rejected(
-            RegionCase::check(&RegionCase::declaring(&EXISTS, source)),
-            expected,
-        );
+        SourceCase::assert_rejected(CbvCase::check(&CbvCase::declaring(&EXISTS, source)), expected);
     }
 }
 
@@ -180,25 +169,22 @@ const RECORD: [&str; 4] = [
     "let CInt : (#Counter :: VType) = (#Counter = Int)",
 ];
 
-impl RegionCase {
+impl CbvCase {
     fn accept_with_record(source: &str) {
-        SourceCase::assert_accepted(RegionCase::check_invariants(&RegionCase::declaring(
+        SourceCase::assert_accepted(CbvCase::check_invariants(&CbvCase::declaring(
             &RECORD, source,
         )));
     }
 
     fn reject_with_record(source: &str, expected: TyckDiagnosticCode) {
-        SourceCase::assert_rejected(
-            RegionCase::check(&RegionCase::declaring(&RECORD, source)),
-            expected,
-        );
+        SourceCase::assert_rejected(CbvCase::check(&CbvCase::declaring(&RECORD, source)), expected);
     }
 
-    /// A checked `source` beside a term `outside` the region, for the tests that a
+    /// A checked `source` beside a term `outside` the block, for the tests that a
     /// classifier cannot read one.
     fn reject_beside_outside(source: String, expected: TyckDiagnosticCode) {
         SourceCase::assert_rejected(
-            RegionCase::check(&format!("let outside = 7 in\n{source}")),
+            CbvCase::check(&format!("let outside = 7 in\n{source}")),
             expected,
         );
     }
@@ -208,42 +194,42 @@ impl RegionCase {
 
 #[test]
 fn translates_a_literal() {
-    RegionCase::accept("@[cbv] (5)");
+    CbvCase::accept("@[cbv] (5)");
 }
 
 #[test]
 fn translates_unit() {
-    RegionCase::accept("@[cbv] (())");
+    CbvCase::accept("@[cbv] (())");
 }
 
 #[test]
 fn translates_the_identity_function() {
-    RegionCase::accept("@[cbv] (fn (x : Int) => x)");
+    CbvCase::accept("@[cbv] (fn (x : Int) => x)");
 }
 
 #[test]
 fn translates_a_wildcard_binder() {
-    RegionCase::accept("@[cbv] (fn (_ : Int) => 7)");
+    CbvCase::accept("@[cbv] (fn (_ : Int) => 7)");
 }
 
 #[test]
 fn translates_a_nested_arrow_domain() {
-    RegionCase::accept("@[cbv] (fn (f : Int -> Int) => f)");
+    CbvCase::accept("@[cbv] (fn (f : Int -> Int) => f)");
 }
 
 #[test]
 fn translates_an_application() {
-    RegionCase::accept("@[cbv] ((fn (x : Int) => x) 7)");
+    CbvCase::accept("@[cbv] ((fn (x : Int) => x) 7)");
 }
 
 #[test]
 fn translates_a_higher_order_application() {
-    RegionCase::accept("@[cbv] ((fn (f : Int -> Int) => f) (fn (y : Int) => y))");
+    CbvCase::accept("@[cbv] ((fn (f : Int -> Int) => f) (fn (y : Int) => y))");
 }
 
 #[test]
 fn translates_a_variable_bound_by_an_enclosing_lambda() {
-    RegionCase::accept("@[cbv] (fn (x : Int) => fn (y : Int) => x)");
+    CbvCase::accept("@[cbv] (fn (x : Int) => fn (y : Int) => x)");
 }
 
 /// The block's own type is the term translation's, so a value body still
@@ -251,27 +237,27 @@ fn translates_a_variable_bound_by_an_enclosing_lambda() {
 /// accepted cases above already assert; this one states the type outright.
 #[test]
 fn a_value_body_still_produces_a_returner() {
-    SourceCase::assert_accepted(RegionCase::check_invariants(
+    SourceCase::assert_accepted(CbvCase::check_invariants(
         "do case_result <- (@[cbv] (fn (x : Int) => x) : Ret (Thk (Int -> Ret Int)));\nret ()",
     ));
 }
 
 /* ---------------------------- the source types ---------------------------- */
 
-/// A name the region binds for a primitive is the primitive.
+/// A name the block binds for a primitive is the primitive.
 #[test]
 fn admits_an_alias_of_a_primitive_source_type() {
-    RegionCase::accept("@[cbv] (let MyInt : VType = Int that fn (x : MyInt) => x)");
+    CbvCase::accept("@[cbv] (let MyInt : VType = Int that fn (x : MyInt) => x)");
 }
 
-/// A name bound outside the region is not the region's to name, even for a type
-/// the region could write itself: an outside type enters by type abstraction.
-/// While regions were open over types this was admitted, because the name
+/// A name bound outside the block is not the block's to name, even for a type
+/// the block could write itself: an outside type enters by type abstraction.
+/// While blocks were open over types this was admitted, because the name
 /// resolved to a type in the translation's image.
 #[test]
-fn rejects_a_type_name_bound_outside_the_region() {
+fn rejects_a_type_name_bound_outside_the_block() {
     SourceCase::assert_rejected(
-        RegionCase::check(
+        CbvCase::check(
             "let MyInt = Int in\ndo case_result <- @[cbv] (fn (x : MyInt) => x);\nret ()",
         ),
         TyckDiagnosticCode::Expressivity,
@@ -279,10 +265,10 @@ fn rejects_a_type_name_bound_outside_the_region() {
 }
 
 /// The built-ins are no exception: `Int` named outside is a host name like any
-/// other. Every other region in this file binds them inside, by
-/// [`CbvRegion::closed`].
+/// other. Every other block in this file binds them inside, by
+/// [`CbvBlock::closed`].
 #[test]
-fn rejects_a_built_in_type_named_outside_the_region() {
+fn rejects_a_built_in_type_named_outside_the_block() {
     SourceCase::assert_rejected(
         SourceCase::check("do case_result <- @[cbv] (fn (x : Int) => x);\nret ()"),
         TyckDiagnosticCode::Expressivity,
@@ -326,7 +312,7 @@ ret ()",
         "HostI",
     );
     SourceCase::assert_rejected_at(
-        RegionCase::check(
+        CbvCase::check(
             "let HostI = Int in
 do case_result <- @[cbv] (let Id : VType -> VType = fn (X : VType) => X that fn (x : Id HostI) => x);
 ret ()",
@@ -334,22 +320,22 @@ ret ()",
         TyckDiagnosticCode::Expressivity,
         "HostI",
     );
-    // the same definition at a kind the region binds
-    RegionCase::accept(
+    // the same definition at a kind the block binds
+    CbvCase::accept(
         "@[cbv] (let V = @(intrinsic(vtype)) in def D (X : V) : V = data | +Mk : X end in 0)",
     );
 }
 
-/// A region binds a kind as the host does, `let K = VType -> VType`, and uses it
+/// A block binds a kind as the host does, `let K = VType -> VType`, and uses it
 /// wherever it writes a kind; the bindee decides, since a kind has no
-/// classifier. A kind binding may name another kind the region bound.
+/// classifier. A kind binding may name another kind the block bound.
 #[test]
-fn binds_a_kind_in_the_region() {
-    RegionCase::accept("@[cbv] (let K = VType -> VType that fn (F : K) => fn (x : F Int) => x)");
-    RegionCase::accept(
+fn binds_a_kind_in_the_block() {
+    CbvCase::accept("@[cbv] (let K = VType -> VType that fn (F : K) => fn (x : F Int) => x)");
+    CbvCase::accept(
         "@[cbv] (let J = VType that let Id : J -> J = fn (X : J) => X that fn (x : Id Int) => x)",
     );
-    RegionCase::accept("@[cbv] (let K = @(intrinsic(vtype)) that fn (X : K) => fn (x : X) => x)");
+    CbvCase::accept("@[cbv] (let K = @(intrinsic(vtype)) that fn (X : K) => fn (x : X) => x)");
 }
 
 /// A kind named outside is a host name like a type is, so a kind binding cannot
@@ -364,19 +350,16 @@ fn rejects_a_kind_named_outside_and_an_intrinsic_that_is_no_primitive() {
         SourceCase::check("do case_result <- @[cbv] (fn (X : VType) => 0);\nret ()"),
         TyckDiagnosticCode::Expressivity,
     );
-    RegionCase::reject(
-        "@[cbv] (fn (x : @(intrinsic(ret))) => 0)",
-        TyckDiagnosticCode::Expressivity,
-    );
+    CbvCase::reject("@[cbv] (fn (x : @(intrinsic(ret))) => 0)", TyckDiagnosticCode::Expressivity);
 }
 
 /// A shift is no source type. Written with intrinsics it reaches nothing
-/// outside the region, so the rule that refuses it is that a region's
+/// outside the block, so the rule that refuses it is that a block's
 /// intrinsics are its primitives; written with the host's names, as below, it
-/// is refused before that, as names the region did not bind.
+/// is refused before that, as names the block did not bind.
 #[test]
 fn rejects_a_shift_written_with_intrinsics() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (fn (x : (@(intrinsic(thk))) ((@(intrinsic(ret))) Int)) => x)",
         TyckDiagnosticCode::Expressivity,
     );
@@ -384,7 +367,7 @@ fn rejects_a_shift_written_with_intrinsics() {
 
 #[test]
 fn rejects_a_shift_named_outside() {
-    RegionCase::reject("@[cbv] (fn (x : Thk (Ret Int)) => x)", TyckDiagnosticCode::Expressivity);
+    CbvCase::reject("@[cbv] (fn (x : Thk (Ret Int)) => x)", TyckDiagnosticCode::Expressivity);
 }
 
 /// A classifier must be a *name*. Admitting any other shape means handing a
@@ -397,7 +380,7 @@ fn rejects_a_shift_named_outside() {
 #[test]
 fn rejects_an_import_wrapped_in_an_annotation() {
     SourceCase::assert_rejected(
-        RegionCase::check_with_import(
+        CbvCase::check_with_import(
             "do case_result <- @[cbv] (fn (x : (@(import(\"imported.zy\")) : VType)) => x);
 ret ()",
             "@(intrinsic(int))",
@@ -409,7 +392,7 @@ ret ()",
 #[test]
 fn rejects_a_classifier_expression_reading_an_outside_variable() {
     SourceCase::assert_rejected(
-        RegionCase::check(
+        CbvCase::check(
             "let outside = 42 in
 do case_result <- @[cbv] (fn (x : (@[typeof] outside)) => x);
 ret ()",
@@ -423,7 +406,7 @@ ret ()",
 /// accepting the same type bound to a name first.
 #[test]
 fn admits_a_classifier_built_by_type_application() {
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (let Id : VType -> VType = fn (X : VType) => X that fn (x : Id Int) => x)",
     );
 }
@@ -433,8 +416,8 @@ fn admits_a_classifier_built_by_type_application() {
 /// only at the classifier's root.
 #[test]
 fn rejects_a_classifier_expression_nested_in_an_application() {
-    RegionCase::reject_beside_outside(
-        RegionCase::block(
+    CbvCase::reject_beside_outside(
+        CbvCase::block(
             "@[cbv] (let Id : VType -> VType = fn (X : VType) => X that
   fn (x : Id ((@[typeof] outside))) => x)",
         ),
@@ -445,7 +428,7 @@ fn rejects_a_classifier_expression_nested_in_an_application() {
 #[test]
 fn rejects_an_import_nested_in_an_application() {
     SourceCase::assert_rejected(
-        RegionCase::check_with_import(
+        CbvCase::check_with_import(
             "do case_result <- @[cbv] (let Id : VType -> VType = fn (X : VType) => X that
   fn (x : Id (@(import(\"imported.zy\")))) => x);
 ret ()",
@@ -461,11 +444,11 @@ ret ()",
 /// group.
 #[test]
 fn admits_a_named_arrow_binder_that_nothing_mentions() {
-    RegionCase::accept("@[cbv] (fn (f : pi (y : Int) . Int) => f 1)");
-    RegionCase::accept("@[cbv] (fn (f : pi (x : Int) (y : Int) . Int) => f 1 2)");
+    CbvCase::accept("@[cbv] (fn (f : pi (y : Int) . Int) => f 1)");
+    CbvCase::accept("@[cbv] (fn (f : pi (x : Int) (y : Int) . Int) => f 1 2)");
     for mention in ["pi (y : Int) . y", "pi (x : Int) (y : x) . Int", "pi (x : Int) (y : Int) . x"]
     {
-        RegionCase::reject(
+        CbvCase::reject(
             &format!("@[cbv] (fn (f : {mention}) => 0)"),
             TyckDiagnosticCode::SortMismatch,
         );
@@ -477,9 +460,9 @@ fn admits_a_named_arrow_binder_that_nothing_mentions() {
 /// domain, and how deep an annotation sits decides nothing.
 #[test]
 fn checks_every_annotation_of_a_telescope_binder() {
-    RegionCase::accept("@[cbv] (fn (f : pi ((_ : Int) : Int) . Int) => 0)");
-    RegionCase::accept("@[cbv] (fn (f : pi ((y : Int) : Int) . Int) => 0)");
-    RegionCase::reject(
+    CbvCase::accept("@[cbv] (fn (f : pi ((_ : Int) : Int) . Int) => 0)");
+    CbvCase::accept("@[cbv] (fn (f : pi ((y : Int) : Int) . Int) => 0)");
+    CbvCase::reject(
         "@[cbv] (fn (f : pi ((_ : Unit) : Int) . Int) => 0)",
         TyckDiagnosticCode::TypeMismatch,
     );
@@ -489,13 +472,13 @@ fn checks_every_annotation_of_a_telescope_binder() {
 
 #[test]
 fn rejects_an_unannotated_binder() {
-    RegionCase::reject("@[cbv] (fn x => x)", TyckDiagnosticCode::Expressivity);
+    CbvCase::reject("@[cbv] (fn x => x)", TyckDiagnosticCode::Expressivity);
 }
 
 /// A parameter's type may come from the annotations inside it, when they give
 /// the type of every part, as the host's synthesis reads them:
 /// `fn ((x : Int), (y : Int)) => x` takes `Int * Int`, in any position of a
-/// group. A part with no annotation would need inference, which a region does
+/// group. A part with no annotation would need inference, which a block does
 /// not do, so it is refused as a bare parameter is; and each annotation is
 /// translated and guarded as any is.
 #[test]
@@ -506,18 +489,18 @@ fn takes_a_parameter_type_from_the_annotations_inside_it() {
         "(fn () => 0) ()",
         "(fn (z : Int) ((x : Int), (y : Int)) => z) 0 (1, 2)",
     ] {
-        RegionCase::accept(&format!("@[cbv] ({accepted})"));
+        CbvCase::accept(&format!("@[cbv] ({accepted})"));
     }
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] ((fn ((x : Int), (y : Int)) => x) (1, ()))",
         TyckDiagnosticCode::TypeMismatch,
     );
     for refused in ["fn ((x : Int), y) => x", "fn ((x : Int), _) => x", "fn (z : Int) (x, y) => z"]
     {
-        RegionCase::reject(&format!("@[cbv] ({refused})"), TyckDiagnosticCode::Expressivity);
+        CbvCase::reject(&format!("@[cbv] ({refused})"), TyckDiagnosticCode::Expressivity);
     }
     SourceCase::assert_rejected(
-        SourceCase::check(&CbvRegion::closed(
+        SourceCase::check(&CbvBlock::closed(
             "let outside = 0 in
 do case_result <- @[cbv] (fn ((x : @[typeof] outside), (y : Int)) => y);
 ret ()",
@@ -531,19 +514,19 @@ ret ()",
 /// translation accepted it, and so emitted a term the ordinary rules forbid.
 #[test]
 fn rejects_a_refutable_binder() {
-    RegionCase::reject("@[cbv] (fn (0 : Int) => 1)", TyckDiagnosticCode::Expressivity);
+    CbvCase::reject("@[cbv] (fn (0 : Int) => 1)", TyckDiagnosticCode::Expressivity);
 }
 
 /* ----------------------------- the applications --------------------------- */
 
 #[test]
 fn rejects_applying_a_non_function() {
-    RegionCase::reject("@[cbv] (1 2)", TyckDiagnosticCode::Expressivity);
+    CbvCase::reject("@[cbv] (1 2)", TyckDiagnosticCode::Expressivity);
 }
 
 #[test]
 fn rejects_applying_a_function_to_the_wrong_type() {
-    RegionCase::reject("@[cbv] ((fn (x : Int) => x) ())", TyckDiagnosticCode::TypeMismatch);
+    CbvCase::reject("@[cbv] ((fn (x : Int) => x) ())", TyckDiagnosticCode::TypeMismatch);
 }
 
 /* -------------------------------- the leaves ------------------------------ */
@@ -553,7 +536,7 @@ fn rejects_applying_a_function_to_the_wrong_type() {
 /// both.
 #[test]
 fn rejects_an_out_of_range_literal() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (99999999999999999999999)",
         TyckDiagnosticCode::IntegerLiteralOutOfRange,
     );
@@ -567,7 +550,7 @@ fn rejects_an_out_of_range_literal() {
 #[test]
 fn rejects_a_variable_bound_outside_the_block() {
     SourceCase::assert_rejected(
-        RegionCase::check(
+        CbvCase::check(
             "let outside = 42 in\ndo case_result <- @[cbv] (fn (x : Int) => outside);\nret ()",
         ),
         TyckDiagnosticCode::Expressivity,
@@ -577,7 +560,7 @@ fn rejects_a_variable_bound_outside_the_block() {
 #[test]
 fn rejects_an_outside_variable_as_an_argument() {
     SourceCase::assert_rejected(
-        RegionCase::check(
+        CbvCase::check(
             "let outside = 42 in\ndo case_result <- @[cbv] ((fn (x : Int) => x) outside);\nret ()",
         ),
         TyckDiagnosticCode::Expressivity,
@@ -591,7 +574,7 @@ fn rejects_an_outside_variable_as_an_argument() {
 #[test]
 fn rejects_an_import_in_term_position() {
     SourceCase::assert_rejected(
-        RegionCase::check_with_import(
+        CbvCase::check_with_import(
             "do case_result <- @[cbv] @(import(\"imported.zy\"));\nret ()",
             "ret 0",
         ),
@@ -602,7 +585,7 @@ fn rejects_an_import_in_term_position() {
 #[test]
 fn rejects_an_import_in_a_binder_classifier() {
     SourceCase::assert_rejected(
-        RegionCase::check_with_import(
+        CbvCase::check_with_import(
             "do case_result <- @[cbv] (fn (x : @(import(\"imported.zy\"))) => x);\nret ()",
             "@(intrinsic(int))",
         ),
@@ -617,14 +600,14 @@ fn rejects_an_import_in_a_binder_classifier() {
 /// admissible without this test being revisited.
 #[test]
 fn rejects_a_source_form_outside_the_fragment() {
-    RegionCase::reject("@[cbv] ({ 5 })", TyckDiagnosticCode::Expressivity);
+    CbvCase::reject("@[cbv] ({ 5 })", TyckDiagnosticCode::Expressivity);
 }
 
 /* --------------------------- bindings and products ------------------------ */
 
 #[test]
 fn translates_a_let() {
-    RegionCase::accept("@[cbv] (let y = 5 in y)");
+    CbvCase::accept("@[cbv] (let y = 5 in y)");
 }
 
 /// A binding's bindee is wrapped in an annotation by desugaring whether or not
@@ -633,22 +616,22 @@ fn translates_a_let() {
 /// bindee synthesized.
 #[test]
 fn translates_an_annotated_let() {
-    RegionCase::accept("@[cbv] (let y : Int = 5 in y)");
+    CbvCase::accept("@[cbv] (let y : Int = 5 in y)");
 }
 
 #[test]
 fn rejects_a_let_whose_annotation_disagrees() {
-    RegionCase::reject("@[cbv] (let y : Unit = 5 in y)", TyckDiagnosticCode::TypeMismatch);
+    CbvCase::reject("@[cbv] (let y : Unit = 5 in y)", TyckDiagnosticCode::TypeMismatch);
 }
 
 #[test]
 fn translates_a_let_over_an_application() {
-    RegionCase::accept("@[cbv] (let y = (fn (x : Int) => x) 7 in y)");
+    CbvCase::accept("@[cbv] (let y = (fn (x : Int) => x) 7 in y)");
 }
 
 #[test]
 fn translates_a_tuple_of_values() {
-    RegionCase::accept("@[cbv] (5, 6)");
+    CbvCase::accept("@[cbv] (5, 6)");
 }
 
 /// A tuple whose components are not all values takes the term clause, which
@@ -656,12 +639,12 @@ fn translates_a_tuple_of_values() {
 /// judgments.
 #[test]
 fn translates_a_tuple_that_sequences() {
-    RegionCase::accept("@[cbv] ((fn (x : Int) => x) 7, 8)");
+    CbvCase::accept("@[cbv] ((fn (x : Int) => x) 7, 8)");
 }
 
 #[test]
 fn translates_a_product_classifier() {
-    RegionCase::accept("@[cbv] (fn (p : Int * Int) => p)");
+    CbvCase::accept("@[cbv] (fn (p : Int * Int) => p)");
 }
 
 /// A product binder is irrefutable when its components are, which is what the
@@ -669,42 +652,42 @@ fn translates_a_product_classifier() {
 /// admitting a second shape.
 #[test]
 fn translates_a_product_binder() {
-    RegionCase::accept("@[cbv] (let (a, b) = (5, 6) in a)");
+    CbvCase::accept("@[cbv] (let (a, b) = (5, 6) in a)");
 }
 
 #[test]
 fn rejects_a_refutable_component_in_a_product_binder() {
-    RegionCase::reject("@[cbv] (let (a, 0) = (5, 6) in a)", TyckDiagnosticCode::Expressivity);
+    CbvCase::reject("@[cbv] (let (a, 0) = (5, 6) in a)", TyckDiagnosticCode::Expressivity);
 }
 
 /* --------------------------- the binding boundary ------------------------- */
 
 /// Name resolution lifts a `that` binding to the block that owns it and leaves
 /// a residual where the body continues, so what the translation receives is an
-/// elaborated chain rather than the binding the source wrote. For a region the
+/// elaborated chain rather than the binding the source wrote. For a block the
 /// owning block is the one desugaring inserts around its payload.
 #[test]
 fn translates_a_that_binding() {
-    RegionCase::accept("@[cbv] (let y = 5 that y)");
+    CbvCase::accept("@[cbv] (let y = 5 that y)");
 }
 
 #[test]
 fn translates_a_chain_of_that_bindings() {
-    RegionCase::accept("@[cbv] (let p = 5 that let q = (fn (x : Int) => x) p that q)");
+    CbvCase::accept("@[cbv] (let p = 5 that let q = (fn (x : Int) => x) p that q)");
 }
 
 #[test]
 fn translates_a_that_binding_with_a_product_binder() {
-    RegionCase::accept("@[cbv] (let (m, n) = (5, 6) that n)");
+    CbvCase::accept("@[cbv] (let (m, n) = (5, 6) that n)");
 }
 
 /// The owning block is the nearest one, as in the host, so a `that` binding in a
-/// lambda's body is lifted to the region's own level, where the lambda's
+/// lambda's body is lifted to the block's own level, where the lambda's
 /// parameter is not in scope. The reference said such a binding is translated
 /// where it was written.
 #[test]
 fn lifts_a_that_binding_out_of_a_lambda_body() {
-    SourceCase::assert_resolve_error(RegionCase::check(&RegionCase::block(
+    SourceCase::assert_resolve_error(CbvCase::check(&CbvCase::block(
         "@[cbv] (fn (x : Int) => let y = x that y)",
     )));
 }
@@ -712,28 +695,28 @@ fn lifts_a_that_binding_out_of_a_lambda_body() {
 /// A `begin … end` around the body is a nearer block, and keeps it inside.
 #[test]
 fn keeps_a_that_binding_in_a_lambda_body_under_a_block() {
-    RegionCase::accept("@[cbv] (let f = fn (x : Int) => begin let y = x that y end in f 2)");
+    CbvCase::accept("@[cbv] (let f = fn (x : Int) => begin let y = x that y end in f 2)");
 }
 
-/// Inside a region `param` is the call-by-value lambda, so the region returns a
+/// Inside a block `param` is the call-by-value lambda, so the block returns a
 /// thunk rather than becoming a function itself and its classifier is still
 /// `Ret [[A]]v`.
 #[test]
 fn translates_a_param_as_a_call_by_value_lambda() {
-    RegionCase::accept("@[cbv] (param x : Int that x)");
+    CbvCase::accept("@[cbv] (param x : Int that x)");
 }
 
-/// The boundary itself: before the inserted block, a `that` written inside a
-/// region was owned by the *enclosing* block and its name stayed in scope
-/// after the region.
+/// The boundary itself: before the inserted `Block`, a `that` written inside a
+/// call-by-value block was owned by the *enclosing* block and its name stayed
+/// in scope after the call-by-value block.
 ///
 /// The enclosing block is written explicitly, and that is what makes the case
-/// a witness. Without one, a `that` inside a transparent region would be
+/// a witness. Without one, a `that` inside a transparent call-by-value block would be
 /// rejected for having no boundary to belong to at all, which is a resolution
 /// failure as well and would let this pass for the wrong reason.
 #[test]
-fn a_that_binding_does_not_escape_the_region() {
-    SourceCase::assert_resolve_error(RegionCase::check(
+fn a_that_binding_does_not_escape_the_block() {
+    SourceCase::assert_resolve_error(CbvCase::check(
         "begin
   do case_result <- @[cbv] (let y = 5 that 1);
   ret y
@@ -742,12 +725,12 @@ end",
 }
 
 /// A `that` bindee is resolved in the block's scope, which includes the names
-/// around the region, so the closed-term restriction has to reach into the
+/// around the block, so the closed-term restriction has to reach into the
 /// elaborated chain as well.
 #[test]
 fn rejects_a_that_bindee_reading_an_outside_variable() {
     SourceCase::assert_rejected(
-        RegionCase::check(
+        CbvCase::check(
             "let outside = 42 in
 do case_result <- @[cbv] (let y = outside that y);
 ret ()",
@@ -761,7 +744,7 @@ ret ()",
 /// it, with a diagnostic that directs the author to `let fix`.
 #[test]
 fn rejects_a_recursive_that_binding() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let f = fn (x : Int) => f x that f 3)",
         TyckDiagnosticCode::InvalidBindingCycle,
     );
@@ -771,7 +754,7 @@ fn rejects_a_recursive_that_binding() {
 /// fragment.
 #[test]
 fn rejects_a_value_param() {
-    RegionCase::reject("@[cbv] (param val X : VType that 5)", TyckDiagnosticCode::Expressivity);
+    CbvCase::reject("@[cbv] (param val X : VType that 5)", TyckDiagnosticCode::Expressivity);
 }
 
 /* ----------------------- what the fifth review found ---------------------- */
@@ -779,12 +762,12 @@ fn rejects_a_value_param() {
 /// Review's input, kept. The classifier guard split a kind binder into its
 /// outermost annotation and discarded the rest, and the ordinary pattern
 /// checker then descended into what had been discarded. So this read a term
-/// variable bound outside the region, defeating the closedness rule, and still
+/// variable bound outside the block, defeating the closedness rule, and still
 /// produced a well-formed core term — which is why the arena invariants passed it.
 #[test]
 fn rejects_a_classifier_expression_inside_a_kind_binder() {
     SourceCase::assert_rejected(
-        RegionCase::check(
+        CbvCase::check(
             "let outside = 5 in
 let Id = fn (T : VType) => T in
 do case_result <- @[cbv] (fn (x : ((Id : pi ((X : @[typeof] (@[typeof] outside)) : VType) . VType) Int)) => x);
@@ -799,7 +782,7 @@ ret ()",
 #[test]
 fn rejects_an_import_inside_a_kind_binder() {
     SourceCase::assert_rejected(
-        RegionCase::check_with_import(
+        CbvCase::check_with_import(
             "let Id = fn (T : VType) => T in
 do case_result <- @[cbv] (fn (x : ((Id : pi ((X : @(import(\"imported.zy\"))) : VType) . VType) Int)) => x);
 ret ()",
@@ -809,18 +792,18 @@ ret ()",
     );
 }
 
-/// An ascription around a type the region already admits. The leaf rule used
+/// An ascription around a type the block already admits. The leaf rule used
 /// to hand the whole ascription to ordinary synthesis, where a source arrow is
 /// not a host type, so the unascribed spelling was accepted and this one came
 /// back with a host diagnostic about `val pi`.
 #[test]
 fn admits_an_ascribed_product_source_type() {
-    RegionCase::accept("@[cbv] (fn (x : ((Int * Int) : VType)) => x)");
+    CbvCase::accept("@[cbv] (fn (x : ((Int * Int) : VType)) => x)");
 }
 
 #[test]
 fn admits_an_ascribed_arrow_source_type() {
-    RegionCase::accept("@[cbv] (fn (x : ((Int -> Int) : VType)) => x)");
+    CbvCase::accept("@[cbv] (fn (x : ((Int -> Int) : VType)) => x)");
 }
 
 /// A type operator's argument is a source type and is translated. Before, the
@@ -828,18 +811,18 @@ fn admits_an_ascribed_arrow_source_type() {
 /// with `Pair = Int * Int` while `Id (Int * Int)` was not.
 #[test]
 fn admits_a_composite_argument_to_a_type_operator() {
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (let Id : VType -> VType = fn (X : VType) => X that fn (x : Id (Int * Int)) => x)",
     );
 }
 
-/// An operator cannot launder a type the region may not write: its body is a
+/// An operator cannot launder a type the block may not write: its body is a
 /// source type and is translated as one, so a shift is refused where it is
 /// written. While an operator could be named outside, the applied result was
 /// tested for membership in the image instead.
 #[test]
 fn rejects_a_type_operator_aliasing_a_shift() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let Launder : VType -> VType = fn (X : VType) => (@(intrinsic(thk))) ((@(intrinsic(ret))) X) that
   fn (x : Launder Int) => x)",
         TyckDiagnosticCode::Expressivity,
@@ -867,7 +850,7 @@ fn rejects_a_type_operator_aliasing_a_shift() {
 fn translates_a_wide_tuple() {
     let mut components = vec!["(let x = 0 in x)".to_string()];
     components.extend((0..1_999).map(|_| "1".to_string()));
-    RegionCase::accept(&format!("@[cbv] ({})", components.join(", ")));
+    CbvCase::accept(&format!("@[cbv] ({})", components.join(", ")));
 }
 
 /* -------------------------- the analysis direction ------------------------ */
@@ -878,7 +861,7 @@ fn translates_a_wide_tuple() {
 /// defect in the fragment as it stands, before any of the formers it gates.
 #[test]
 fn checks_a_literal_against_an_authored_classifier() {
-    RegionCase::accept("@[cbv] ((5 : Int64))");
+    CbvCase::accept("@[cbv] ((5 : Int64))");
 }
 
 /// An abstraction may take its domain from the expectation rather than from an
@@ -886,17 +869,17 @@ fn checks_a_literal_against_an_authored_classifier() {
 /// program with nothing to take it from.
 #[test]
 fn checks_an_unannotated_binder_against_an_authored_arrow() {
-    RegionCase::accept("@[cbv] ((fn x => x) : Int -> Int)");
+    CbvCase::accept("@[cbv] ((fn x => x) : Int -> Int)");
 }
 
 #[test]
 fn pushes_an_expectation_into_a_product() {
-    RegionCase::accept("@[cbv] ((fn x => x, 2) : (Int -> Int) * Int64)");
+    CbvCase::accept("@[cbv] ((fn x => x, 2) : (Int -> Int) * Int64)");
 }
 
 #[test]
 fn pushes_an_expectation_through_a_binding() {
-    RegionCase::accept("@[cbv] ((let y = 5 in fn x => x) : Int -> Int)");
+    CbvCase::accept("@[cbv] ((let y = 5 in fn x => x) : Int -> Int)");
 }
 
 /// The expectation is checked even when no clause could use it: an abstraction
@@ -904,12 +887,12 @@ fn pushes_an_expectation_through_a_binding() {
 /// unchecked.
 #[test]
 fn rejects_an_expectation_no_clause_could_use() {
-    RegionCase::reject("@[cbv] ((fn (x : Int) => x) : Int)", TyckDiagnosticCode::TypeMismatch);
+    CbvCase::reject("@[cbv] ((fn (x : Int) => x) : Int)", TyckDiagnosticCode::TypeMismatch);
 }
 
 #[test]
 fn rejects_a_binder_annotation_disagreeing_with_the_expectation() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] ((fn (x : Unit) => x) : Int -> Unit)",
         TyckDiagnosticCode::TypeMismatch,
     );
@@ -920,17 +903,17 @@ fn rejects_a_binder_annotation_disagreeing_with_the_expectation() {
 /// result is inference rather than analysis.
 #[test]
 fn rejects_an_unannotated_binder_under_an_application() {
-    RegionCase::reject("@[cbv] (((fn x => x) 5) : Int)", TyckDiagnosticCode::Expressivity);
+    CbvCase::reject("@[cbv] (((fn x => x) 5) : Int)", TyckDiagnosticCode::Expressivity);
 }
 
 /// The decision that analysis stops at the boundary, stated as a program. The
-/// ascription here is the *host's*, outside the region, so it is reconciled
-/// with what the region synthesized and never reaches the binder — where the
-/// same ascription written inside the region does.
+/// ascription here is the *host's*, outside the block, so it is reconciled
+/// with what the block synthesized and never reaches the binder — where the
+/// same ascription written inside the block does.
 #[test]
-fn a_host_expectation_does_not_reach_into_a_region() {
+fn a_host_expectation_does_not_reach_into_a_block() {
     SourceCase::assert_rejected(
-        RegionCase::check(
+        CbvCase::check(
             "do case_result <- (@[cbv] (fn x => x) : Ret (Thk (Int -> Ret Int)));\nret ()",
         ),
         TyckDiagnosticCode::Expressivity,
@@ -940,13 +923,13 @@ fn a_host_expectation_does_not_reach_into_a_region() {
 /* ------------------------ the image of the translation -------------------- */
 
 /// Four spellings of one source type, which the provenance test that preceded
-/// membership split two against two: it refused every `Thk`, so a region-bound
+/// membership split two against two: it refused every `Thk`, so a block-bound
 /// arrow name needed an exemption and the same name under an operator was still
 /// refused. A fifth, a host name for the arrow's translation, was admitted by
-/// membership until regions were closed over types.
+/// membership until blocks were closed over types.
 #[test]
 fn admits_every_spelling_of_one_arrow_type() {
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (let Id : VType -> VType = fn (X : VType) => X that
   let Fn : VType = Int -> Int that
   let a : Int -> Int = fn (p : Int) => p that
@@ -959,7 +942,7 @@ fn admits_every_spelling_of_one_arrow_type() {
 
 #[test]
 fn admits_an_arrow_inside_a_product_under_an_operator() {
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (let Id : VType -> VType = fn (X : VType) => X that
   fn (x : Id (Int * (Int -> Int))) => x)",
     );
@@ -967,7 +950,7 @@ fn admits_an_arrow_inside_a_product_under_an_operator() {
 
 #[test]
 fn rejects_a_returner_as_a_source_type() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (fn (x : (@(intrinsic(ret))) Int) => x)",
         TyckDiagnosticCode::Expressivity,
     );
@@ -978,7 +961,7 @@ fn rejects_a_returner_as_a_source_type() {
 /// and neither the shift nor the returner is one.
 #[test]
 fn rejects_a_translated_arrow_written_out() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (fn (x : (@(intrinsic(thk))) (Int -> (@(intrinsic(ret))) Int)) => x)",
         TyckDiagnosticCode::Expressivity,
     );
@@ -986,13 +969,13 @@ fn rejects_a_translated_arrow_written_out() {
 
 /* ------------------------------ type bindings ----------------------------- */
 
-/// A region can name a source type. The declared kind is what tells the
+/// A block can name a source type. The declared kind is what tells the
 /// translation which judgment the bindee belongs to, since the host's way of
 /// deciding — synthesize it and read off the sort — is not available on source
 /// syntax.
 #[test]
 fn translates_a_type_binding() {
-    RegionCase::accept("@[cbv] (let MyInt : VType = Int that fn (x : MyInt) => x)");
+    CbvCase::accept("@[cbv] (let MyInt : VType = Int that fn (x : MyInt) => x)");
 }
 
 /// The one way to name a source arrow: `Int -> Int` is ill-kinded in the host,
@@ -1001,39 +984,37 @@ fn translates_a_type_binding() {
 /// refuses a `Thk` the author wrote.
 #[test]
 fn translates_an_arrow_type_binding() {
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (let Fn : VType = Int -> Int that let g : Fn = fn (x : Int) => x in g 7)",
     );
 }
 
 #[test]
 fn translates_a_product_type_binding() {
-    RegionCase::accept("@[cbv] (let P : VType = Int * Int that fn (p : P) => p)");
+    CbvCase::accept("@[cbv] (let P : VType = Int * Int that fn (p : P) => p)");
 }
 
 #[test]
 fn translates_a_chain_of_type_bindings() {
-    RegionCase::accept(
-        "@[cbv] (let A : VType = Int that let B : VType = A * A that fn (x : B) => x)",
-    );
+    CbvCase::accept("@[cbv] (let A : VType = Int that let B : VType = A * A that fn (x : B) => x)");
 }
 
-/// A call-by-push-value type cannot be bound inside a region and used from
+/// A call-by-push-value type cannot be bound inside a block and used from
 /// there: the bindee is a source type, and a shift is not one.
 #[test]
 fn rejects_a_type_binding_to_a_host_type() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let F : VType = (@(intrinsic(thk))) ((@(intrinsic(ret))) Int) that fn (x : F) => x)",
         TyckDiagnosticCode::Expressivity,
     );
 }
 
 /// Without a declared kind the binding is a term binding, and a type name in
-/// term position is a reference outside the region. Both rejections are right;
+/// term position is a reference outside the block. Both rejections are right;
 /// the diagnostic says which one the author ran into.
 #[test]
 fn rejects_a_type_binding_without_its_kind() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let MyInt = Int that fn (x : MyInt) => x)",
         TyckDiagnosticCode::Expressivity,
     );
@@ -1041,15 +1022,15 @@ fn rejects_a_type_binding_without_its_kind() {
 
 #[test]
 fn rejects_a_type_binding_whose_kind_disagrees() {
-    RegionCase::reject("@[cbv] (let C : CType = Int that 5)", TyckDiagnosticCode::KindMismatch);
+    CbvCase::reject("@[cbv] (let C : CType = Int that 5)", TyckDiagnosticCode::KindMismatch);
 }
 
 /// The host tells a value cycle from a type one by syntax, and `D * Int` is
 /// written with the tuple's node, so it reads a value body and refuses the
-/// cycle. A region gives the host's verdict.
+/// cycle. A block gives the host's verdict.
 #[test]
 fn rejects_a_recursive_sealed_product_as_the_host_does() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (def D : VType = D * Int that 5)",
         TyckDiagnosticCode::InvalidBindingCycle,
     );
@@ -1060,7 +1041,7 @@ fn rejects_a_recursive_sealed_product_as_the_host_does() {
 /// over a hole. Refusing every `Pi` confused the two.
 #[test]
 fn translates_a_recursive_binding_returning_a_function() {
-    RegionCase::accept("@[cbv] (let fix f (x : Int) : Int -> Int = fn (y : Int) => y in (f 0) 7)");
+    CbvCase::accept("@[cbv] (let fix f (x : Int) : Int -> Int = fn (y : Int) => y in (f 0) 7)");
 }
 
 /// Desugaring freshens one pattern into both the parameter and the telescope's
@@ -1071,7 +1052,7 @@ fn translates_a_recursive_binding_returning_a_function() {
 /// accepted.
 #[test]
 fn rejects_a_recursive_signature_disagreeing_with_its_parameter() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let ! f : pi (x : Int * Int) . Int = fix g => fn (x : Int) => x in f 1)",
         TyckDiagnosticCode::TypeMismatch,
     );
@@ -1082,7 +1063,7 @@ fn rejects_a_recursive_signature_disagreeing_with_its_parameter() {
 /// terminating case only built a `fix` without using it.
 #[test]
 fn a_recursive_function_that_recurs_and_stops_runs() {
-    SourceCase::assert_accepted(RegionCase::run(
+    SourceCase::assert_accepted(CbvCase::run(
         "do case_result <- @[cbv] (
   let fix f (k : (Int -> Int) -> Int) : Int =
     k (fn (n : Int) => f (fn (r : Int -> Int) => n))
@@ -1094,13 +1075,13 @@ fn a_recursive_function_that_recurs_and_stops_runs() {
 
 /* ----------------------------- data and match ----------------------------- */
 
-/// A nominal type declared outside the region is not the region's to name; the
+/// A nominal type declared outside the block is not the block's to name; the
 /// image test used to admit it by unfolding the nominal and testing its arms. A
-/// region declares its own, as the tests below do.
+/// block declares its own, as the tests below do.
 #[test]
 fn rejects_a_data_type_declared_outside() {
     SourceCase::assert_rejected(
-        RegionCase::check(
+        CbvCase::check(
             "begin
   def Flag : VType = data | +Off : Unit | +On : Int end that
   do case_result <- @[cbv] (fn (x : Flag) => x);
@@ -1112,8 +1093,8 @@ end",
 }
 
 #[test]
-fn admits_a_data_type_declared_in_the_region() {
-    RegionCase::accept_with_data("@[cbv] (fn (x : Flag) => x)");
+fn admits_a_data_type_declared_in_the_block() {
+    CbvCase::accept_with_data("@[cbv] (fn (x : Flag) => x)");
 }
 
 /// A constructor cannot synthesize — nothing about `+On` says which
@@ -1121,50 +1102,48 @@ fn admits_a_data_type_declared_in_the_region() {
 /// first row that *requires* the analysis direction.
 #[test]
 fn translates_a_constructor() {
-    RegionCase::accept_with_data("@[cbv] ((+On(7) : Flag))");
+    CbvCase::accept_with_data("@[cbv] ((+On(7) : Flag))");
 }
 
 #[test]
 fn rejects_a_constructor_without_an_expected_type() {
-    RegionCase::reject_with_data("@[cbv] (+On(7))", TyckDiagnosticCode::MissingAnnotation);
+    CbvCase::reject_with_data("@[cbv] (+On(7))", TyckDiagnosticCode::MissingAnnotation);
 }
 
 /// The function's domain is pushed into the argument, so a constructor
 /// argument needs no annotation of its own.
 #[test]
 fn pushes_an_application_domain_into_a_constructor_argument() {
-    RegionCase::accept_with_data("@[cbv] ((fn (x : Flag) => 0) (+On(7)))");
+    CbvCase::accept_with_data("@[cbv] ((fn (x : Flag) => 0) (+On(7)))");
 }
 
 #[test]
 fn translates_a_match() {
-    RegionCase::accept_with_data(
-        "@[cbv] (fn (x : Flag) => match x | +Off(_) => 0 | +On(n) => n end)",
-    );
+    CbvCase::accept_with_data("@[cbv] (fn (x : Flag) => match x | +Off(_) => 0 | +On(n) => n end)");
 }
 
 /// An empty match has no arm to synthesize from.
 #[test]
 fn rejects_an_empty_match_without_an_expected_type() {
-    RegionCase::reject_with_data("@[cbv] (match 5 end)", TyckDiagnosticCode::MissingAnnotation);
+    CbvCase::reject_with_data("@[cbv] (match 5 end)", TyckDiagnosticCode::MissingAnnotation);
 }
 
 /// An arm's binder is the one refutable shape the source grammar has: a
 /// constructor tag over a plain binder. A literal inside it is not.
 #[test]
 fn rejects_a_refutable_arm_payload() {
-    RegionCase::reject_with_data(
+    CbvCase::reject_with_data(
         "@[cbv] (fn (x : Flag) => match x | +On(0) => 0 | _ => 1 end)",
         TyckDiagnosticCode::Expressivity,
     );
 }
 
 /// `data` closes the loop that recursion opened: a decreasing structure makes
-/// a terminating recursive function writable with nothing but what the region
+/// a terminating recursive function writable with nothing but what the block
 /// already has — no arithmetic, and so no boundary coercion.
 #[test]
 fn a_structurally_recursive_function_computes() {
-    SourceCase::assert_accepted(RegionCase::run(&RegionCase::within(
+    SourceCase::assert_accepted(CbvCase::run(&CbvCase::within(
         &DATA,
         "do case_result <- @[cbv] (
   let fix parity (n : Nat) : Int =
@@ -1189,34 +1168,34 @@ fn a_structurally_recursive_function_computes() {
 /// the kind being absent, not the expectation being needed.
 #[test]
 fn translates_a_type_abstraction_and_uses_it() {
-    RegionCase::accept("@[cbv] (let id = fn (X : VType) => fn (x : X) => x in (id Int) 7)");
+    CbvCase::accept("@[cbv] (let id = fn (X : VType) => fn (x : X) => x in (id Int) 7)");
 }
 
 #[test]
 fn synthesizes_a_type_abstraction_alone() {
-    RegionCase::accept("@[cbv] (fn (X : VType) => fn (x : X) => x)");
+    CbvCase::accept("@[cbv] (fn (X : VType) => fn (x : X) => x)");
 }
 
-/// `[[X]]v = X` holds for the region's own binder, which the scope tracks: a
+/// `[[X]]v = X` holds for the block's own binder, which the scope tracks: a
 /// skolem says nothing about where it came from, and a host opaque type is one
 /// too.
 #[test]
 fn a_type_variable_does_not_escape_its_binder() {
-    SourceCase::assert_resolve_error(RegionCase::check(&RegionCase::block(
+    SourceCase::assert_resolve_error(CbvCase::check(&CbvCase::block(
         "@[cbv] (let id = fn (X : VType) => fn (x : X) => x in fn (y : X) => y)",
     )));
 }
 
 #[test]
 fn a_type_binder_whose_body_ignores_it() {
-    RegionCase::accept("@[cbv] (fn (X : VType) => fn (x : Int) => x)");
+    CbvCase::accept("@[cbv] (fn (X : VType) => fn (x : Int) => x)");
 }
 
-/// The whole point of the machinery: defined inside the region, instantiated
+/// The whole point of the machinery: defined inside the block, instantiated
 /// inside it, and run.
 #[test]
-fn a_region_internal_polymorphic_function_runs() {
-    SourceCase::assert_accepted(RegionCase::run(
+fn a_block_internal_polymorphic_function_runs() {
+    SourceCase::assert_accepted(CbvCase::run(
         "do case_result <- @[cbv] (let id = fn (X : VType) => fn (x : X) => x in (id Int) 0);
 ! exit case_result",
     ));
@@ -1230,7 +1209,7 @@ fn a_region_internal_polymorphic_function_runs() {
 /// it.
 #[test]
 fn translates_an_instantiation_followed_by_an_application() {
-    RegionCase::accept("@[cbv] (fn (f : forall (X : VType) . X -> X) => (f Int) 7)");
+    CbvCase::accept("@[cbv] (fn (f : forall (X : VType) . X -> X) => (f Int) 7)");
 }
 
 /// The type-application recipe reaches `unreachable!()` on a kind mismatch, so
@@ -1239,7 +1218,7 @@ fn translates_an_instantiation_followed_by_an_application() {
 /// refused at the classifier and can no longer reach this check.
 #[test]
 fn rejects_an_instantiation_whose_kind_disagrees() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (fn (f : forall (F : VType -> VType) . F Int) => f Int)",
         TyckDiagnosticCode::KindMismatch,
     );
@@ -1248,29 +1227,29 @@ fn rejects_an_instantiation_whose_kind_disagrees() {
 /// Review's input, which overflowed the process stack while the image test
 /// admitted a codata type named outside: the branch that unrolled a nominal to
 /// find a codata never registered it, so a recursive declaration unrolled once
-/// per field. A region no longer names an outside type, so the input is refused
-/// at the name; a recursive codata type a region declares is unfolded by
+/// per field. A block no longer names an outside type, so the input is refused
+/// at the name; a recursive codata type a block declares is unfolded by
 /// nothing.
 #[test]
 fn refuses_a_recursive_codata_type_named_outside() {
     SourceCase::assert_rejected(
-        RegionCase::check(&format!(
+        CbvCase::check(&format!(
             "begin
   def Stream : CType = codata | .next : Ret (Thk Stream) end that
   let S = Thk Stream that
   {}
 end",
-            RegionCase::block("@[cbv] (fn (x : S) => x)")
+            CbvCase::block("@[cbv] (fn (x : S) => x)")
         )),
         TyckDiagnosticCode::Expressivity,
     );
 }
 
-/// A recursive codata type the region declares, built by `let fix` and
+/// A recursive codata type the block declares, built by `let fix` and
 /// observed twice.
 #[test]
 fn a_recursive_stream_is_built_and_observed() {
-    SourceCase::assert_accepted(RegionCase::run(
+    SourceCase::assert_accepted(CbvCase::run(
         "do case_result <- @[cbv] (
   def Stream : VType = codata | .head : Int | .next : Stream end that
   let fix ones (n : Int) : Stream = comatch | .head => n | .next => ones n end in
@@ -1286,7 +1265,7 @@ fn a_recursive_stream_is_built_and_observed() {
 /// of those. A `forall` over `CType` has no source preimage.
 #[test]
 fn rejects_a_type_binder_whose_kind_is_not_a_source_kind() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (fn (f : forall (R : CType) . Int) => f)",
         TyckDiagnosticCode::Expressivity,
     );
@@ -1296,25 +1275,25 @@ fn rejects_a_type_binder_whose_kind_is_not_a_source_kind() {
 /// VType)`: the application translates as `F Int`, with the variable itself.
 #[test]
 fn admits_a_higher_kinded_type_variable_applied() {
-    RegionCase::accept("@[cbv] (fn (f : forall (F : VType -> VType) . F Int) => f)");
+    CbvCase::accept("@[cbv] (fn (f : forall (F : VType -> VType) . F Int) => f)");
 }
 
-/// An outside type enters by type abstraction: the region takes `O` and the two
+/// An outside type enters by type abstraction: the block takes `O` and the two
 /// operations it needs, and the host instantiates `O`. Inside, `O` is abstract,
 /// so the host may instantiate it at a host `data` type or at `Thk (Ret Int)`,
-/// which no source type translates to, and the region computes the same answer:
+/// which no source type translates to, and the block computes the same answer:
 /// `0`, through the operation for a present payload, where the other gives `1`.
 #[test]
-fn a_region_abstracts_over_an_outside_type_and_runs_at_any_instance() {
-    let region = "do f <- @[cbv] (
+fn a_block_abstracts_over_an_outside_type_and_runs_at_any_instance() {
+    let block = "do f <- @[cbv] (
   fn (O : VType) =>
   fn (some : Int -> O) =>
   fn (caseO : O -> (Unit -> Int) -> (Int -> Int) -> Int) =>
     caseO (some 0) (fn (u : Unit) => 1) (fn (n : Int) => n));";
-    SourceCase::assert_accepted(RegionCase::run(&format!(
+    SourceCase::assert_accepted(CbvCase::run(&format!(
         "begin
   def Opt : VType = data | +None : Unit | +Some : Int end that
-  {region}
+  {block}
   do g <- ! f Opt;
   do h <- ! g {{ fn (n : Int) => ret +Some n }};
   do r <- ! h {{
@@ -1328,9 +1307,9 @@ fn a_region_abstracts_over_an_outside_type_and_runs_at_any_instance() {
   ! exit r
 end"
     )));
-    SourceCase::assert_accepted(RegionCase::run(&format!(
+    SourceCase::assert_accepted(CbvCase::run(&format!(
         "begin
-  {region}
+  {block}
   do g <- ! f (Thk (Ret Int));
   do h <- ! g {{ fn (n : Int) => ret {{ ret n }} }};
   do r <- ! h {{
@@ -1346,11 +1325,11 @@ end"
 }
 
 /// A polymorphic function crosses the boundary the way an operation does — as
-/// the region's own parameter, at a type the region writes — and is
+/// the block's own parameter, at a type the block writes — and is
 /// instantiated inside.
 #[test]
 fn a_polymorphic_parameter_is_instantiated_and_runs() {
-    SourceCase::assert_accepted(RegionCase::run(
+    SourceCase::assert_accepted(CbvCase::run(
         "let Ident = Thk (forall (X : VType) . Ret (Thk (X -> Ret X))) in
 let ident : Ident = { fn (X : VType) => ret { fn (x : X) => ret x } } in
 do f <- @[cbv] (param (id : forall (X : VType) . X -> X) that (id Int) 0);
@@ -1362,12 +1341,12 @@ do case_result <- ! f ident;
 /* ---------------------------- codata and comatch --------------------------- */
 
 /// A codata type is **negative**, so its translation keeps the shift outside:
-/// `[[codata {.di : Ai}]]v = Thk (codata {.di : Ret [[Ai]]v})`. A region meets
+/// `[[codata {.di : Ai}]]v = Thk (codata {.di : Ret [[Ai]]v})`. A block meets
 /// it as a thunk and has to look through that thunk before the declaration is
 /// visible.
 #[test]
 fn translates_a_comatch_and_an_observation() {
-    RegionCase::accept_with_codata(
+    CbvCase::accept_with_codata(
         "@[cbv] (let p : Pair = comatch | .fst => 3 | .snd => 4 end in p.snd)",
     );
 }
@@ -1376,7 +1355,7 @@ fn translates_a_comatch_and_an_observation() {
 /// they answer.
 #[test]
 fn rejects_a_comatch_without_an_expected_type() {
-    RegionCase::reject_with_codata(
+    CbvCase::reject_with_codata(
         "@[cbv] (comatch | .fst => 1 | .snd => 2 end)",
         TyckDiagnosticCode::MissingAnnotation,
     );
@@ -1384,7 +1363,7 @@ fn rejects_a_comatch_without_an_expected_type() {
 
 #[test]
 fn rejects_an_unknown_destructor() {
-    RegionCase::reject_with_codata(
+    CbvCase::reject_with_codata(
         "@[cbv] (let p : Pair = comatch | .nope => 1 end in p.fst)",
         TyckDiagnosticCode::UnknownCoDataDestructor,
     );
@@ -1395,7 +1374,7 @@ fn rejects_an_unknown_destructor() {
 /// mechanical, and is deferred rather than guessed at.
 #[test]
 fn rejects_an_interleaved_copattern() {
-    RegionCase::reject_with_codata(
+    CbvCase::reject_with_codata(
         "@[cbv] (let p : Fn = comatch | .at (n : Int) => n end in 0)",
         TyckDiagnosticCode::Expressivity,
     );
@@ -1403,7 +1382,7 @@ fn rejects_an_interleaved_copattern() {
 
 #[test]
 fn translates_an_un_interleaved_field_taking_an_argument() {
-    RegionCase::accept_with_codata(
+    CbvCase::accept_with_codata(
         "@[cbv] (let p : Fn = comatch | .at => fn (n : Int) => n end in (p.at) 1)",
     );
 }
@@ -1414,7 +1393,7 @@ fn translates_an_un_interleaved_field_taking_an_argument() {
 /// pair is recorded in the translation table.
 #[test]
 fn an_unobserved_field_never_runs() {
-    SourceCase::assert_accepted(RegionCase::run(&RegionCase::within(
+    SourceCase::assert_accepted(CbvCase::run(&CbvCase::within(
         &CODATA,
         "do case_result <- @[cbv] (
   let fix diverge (x : Int) : Int = diverge x in
@@ -1425,14 +1404,14 @@ fn an_unobserved_field_never_runs() {
     )));
 }
 
-/* --------------------- data and codata written in a region ------------------ */
+/* --------------------- data and codata written in a block ------------------ */
 
-/// A region writes a `data` type in place and binds it with a kind:
+/// A block writes a `data` type in place and binds it with a kind:
 /// `[[data {+Ci : Ai}]]v = data {+Ci : [[Ai]]v}`. The type is transparent, so the
-/// region builds and matches its values with no declaration outside.
+/// block builds and matches its values with no declaration outside.
 #[test]
 fn translates_a_data_type_written_in_place() {
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (let Opt : VType = data | +None : Unit | +Some : Int end in
   match (+Some 4 : Opt) | +Some n => n | +None _ => 0 end)",
     );
@@ -1442,7 +1421,7 @@ fn translates_a_data_type_written_in_place() {
 /// refused.
 #[test]
 fn rejects_a_data_arm_written_as_a_call_by_push_value_type() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let Bad : VType = data | +Mk : (@(intrinsic(thk))) ((@(intrinsic(ret))) Int) end in 0)",
         TyckDiagnosticCode::Expressivity,
     );
@@ -1451,7 +1430,7 @@ fn rejects_a_data_arm_written_as_a_call_by_push_value_type() {
 /// The match picks the arm the constructor built: `+None` would answer 1.
 #[test]
 fn a_data_type_written_in_place_computes() {
-    SourceCase::assert_accepted(RegionCase::run(
+    SourceCase::assert_accepted(CbvCase::run(
         "do case_result <- @[cbv] (
   let Opt : VType = data | +None : Unit | +Some : Int end in
   match (+Some 0 : Opt) | +Some n => n | +None _ => 1 end
@@ -1461,10 +1440,10 @@ fn a_data_type_written_in_place_computes() {
 }
 
 /// Transparent data is compared by structure, so a host value of the same
-/// declaration is a value of the region's type, and the region can match on it.
+/// declaration is a value of the block's type, and the block can match on it.
 #[test]
 fn a_host_value_meets_the_same_data_type_written_in_place() {
-    SourceCase::assert_accepted(RegionCase::run(
+    SourceCase::assert_accepted(CbvCase::run(
         "let Opt = data | +None : Unit | +Some : Int end in
 do f <- @[cbv] (
   let O : VType = data | +None : Unit | +Some : Int end in
@@ -1480,7 +1459,7 @@ do case_result <- ! f v;
 #[test]
 fn rejects_a_host_value_of_a_different_data_type() {
     SourceCase::assert_rejected(
-        RegionCase::check(
+        CbvCase::check(
             "let Opt = data | +None : Unit | +Some : Unit end in
 do f <- @[cbv] (
   let O : VType = data | +None : Unit | +Some : Int end in
@@ -1498,7 +1477,7 @@ ret ()",
 /// an unbound name; recursion needs a sealed definition.
 #[test]
 fn rejects_a_data_type_that_mentions_itself_through_let() {
-    SourceCase::assert_resolve_error(RegionCase::check(&RegionCase::block(
+    SourceCase::assert_resolve_error(CbvCase::check(&CbvCase::block(
         "@[cbv] (let N : VType = data | +Z : Unit | +S : N end in 0)",
     )));
 }
@@ -1508,7 +1487,7 @@ fn rejects_a_data_type_that_mentions_itself_through_let() {
 /// Observing `.fst` answers 0, and `.snd` would answer 1.
 #[test]
 fn a_codata_type_written_in_place_computes() {
-    SourceCase::assert_accepted(RegionCase::run(
+    SourceCase::assert_accepted(CbvCase::run(
         "do case_result <- @[cbv] (
   let P : VType = codata | .fst : Int | .snd : Int end in
   let p : P = comatch | .fst => 0 | .snd => 1 end in
@@ -1522,7 +1501,7 @@ fn a_codata_type_written_in_place_computes() {
 /// translation supplies the `Ret`.
 #[test]
 fn rejects_a_codata_field_written_as_a_returner() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let Bad : VType = codata | .f : (@(intrinsic(ret))) Int end in 0)",
         TyckDiagnosticCode::Expressivity,
     );
@@ -1530,7 +1509,7 @@ fn rejects_a_codata_field_written_as_a_returner() {
 
 #[test]
 fn a_codata_field_taking_an_argument_written_in_place_computes() {
-    SourceCase::assert_accepted(RegionCase::run(
+    SourceCase::assert_accepted(CbvCase::run(
         "do case_result <- @[cbv] (
   let F : VType = codata | .at : Int -> Int end in
   let p : F = comatch | .at => fn (n : Int) => n end in
@@ -1545,11 +1524,11 @@ fn a_codata_field_taking_an_argument_written_in_place_computes() {
 /// marker is passed over, while an ascription the author writes is checked.
 #[test]
 fn checks_an_ascription_written_around_a_codata_type() {
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (let P : VType = (codata | .fst : Int end : VType) in
   let p : P = comatch | .fst => 2 end in p.fst)",
     );
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let P : VType = (codata | .fst : Int end : CType) in 0)",
         TyckDiagnosticCode::KindMismatch,
     );
@@ -1557,15 +1536,15 @@ fn checks_an_ascription_written_around_a_codata_type() {
 
 /* -------------------------- sealed declarations --------------------------- */
 
-// `def X : K = D` in a region, for `D` a `data` or `codata` declaration under
+// `def X : K = D` in a block, for `D` a `data` or `codata` declaration under
 // optional type parameters: a seal over `D`'s translation, nominal as the
 // host's is, and recursive when `D` mentions `X`. A `codata` seal sits on the
 // computation type inside the thunk, and `X` stands for `Thk` of it.
 
-impl RegionCase {
-    /// Runs `body` as a region and exits with its result, which must be `0`.
-    fn run_region(body: &str) {
-        SourceCase::assert_accepted(RegionCase::run(&format!(
+impl CbvCase {
+    /// Runs `body` as a block and exits with its result, which must be `0`.
+    fn run_block(body: &str) {
+        SourceCase::assert_accepted(CbvCase::run(&format!(
             "do case_result <- @[cbv] (
   {body}
 );
@@ -1574,12 +1553,12 @@ impl RegionCase {
     }
 }
 
-const REGION_OPT: &str = "def Opt : VType = data | +None : Unit | +Some : Int end that";
+const BLOCK_OPT: &str = "def Opt : VType = data | +None : Unit | +Some : Int end that";
 
 #[test]
 fn a_sealed_data_type_declared_in_place_computes() {
-    RegionCase::run_region(&format!(
-        "{REGION_OPT} match (+Some 0 : Opt) | +Some n => n | +None _ => 1 end"
+    CbvCase::run_block(&format!(
+        "{BLOCK_OPT} match (+Some 0 : Opt) | +Some n => n | +None _ => 1 end"
     ));
 }
 
@@ -1587,7 +1566,7 @@ fn a_sealed_data_type_declared_in_place_computes() {
 /// transparent `let` declarations of one shape above are one.
 #[test]
 fn rejects_one_sealed_declaration_at_another_of_the_same_shape() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (def A : VType = data | +Mk : Int end that def B : VType = data | +Mk : Int end that
   let a : A = +Mk 1 in let b : B = a in 0)",
         TyckDiagnosticCode::TypeMismatch,
@@ -1597,7 +1576,7 @@ fn rejects_one_sealed_declaration_at_another_of_the_same_shape() {
 /// And a host's declaration of the same shape is another type again.
 #[test]
 fn rejects_a_host_value_at_a_sealed_type_declared_in_place() {
-    RegionCase::reject_with_data(
+    CbvCase::reject_with_data(
         "@[cbv] (def Flag2 : VType = data | +Off : Unit | +On : Int end that
   fn (f : Flag) => let g : Flag2 = f in 0)",
         TyckDiagnosticCode::TypeMismatch,
@@ -1606,7 +1585,7 @@ fn rejects_a_host_value_at_a_sealed_type_declared_in_place() {
 
 #[test]
 fn a_recursive_data_type_declared_in_place_computes() {
-    RegionCase::run_region(
+    CbvCase::run_block(
         "def Nat : VType = data | +Z : Unit | +S : Nat end that
   match (+S (+Z ()) : Nat) | +Z _ => 1 | +S m => match m | +Z _ => 0 | +S _ => 1 end end",
     );
@@ -1617,16 +1596,16 @@ fn a_recursive_data_type_declared_in_place_computes() {
 /// host refuses it.
 #[test]
 fn rejects_a_transparent_declaration_that_mentions_itself() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let N : VType = data | +Z : Unit | +S : N end that 0)",
         TyckDiagnosticCode::MissingSeal,
     );
 }
 
-/// A parameterized recursive family, `std`'s `List` written in the region.
+/// A parameterized recursive family, `std`'s `List` written in the block.
 #[test]
 fn a_parameterized_recursive_data_type_declared_in_place_computes() {
-    RegionCase::run_region(
+    CbvCase::run_block(
         "def List (X : VType) : VType = data | +Nil : Unit | +Cons : X * List X end that
   match (+Cons (0, +Nil ()) : List Int) | +Nil _ => 1 | +Cons c => let (h, t) = c in h end",
     );
@@ -1636,7 +1615,7 @@ fn a_parameterized_recursive_data_type_declared_in_place_computes() {
 /// parameters and no `: K`, the desugared definition carries none.
 #[test]
 fn rejects_a_recursive_declaration_without_its_kind() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (def List (X : VType) = data | +Nil : Unit | +Cons : X * List X end that 0)",
         TyckDiagnosticCode::InvalidBindingCycle,
     );
@@ -1646,7 +1625,7 @@ fn rejects_a_recursive_declaration_without_its_kind() {
 /// `Nest (X * X)`, which the seal's generic definition admits.
 #[test]
 fn a_nested_data_type_declared_in_place_computes() {
-    RegionCase::run_region(
+    CbvCase::run_block(
         "def Nest (X : VType) : VType = data | +Leaf : X | +Node : Nest (X * X) end that
   match (+Node (+Leaf (1, 0)) : Nest Int)
   | +Leaf x => x
@@ -1658,7 +1637,7 @@ fn a_nested_data_type_declared_in_place_computes() {
 /// The arms are source types under a seal as well.
 #[test]
 fn rejects_a_sealed_arm_outside_the_image() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (def Bad : VType = data | +Mk : (@(intrinsic(thk))) ((@(intrinsic(ret))) Int) end that 0)",
         TyckDiagnosticCode::Expressivity,
     );
@@ -1666,7 +1645,7 @@ fn rejects_a_sealed_arm_outside_the_image() {
 
 #[test]
 fn a_recursive_codata_type_declared_in_place_computes() {
-    RegionCase::run_region(
+    CbvCase::run_block(
         "def Stream : VType = codata | .head : Int | .tail : Stream end that
   let fix zeros (n : Int) : Stream = comatch | .head => n | .tail => zeros n end in
   let s : Stream = zeros 0 in let t : Stream = s.tail in t.head",
@@ -1677,7 +1656,7 @@ fn a_recursive_codata_type_declared_in_place_computes() {
 /// `Thk (σ Int)`, through the name's `fn X => Thk (σ X)`.
 #[test]
 fn a_parameterized_recursive_codata_type_declared_in_place_computes() {
-    RegionCase::run_region(
+    CbvCase::run_block(
         "def Stream (X : VType) : VType = codata | .head : X | .tail : Stream X end that
   let fix zeros (n : Int) : Stream Int = comatch | .head => n | .tail => zeros n end in
   let s : Stream Int = zeros 0 in let t : Stream Int = s.tail in t.head",
@@ -1688,7 +1667,7 @@ fn a_parameterized_recursive_codata_type_declared_in_place_computes() {
 /// the seal's `CType` is the translation's business, not the author's.
 #[test]
 fn rejects_a_sealed_codata_type_at_a_computation_kind() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (def S : CType = codata | .head : Int end that 0)",
         TyckDiagnosticCode::Expressivity,
     );
@@ -1697,7 +1676,7 @@ fn rejects_a_sealed_codata_type_at_a_computation_kind() {
 /// The declared kind has one arrow per parameter.
 #[test]
 fn rejects_a_sealed_codata_type_whose_kind_has_a_parameter_it_lacks() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (def S : VType -> VType = codata | .head : Int end that 0)",
         TyckDiagnosticCode::KindMismatch,
     );
@@ -1707,7 +1686,7 @@ fn rejects_a_sealed_codata_type_whose_kind_has_a_parameter_it_lacks() {
 /// a seal is entered only through the `data` or `codata` shape it exposes.
 #[test]
 fn rejects_a_sealed_definition_that_declares_no_data_or_codata() {
-    RegionCase::reject("@[cbv] (def D : VType = Int that 5)", TyckDiagnosticCode::Expressivity);
+    CbvCase::reject("@[cbv] (def D : VType = Int that 5)", TyckDiagnosticCode::Expressivity);
 }
 
 /// **Mutual recursion**: declarations that mention one another form one group,
@@ -1716,7 +1695,7 @@ fn rejects_a_sealed_definition_that_declares_no_data_or_codata() {
 /// label is the answer, and a forest read in the wrong order gives `2`.
 #[test]
 fn mutually_recursive_data_types_compute() {
-    RegionCase::run_region(
+    CbvCase::run_block(
         "def Tree : VType = data | +Node : Int * Forest end that
   def Forest : VType = data | +Nil : Unit | +Cons : Tree * Forest end that
   let fix rightmost (t : Tree) : Int =
@@ -1736,7 +1715,7 @@ fn mutually_recursive_data_types_compute() {
 /// `Thk (σ X)` before the stream's own declaration has been translated.
 #[test]
 fn a_mutually_recursive_group_of_data_and_codata_computes() {
-    RegionCase::run_region(
+    CbvCase::run_block(
         "def Stream (X : VType) : VType = codata | .head : X | .tail : Cell X end that
   def Cell (X : VType) : VType = data | +End : Unit | +More : Stream X end that
   let fix alt (a : Int) (b : Int) : Stream Int =
@@ -1749,7 +1728,7 @@ fn a_mutually_recursive_group_of_data_and_codata_computes() {
 /// two separate declarations are.
 #[test]
 fn rejects_one_member_of_a_group_at_another_of_the_same_shape() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (def A : VType = data | +Mk : Unit | +Next : B end that
   def B : VType = data | +Mk : Unit | +Next : A end that
   let a : A = +Mk () in let b : B = a in 0)",
@@ -1761,7 +1740,7 @@ fn rejects_one_member_of_a_group_at_another_of_the_same_shape() {
 /// here, and packing it, below, exports it.
 #[test]
 fn rejects_a_later_member_of_a_group_escaping_through_the_result() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (def A : VType = data | +Mk : Unit | +Next : B end that
   def B : VType = data | +Mk : Unit | +Next : A end that
   (+Mk () : B))",
@@ -1771,7 +1750,7 @@ fn rejects_a_later_member_of_a_group_escaping_through_the_result() {
 
 #[test]
 fn exports_a_later_member_of_a_group_behind_an_abstract_package() {
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (def A : VType = data | +Mk : Unit | +Next : B end that
   def B : VType = data | +Mk : Unit | +Next : A end that
   ((B, +Next (+Mk ())) : exists (X : VType) . X))",
@@ -1782,7 +1761,7 @@ fn exports_a_later_member_of_a_group_behind_an_abstract_package() {
 /// here the second member's, which has parameters and no `: K`.
 #[test]
 fn rejects_a_mutually_recursive_member_without_its_kind() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (def A : VType = data | +Mk : B Int end that
   def B (X : VType) = data | +Mk : A end that 0)",
         TyckDiagnosticCode::InvalidBindingCycle,
@@ -1793,7 +1772,7 @@ fn rejects_a_mutually_recursive_member_without_its_kind() {
 /// missing its seal, as one that mentions only itself is.
 #[test]
 fn rejects_a_transparent_member_of_a_mutually_recursive_group() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (def A : VType = data | +Mk : B end that
   let B : VType = data | +Mk : A end that 0)",
         TyckDiagnosticCode::MissingSeal,
@@ -1804,13 +1783,13 @@ fn rejects_a_transparent_member_of_a_mutually_recursive_group() {
 /// is the one reported, as in the host, whichever way round they come.
 #[test]
 fn reports_a_groups_admission_faults_member_by_member_as_the_host_does() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let A : VType = data | +Mk : B Int end that
   def B (X : VType) = data | +Mk : A end that 0)",
         TyckDiagnosticCode::MissingSeal,
     );
     SourceCase::assert_rejected(
-        RegionCase::check(
+        CbvCase::check(
             "begin
   let A : VType = data | +Mk : B Int end that
   def B (X : VType) = data | +Mk : A end that
@@ -1819,13 +1798,13 @@ end",
         ),
         TyckDiagnosticCode::MissingSeal,
     );
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (def A (X : VType) = data | +Mk : B end that
   let B : VType = data | +Mk : A Int end that 0)",
         TyckDiagnosticCode::InvalidBindingCycle,
     );
     SourceCase::assert_rejected(
-        RegionCase::check(
+        CbvCase::check(
             "begin
   def A (X : VType) = data | +Mk : B end that
   let B : VType = data | +Mk : A Int end that
@@ -1836,19 +1815,19 @@ end",
     );
 }
 
-/// What only a region requires of a member comes after every member's
+/// What only a block requires of a member comes after every member's
 /// admission, so the second member's missing seal is reported before the
 /// first member's binder, which is a product. The host checks each binder
 /// before the next member, and reports the binder.
 #[test]
 fn reports_a_later_members_admission_before_an_earlier_binders_shape() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (def (A, X) : VType = data | +A : B end that
   let B : VType = data | +B : A end that 0)",
         TyckDiagnosticCode::MissingSeal,
     );
     SourceCase::assert_rejected(
-        RegionCase::check(
+        CbvCase::check(
             "begin
   def (A, X) : VType = data | +A : B end that
   let B : VType = data | +B : A end that
@@ -1866,7 +1845,7 @@ end",
 /// called itself answers `2`.
 #[test]
 fn mutually_recursive_functions_are_a_recursive_record() {
-    RegionCase::run_region(
+    CbvCase::run_block(
         "def Nat : VType = data | +Zero : Unit | +Succ : Nat end that
   let Bool : VType = data | +True : Unit | +False : Unit end that
   let Parity : VType = codata | .even : Nat -> Bool | .odd : Nat -> Bool end that
@@ -1884,10 +1863,10 @@ fn mutually_recursive_functions_are_a_recursive_record() {
 }
 
 /// Two `let fix` bindings that name each other are a value cycle, which the
-/// host refuses and directs to `fix`, and so does a region.
+/// host refuses and directs to `fix`, and so does a block.
 #[test]
 fn rejects_two_recursive_functions_naming_each_other() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (def Nat : VType = data | +Zero : Unit | +Succ : Nat end that
   let fix even (n : Nat) : Int = match n | +Zero _ => 0 | +Succ m => odd m end that
   let fix odd (n : Nat) : Int = match n | +Zero _ => 1 | +Succ m => even m end that
@@ -1901,22 +1880,22 @@ fn rejects_two_recursive_functions_naming_each_other() {
 /// exports it, hiding it behind its witness.
 #[test]
 fn exports_a_declared_type_behind_an_abstract_package() {
-    RegionCase::accept(&format!("@[cbv] ({REGION_OPT} ((Opt, +Some 7) : exists (X : VType) . X))"));
+    CbvCase::accept(&format!("@[cbv] ({BLOCK_OPT} ((Opt, +Some 7) : exists (X : VType) . X))"));
 }
 
 /// A manifest package discloses it, and is refused.
 #[test]
 fn rejects_a_manifest_package_disclosing_a_declared_type() {
-    RegionCase::reject(
-        &format!("@[cbv] ({REGION_OPT} ((Opt, +Some 7) : exists (X as Opt : VType) . X))"),
+    CbvCase::reject(
+        &format!("@[cbv] ({BLOCK_OPT} ((Opt, +Some 7) : exists (X as Opt : VType) . X))"),
         TyckDiagnosticCode::EscapingDeclaration,
     );
 }
 
 #[test]
 fn rejects_a_declared_type_escaping_through_the_result() {
-    RegionCase::reject(
-        &format!("@[cbv] ({REGION_OPT} (+Some 4 : Opt))"),
+    CbvCase::reject(
+        &format!("@[cbv] ({BLOCK_OPT} (+Some 4 : Opt))"),
         TyckDiagnosticCode::EscapingDeclaration,
     );
 }
@@ -1925,8 +1904,8 @@ fn rejects_a_declared_type_escaping_through_the_result() {
 /// codomain.
 #[test]
 fn rejects_a_declared_type_escaping_inside_a_larger_type() {
-    RegionCase::reject(
-        &format!("@[cbv] ({REGION_OPT} fn (x : Int) => (+Some x : Opt))"),
+    CbvCase::reject(
+        &format!("@[cbv] ({BLOCK_OPT} fn (x : Int) => (+Some x : Opt))"),
         TyckDiagnosticCode::EscapingDeclaration,
     );
 }
@@ -1934,17 +1913,17 @@ fn rejects_a_declared_type_escaping_inside_a_larger_type() {
 /// A codata name stands for `Thk σ`, which mentions the seal as well.
 #[test]
 fn rejects_a_declared_codata_type_escaping_through_the_result() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (def S : VType = codata | .head : Int end that (comatch | .head => 1 end : S))",
         TyckDiagnosticCode::EscapingDeclaration,
     );
 }
 
-/// The package leaves the region and is used outside it: the host unpacks it
+/// The package leaves the block and is used outside it: the host unpacks it
 /// and applies the operation it carries, which is what exporting is for.
 #[test]
 fn a_declared_type_exported_behind_a_package_is_used_outside() {
-    SourceCase::assert_accepted(RegionCase::run(
+    SourceCase::assert_accepted(CbvCase::run(
         "do p <- @[cbv] (
   def Opt : VType = data | +None : Unit | +Some : Int end that
   ((Opt, +Some 0, fn (o : Opt) => match o | +Some n => n | +None _ => 1 end)
@@ -1959,11 +1938,11 @@ do case_result <- ! f x;
 // What the second review of the closed-types steps found.
 
 /// The definition table holds a declaration's checked body, which the editor
-/// shows as its definition. It held the seal, so a region's `D` was shown as
+/// shows as its definition. It held the seal, so a block's `D` was shown as
 /// `D`; the host's holds the `data` type.
 #[test]
 fn records_a_sealed_declarations_body_as_the_host_does() {
-    let host = RegionCase::type_definition_bodies(
+    let host = CbvCase::type_definition_bodies(
         "begin
   def D : VType = data | +Mk : Int end that
   ret ()
@@ -1971,20 +1950,20 @@ end",
         "D",
     )
     .unwrap();
-    let region = RegionCase::type_definition_bodies(
-        &RegionCase::block("@[cbv] (def D : VType = data | +Mk : Int end in 0)"),
+    let block = CbvCase::type_definition_bodies(
+        &CbvCase::block("@[cbv] (def D : VType = data | +Mk : Int end in 0)"),
         "D",
     )
     .unwrap();
-    assert_eq!(region, host);
+    assert_eq!(block, host);
 }
 
 /// A codata declaration's body is its translation: the thunk of the
 /// computation type the seal is on, at the source name's kind.
 #[test]
 fn records_a_sealed_codata_declarations_body_as_its_thunk() {
-    let bodies = RegionCase::type_definition_bodies(
-        &RegionCase::block("@[cbv] (def S : VType = codata | .head : Int end in 0)"),
+    let bodies = CbvCase::type_definition_bodies(
+        &CbvCase::block("@[cbv] (def S : VType = codata | .head : Int end in 0)"),
         "S",
     )
     .unwrap();
@@ -1994,24 +1973,24 @@ fn records_a_sealed_codata_declarations_body_as_its_thunk() {
     );
 }
 
-/// A composite kind a region reads records its source facts, as the host's
+/// A composite kind a block reads records its source facts, as the host's
 /// checking of the same annotation does. Built directly, the named kind and the
 /// arrow had none, which an editor reading those nodes would show.
 #[test]
 fn records_source_facts_for_a_composite_kind() {
     let shapes = ["Pi(", "Label("];
-    let host = RegionCase::unannotated_terms(
+    let host = CbvCase::unannotated_terms(
         "let f = { fn (F : (#C :: VType) -> VType) => ret 0 } in ret ()",
         &shapes,
     )
     .unwrap();
     assert_eq!(host, Vec::<String>::new());
-    let region = RegionCase::unannotated_terms(
-        &RegionCase::block("@[cbv] (fn (F : (#C :: VType) -> VType) => 0)"),
+    let block = CbvCase::unannotated_terms(
+        &CbvCase::block("@[cbv] (fn (F : (#C :: VType) -> VType) => 0)"),
         &shapes,
     )
     .unwrap();
-    assert_eq!(region, Vec::<String>::new());
+    assert_eq!(block, Vec::<String>::new());
 }
 
 /// A value inside a named field or a package's payload records its source
@@ -2025,7 +2004,7 @@ fn records_source_facts_for_named_field_and_package_payloads() {
         "@[cbv] (((Int, fn (x : Int) => x) : exists (X : VType) . X -> X))",
         "@[cbv] (((Int, fn (x : Int) => x, 1) : exists (X : VType) . (X -> X) * Int))",
     ] {
-        let missing = RegionCase::unannotated_terms(&RegionCase::block(source), &["Abs("]).unwrap();
+        let missing = CbvCase::unannotated_terms(&CbvCase::block(source), &["Abs("]).unwrap();
         assert_eq!(missing, Vec::<String>::new(), "{source}");
     }
 }
@@ -2035,19 +2014,16 @@ fn records_source_facts_for_named_field_and_package_payloads() {
 /// authored kind and refused, so the inference never ran.
 #[test]
 fn infers_a_sealed_declarations_kind_from_its_parameters() {
-    RegionCase::accept("@[cbv] (def D = data | +Mk : Int end in 0)");
-    RegionCase::accept("@[cbv] (def S = codata | .head : Int end in 0)");
-    RegionCase::run_region(
+    CbvCase::accept("@[cbv] (def D = data | +Mk : Int end in 0)");
+    CbvCase::accept("@[cbv] (def S = codata | .head : Int end in 0)");
+    CbvCase::run_block(
         "def D (X : VType) = data | +Mk : X end in match (+Mk 0 : D Int) | +Mk n => n end",
     );
 }
 
 #[test]
 fn rejects_an_inferred_kind_whose_parameter_declares_none() {
-    RegionCase::reject(
-        "@[cbv] (def D X = data | +Mk : X end in 0)",
-        TyckDiagnosticCode::Expressivity,
-    );
+    CbvCase::reject("@[cbv] (def D X = data | +Mk : X end in 0)", TyckDiagnosticCode::Expressivity);
 }
 
 /// An ascription around the declaration is the ordinary one, checked against
@@ -2055,9 +2031,9 @@ fn rejects_an_inferred_kind_whose_parameter_declares_none() {
 /// through, so any other hid the declaration.
 #[test]
 fn accepts_an_ascription_around_a_sealed_declaration() {
-    RegionCase::accept("@[cbv] (def S : VType = (codata | .head : Int end : VType) in 0)");
-    RegionCase::accept("@[cbv] (def D (X : VType) : VType = (data | +Mk : X end : VType) in 0)");
-    RegionCase::accept(
+    CbvCase::accept("@[cbv] (def S : VType = (codata | .head : Int end : VType) in 0)");
+    CbvCase::accept("@[cbv] (def D (X : VType) : VType = (data | +Mk : X end : VType) in 0)");
+    CbvCase::accept(
         "@[cbv] (def D : VType -> VType = ((fn (X : VType) => data | +Mk : X end) : VType -> VType) in 0)",
     );
 }
@@ -2065,11 +2041,11 @@ fn accepts_an_ascription_around_a_sealed_declaration() {
 /// A source codata type is a value type, here as anywhere.
 #[test]
 fn rejects_a_computation_kind_ascribed_to_a_sealed_codata_declaration() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (def S : VType = (codata | .head : Int end : CType) in 0)",
         TyckDiagnosticCode::KindMismatch,
     );
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (def D : VType -> VType = ((fn (X : VType) => data | +Mk : X end) : VType) in 0)",
         TyckDiagnosticCode::KindMismatch,
     );
@@ -2082,7 +2058,7 @@ fn rejects_a_computation_kind_ascribed_to_a_sealed_codata_declaration() {
 /// infers its result from the parameters.
 #[test]
 fn infers_the_result_of_a_written_telescope() {
-    RegionCase::run_region(
+    CbvCase::run_block(
         "def D (X : VType) : _ = data | +Mk : X end in match (+Mk 0 : D Int) | +Mk n => n end",
     );
 }
@@ -2092,22 +2068,22 @@ fn infers_the_result_of_a_written_telescope() {
 /// was never read: `CType -> _` and `Int -> _` were accepted.
 #[test]
 fn rejects_a_written_prefix_before_an_inferred_result() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (def D : CType -> _ = data | +Mk : Int end in 0)",
         TyckDiagnosticCode::Expressivity,
     );
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (def D : Int -> _ = data | +Mk : Int end in 0)",
         TyckDiagnosticCode::SortMismatch,
     );
 }
 
-/// And it is guarded as any kind is: a prefix that reads outside the region was
+/// And it is guarded as any kind is: a prefix that reads outside the block was
 /// admitted unread.
 #[test]
 fn rejects_a_prefix_before_an_inferred_result_that_reaches_outside() {
     SourceCase::assert_rejected(
-        RegionCase::check(
+        CbvCase::check(
             "let outside = 7 in
              do case_result <- @[cbv] (def D : pi (Y : @[typeof] outside) . _ = data | +Mk : Int end in 0);
              ret ()",
@@ -2115,7 +2091,7 @@ fn rejects_a_prefix_before_an_inferred_result_that_reaches_outside() {
         TyckDiagnosticCode::Expressivity,
     );
     SourceCase::assert_rejected(
-        RegionCase::check_with_import(
+        CbvCase::check_with_import(
             "do case_result <- @[cbv] (def D : pi (_ : @(import(\"imported.zy\"))) . _ = data | +Mk : Int end in 0);
 ret ()",
             "@(intrinsic(vtype))",
@@ -2130,11 +2106,11 @@ ret ()",
 /// `accepts_an_ascription_around_a_sealed_declaration`.
 #[test]
 fn rejects_an_ascription_naming_a_parameter_by_sort() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (def D (X : VType) : VType = (data | +Mk : X end : X) in 0)",
         TyckDiagnosticCode::SortMismatch,
     );
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (def S (X : VType) : VType = (codata | .head : X end : X) in 0)",
         TyckDiagnosticCode::SortMismatch,
     );
@@ -2145,12 +2121,12 @@ fn rejects_an_ascription_naming_a_parameter_by_sort() {
 /// it reached the parameter ahead of its binder.
 #[test]
 fn rejects_a_parameter_kind_naming_an_earlier_parameter() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (def D (X : VType) (Y : X) = data | +Mk : Int end in 0)",
         TyckDiagnosticCode::SortMismatch,
     );
     // read off the telescope `: _` after the parameters desugars to
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (def D (X : VType) (Y : X) : _ = data | +Mk : Int end in 0)",
         TyckDiagnosticCode::SortMismatch,
     );
@@ -2158,7 +2134,7 @@ fn rejects_a_parameter_kind_naming_an_earlier_parameter() {
 
 #[test]
 fn infers_a_kind_from_two_parameters() {
-    RegionCase::run_region(
+    CbvCase::run_block(
         "def D (X : VType) (Y : VType) = data | +Mk : X * Y end in
   match (+Mk (0, 1) : D Int Int) | +Mk p => let (a, b) = p in a end",
     );
@@ -2169,7 +2145,7 @@ fn infers_a_kind_from_two_parameters() {
 /// name it binds. The arrow and its domain had theirs; the binder had none.
 #[test]
 fn records_binder_facts_for_a_kind_arrow() {
-    let host = RegionCase::unrecorded_pattern_facts(
+    let host = CbvCase::unrecorded_pattern_facts(
         "let f = { fn (F : pi (X : VType) . VType) => ret 0 } in
 let g = { fn (G : (#C :: VType) -> VType) => ret 0 } in
 ret ()",
@@ -2177,15 +2153,15 @@ ret ()",
     )
     .unwrap();
     assert_eq!(host, (Vec::<String>::new(), 0));
-    let region = RegionCase::unrecorded_pattern_facts(
-        &RegionCase::block(
+    let block = CbvCase::unrecorded_pattern_facts(
+        &CbvCase::block(
             "@[cbv] (let f = fn (F : pi (X : VType) . VType) => 0 in
   let g = fn (G : (#C :: VType) -> VType) => 0 in 0)",
         ),
         "X",
     )
     .unwrap();
-    assert_eq!(region, (Vec::<String>::new(), 0));
+    assert_eq!(block, (Vec::<String>::new(), 0));
 }
 
 // What the fourth review found.
@@ -2193,13 +2169,13 @@ ret ()",
 /// A telescope binder before an inferred result is checked whole, every
 /// annotation in it guarded as a type binder's is. Only its outermost one was,
 /// and the pattern rule read an inner one unguarded: a query of a term bound
-/// outside the region, and an import, were admitted. With `VType` in place of
+/// outside the block, and an import, were admitted. With `VType` in place of
 /// the `_` the same binders were refused.
 #[test]
 fn rejects_an_inner_annotation_of_a_telescope_binder_that_reaches_outside() {
     for declaration in ["data | +Mk : Y end", "codata | .head : Y end"] {
         SourceCase::assert_rejected(
-            RegionCase::check(&format!(
+            CbvCase::check(&format!(
                 "let outside = 7 in
              do case_result <- @[cbv] (
                def D : pi ((X : @[typeof] (@[typeof] outside)) : VType) . _ =
@@ -2211,7 +2187,7 @@ fn rejects_an_inner_annotation_of_a_telescope_binder_that_reaches_outside() {
         );
     }
     SourceCase::assert_rejected(
-        RegionCase::check_with_import(
+        CbvCase::check_with_import(
             "do case_result <- @[cbv] (
   def D : pi ((X : @(import(\"imported.zy\"))) : VType) . _ =
     fn (Y : VType) => data | +Mk : Y end
@@ -2223,15 +2199,15 @@ ret ()",
     );
 }
 
-/// Beside it: an inner annotation that stays inside the region is admitted, in
+/// Beside it: an inner annotation that stays inside the block is admitted, in
 /// a telescope written whole and in one desugared from the parameters.
 #[test]
 fn accepts_an_inner_annotation_of_a_telescope_binder() {
-    RegionCase::run_region(
+    CbvCase::run_block(
         "def D : pi ((X : VType) : VType) . _ = fn (Y : VType) => data | +Mk : Y end in
   match (+Mk 0 : D Int) | +Mk n => n end",
     );
-    RegionCase::run_region(
+    CbvCase::run_block(
         "def D ((X : VType) : VType) : _ = data | +Mk : X end in
   match (+Mk 0 : D Int) | +Mk n => n end",
     );
@@ -2242,12 +2218,12 @@ fn accepts_an_inner_annotation_of_a_telescope_binder() {
 /// with; it is held to having none missing.
 #[test]
 fn records_binder_facts_for_a_written_telescope() {
-    let region = RegionCase::unrecorded_pattern_facts(
-        &RegionCase::block("@[cbv] (def D (X : VType) : _ = data | +Mk : X end in 0)"),
+    let block = CbvCase::unrecorded_pattern_facts(
+        &CbvCase::block("@[cbv] (def D (X : VType) : _ = data | +Mk : X end in 0)"),
         "X",
     )
     .unwrap();
-    assert_eq!(region, (Vec::<String>::new(), 0));
+    assert_eq!(block, (Vec::<String>::new(), 0));
 }
 
 /// A recursive declaration's classifier must be a kind before anything else
@@ -2256,15 +2232,15 @@ fn records_binder_facts_for_a_written_telescope() {
 /// none.
 #[test]
 fn rejects_a_recursive_declaration_at_a_type_as_the_host_does() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let N : Int = data | +Mk : N end that 0)",
         TyckDiagnosticCode::InvalidBindingCycle,
     );
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (def N : Int = data | +Mk : N end that 0)",
         TyckDiagnosticCode::InvalidBindingCycle,
     );
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (def A : Int = data | +A : B end that def B : VType = data | +B : A end that 0)",
         TyckDiagnosticCode::InvalidBindingCycle,
     );
@@ -2273,23 +2249,23 @@ fn rejects_a_recursive_declaration_at_a_type_as_the_host_does() {
 /* ------------------------------- recursion -------------------------------- */
 
 /// `let fix` is host syntax already; what is new is its reading inside a
-/// region. `: Int` is the **source** return type and the recursive call is
+/// block. `: Int` is the **source** return type and the recursive call is
 /// written `f x` — the `Ret`, the `Thk` and the force are the translation's.
 /// The emitted term is
 /// `do f <- ret { fix f => fn x => do g <- ret f; do a <- ret x; ! g a }; …`,
 /// so the recursive name maps straight onto the `fix` binder with no coercion.
 #[test]
 fn translates_a_recursive_binding() {
-    RegionCase::accept("@[cbv] (let fix f (x : Int) : Int = f x in f)");
+    CbvCase::accept("@[cbv] (let fix f (x : Int) : Int = f x in f)");
 }
 
 /// The clause builds a `fix` whether or not the body calls itself, so the
-/// terminating case is a recursive binding that does not recur. A region
+/// terminating case is a recursive binding that does not recur. A block
 /// cannot reach a comparison, so there is no way yet to write one that recurs
 /// and stops.
 #[test]
 fn a_recursive_binding_that_does_not_recur_runs() {
-    SourceCase::assert_accepted(RegionCase::run(
+    SourceCase::assert_accepted(CbvCase::run(
         "do case_result <- @[cbv] (let fix f (x : Int) : Int = x in f 0);
 ! exit case_result",
     ));
@@ -2299,7 +2275,7 @@ fn a_recursive_binding_that_does_not_recur_runs() {
 /// call-by-value and `fix` is call-by-push-value's own form.
 #[test]
 fn rejects_a_directly_written_fix() {
-    RegionCase::reject("@[cbv] (fix f => f)", TyckDiagnosticCode::Expressivity);
+    CbvCase::reject("@[cbv] (fix f => f)", TyckDiagnosticCode::Expressivity);
 }
 
 /// And a thunked fixed point that is *not* a header is not mistaken for one.
@@ -2313,7 +2289,7 @@ fn rejects_a_directly_written_fix() {
 /// never reaches `Thunk` at all.
 #[test]
 fn rejects_a_thunked_fix_that_is_not_a_header() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let f = { fix g => fn (x : Int) => x } in f 1)",
         TyckDiagnosticCode::Expressivity,
     );
@@ -2329,13 +2305,13 @@ fn rejects_a_thunked_fix_that_is_not_a_header() {
 fn recognizes_a_header_whose_first_parameter_has_no_type() {
     for header in ["let fix g x : Int = 0 in 0", "let fix g (x : Int) y : Int = 0 in 0"] {
         SourceCase::assert_rejected_at(
-            RegionCase::check(&RegionCase::block(&format!("@[cbv] ({header})"))),
+            CbvCase::check(&CbvCase::block(&format!("@[cbv] ({header})"))),
             TyckDiagnosticCode::Expressivity,
             header,
         );
     }
-    RegionCase::accept("@[cbv] (let ! f : Int -> Int = fix g => fn x => x in f 1)");
-    RegionCase::reject(
+    CbvCase::accept("@[cbv] (let ! f : Int -> Int = fix g => fn x => x in f 1)");
+    CbvCase::reject(
         "@[cbv] (let ! f : Int -> Int = fix g => fn x => (x : Unit) in f 1)",
         TyckDiagnosticCode::TypeMismatch,
     );
@@ -2346,14 +2322,11 @@ fn recognizes_a_header_whose_first_parameter_has_no_type() {
 /// A signature that mentions one is refused by sort.
 #[test]
 fn translates_a_function_header() {
-    RegionCase::accept("@[cbv] (let f (x : Int) : Int = x in f 1)");
-    RegionCase::accept("@[cbv] (let f (x : Int) (y : Int) : Int = y in f 1 2)");
-    RegionCase::accept("@[cbv] (let f (X : VType) (x : X) : X = x in f Int 3)");
-    RegionCase::reject(
-        "@[cbv] (let f (x : Int) : Int = () in 0)",
-        TyckDiagnosticCode::TypeMismatch,
-    );
-    RegionCase::reject("@[cbv] (let f (x : Int) : x = x in 0)", TyckDiagnosticCode::SortMismatch);
+    CbvCase::accept("@[cbv] (let f (x : Int) : Int = x in f 1)");
+    CbvCase::accept("@[cbv] (let f (x : Int) (y : Int) : Int = y in f 1 2)");
+    CbvCase::accept("@[cbv] (let f (X : VType) (x : X) : X = x in f Int 3)");
+    CbvCase::reject("@[cbv] (let f (x : Int) : Int = () in 0)", TyckDiagnosticCode::TypeMismatch);
+    CbvCase::reject("@[cbv] (let f (x : Int) : x = x in 0)", TyckDiagnosticCode::SortMismatch);
 }
 
 /// The `let !` spelling writes a signature's binders apart from the
@@ -2361,13 +2334,13 @@ fn translates_a_function_header() {
 /// is translated, guarded and compared with its domain, and its shape is a
 /// binder's, in any position of the group. They were read for their outermost
 /// annotation alone, which let a conflicting annotation, a literal, and a
-/// classifier reading outside the region through.
+/// classifier reading outside the block through.
 #[test]
 fn checks_a_let_bang_signature_binder_as_a_parameter() {
     const ONE: &str = "fix g => fn (x : Int) => x in f 0";
     const TWO: &str = "fix g => fn (x : Int) (y : Int) => y in f 0 1";
-    RegionCase::accept(&format!("@[cbv] (let ! f : pi ((x : Int) : Int) . Int = {ONE})"));
-    RegionCase::accept(&format!("@[cbv] (let ! f : pi (x : Int) ((y : Int) : Int) . Int = {TWO})"));
+    CbvCase::accept(&format!("@[cbv] (let ! f : pi ((x : Int) : Int) . Int = {ONE})"));
+    CbvCase::accept(&format!("@[cbv] (let ! f : pi (x : Int) ((y : Int) : Int) . Int = {TWO})"));
     for (signature, body, expected) in [
         ("pi ((x : Unit) : Int) . Int", ONE, TyckDiagnosticCode::TypeMismatch),
         ("pi (x : Int) ((y : Unit) : Int) . Int", TWO, TyckDiagnosticCode::TypeMismatch),
@@ -2375,7 +2348,7 @@ fn checks_a_let_bang_signature_binder_as_a_parameter() {
         ("pi ((x : @[typeof] outside) : Int) . Int", ONE, TyckDiagnosticCode::Expressivity),
     ] {
         SourceCase::assert_rejected(
-            SourceCase::check(&CbvRegion::closed(&format!(
+            SourceCase::check(&CbvBlock::closed(&format!(
                 "let outside = 0 in
 do case_result <- @[cbv] (let ! f : {signature} = {body});
 ret ()"
@@ -2391,19 +2364,19 @@ ret ()"
 /// mention, so they are read for their domains.
 #[test]
 fn translates_a_recursive_binding_with_several_parameters() {
-    RegionCase::accept("@[cbv] (let fix f (x : Int) (y : Int) : Int = y in f 1 2)");
-    RegionCase::accept("@[cbv] (let fix f (x : Int) (y : Int) (z : Int) : Int = z in f 1 2 3)");
-    RegionCase::accept("@[cbv] (let fix f (x : Int) (X : VType) (y : X) : X = y in f 1 Int 2)");
+    CbvCase::accept("@[cbv] (let fix f (x : Int) (y : Int) : Int = y in f 1 2)");
+    CbvCase::accept("@[cbv] (let fix f (x : Int) (y : Int) (z : Int) : Int = z in f 1 2 3)");
+    CbvCase::accept("@[cbv] (let fix f (x : Int) (X : VType) (y : X) : X = y in f 1 Int 2)");
 }
 
 /// Consecutive parameters are one function, so a call passes all of them.
 #[test]
 fn refuses_a_recursive_call_with_too_few_arguments() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let fix f (x : Int) (y : Int) : Int = f x in 0)",
         TyckDiagnosticCode::Expressivity,
     );
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let fix f (x : Int) (y : Int) : Int = y in f 1)",
         TyckDiagnosticCode::Expressivity,
     );
@@ -2418,12 +2391,12 @@ const NEST: &str = "def Nest (X : VType) : VType = data | +Flat : X | +Deep : Ne
 /// a term.
 #[test]
 fn translates_polymorphic_recursion() {
-    RegionCase::accept("@[cbv] (let fix f (X : VType) (x : X) : X = x in f Int 3)");
-    RegionCase::accept_declaring(
+    CbvCase::accept("@[cbv] (let fix f (X : VType) (x : X) : X = x in f Int 3)");
+    CbvCase::accept_declaring(
         &[NEST],
         "@[cbv] (let fix pick (X : VType) (n : Nest X) : X = match n | +Flat(x) => x | +Deep(m) => let (a, b) = pick (X * X) m in b end in pick Int (+Deep(+Flat((1, 2)))))",
     );
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (let fix ap (F : VType -> VType) (x : F Int) : F Int = x in ap (fn X => X) 9)",
     );
 }
@@ -2434,7 +2407,7 @@ fn translates_polymorphic_recursion() {
 /// error even when the body never mentions the variable.
 #[test]
 fn refuses_a_let_bang_signature_whose_type_binder_disagrees() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let ! f : pi (X : VType) . Int = fix g => fn (X : VType -> VType) => 5 in 0)",
         TyckDiagnosticCode::KindMismatch,
     );
@@ -2445,11 +2418,11 @@ fn refuses_a_let_bang_signature_whose_type_binder_disagrees() {
 /// reached the quantifier's destructors with an arrow, and the checker panicked.
 #[test]
 fn refuses_a_let_bang_signature_that_disagrees_about_a_type_parameter() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let ! f : pi (x : Int) . Int = fix g => fn (X : VType) => 5 in 0)",
         TyckDiagnosticCode::SortMismatch,
     );
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let ! f : pi (X : VType) . Int = fix g => fn (x : Int) => 5 in 0)",
         TyckDiagnosticCode::SortMismatch,
     );
@@ -2459,11 +2432,11 @@ fn refuses_a_let_bang_signature_that_disagrees_about_a_type_parameter() {
 /// source kind, as at any type binder.
 #[test]
 fn refuses_polymorphic_recursion_outside_the_rules() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let fix f (X : VType) (x : X) : X = 3 in 0)",
         TyckDiagnosticCode::TypeMismatch,
     );
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let fix f (R : CType) (x : Int) : Int = x in 0)",
         TyckDiagnosticCode::Expressivity,
     );
@@ -2475,20 +2448,20 @@ const FN_BOX: &str = "def FnBox : VType = data | +F : Int -> Int end";
 
 /// An annotation below a binder's top level. Its classifier is a source type,
 /// which ordinary pattern checking cannot read — `Int -> Int` is ill-kinded in
-/// the host — so the region translates it first and the annotation rule takes
+/// the host — so the block translates it first and the annotation rule takes
 /// the translation. The shape guard refused every such annotation. Each case
 /// annotates at a source arrow, so each site that hands a binder to ordinary
 /// checking is witnessed: a `let`, a lambda, a `let fix` parameter, an arm.
 #[test]
 fn translates_an_annotated_sub_pattern() {
-    RegionCase::accept("@[cbv] (let (f : Int -> Int, n) = (fn (x : Int) => x, 3) that f n)");
-    RegionCase::accept(
+    CbvCase::accept("@[cbv] (let (f : Int -> Int, n) = (fn (x : Int) => x, 3) that f n)");
+    CbvCase::accept(
         "@[cbv] (let g = fn ((f : Int -> Int, y) : (Int -> Int) * Int) => f y that g (fn (x : Int) => x, 4))",
     );
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (let fix k ((f : Int -> Int, n) : (Int -> Int) * Int) : Int = f n in k (fn (x : Int) => x, 5))",
     );
-    RegionCase::accept_declaring(
+    CbvCase::accept_declaring(
         &[FN_BOX],
         "@[cbv] (let h = fn (b : FnBox) => match b | +F((f : Int -> Int)) => f 6 end that
   h (+F (fn (x : Int) => x)))",
@@ -2498,21 +2471,18 @@ fn translates_an_annotated_sub_pattern() {
 /// The annotation is compared with the type its position expects.
 #[test]
 fn refuses_an_annotated_sub_pattern_that_disagrees() {
-    RegionCase::reject(
-        "@[cbv] (let (a : Unit, b) = (1, 2) that b)",
-        TyckDiagnosticCode::TypeMismatch,
-    );
+    CbvCase::reject("@[cbv] (let (a : Unit, b) = (1, 2) that b)", TyckDiagnosticCode::TypeMismatch);
 }
 
-/// It is translated under the region's guards, so it reaches nothing outside the
-/// region and denotes no type the region could not write.
+/// It is translated under the block's guards, so it reaches nothing outside the
+/// block and denotes no type the block could not write.
 #[test]
 fn refuses_an_annotated_sub_pattern_outside_the_rules() {
-    RegionCase::reject_beside_outside(
-        RegionCase::block("@[cbv] (let (a : @[typeof] outside, b) = (1, 2) that b)"),
+    CbvCase::reject_beside_outside(
+        CbvCase::block("@[cbv] (let (a : @[typeof] outside, b) = (1, 2) that b)"),
         TyckDiagnosticCode::Expressivity,
     );
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let (a : (@(intrinsic(thk))) ((@(intrinsic(ret))) Int), b) = (1, 2) that b)",
         TyckDiagnosticCode::Expressivity,
     );
@@ -2527,7 +2497,7 @@ fn refuses_an_annotated_sub_pattern_outside_the_rules() {
 /// green whatever happened to the annotation.
 #[test]
 fn refuses_an_annotation_that_mentions_its_own_binder() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let p = ((Int, 3) : exists (X : VType) . X) in let (X, (x : X)) = p in 0)",
         TyckDiagnosticCode::Expressivity,
     );
@@ -2536,16 +2506,16 @@ fn refuses_an_annotation_that_mentions_its_own_binder() {
 /* ------------------------------- existentials ----------------------------- */
 
 /// Naming one is the first thing the family needs, and it was the first thing
-/// missing: the image test had no `exists` clause, so a region could not even
+/// missing: the image test had no `exists` clause, so a block could not even
 /// mention an existential type, let alone build a value at one.
 #[test]
 fn names_an_abstract_existential() {
-    RegionCase::accept_with_exists("@[cbv] (param p : Boxed that 7)");
+    CbvCase::accept_with_exists("@[cbv] (param p : Boxed that 7)");
 }
 
 #[test]
 fn names_a_manifest_existential() {
-    RegionCase::accept_with_exists("@[cbv] (param p : Clear that 7)");
+    CbvCase::accept_with_exists("@[cbv] (param p : Clear that 7)");
 }
 
 /// A manifest binder declares its kind before its definition is read, so an
@@ -2553,13 +2523,13 @@ fn names_a_manifest_existential() {
 /// does; under a field name the definition is the payload's.
 #[test]
 fn reads_a_manifest_definition_against_its_declared_kind() {
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (let P : VType = exists (F as (fn X => X) : VType -> VType) . F Int in 0)",
     );
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (let P : VType = exists (#C = ((F as (fn X => X)) : VType -> VType)) . F Int in 0)",
     );
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let P : VType = exists (F as (fn X => X) : VType) . F in 0)",
         TyckDiagnosticCode::KindMismatch,
     );
@@ -2569,32 +2539,32 @@ fn reads_a_manifest_definition_against_its_declared_kind() {
 /// expected type is what says the first component is a type.
 #[test]
 fn builds_a_pack_at_a_manifest_existential() {
-    RegionCase::accept_with_exists("@[cbv] ((Int, 7) : Clear)");
+    CbvCase::accept_with_exists("@[cbv] ((Int, 7) : Clear)");
 }
 
 #[test]
 fn builds_a_pack_at_an_abstract_existential() {
-    RegionCase::accept_with_exists("@[cbv] ((Int, 7) : Boxed)");
+    CbvCase::accept_with_exists("@[cbv] ((Int, 7) : Boxed)");
 }
 
 /// A pack with more components than witnesses: the rest are the body product.
 #[test]
 fn builds_a_pack_whose_body_is_a_product() {
-    RegionCase::accept_with_exists("@[cbv] ((Int, 7, fn (x : Int) => x) : Showable)");
+    CbvCase::accept_with_exists("@[cbv] ((Int, 7, fn (x : Int) => x) : Showable)");
 }
 
 /// `[[(T, M)]]v_term = do a <- [[M]]v; ret ([[T]]v, a)`, the term row: a
 /// payload that is not a source value is sequenced, and the witness is not.
 #[test]
 fn builds_a_pack_whose_payload_is_a_computation() {
-    RegionCase::accept_with_exists("@[cbv] ((Int, (fn (x : Int) => x) 7) : Clear)");
+    CbvCase::accept_with_exists("@[cbv] ((Int, (fn (x : Int) => x) 7) : Clear)");
 }
 
 /// The manifest equation is checked, not assumed — which is what makes the
 /// disclosed witness worth translating rather than ignoring.
 #[test]
 fn rejects_a_pack_whose_witness_disagrees_with_the_manifest_definition() {
-    RegionCase::reject_with_exists("@[cbv] ((Unit, ()) : Clear)", TyckDiagnosticCode::TypeMismatch);
+    CbvCase::reject_with_exists("@[cbv] ((Unit, ()) : Clear)", TyckDiagnosticCode::TypeMismatch);
 }
 
 /// Nothing in `(Int, 7)` says which existential it inhabits, so the row needs
@@ -2602,22 +2572,22 @@ fn rejects_a_pack_whose_witness_disagrees_with_the_manifest_definition() {
 /// first component as a value.
 #[test]
 fn rejects_a_pack_with_no_expected_type() {
-    RegionCase::reject_with_exists("@[cbv] (Int, 7)", TyckDiagnosticCode::Expressivity);
+    CbvCase::reject_with_exists("@[cbv] (Int, 7)", TyckDiagnosticCode::Expressivity);
 }
 
 /// `[[let (X, x) = M in N]]term`. The binder is a product whose leading
 /// component binds a type; the closedness walk had no arm for that shape, so
-/// the body's own variable read as one bound outside the region.
+/// the body's own variable read as one bound outside the block.
 #[test]
 fn unpacks_a_manifest_package() {
-    RegionCase::accept_with_exists("@[cbv] (param p : Clear that let (X, v) = p that v)");
+    CbvCase::accept_with_exists("@[cbv] (param p : Clear that let (X, v) = p that v)");
 }
 
 /// The substance of the row: the opened witness is admissible as a *source*
 /// type, so a source lambda can be written at it.
 #[test]
 fn uses_an_opened_witness_as_a_source_type() {
-    RegionCase::accept_with_exists(
+    CbvCase::accept_with_exists(
         "@[cbv] (param p : Boxed that let (X, v) = p that (fn (y : X) => 7) v)",
     );
 }
@@ -2626,22 +2596,22 @@ fn uses_an_opened_witness_as_a_source_type() {
 /// the shape an existential is actually used in.
 #[test]
 fn applies_a_packaged_operation_to_its_own_opaque_payload() {
-    RegionCase::accept_with_exists("@[cbv] (param p : Showable that let (X, v, k) = p that k v)");
+    CbvCase::accept_with_exists("@[cbv] (param p : Showable that let (X, v, k) = p that k v)");
 }
 
 /// A witness may not outlive its unpack. Paired with the two accepted cases
 /// above, which differ only in whether the result mentions `X`.
 #[test]
 fn rejects_a_witness_that_escapes_the_unpack() {
-    RegionCase::reject_with_exists(
+    CbvCase::reject_with_exists(
         "@[cbv] (param p : Boxed that let (X, v) = p that v)",
         TyckDiagnosticCode::EscapingExistential,
     );
 }
 
 #[test]
-fn packs_and_unpacks_in_one_region() {
-    RegionCase::accept_with_exists(
+fn packs_and_unpacks_in_one_block() {
+    CbvCase::accept_with_exists(
         "@[cbv] (let p = ((Int, 7, fn (x : Int) => x) : Showable) that let (X, v, k) = p that k v)",
     );
 }
@@ -2653,7 +2623,7 @@ fn packs_and_unpacks_in_one_region() {
 /// `Int` into `int/add` reached `unreachable!()` in the interpreter.
 #[test]
 fn rejects_a_pack_whose_payload_disagrees_with_the_witness() {
-    RegionCase::reject_with_exists(
+    CbvCase::reject_with_exists(
         "@[cbv] ((Int, fn (x : Int) => x) : Clear)",
         TyckDiagnosticCode::TypeMismatch,
     );
@@ -2665,26 +2635,23 @@ fn rejects_a_pack_whose_payload_disagrees_with_the_witness() {
 /// existential anyway.
 #[test]
 fn rejects_a_pack_with_excess_components() {
-    RegionCase::reject_with_exists(
-        "@[cbv] ((Int, 7, 8) : Clear)",
-        TyckDiagnosticCode::TypeMismatch,
-    );
-    RegionCase::reject_with_exists(
+    CbvCase::reject_with_exists("@[cbv] ((Int, 7, 8) : Clear)", TyckDiagnosticCode::TypeMismatch);
+    CbvCase::reject_with_exists(
         "@[cbv] ((Int, (fn (x : Int) => x) 7, 8) : Clear)",
         TyckDiagnosticCode::TypeMismatch,
     );
 }
 
-/// A region is closed, and the type-abstraction entrance did not enforce it. The
+/// A block is closed, and the type-abstraction entrance did not enforce it. The
 /// clause is recognized by the binder's *outer* annotation, and the whole pattern
 /// then went to ordinary synthesis, which descends into the rest — so an inner
-/// annotation could read a term bound outside the region. This is the same defect
+/// annotation could read a term bound outside the block. This is the same defect
 /// the fifth review found in the image test's classifier guard, at an entrance
 /// added after that guard was written.
 #[test]
-fn rejects_a_type_binder_whose_annotation_reads_outside_the_region() {
+fn rejects_a_type_binder_whose_annotation_reads_outside_the_block() {
     SourceCase::assert_rejected(
-        RegionCase::check(
+        CbvCase::check(
             "let outside = 7 in\n             do case_result <- @[cbv] (fn ((X : @[typeof] (@[typeof] outside)) : VType) => 0);\n             ret ()",
         ),
         TyckDiagnosticCode::Expressivity,
@@ -2695,7 +2662,7 @@ fn rejects_a_type_binder_whose_annotation_reads_outside_the_region() {
 /// is *named*: no source type is a computation.
 #[test]
 fn rejects_a_type_binder_at_a_computation_kind() {
-    RegionCase::reject("@[cbv] (fn (R : CType) => 0)", TyckDiagnosticCode::Expressivity);
+    CbvCase::reject("@[cbv] (fn (R : CType) => 0)", TyckDiagnosticCode::Expressivity);
 }
 
 /// A witness opened by a **lambda parameter** may not outlive it, as one opened by
@@ -2706,9 +2673,9 @@ fn rejects_a_type_binder_at_a_computation_kind() {
 ///
 /// **This case pins the rule, not the fix.** Removing `close_scope_k` from the
 /// lambda clause leaves it passing, because this harness's wrapper rejects the
-/// free witness for its own reasons whatever the region decides — verified by
+/// free witness for its own reasons whatever the block decides — verified by
 /// deleting the call and re-running. The discriminating witness is a standalone
-/// program, where the region's result is the whole program and nothing else
+/// program, where the block's result is the whole program and nothing else
 /// constrains it:
 ///
 /// ```text
@@ -2722,7 +2689,7 @@ fn rejects_a_type_binder_at_a_computation_kind() {
 #[test]
 fn rejects_a_witness_that_escapes_a_lambda_parameters_unpack() {
     SourceCase::assert_rejected(
-        RegionCase::check(
+        CbvCase::check(
             "@[cbv] (let Boxed : VType = exists (X : VType) . X that fn ((X, v) : Boxed) => v)",
         ),
         TyckDiagnosticCode::EscapingExistential,
@@ -2732,7 +2699,7 @@ fn rejects_a_witness_that_escapes_a_lambda_parameters_unpack() {
 /// Its accepted neighbour, differing only in whether the result mentions `X`.
 #[test]
 fn admits_a_lambda_parameters_unpack_whose_result_is_closed() {
-    SourceCase::assert_accepted(RegionCase::check_invariants(
+    SourceCase::assert_accepted(CbvCase::check_invariants(
         "@[cbv] (let Boxed : VType = exists (X : VType) . X that fn ((X, v) : Boxed) => 7)",
     ));
 }
@@ -2744,14 +2711,14 @@ fn admits_a_lambda_parameters_unpack_whose_result_is_closed() {
 /// projection of a bound variable rather than of a concrete record.
 #[test]
 fn admits_a_residual_type_projection() {
-    RegionCase::accept("@[cbv] (fn (p : forall (P : (#item :: VType)) . P/item) => p)");
+    CbvCase::accept("@[cbv] (fn (p : forall (P : (#item :: VType)) . P/item) => p)");
 }
 
 /* ----------------------- the type-level abstraction ----------------------- */
 //
 // The type-level STLC was translated in its application and not in its
 // abstraction, which showed up three ways: an applied seal, an operator passed
-// as a type argument, and an operator written inside a region. The cases below
+// as a type argument, and an operator written inside a block. The cases below
 // are paired so that each acceptance differs from a refusal by one thing.
 
 const OPT: &str = "def Opt (X : VType) : VType = data | +None : Unit | +Some : X end";
@@ -2763,16 +2730,13 @@ const HIGHER: &str = "let Higher : VType = forall (F : VType -> VType) . F Int";
 /// nothing unfolds once; only the two together were refused.
 #[test]
 fn admits_an_applied_seal() {
-    RegionCase::accept_declaring(
-        &[OPT],
-        "@[cbv] (let f = fn (p : Opt Int) => 0 that f (+None ()))",
-    );
+    CbvCase::accept_declaring(&[OPT], "@[cbv] (let f = fn (p : Opt Int) => 0 that f (+None ()))");
 }
 
 /// A recursive family, applied and matched on.
 #[test]
 fn admits_a_recursive_parameterized_seal_and_matches_on_it() {
-    RegionCase::accept_declaring(
+    CbvCase::accept_declaring(
         &[LIST],
         "@[cbv] (let f = fn (p : List Int) =>
     match p | +Nil(_) => 0 | +Cons(c) => let (h, t) = c in h end
@@ -2788,13 +2752,13 @@ const STREAM: &str = "def Stream (X : VType) : VType = codata | .head : X | .tai
 /// at every mention.
 #[test]
 fn admits_an_applied_recursive_codata_seal() {
-    RegionCase::accept_declaring(&[STREAM], "@[cbv] (let f = fn (s : Stream Int) => 0 that 0)");
+    CbvCase::accept_declaring(&[STREAM], "@[cbv] (let f = fn (s : Stream Int) => 0 that 0)");
 }
 
 /// And usable: built by `let fix` and observed twice.
 #[test]
 fn an_applied_recursive_stream_is_built_and_observed() {
-    SourceCase::assert_accepted(RegionCase::run(&RegionCase::within(
+    SourceCase::assert_accepted(CbvCase::run(&CbvCase::within(
         &[STREAM],
         "do case_result <- @[cbv] (
   let fix ones (n : Int) : Stream Int = comatch | .head => n | .tail => ones n end in
@@ -2809,7 +2773,7 @@ fn an_applied_recursive_stream_is_built_and_observed() {
 /// `[[fn (X : K) => T]]v`: an operator passed as a type argument.
 #[test]
 fn admits_an_operator_as_a_type_argument() {
-    RegionCase::accept_declaring(
+    CbvCase::accept_declaring(
         &[HIGHER, "let Id : VType -> VType = fn (X : VType) => X"],
         "@[cbv] (param f : Higher that f Id)",
     );
@@ -2817,7 +2781,7 @@ fn admits_an_operator_as_a_type_argument() {
 
 #[test]
 fn refuses_an_operator_argument_whose_body_is_outside_the_image() {
-    RegionCase::reject_declaring(
+    CbvCase::reject_declaring(
         &[
             HIGHER,
             "let BadOp : VType -> VType = fn (X : VType) => (@(intrinsic(thk))) ((@(intrinsic(ret))) X)",
@@ -2830,28 +2794,25 @@ fn refuses_an_operator_argument_whose_body_is_outside_the_image() {
 /// A sealed operator passed unapplied.
 #[test]
 fn admits_a_sealed_operator_as_a_type_argument() {
-    RegionCase::accept_declaring(
-        &[HIGHER, OPT],
-        "@[cbv] (let g = fn (f : Higher) => f Opt that 0)",
-    );
+    CbvCase::accept_declaring(&[HIGHER, OPT], "@[cbv] (let g = fn (f : Higher) => f Opt that 0)");
 }
 
-/// A region's **own** higher-kinded binder, applied in a classifier, at a kind
-/// the region binds. The image test admitted a bound operator applied, but this
+/// A block's **own** higher-kinded binder, applied in a classifier, at a kind
+/// the block binds. The image test admitted a bound operator applied, but this
 /// path seeded it with no binders at all.
 #[test]
-fn applies_a_regions_own_higher_kinded_binder() {
-    RegionCase::accept_declaring(
+fn applies_a_blocks_own_higher_kinded_binder() {
+    CbvCase::accept_declaring(
         &["let K = VType -> VType"],
         "@[cbv] (fn (F : K) => fn (x : F Int) => x)",
     );
 }
 
 /// The forward clause, reached through a type binding whose kind is an arrow
-/// the region binds to a name.
+/// the block binds to a name.
 #[test]
-fn translates_a_type_operator_bound_inside_a_region() {
-    RegionCase::accept_declaring(
+fn translates_a_type_operator_bound_inside_a_block() {
+    CbvCase::accept_declaring(
         &["let K = VType -> VType"],
         "@[cbv] (let F : K = fn (X : VType) => X * X that let p : F Int = (1, 2) that p)",
     );
@@ -2859,7 +2820,7 @@ fn translates_a_type_operator_bound_inside_a_region() {
 
 #[test]
 fn translates_an_inline_operator_as_a_type_argument() {
-    RegionCase::accept_declaring(
+    CbvCase::accept_declaring(
         &[HIGHER],
         "@[cbv] (param f : Higher that f (fn (X : VType) => X * X))",
     );
@@ -2870,8 +2831,8 @@ fn translates_an_inline_operator_as_a_type_argument() {
 /// refused while the same operator bound to a name and applied was accepted.
 #[test]
 fn translates_an_operator_written_at_the_head_of_an_application() {
-    RegionCase::accept("@[cbv] (let p : (fn (X : VType) => X * X) Int = (1, 2) that p)");
-    RegionCase::accept(
+    CbvCase::accept("@[cbv] (let p : (fn (X : VType) => X * X) Int = (1, 2) that p)");
+    CbvCase::accept(
         "@[cbv] (let p : (fn (X : VType) => fn (Y : VType) => X * Y) Int Unit = (1, ()) that p)",
     );
 }
@@ -2880,21 +2841,21 @@ fn translates_an_operator_written_at_the_head_of_an_application() {
 /// kind and its body are checked as an operator's are anywhere else.
 #[test]
 fn refuses_a_written_head_over_a_computation_kind_or_outside_the_image() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let p : (fn (R : CType) => Int) Int = 0 that 0)",
         TyckDiagnosticCode::Expressivity,
     );
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let p : (fn (X : VType) => (@(intrinsic(thk))) ((@(intrinsic(ret))) X)) Int = 0 that 0)",
         TyckDiagnosticCode::Expressivity,
     );
 }
 
-/// And a head that is not a type form at all reaches nothing outside the region.
+/// And a head that is not a type form at all reaches nothing outside the block.
 #[test]
-fn refuses_a_head_that_reads_outside_the_region() {
-    RegionCase::reject_beside_outside(
-        RegionCase::block("@[cbv] (let p : (@[typeof] outside) Int = 0 that 0)"),
+fn refuses_a_head_that_reads_outside_the_block() {
+    CbvCase::reject_beside_outside(
+        CbvCase::block("@[cbv] (let p : (@[typeof] outside) Int = 0 that 0)"),
         TyckDiagnosticCode::Expressivity,
     );
 }
@@ -2904,7 +2865,7 @@ fn refuses_a_head_that_reads_outside_the_region() {
 /// `forall X . forall X' . X * X' -> X` and the first component inhabits it.
 #[test]
 fn substitutes_without_capture_through_a_written_head() {
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (let g : forall (X : VType) . (fn (Y : VType) => forall (X : VType) . Y * X -> Y) X = fn (A : VType) => fn (B : VType) => fn (p : A * B) => let (a, b) = p in a that 0)",
     );
 }
@@ -2913,7 +2874,7 @@ fn substitutes_without_capture_through_a_written_head() {
 /// would have read `forall X . forall X . X * X -> X`.
 #[test]
 fn refuses_the_component_capture_would_have_admitted() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let g : forall (X : VType) . (fn (Y : VType) => forall (X : VType) . Y * X -> Y) X = fn (A : VType) => fn (B : VType) => fn (p : A * B) => let (a, b) = p in b that 0)",
         TyckDiagnosticCode::TypeMismatch,
     );
@@ -2921,11 +2882,11 @@ fn refuses_the_component_capture_would_have_admitted() {
 
 /// **Both guards hold at this entrance too**, because both abstractions now open
 /// their binder through one function. This is the input that read a term bound
-/// outside the region at the term-level abstraction before that was fixed.
+/// outside the block at the term-level abstraction before that was fixed.
 #[test]
-fn refuses_a_type_operator_whose_binder_reads_outside_the_region() {
-    RegionCase::reject_beside_outside(
-        RegionCase::declaring(
+fn refuses_a_type_operator_whose_binder_reads_outside_the_block() {
+    CbvCase::reject_beside_outside(
+        CbvCase::declaring(
             &["let K = VType -> VType"],
             "@[cbv] (let F : K = fn ((X : @[typeof] (@[typeof] outside)) : VType) => X that 0)",
         ),
@@ -2935,7 +2896,7 @@ fn refuses_a_type_operator_whose_binder_reads_outside_the_region() {
 
 #[test]
 fn refuses_a_type_operator_over_a_computation_kind() {
-    RegionCase::reject_declaring(
+    CbvCase::reject_declaring(
         &["let K = CType -> VType"],
         "@[cbv] (let F : K = fn (R : CType) => Thk R that 0)",
         TyckDiagnosticCode::Expressivity,
@@ -2945,7 +2906,7 @@ fn refuses_a_type_operator_over_a_computation_kind() {
 /// The operator's body is a source type like any other.
 #[test]
 fn refuses_a_type_operator_whose_body_is_outside_the_image() {
-    RegionCase::reject_declaring(
+    CbvCase::reject_declaring(
         &["let K = VType -> VType"],
         "@[cbv] (let F : K = fn (X : VType) => (@(intrinsic(thk))) ((@(intrinsic(ret))) X) that 0)",
         TyckDiagnosticCode::Expressivity,
@@ -2963,7 +2924,7 @@ fn refuses_an_operator_in_a_value_type_position() {
     for source in
         ["fn (f : Int -> Opt) => 0", "fn (f : Opt -> Int) => 0", "fn (p : Int * Opt) => 0"]
     {
-        RegionCase::reject_declaring(
+        CbvCase::reject_declaring(
             &[OPT],
             &format!("@[cbv] ({source})"),
             TyckDiagnosticCode::KindMismatch,
@@ -2976,7 +2937,7 @@ fn refuses_an_operator_in_a_value_type_position() {
 /// and the lint panicked. Both now share one construction.
 #[test]
 fn refuses_an_operator_as_a_recursive_bindings_codomain() {
-    RegionCase::reject_declaring(
+    CbvCase::reject_declaring(
         &[OPT],
         "@[cbv] (let fix f (x : Int) : Opt = f x in 0)",
         TyckDiagnosticCode::KindMismatch,
@@ -2985,44 +2946,42 @@ fn refuses_an_operator_as_a_recursive_bindings_codomain() {
 
 #[test]
 fn admits_a_recursive_binding_at_a_saturated_operator() {
-    RegionCase::accept_declaring(&[OPT], "@[cbv] (let fix f (x : Int) : Opt Int = f x in 0)");
+    CbvCase::accept_declaring(&[OPT], "@[cbv] (let fix f (x : Int) : Opt Int = f x in 0)");
 }
 
 /// A term's type is a value type; an ascription at an operator is a kind error
 /// rather than a mismatch found by comparing an ill-kinded `Ret Opt`.
 #[test]
 fn refuses_an_ascription_at_an_operator() {
-    RegionCase::reject_declaring(&[OPT], "@[cbv] ((5 : Opt))", TyckDiagnosticCode::KindMismatch);
+    CbvCase::reject_declaring(&[OPT], "@[cbv] ((5 : Opt))", TyckDiagnosticCode::KindMismatch);
 }
 
 /// Its neighbour: the same positions at a value type are fine.
 #[test]
 fn admits_a_saturated_operator_in_a_value_type_position() {
-    RegionCase::accept_declaring(&[OPT], "@[cbv] (let g = fn (f : Int -> Opt Int) => 0 that 0)");
+    CbvCase::accept_declaring(&[OPT], "@[cbv] (let g = fn (f : Int -> Opt Int) => 0 that 0)");
 }
 
 /* -------------------------- quantifiers written inside --------------------- */
 
 /// `[[forall (X : K) . A]]v = Thk (forall (X : K) . Ret [[A]]v)`, written inside
-/// the region. A region could only *name* a `forall` declared outside, though the
+/// the block. A block could only *name* a `forall` declared outside, though the
 /// former is structural and needs neither a seal nor a query.
 #[test]
-fn translates_a_quantifier_written_inside_a_region() {
-    RegionCase::accept("@[cbv] (fn (p : forall (X : VType) . X -> X) => p Int 7)");
+fn translates_a_quantifier_written_inside_a_block() {
+    CbvCase::accept("@[cbv] (fn (p : forall (X : VType) . X -> X) => p Int 7)");
 }
 
 /// The type abstraction's synthesized type and the written quantifier's
 /// translation agree, up to the binder's name.
 #[test]
 fn checks_a_type_abstraction_against_a_written_quantifier() {
-    RegionCase::accept(
-        "@[cbv] ((fn (X : VType) => fn (x : X) => x) : forall (X : VType) . X -> X)",
-    );
+    CbvCase::accept("@[cbv] ((fn (X : VType) => fn (x : X) => x) : forall (X : VType) . X -> X)");
 }
 
 #[test]
 fn refuses_a_written_quantifier_over_a_computation_kind() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let P : VType = forall (R : CType) . Int that 0)",
         TyckDiagnosticCode::Expressivity,
     );
@@ -3031,7 +2990,7 @@ fn refuses_a_written_quantifier_over_a_computation_kind() {
 /// A quantifier's body is a value-type position before the returner goes on.
 #[test]
 fn refuses_a_written_quantifier_whose_body_is_an_operator() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let P : VType = forall (X : VType) . (fn (Y : VType) => Y) that 0)",
         TyckDiagnosticCode::KindMismatch,
     );
@@ -3040,9 +2999,9 @@ fn refuses_a_written_quantifier_whose_body_is_an_operator() {
 /// The binder goes through the same opener as both type abstractions, so the
 /// shape guard holds here as well.
 #[test]
-fn refuses_a_written_quantifier_whose_binder_reads_outside_the_region() {
-    RegionCase::reject_beside_outside(
-        RegionCase::block(
+fn refuses_a_written_quantifier_whose_binder_reads_outside_the_block() {
+    CbvCase::reject_beside_outside(
+        CbvCase::block(
             "@[cbv] (let P : VType = forall ((X : @[typeof] (@[typeof] outside)) : VType) . X that 0)",
         ),
         TyckDiagnosticCode::Expressivity,
@@ -3052,8 +3011,8 @@ fn refuses_a_written_quantifier_whose_binder_reads_outside_the_region() {
 /// `[[exists (X : K) . A]]v = exists (X : K) . [[A]]v`, written inside, then
 /// packed and opened.
 #[test]
-fn translates_an_existential_written_inside_a_region() {
-    RegionCase::accept(
+fn translates_an_existential_written_inside_a_block() {
+    CbvCase::accept(
         "@[cbv] (let b = ((Int, 7) : exists (X : VType) . X) that let (X, v) = b that 0)",
     );
 }
@@ -3061,7 +3020,7 @@ fn translates_an_existential_written_inside_a_region() {
 /// The witness of a written existential escapes no more than a named one's.
 #[test]
 fn refuses_a_witness_escaping_a_written_existential() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let b = ((Int, 7) : exists (X : VType) . X) that let (X, v) = b that v)",
         TyckDiagnosticCode::EscapingExistential,
     );
@@ -3069,7 +3028,7 @@ fn refuses_a_witness_escaping_a_written_existential() {
 
 #[test]
 fn refuses_a_written_existential_whose_body_is_an_operator() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let E : VType = exists (X : VType) . (fn (Y : VType) => Y) that 0)",
         TyckDiagnosticCode::KindMismatch,
     );
@@ -3077,23 +3036,23 @@ fn refuses_a_written_existential_whose_body_is_an_operator() {
 
 /* ------------------------------ kinds written inside ------------------------- */
 
-/// An **arrow kind written inside** a region, at a type abstraction's binder. The
+/// An **arrow kind written inside** a block, at a type abstraction's binder. The
 /// probe deciding whether an annotation is a kind admitted a bare name alone, so
 /// `VType -> VType` was read as a source arrow over `VType` and refused as a sort
 /// mismatch, while the same binder at a name for it declared outside was accepted.
 #[test]
 fn admits_an_arrow_kind_written_at_a_type_binder() {
-    RegionCase::accept("@[cbv] (fn (F : VType -> VType) => fn (x : F Int) => x)");
+    CbvCase::accept("@[cbv] (fn (F : VType -> VType) => fn (x : F Int) => x)");
 }
 
 /// A kind arrow's binder may carry an annotation inside its outermost one, as
 /// any binder may, and each is a kind the domain must agree with.
 #[test]
 fn reads_a_kind_arrow_whose_binder_is_annotated_twice() {
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (let K = pi ((_ : VType) : VType) . VType in fn (F : K) => fn (x : F Int) => x)",
     );
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let K = pi ((_ : VType -> VType) : VType) . VType in 0)",
         TyckDiagnosticCode::KindMismatch,
     );
@@ -3102,7 +3061,7 @@ fn reads_a_kind_arrow_whose_binder_is_annotated_twice() {
 /// The same kind at a type binding, which the same probe decides.
 #[test]
 fn admits_an_arrow_kind_written_at_a_type_binding() {
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (let F : VType -> VType -> VType = fn (X : VType) => fn (Y : VType) => X * Y that let p : F Int Unit = (1, ()) that p)",
     );
 }
@@ -3111,33 +3070,33 @@ fn admits_an_arrow_kind_written_at_a_type_binding() {
 /// instantiated at an operator written in place.
 #[test]
 fn admits_an_arrow_kind_written_at_a_quantifier() {
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (fn (p : forall (F : VType -> VType) . F Int -> F Int) => p (fn (X : VType) => X) 5)",
     );
-    RegionCase::accept("@[cbv] (fn (p : exists (F : (VType -> VType) -> VType) . Int) => 0)");
+    CbvCase::accept("@[cbv] (fn (p : exists (F : (VType -> VType) -> VType) . Int) => 0)");
 }
 
 /// A kind written as an arrow is still a source kind only when its parts are.
 #[test]
 fn refuses_an_arrow_kind_written_over_a_computation_kind() {
-    RegionCase::reject("@[cbv] (fn (R : VType -> CType) => 0)", TyckDiagnosticCode::Expressivity);
+    CbvCase::reject("@[cbv] (fn (R : VType -> CType) => 0)", TyckDiagnosticCode::Expressivity);
 }
 
 /// A binding's written kind is compared with its bindee's, as a named one is.
 #[test]
 fn refuses_a_type_binding_whose_written_arrow_kind_disagrees() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let F : VType -> VType = fn (X : VType) => fn (Y : VType) => X that 0)",
         TyckDiagnosticCode::KindMismatch,
     );
 }
 
 /// `K -> A` with `A` a type is the host's spelling of a quantifier over an
-/// anonymous binder, `forall (_ : K) . A`, and the region reads it the same way:
+/// anonymous binder, `forall (_ : K) . A`, and the block reads it the same way:
 /// only the parts of an arrow are probed, so this is a quantifier and not a kind.
 #[test]
 fn reads_a_kind_to_type_arrow_as_a_quantifier() {
-    RegionCase::accept("@[cbv] (let k : VType -> Int = fn (X : VType) => 5 that 0)");
+    CbvCase::accept("@[cbv] (let k : VType -> Int = fn (X : VType) => 5 that 0)");
 }
 
 /* ------------------------ kinds taken from an expectation -------------------- */
@@ -3148,10 +3107,10 @@ fn reads_a_kind_to_type_arrow_as_a_quantifier() {
 /// with a complaint about how a source type may be built.
 #[test]
 fn takes_a_type_operators_binder_kind_from_a_declared_kind() {
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (let F : VType -> VType = fn X => X * X that let p : F Int = (1, 2) that p)",
     );
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (let P : VType -> VType -> VType = fn X => fn Y => X * Y that let p : P Int Unit = (1, ()) that p)",
     );
 }
@@ -3160,13 +3119,13 @@ fn takes_a_type_operators_binder_kind_from_a_declared_kind() {
 /// operator's argument, and an ascription.
 #[test]
 fn takes_a_type_operators_binder_kind_from_each_expected_kind() {
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (fn (p : forall (F : VType -> VType) . F Int -> F Int) => p (fn X => X) 5)",
     );
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (let Ap : (VType -> VType) -> VType = fn (F : VType -> VType) => F Int that let x : Ap (fn X => X * X) = (1, 2) that x)",
     );
-    RegionCase::accept("@[cbv] (let p : ((fn X => X * X) : VType -> VType) Int = (1, 2) that p)");
+    CbvCase::accept("@[cbv] (let p : ((fn X => X * X) : VType -> VType) Int = (1, 2) that p)");
 }
 
 /// And at a package's witness, whose kind the expected existential's binder gives
@@ -3175,7 +3134,7 @@ fn takes_a_type_operators_binder_kind_from_each_expected_kind() {
 /// host's `(fn X => X * X, (1, 2))` was refused here.
 #[test]
 fn takes_a_pack_witness_operators_binder_kind_from_the_existential() {
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (let p = ((fn X => X * X, (1, 2)) : exists (F : VType -> VType) . F Int) that 0)",
     );
 }
@@ -3183,7 +3142,7 @@ fn takes_a_pack_witness_operators_binder_kind_from_the_existential() {
 /// With nothing expected there is nothing to take the kind from.
 #[test]
 fn refuses_a_type_operator_with_no_kind_to_take() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let p : (fn X => X * X) Int = (1, 2) that p)",
         TyckDiagnosticCode::Expressivity,
     );
@@ -3194,11 +3153,8 @@ fn refuses_a_type_operator_with_no_kind_to_take() {
 /// missing its kind.
 #[test]
 fn refuses_a_type_operator_where_a_non_arrow_kind_is_expected() {
-    RegionCase::reject(
-        "@[cbv] (let F : VType = fn X => X that 0)",
-        TyckDiagnosticCode::KindMismatch,
-    );
-    RegionCase::reject(
+    CbvCase::reject("@[cbv] (let F : VType = fn X => X that 0)", TyckDiagnosticCode::KindMismatch);
+    CbvCase::reject(
         "@[cbv] (let p = ((fn X => X, 5) : exists (X : VType) . Int) that 0)",
         TyckDiagnosticCode::KindMismatch,
     );
@@ -3208,11 +3164,11 @@ fn refuses_a_type_operator_where_a_non_arrow_kind_is_expected() {
 /// has to agree with the expected domain.
 #[test]
 fn refuses_a_taken_computation_kind_or_a_disagreeing_written_one() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let G : CType -> VType = fn R => Thk R that 0)",
         TyckDiagnosticCode::Expressivity,
     );
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let F : VType -> VType = fn (X : VType -> VType) => Int that 0)",
         TyckDiagnosticCode::KindMismatch,
     );
@@ -3223,21 +3179,21 @@ fn refuses_a_taken_computation_kind_or_a_disagreeing_written_one() {
 /// host reads `fn X => M` that way too.
 #[test]
 fn takes_a_type_abstractions_binder_kind_from_an_expected_quantifier() {
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (let id : forall (X : VType) . X -> X = fn X => fn (x : X) => x that id Int 5)",
     );
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (let ap : forall (F : VType -> VType) . F Int -> F Int = fn F => fn (x : F Int) => x that ap (fn X => X) 5)",
     );
 }
 
 #[test]
 fn refuses_a_type_abstraction_with_no_kind_to_take_or_a_body_that_disagrees() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let id = fn X => fn (x : X) => x that 0)",
         TyckDiagnosticCode::Expressivity,
     );
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let id : forall (X : VType) . X -> X = fn X => fn (x : Int) => x that 0)",
         TyckDiagnosticCode::TypeMismatch,
     );
@@ -3256,15 +3212,15 @@ fn admits_a_hole_wherever_a_type_is_expected() {
         "@[cbv] ((_ : Int -> Int) 3)",
         "@[cbv] (let f : Int -> Int = _ in f 4)",
     ] {
-        SourceCase::assert_accepted(RegionCase::check(&RegionCase::block(source)));
+        SourceCase::assert_accepted(CbvCase::check(&CbvCase::block(source)));
     }
 }
 
-/// `@[debug]` inside a region observes the translation of what it annotates,
-/// not of the whole region, so it shows what one part of a region became.
+/// `@[debug]` inside a block observes the translation of what it annotates,
+/// not of the whole block, so it shows what one part of a block became.
 #[test]
 fn debug_observes_the_translation_of_what_it_annotates() {
-    let observed = RegionCase::debug_observations(&RegionCase::block(
+    let observed = CbvCase::debug_observations(&CbvCase::block(
         "@[cbv] (let f : Int -> Int * Int = fn (x : Int) => @[debug] (x, x) in f 2)",
     ))
     .unwrap();
@@ -3275,7 +3231,7 @@ fn debug_observes_the_translation_of_what_it_annotates() {
 /// it would be without it.
 #[test]
 fn refuses_inside_a_transparent_annotation_as_without_it() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let f : Int -> Int = fn (x : Int) => @[debug] (x, x) in f 2)",
         TyckDiagnosticCode::TypeMismatch,
     );
@@ -3288,19 +3244,19 @@ const BOX: &str = "def Box (X : VType) : VType = data | +Box : X end";
 /// A single-constructor pattern binds in a `let` as it does in the host's `do`:
 /// the core calls `+C p` irrefutable when `C` is its declaration's only
 /// constructor and `p` is irrefutable. The binder guard refused every
-/// constructor tag outside a match arm, so the region refused what the core
+/// constructor tag outside a match arm, so the block refused what the core
 /// admits.
 #[test]
 fn binds_a_single_constructor_pattern_in_a_let() {
-    RegionCase::accept_declaring(
+    CbvCase::accept_declaring(
         &[BOX],
         "@[cbv] (let b : Box Int = +Box 3 that let +Box x = b that x)",
     );
-    RegionCase::accept_declaring(
+    CbvCase::accept_declaring(
         &[BOX],
         "@[cbv] (let bb : Box (Box Int) = +Box (+Box 4) that let +Box (+Box x) = bb that x)",
     );
-    RegionCase::accept_declaring(
+    CbvCase::accept_declaring(
         &[BOX],
         "@[cbv] (let p : Box Int * Int = (+Box 5, 9) that let (+Box x, y) = p that x)",
     );
@@ -3310,30 +3266,30 @@ fn binds_a_single_constructor_pattern_in_a_let() {
 /// rule constrains the same way.
 #[test]
 fn binds_a_single_constructor_pattern_as_a_parameter() {
-    RegionCase::accept_declaring(
+    CbvCase::accept_declaring(
         &[BOX],
         "@[cbv] (let f = fn (+Box x : Box Int) => x that f (+Box 6))",
     );
-    RegionCase::accept_declaring(
+    CbvCase::accept_declaring(
         &[BOX],
         "@[cbv] (let fix f (+Box x : Box Int) : Int = x in f (+Box 7))",
     );
 }
 
 /// A tag whose declaration has another constructor can fail, and the host's
-/// own check refuses it, as it refuses the same `do` outside a region. Without
+/// own check refuses it, as it refuses the same `do` outside a block. Without
 /// that check the hand-built binding carried a refutable binder.
 #[test]
 fn refuses_a_constructor_binder_that_can_fail() {
-    RegionCase::reject_with_data(
+    CbvCase::reject_with_data(
         "@[cbv] (fn (x : Flag) => let +On(n) = x in n)",
         TyckDiagnosticCode::RefutableBinding,
     );
-    RegionCase::reject_with_data(
+    CbvCase::reject_with_data(
         "@[cbv] (fn (+On(n) : Flag) => n)",
         TyckDiagnosticCode::RefutableBinding,
     );
-    RegionCase::reject_with_data(
+    CbvCase::reject_with_data(
         "@[cbv] (let fix f (+On(n) : Flag) : Int = n in 0)",
         TyckDiagnosticCode::RefutableBinding,
     );
@@ -3343,23 +3299,23 @@ fn refuses_a_constructor_binder_that_can_fail() {
 /// refused, while `fn x => x` and `let x : _ = 5` both checked.
 #[test]
 fn takes_a_hole_annotated_binders_domain_from_the_expectation() {
-    RegionCase::accept("@[cbv] (let F : VType = Int -> Int that ((fn (x : _) => x) : F))");
+    CbvCase::accept("@[cbv] (let F : VType = Int -> Int that ((fn (x : _) => x) : F))");
 }
 
 #[test]
 fn refuses_a_hole_annotated_binder_with_no_expectation() {
-    RegionCase::reject("@[cbv] (fn (x : _) => x)", TyckDiagnosticCode::Expressivity);
+    CbvCase::reject("@[cbv] (fn (x : _) => x)", TyckDiagnosticCode::Expressivity);
 }
 
 /// `()` binds nothing and cannot fail, as the core's P-UNIT has it.
 #[test]
 fn admits_a_unit_binder() {
-    RegionCase::accept("@[cbv] ((fn (() : Unit) => 0) ())");
+    CbvCase::accept("@[cbv] ((fn (() : Unit) => 0) ())");
 }
 
 #[test]
 fn refuses_a_unit_binder_at_a_non_unit_type() {
-    RegionCase::reject("@[cbv] (let () = 5 that 7)", TyckDiagnosticCode::TypeMismatch);
+    CbvCase::reject("@[cbv] (let () = 5 that 7)", TyckDiagnosticCode::TypeMismatch);
 }
 
 /* ------------------------------- named fields ----------------------------- */
@@ -3368,25 +3324,25 @@ fn refuses_a_unit_binder_at_a_non_unit_type() {
 /// takes no shift and the translation commutes with it.
 #[test]
 fn names_a_record_type() {
-    RegionCase::accept_with_record("@[cbv] (param r : Rec that 7)");
+    CbvCase::accept_with_record("@[cbv] (param r : Rec that 7)");
 }
 
 /// `[[#f = V]]v = #f = [[V]]v`, the value row.
 #[test]
 fn builds_a_record() {
-    RegionCase::accept_with_record("@[cbv] ((#fst = 1, #snd = 2) : Rec)");
+    CbvCase::accept_with_record("@[cbv] ((#fst = 1, #snd = 2) : Rec)");
 }
 
 /// `[[#f = M]]v_term = do a <- [[M]]v; ret (#f = a)`, the term row the value
 /// row lacks: a field whose payload is a computation is sequenced.
 #[test]
 fn builds_a_record_with_a_computation_field() {
-    RegionCase::accept_with_record("@[cbv] ((#fst = (fn (x : Int) => x) 1, #snd = 2) : Rec)");
+    CbvCase::accept_with_record("@[cbv] ((#fst = (fn (x : Int) => x) 1, #snd = 2) : Rec)");
 }
 
 #[test]
 fn rejects_a_record_field_with_the_wrong_name() {
-    RegionCase::reject_with_record(
+    CbvCase::reject_with_record(
         "@[cbv] ((#oops = 1, #snd = 2) : Rec)",
         TyckDiagnosticCode::NamedLabelMismatch,
     );
@@ -3396,7 +3352,7 @@ fn rejects_a_record_field_with_the_wrong_name() {
 /// resolution: the binder names each field and the payload binds.
 #[test]
 fn reads_a_record_by_pattern() {
-    RegionCase::accept_with_record("@[cbv] (param r : Rec that let (= fst, = snd) = r that fst)");
+    CbvCase::accept_with_record("@[cbv] (param r : Rec that let (= fst, = snd) = r that fst)");
 }
 
 /// `[[M/f]]v_term = do a <- [[M]]v; ret (a/f)`. The row synthesizes, and the
@@ -3404,30 +3360,30 @@ fn reads_a_record_by_pattern() {
 /// sitting behind a product prefix.
 #[test]
 fn projects_a_record_field() {
-    RegionCase::accept_with_record("@[cbv] (param r : Rec that r/snd)");
+    CbvCase::accept_with_record("@[cbv] (param r : Rec that r/snd)");
 }
 
 /// The head is sequenced, so it need not be a value.
 #[test]
 fn projects_a_field_from_a_computation_head() {
-    RegionCase::accept_with_record(
+    CbvCase::accept_with_record(
         "@[cbv] (param l : Lib that let g = (fn (x : Int) => l) that (g 0)/base)",
     );
 }
 
 #[test]
 fn rejects_a_projection_of_a_missing_field() {
-    RegionCase::reject_with_record(
+    CbvCase::reject_with_record(
         "@[cbv] (param r : Rec that r/nope)",
         TyckDiagnosticCode::MissingNamedField,
     );
 }
 
-/// Built and read in one region, with a field at a translated source arrow —
+/// Built and read in one block, with a field at a translated source arrow —
 /// which is what makes the family more than a relabelled product.
 #[test]
 fn builds_and_reads_a_record_with_a_source_arrow_field() {
-    RegionCase::accept_with_record(
+    CbvCase::accept_with_record(
         "@[cbv] (let l = ((#id = fn (x : Int) => x, #base = 7) : Lib) that (l/id) (l/base))",
     );
 }
@@ -3437,19 +3393,19 @@ fn builds_and_reads_a_record_with_a_source_arrow_field() {
 /// whether the binder's kind is one the source has.
 #[test]
 fn names_a_package_at_a_labeled_kind() {
-    RegionCase::accept_with_record("@[cbv] (param p : Pkg that 7)");
+    CbvCase::accept_with_record("@[cbv] (param p : Pkg that 7)");
 }
 
 /// `[[(l = S)]]v = (l = [[S]]v)`, reached through an outside alias for the
 /// witness; `writes_a_package_witness_in_place` spells it inside.
 #[test]
 fn builds_a_package_at_a_labeled_kind() {
-    RegionCase::accept_with_record("@[cbv] ((CInt, #zero = 0) : Pkg)");
+    CbvCase::accept_with_record("@[cbv] ((CInt, #zero = 0) : Pkg)");
 }
 
 #[test]
 fn unpacks_a_package_at_a_labeled_kind() {
-    RegionCase::accept_with_record(
+    CbvCase::accept_with_record(
         "@[cbv] (param p : Pkg that let (= Counter, = zero) = p that zero)",
     );
 }
@@ -3457,25 +3413,25 @@ fn unpacks_a_package_at_a_labeled_kind() {
 /// The field route and the unpack route agree on the same package.
 #[test]
 fn projects_a_field_of_a_package_at_a_labeled_kind() {
-    RegionCase::accept_with_record("@[cbv] (param p : Pkg that p/zero)");
+    CbvCase::accept_with_record("@[cbv] (param p : Pkg that p/zero)");
 }
 
 /* ------------------ named fields and packages written in place ------------------ */
 
 // Everything the section above names, written where it is used instead: the
 // forward rows for `#f :: A`, `(l = S)`, `S/l` and the manifest existential,
-// and named kinds wherever a region writes a kind.
+// and named kinds wherever a block writes a kind.
 
 /// `[[#f :: A]]v = #f :: [[A]]v`, a record type in a binder's annotation.
 #[test]
 fn writes_a_record_type_in_place() {
-    RegionCase::accept("@[cbv] (fn (r : (#fst :: Int, #snd :: Int)) => r/snd)");
+    CbvCase::accept("@[cbv] (fn (r : (#fst :: Int, #snd :: Int)) => r/snd)");
 }
 
 /// A field's payload is a source type, so a returner is no field type.
 #[test]
 fn rejects_a_record_field_written_as_a_returner() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (fn (r : (#f :: (@(intrinsic(ret))) Int)) => 0)",
         TyckDiagnosticCode::Expressivity,
     );
@@ -3483,7 +3439,7 @@ fn rejects_a_record_field_written_as_a_returner() {
 
 #[test]
 fn a_record_type_written_in_place_computes() {
-    SourceCase::assert_accepted(RegionCase::run(
+    SourceCase::assert_accepted(CbvCase::run(
         "do case_result <- @[cbv] (
   let R : VType = (#fst :: Int, #snd :: Int) in
   let r : R = (#fst = 3, #snd = 0) in
@@ -3497,14 +3453,14 @@ fn a_record_type_written_in_place_computes() {
 /// written in place are one type.
 #[test]
 fn a_host_record_meets_the_same_record_type_written_in_place() {
-    RegionCase::accept_with_record(
+    CbvCase::accept_with_record(
         "@[cbv] (fn (r : Rec) => let s : (#fst :: Int, #snd :: Int) = r in s/fst)",
     );
 }
 
 #[test]
 fn rejects_a_host_record_at_a_record_type_with_another_field() {
-    RegionCase::reject_with_record(
+    CbvCase::reject_with_record(
         "@[cbv] (fn (r : Rec) => let s : (#fst :: Int, #two :: Int) = r in s/fst)",
         TyckDiagnosticCode::NamedLabelMismatch,
     );
@@ -3513,12 +3469,12 @@ fn rejects_a_host_record_at_a_record_type_with_another_field() {
 /// `[[(l = S)]]v = (l = [[S]]v)`: the witness `CInt` stood in for above.
 #[test]
 fn writes_a_package_witness_in_place() {
-    RegionCase::accept_with_record("@[cbv] (((#Counter = Int), #zero = 0) : Pkg)");
+    CbvCase::accept_with_record("@[cbv] (((#Counter = Int), #zero = 0) : Pkg)");
 }
 
 #[test]
 fn rejects_a_package_witness_with_another_field_name() {
-    RegionCase::reject_with_record(
+    CbvCase::reject_with_record(
         "@[cbv] (((#Count = Int), #zero = 0) : Pkg)",
         TyckDiagnosticCode::NamedLabelMismatch,
     );
@@ -3527,19 +3483,19 @@ fn rejects_a_package_witness_with_another_field_name() {
 /// A named kind at a type binder, and `S/l` projecting its payload.
 #[test]
 fn binds_a_type_at_a_named_kind() {
-    RegionCase::accept("@[cbv] (fn (X : (#C :: VType)) => fn (x : X/C) => x)");
+    CbvCase::accept("@[cbv] (fn (X : (#C :: VType)) => fn (x : X/C) => x)");
 }
 
 /// A label adds nothing to decide, so its payload must be a source kind.
 #[test]
 fn rejects_a_named_kind_over_a_computation_kind() {
-    RegionCase::reject("@[cbv] (fn (X : (#C :: CType)) => 0)", TyckDiagnosticCode::Expressivity);
+    CbvCase::reject("@[cbv] (fn (X : (#C :: CType)) => 0)", TyckDiagnosticCode::Expressivity);
 }
 
 /// A named kind at a type binding, whose name is then projected.
 #[test]
 fn a_type_bound_at_a_named_kind_computes() {
-    SourceCase::assert_accepted(RegionCase::run(
+    SourceCase::assert_accepted(CbvCase::run(
         "do case_result <- @[cbv] (
   let C : (#C :: VType) = (#C = Int) in
   let x : C/C = 0 in
@@ -3551,7 +3507,7 @@ fn a_type_bound_at_a_named_kind_computes() {
 
 #[test]
 fn rejects_a_type_binding_whose_named_kind_disagrees() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let C : (#C :: VType) = (#D = Int) in 0)",
         TyckDiagnosticCode::NamedLabelMismatch,
     );
@@ -3560,12 +3516,12 @@ fn rejects_a_type_binding_whose_named_kind_disagrees() {
 /// A named kind in an ascription, read by the same kind judgment.
 #[test]
 fn ascribes_a_type_at_a_named_kind() {
-    RegionCase::accept("@[cbv] (fn (x : (((#C = Int) : (#C :: VType))/C)) => x)");
+    CbvCase::accept("@[cbv] (fn (x : (((#C = Int) : (#C :: VType))/C)) => x)");
 }
 
 #[test]
 fn rejects_an_ascription_whose_named_kind_disagrees() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (fn (x : (((#C = Int) : (#D :: VType))/C)) => x)",
         TyckDiagnosticCode::NamedLabelMismatch,
     );
@@ -3575,7 +3531,7 @@ fn rejects_an_ascription_whose_named_kind_disagrees() {
 /// so where a kind belongs it is the wrong sort.
 #[test]
 fn rejects_a_field_type_where_a_kind_belongs() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (fn (x : (((#C = Int) : (#C :: Int))/C)) => x)",
         TyckDiagnosticCode::SortMismatch,
     );
@@ -3583,7 +3539,7 @@ fn rejects_a_field_type_where_a_kind_belongs() {
 
 #[test]
 fn rejects_a_type_projection_of_a_missing_field() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (fn (x : ((#C = Int)/D)) => x)",
         TyckDiagnosticCode::MissingNamedTypeField,
     );
@@ -3593,7 +3549,7 @@ fn rejects_a_type_projection_of_a_missing_field() {
 /// equation survives the translation, so opening the package shows `X = Int`.
 #[test]
 fn writes_a_manifest_existential_in_place() {
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (fn (p : exists (X as Int : VType) . X) => let (X, x) = p in (x : Int))",
     );
 }
@@ -3601,7 +3557,7 @@ fn writes_a_manifest_existential_in_place() {
 /// The same opening at an abstract existential shows nothing.
 #[test]
 fn rejects_reading_an_abstract_witness_as_its_representation() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (fn (p : exists (X : VType) . X) => let (X, x) = p in (x : Int))",
         TyckDiagnosticCode::TypeMismatch,
     );
@@ -3610,7 +3566,7 @@ fn rejects_reading_an_abstract_witness_as_its_representation() {
 /// The disclosed definition is a source type and is translated as one.
 #[test]
 fn rejects_a_manifest_definition_outside_the_image() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (fn (p : exists (X as (@(intrinsic(thk))) ((@(intrinsic(ret))) Int) : VType) . X) => 0)",
         TyckDiagnosticCode::Expressivity,
     );
@@ -3618,7 +3574,7 @@ fn rejects_a_manifest_definition_outside_the_image() {
 
 #[test]
 fn a_manifest_package_written_in_place_computes() {
-    SourceCase::assert_accepted(RegionCase::run(
+    SourceCase::assert_accepted(CbvCase::run(
         "do case_result <- @[cbv] (
   let M : VType = exists (X as Int : VType) . X in
   let m : M = (Int, 0) in
@@ -3632,14 +3588,14 @@ fn a_manifest_package_written_in_place_computes() {
 /// `Pkg` itself, whose binder names its field: `#Counter = Rep`.
 #[test]
 fn writes_a_package_at_a_labeled_kind_in_place() {
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (fn (p : exists (#Counter = ((Rep as Int) : VType)) . (#zero :: Rep)) => p/zero)",
     );
 }
 
 #[test]
 fn a_host_package_meets_the_same_package_type_written_in_place() {
-    RegionCase::accept_with_record(
+    CbvCase::accept_with_record(
         "@[cbv] (fn (p : Pkg) => let q : exists (#Counter = ((Rep as Int) : VType)) . (#zero :: Rep) = p in q/zero)",
     );
 }
@@ -3648,7 +3604,7 @@ fn a_host_package_meets_the_same_package_type_written_in_place() {
 /// type.
 #[test]
 fn rejects_a_host_package_at_another_disclosed_definition() {
-    RegionCase::reject_with_record(
+    CbvCase::reject_with_record(
         "@[cbv] (fn (p : Pkg) => let q : exists (#Counter = ((Rep as Unit) : VType)) . (#zero :: Rep) = p in 0)",
         TyckDiagnosticCode::TypeMismatch,
     );
@@ -3656,7 +3612,7 @@ fn rejects_a_host_package_at_another_disclosed_definition() {
 
 #[test]
 fn a_package_at_a_labeled_kind_written_in_place_computes() {
-    SourceCase::assert_accepted(RegionCase::run(
+    SourceCase::assert_accepted(CbvCase::run(
         "do case_result <- @[cbv] (
   let P : VType = exists (#Counter = ((Rep as Int) : VType)) . (#zero :: Rep) in
   let p : P = ((#Counter = Int), #zero = 0) in
@@ -3670,23 +3626,23 @@ fn a_package_at_a_labeled_kind_written_in_place_computes() {
 /// The abstract form takes a field binder too.
 #[test]
 fn writes_an_abstract_package_at_a_labeled_kind_in_place() {
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (fn (p : exists (#C = (X : VType)) . (#zero :: X)) => let (= C, = zero) = p in 0)",
     );
 }
 
 /// A field reached through a package nested under a label is bound by the
-/// projection, so the region may use it. The checker joins that route with an
+/// projection, so the block may use it. The checker joins that route with an
 /// alias pattern, which the closedness rule has to see through. A variable the
 /// projection did not bind is still refused.
 #[test]
 fn uses_a_field_projected_through_a_labeled_nested_package() {
     let package =
         "exists (#I = (Item : VType)) . (#box :: exists (#T = (Token : VType)) . (#value :: Int))";
-    RegionCase::accept(&format!("@[cbv] (fn (p : {package}) => let (/value) = p in value)"));
-    RegionCase::accept(&format!("@[cbv] (fn (p : {package}) => let (/I, /value) = p in value)"));
+    CbvCase::accept(&format!("@[cbv] (fn (p : {package}) => let (/value) = p in value)"));
+    CbvCase::accept(&format!("@[cbv] (fn (p : {package}) => let (/I, /value) = p in value)"));
     SourceCase::assert_rejected(
-        RegionCase::check(&format!(
+        CbvCase::check(&format!(
             "let other = 7 in
              do case_result <- @[cbv] (fn (p : {package}) => let (/value) = p in other);
              ret ()"
@@ -3698,10 +3654,10 @@ fn uses_a_field_projected_through_a_labeled_nested_package() {
 /// **Only a package's binder may name its field.** A term-level type
 /// abstraction is built from its witness, `Abs(cs::Ty(witness), …)`, which
 /// makes a plain binder at the witness's kind, so the field name would vanish
-/// from the type the region builds.
+/// from the type the block builds.
 #[test]
 fn rejects_a_field_binder_at_a_type_abstraction() {
-    RegionCase::reject("@[cbv] (fn (#C = (X : VType)) => 0)", TyckDiagnosticCode::Expressivity);
+    CbvCase::reject("@[cbv] (fn (#C = (X : VType)) => 0)", TyckDiagnosticCode::Expressivity);
 }
 
 /// A quantifier keeps its binder's pattern, so here the refusal is not forced
@@ -3709,7 +3665,7 @@ fn rejects_a_field_binder_at_a_type_abstraction() {
 /// named argument does has not been specified.
 #[test]
 fn rejects_a_field_binder_at_a_quantifier() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (fn (f : forall (#C = (X : VType)) . X) => 0)",
         TyckDiagnosticCode::Expressivity,
     );
@@ -3721,7 +3677,7 @@ fn rejects_a_field_binder_at_a_quantifier() {
 #[test]
 fn rejects_a_named_kind_whose_payload_reads_outside() {
     SourceCase::assert_rejected(
-        RegionCase::check(
+        CbvCase::check(
             "let outside = 7 in
              do case_result <- @[cbv] (fn (X : (#C :: @[typeof] outside)) => 0);
              ret ()",
@@ -3738,7 +3694,7 @@ fn rejects_a_named_kind_whose_payload_reads_outside() {
 #[test]
 fn rejects_a_field_binder_whose_annotation_reads_outside() {
     SourceCase::assert_rejected(
-        RegionCase::check(
+        CbvCase::check(
             "let outside = 7 in
              do case_result <- @[cbv] (fn (p : exists (#C = ((X : @[typeof] outside) : VType)) . X) => 0);
              ret ()",
@@ -3750,7 +3706,7 @@ fn rejects_a_field_binder_whose_annotation_reads_outside() {
 #[test]
 fn rejects_a_manifest_definition_that_reads_outside() {
     SourceCase::assert_rejected(
-        RegionCase::check(
+        CbvCase::check(
             "let outside = 7 in
              do case_result <- @[cbv] (fn (p : exists (X as (@[typeof] outside) : VType) . X) => 0);
              ret ()",
@@ -3765,23 +3721,24 @@ fn rejects_a_manifest_definition_that_reads_outside() {
 /// one a hand-written call-by-push-value program of the same meaning produces.
 #[test]
 fn an_application_runs_to_its_source_value() {
-    SourceCase::assert_accepted(RegionCase::run(
+    SourceCase::assert_accepted(CbvCase::run(
         "do case_result <- @[cbv] ((fn (x : Int) => x) 0);\n! exit case_result",
     ));
 }
 
 #[test]
 fn the_hand_written_counterpart_runs_the_same_way() {
-    SourceCase::assert_accepted(RegionCase::run(
+    SourceCase::assert_accepted(CbvCase::run(
         "do case_result <- (do f <- ret { fn (x : Int) => ret x }; do a <- ret 0; ! f a);\n! exit case_result",
     ));
 }
 
 /* --------------------------- inside a monadic block -------------------------- */
 
-impl RegionCase {
-    /// A region nested in `@[monadic]` is translated twice, the block reinterpreting
-    /// the `Ret` and `do` the region emitted. A type the region declares is carried
+impl CbvCase {
+    /// A call-by-value block nested in `@[monadic]` is translated twice, the
+    /// monadic block reinterpreting the `Ret` and `do` the call-by-value block
+    /// emitted. A type the call-by-value block declares is carried
     /// along, transparent or sealed: `lib/tests/cbv/effects.zy` and
     /// `lib/tests/cbv/effects-on-data.zy` run both under a carrier with effects.
     fn nested_in_monadic(declaration: &str) -> String {
@@ -3796,14 +3753,14 @@ end"
 
 #[test]
 fn composes_with_a_monadic_block_over_a_transparent_data_type() {
-    SourceCase::assert_accepted(RegionCase::check_monadic(&RegionCase::nested_in_monadic(
+    SourceCase::assert_accepted(CbvCase::check_monadic(&CbvCase::nested_in_monadic(
         "let Opt : VType = data | +None : Unit | +Some : Int end",
     )));
 }
 
 #[test]
 fn composes_with_a_monadic_block_over_a_sealed_data_type() {
-    SourceCase::assert_accepted(RegionCase::check_monadic(&RegionCase::nested_in_monadic(
+    SourceCase::assert_accepted(CbvCase::check_monadic(&CbvCase::nested_in_monadic(
         "def Opt : VType = data | +None : Unit | +Some : Int end",
     )));
 }
@@ -3813,7 +3770,7 @@ fn composes_with_a_monadic_block_over_a_sealed_data_type() {
 #[test]
 fn refuses_a_seal_declared_outside_a_monadic_block_as_the_block_does() {
     SourceCase::assert_rejected(
-        RegionCase::check_monadic(
+        CbvCase::check_monadic(
             "begin
   def Opt : VType = data | +None : Unit | +Some : Int end that
   @[monadic] begin
@@ -3830,7 +3787,7 @@ end",
 
 const OPERATOR: &str = "let F : VType -> VType = fn (X : VType) => X that";
 
-impl RegionCase {
+impl CbvCase {
     /// Every place a parameter is written, for one binder and one classifier.
     /// A group of parameters is checked one binder at a time, so its first,
     /// middle, and last positions are separate sites.
@@ -3858,8 +3815,8 @@ impl RegionCase {
 #[test]
 fn rejects_a_type_operator_as_a_parameter_type_for_every_binder_and_site() {
     for binder in ["x", "_", "()", "(a, b)", "(#l = x)"] {
-        for site in RegionCase::parameter_sites(binder, "F", "G") {
-            RegionCase::reject(
+        for site in CbvCase::parameter_sites(binder, "F", "G") {
+            CbvCase::reject(
                 &format!("@[cbv] ({OPERATOR} {site})"),
                 TyckDiagnosticCode::KindMismatch,
             );
@@ -3871,10 +3828,9 @@ fn rejects_a_type_operator_as_a_parameter_type_for_every_binder_and_site() {
 #[test]
 fn accepts_an_applied_operator_as_a_parameter_type() {
     for binder in ["x", "_"] {
-        let [lambda, param, .., quantified, _] =
-            RegionCase::parameter_sites(binder, "F Int", "G Int");
+        let [lambda, param, .., quantified, _] = CbvCase::parameter_sites(binder, "F Int", "G Int");
         for site in [lambda, param, quantified] {
-            RegionCase::accept(&format!("@[cbv] ({OPERATOR} {site})"));
+            CbvCase::accept(&format!("@[cbv] ({OPERATOR} {site})"));
         }
     }
 }
@@ -3895,14 +3851,14 @@ fn an_annotated_match_arm_is_the_arm_it_annotates() {
         "+On (x : Int) => x | +Off y => y",
         "(other : Flag) => 0",
     ] {
-        RegionCase::accept(&format!("@[cbv] ({FLAG} match (+On 1 : Flag) | {arms} end)"));
+        CbvCase::accept(&format!("@[cbv] ({FLAG} match (+On 1 : Flag) | {arms} end)"));
     }
 }
 
 /// The annotation does not change what the arm binds.
 #[test]
 fn an_annotated_match_arm_binds_its_payload() {
-    RegionCase::run_region(&format!(
+    CbvCase::run_block(&format!(
         "{FLAG} match (+On 0 : Flag) | (+On x : Flag) => x | (+Off y : Flag) => 1 end"
     ));
 }
@@ -3916,22 +3872,22 @@ fn rejects_an_annotated_match_arm_that_disagrees_or_is_no_arm() {
         ("(+On 0 : Flag) => 0 | +Off y => y", TyckDiagnosticCode::Expressivity),
         ("(+Nope x : Flag) => x | +Off y => y", TyckDiagnosticCode::UnknownDataConstructor),
     ] {
-        RegionCase::reject(&format!("@[cbv] ({FLAG} match (+On 1 : Flag) | {arms} end)"), expected);
+        CbvCase::reject(&format!("@[cbv] ({FLAG} match (+On 1 : Flag) | {arms} end)"), expected);
     }
 }
 
-/// An arm is checked against the scrutinee's unrolled type, in a region as in
+/// An arm is checked against the scrutinee's unrolled type, in a block as in
 /// the host, so an annotation naming a seal is a different type there.
 #[test]
 fn rejects_an_annotated_arm_at_a_sealed_type_as_the_host_does() {
-    RegionCase::reject(
+    CbvCase::reject(
         &format!(
-            "@[cbv] ({REGION_OPT} match (+Some 1 : Opt) | (+Some x : Opt) => x | +None _ => 0 end)"
+            "@[cbv] ({BLOCK_OPT} match (+Some 1 : Opt) | (+Some x : Opt) => x | +None _ => 0 end)"
         ),
         TyckDiagnosticCode::TypeMismatch,
     );
     SourceCase::assert_rejected(
-        RegionCase::check(
+        CbvCase::check(
             "begin
   def Opt : VType = data | +None : Unit | +Some : Int end that
   match (+Some 1 : Opt) | (+Some x : Opt) => ret x | +None _ => ret 0 end
@@ -3970,7 +3926,7 @@ fn rejects_a_term_parameter_named_in_a_recursive_signature() {
         "let fix g (X : VType) (x : X) (y : x) : X = x in 0",
         "let ! f : pi (x : Int) . x = fix g => fn (x : Int) => 0 in 0",
     ] {
-        RegionCase::reject(
+        CbvCase::reject(
             &format!("@[cbv] ({SIGNATURE_TYPES} {site})"),
             TyckDiagnosticCode::SortMismatch,
         );
@@ -3981,7 +3937,7 @@ fn rejects_a_term_parameter_named_in_a_recursive_signature() {
 #[test]
 fn reports_a_term_parameter_in_a_signature_at_the_name() {
     SourceCase::assert_rejected_at(
-        RegionCase::check(&RegionCase::block("@[cbv] (let fix g (shown : Int) : shown = 0 in 0)")),
+        CbvCase::check(&CbvCase::block("@[cbv] (let fix g (shown : Int) : shown = 0 in 0)")),
         TyckDiagnosticCode::SortMismatch,
         "shown",
     );
@@ -3998,7 +3954,7 @@ fn accepts_a_type_parameter_named_in_a_recursive_signature() {
         "let fix g (X : VType) : Box X = g X in 0",
         "let fix g (F2 : VType -> VType) (x : F2 Int) : F2 Int = x in 0",
     ] {
-        RegionCase::accept(&format!("@[cbv] ({SIGNATURE_TYPES} {site})"));
+        CbvCase::accept(&format!("@[cbv] ({SIGNATURE_TYPES} {site})"));
     }
 }
 
@@ -4013,13 +3969,13 @@ fn rejects_the_recursive_name_as_a_parameter_annotation() {
         "let ! f : Int -> Int = fix g => fn (x : g) => 0 in 0",
         "let ! f : forall (X : VType) . Int = fix g => fn (X : g) => 0 in 0",
     ] {
-        RegionCase::reject(&format!("@[cbv] ({site})"), TyckDiagnosticCode::SortMismatch);
+        CbvCase::reject(&format!("@[cbv] ({site})"), TyckDiagnosticCode::SortMismatch);
     }
 }
 
 #[test]
 fn accepts_the_recursive_name_used_as_a_term() {
-    RegionCase::accept("@[cbv] (let ! f : Int -> Int = fix g => fn (x : Int) => g x in 0)");
+    CbvCase::accept("@[cbv] (let ! f : Int -> Int = fix g => fn (x : Int) => g x in 0)");
 }
 
 /// An expected quantifier's body reaches the abstraction's body, under the
@@ -4033,14 +3989,14 @@ fn a_type_abstraction_takes_the_expected_quantifiers_body() {
         "((fn X Y => fn x => fn y => y) : forall (A : VType) (B : VType) . A -> B -> B)",
         "let O : VType -> VType = fn (X : VType) => (X * Int) that ((fn X => fn x => (x, 0)) : forall (A : VType) . A -> O A)",
     ] {
-        RegionCase::accept(&format!("@[cbv] ({program})"));
+        CbvCase::accept(&format!("@[cbv] ({program})"));
     }
 }
 
 /// A constructor cannot synthesize, so one under a type abstraction needs this.
 #[test]
 fn a_constructor_under_a_type_abstraction_takes_its_type_from_the_quantifier() {
-    RegionCase::run_region(
+    CbvCase::run_block(
         "let O (X : VType) : VType = data | +None : Unit | +Some : X end that
   let none : forall (A : VType) . O A = fn A => +None () in
   match none Int | +Some n => n | +None _ => 0 end",
@@ -4051,10 +4007,10 @@ fn a_constructor_under_a_type_abstraction_takes_its_type_from_the_quantifier() {
 /// of two is refused, and the right one is accepted however they are named.
 #[test]
 fn a_type_abstractions_expected_body_avoids_capture() {
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (((fn Y => fn X => fn (a : Y) => fn (b : X) => a) : forall (X : VType) . forall (Y : VType) . X -> Y -> X))",
     );
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (((fn Y => fn X => fn (a : Y) => fn (b : X) => b) : forall (X : VType) . forall (Y : VType) . X -> Y -> X))",
         TyckDiagnosticCode::TypeMismatch,
     );
@@ -4063,11 +4019,11 @@ fn a_type_abstractions_expected_body_avoids_capture() {
 /// The expectation is binding, not a hint.
 #[test]
 fn rejects_a_type_abstraction_that_disagrees_with_its_quantifier() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (((fn X => fn (x : X) => 0) : forall (X : VType) . X -> X))",
         TyckDiagnosticCode::TypeMismatch,
     );
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (((fn (X : VType -> VType) => 0) : forall (Y : VType) . Int))",
         TyckDiagnosticCode::KindMismatch,
     );
@@ -4076,19 +4032,19 @@ fn rejects_a_type_abstraction_that_disagrees_with_its_quantifier() {
 /// An expected named kind gives its payload's kind to the operator inside.
 #[test]
 fn a_named_type_takes_its_payloads_kind_from_the_expected_named_kind() {
-    RegionCase::accept("@[cbv] (let F : (#C :: (VType -> VType)) = (#C = fn X => X) that 0)");
-    RegionCase::accept(
+    CbvCase::accept("@[cbv] (let F : (#C :: (VType -> VType)) = (#C = fn X => X) that 0)");
+    CbvCase::accept(
         "@[cbv] (let F : (#C :: (VType -> VType)) = (#C = fn (X : VType) => X) that 0)",
     );
 }
 
 #[test]
 fn rejects_a_named_type_that_disagrees_with_its_named_kind() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let F : (#C :: VType) = (#C = fn X => X) that 0)",
         TyckDiagnosticCode::KindMismatch,
     );
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let F : (#D :: (VType -> VType)) = (#C = fn (X : VType) => X) that 0)",
         TyckDiagnosticCode::NamedLabelMismatch,
     );
@@ -4116,9 +4072,9 @@ fn a_call_passes_exactly_the_parameters_of_one_group() {
         for (call, accepted) in CALLS.into_iter().zip(accepted) {
             let program = format!("@[cbv] (let f = {function} in {call})");
             if accepted {
-                RegionCase::accept(&program);
+                CbvCase::accept(&program);
             } else {
-                RegionCase::reject(&program, TyckDiagnosticCode::Expressivity);
+                CbvCase::reject(&program, TyckDiagnosticCode::Expressivity);
             }
         }
     }
@@ -4136,9 +4092,9 @@ fn a_type_argument_is_passed_with_its_group() {
         for (call, accepted) in CALLS.into_iter().zip(accepted) {
             let program = format!("@[cbv] (let f = {function} in {call})");
             if accepted {
-                RegionCase::accept(&program);
+                CbvCase::accept(&program);
             } else {
-                RegionCase::reject(&program, TyckDiagnosticCode::Expressivity);
+                CbvCase::reject(&program, TyckDiagnosticCode::Expressivity);
             }
         }
     }
@@ -4152,8 +4108,8 @@ fn a_telescope_translates_to_one_function_type() {
         ("Int -> Int -> Int", "Thk (Int -> Ret (Thk (Int -> Ret Int)))"),
         ("pi (_ : Int) . pi (_ : Int) . Int", "Thk (Int -> Ret (Thk (Int -> Ret Int)))"),
     ] {
-        let bodies = RegionCase::type_definition_bodies(
-            &RegionCase::block(&format!("@[cbv] (let T : VType = {source} in 0)")),
+        let bodies = CbvCase::type_definition_bodies(
+            &CbvCase::block(&format!("@[cbv] (let T : VType = {source} in 0)")),
             "T",
         )
         .unwrap();
@@ -4174,16 +4130,16 @@ fn a_function_meets_an_expected_type_that_groups_its_parameters_alike() {
         ("fn x y => y", "fn x => fn y => y"),
         ("fn (x : _) (y : _) => y", "fn (x : _) => fn (y : _) => y"),
     ] {
-        RegionCase::accept(&format!("@[cbv] (({group}) : {TELESCOPE})"));
+        CbvCase::accept(&format!("@[cbv] (({group}) : {TELESCOPE})"));
         SourceCase::assert_rejected_at(
-            RegionCase::check(&RegionCase::block(&format!("@[cbv] (({chain}) : {TELESCOPE})"))),
+            CbvCase::check(&CbvCase::block(&format!("@[cbv] (({chain}) : {TELESCOPE})"))),
             TyckDiagnosticCode::Expressivity,
             chain,
         );
         for curried in CHAINS {
-            RegionCase::accept(&format!("@[cbv] (({chain}) : {curried})"));
+            CbvCase::accept(&format!("@[cbv] (({chain}) : {curried})"));
             SourceCase::assert_rejected_at(
-                RegionCase::check(&RegionCase::block(&format!("@[cbv] (({group}) : {curried})"))),
+                CbvCase::check(&CbvCase::block(&format!("@[cbv] (({group}) : {curried})"))),
                 TyckDiagnosticCode::Expressivity,
                 group,
             );
@@ -4209,8 +4165,8 @@ fn a_type_parameter_groups_with_the_binders_it_meets() {
         ("fn X x => x", "pi (A : VType) (_ : A) . A", "forall (A : VType) . A -> A"),
         ("fn X => fn x => x", "forall (A : VType) . A -> A", "pi (A : VType) (_ : A) . A"),
     ] {
-        RegionCase::accept(&format!("@[cbv] (({function}) : {accepted})"));
-        RegionCase::reject(
+        CbvCase::accept(&format!("@[cbv] (({function}) : {accepted})"));
+        CbvCase::reject(
             &format!("@[cbv] (({function}) : {refused})"),
             TyckDiagnosticCode::Expressivity,
         );
@@ -4223,7 +4179,7 @@ fn a_type_parameter_groups_with_the_binders_it_meets() {
 /// parameter; a later pair is compared when the function meets its signature.
 #[test]
 fn compares_every_parameter_of_a_let_bang_group_with_its_signature() {
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (let ! f : pi (X : VType) (_ : X) . Int = fix g => fn (X : VType) (y : X) => 5 in f Int 1)",
     );
     for (signature, parameters) in [
@@ -4231,7 +4187,7 @@ fn compares_every_parameter_of_a_let_bang_group_with_its_signature() {
         ("pi (x : Int) (_ : Int) . Int", "(x : Int) (Y : VType)"),
         ("pi (X : VType) (_ : X) . Int", "(X : VType) (y : Int)"),
     ] {
-        RegionCase::reject(
+        CbvCase::reject(
             &format!("@[cbv] (let ! f : {signature} = fix g => fn {parameters} => 5 in 0)"),
             TyckDiagnosticCode::TypeMismatch,
         );
@@ -4254,12 +4210,12 @@ fn refuses_an_annotation_reading_outside_in_any_position_of_a_group() {
         (format!("fn (X : VType) ((Y : {KIND}) : VType) => 0"), "VType"),
         (format!("let T : VType = forall (X : VType) ((Y : {KIND}) : VType) . X in 0"), "VType"),
     ] {
-        RegionCase::reject_beside_outside(
-            RegionCase::block(&format!("@[cbv] ({site})")),
+        CbvCase::reject_beside_outside(
+            CbvCase::block(&format!("@[cbv] ({site})")),
             TyckDiagnosticCode::Expressivity,
         );
         let inside = site.replace(KIND, inside).replace(TYPE, inside);
-        RegionCase::accept(&format!("@[cbv] ({inside})"));
+        CbvCase::accept(&format!("@[cbv] ({inside})"));
     }
 }
 
@@ -4269,7 +4225,7 @@ fn refuses_an_annotation_reading_outside_in_any_position_of_a_group() {
 fn rejects_a_type_operator_in_any_position_of_a_telescope() {
     for telescope in ["pi (_ : F) (_ : Int) . Int", "pi (_ : Int) (_ : F) . Int"] {
         let program = format!("@[cbv] ({OPERATOR} let T : VType = {telescope} in 0)");
-        RegionCase::reject(&program, TyckDiagnosticCode::KindMismatch);
-        RegionCase::accept(&program.replace("(_ : F)", "(_ : F Int)"));
+        CbvCase::reject(&program, TyckDiagnosticCode::KindMismatch);
+        CbvCase::accept(&program.replace("(_ : F)", "(_ : F Int)"));
     }
 }

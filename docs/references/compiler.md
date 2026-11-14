@@ -902,7 +902,7 @@ flatten consecutive existential layers, and construct quantifier and packed valu
 A `pi` telescope stays one node with its binders in order, as an abstraction's parameters
 and an application's arguments do, and checking walks it one binder at a time,
 each at an allocation site of its own, so in the core a group and its nested spelling elaborate alike;
-a call-by-value region translates the group as one function.
+a call-by-value block translates the group as one function.
 `val pi` and `sigma` telescopes become one layer per binder.
 The [binding rules](../../lang/surface/src/bitter/desugar/bindings.rs) interpret binding flavors
 and build terms together with classifiers over the same parameter fold.

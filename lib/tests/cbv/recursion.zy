@@ -1,11 +1,11 @@
--- Recursive functions in a call-by-value region, `let fix` in each of its forms, run end to end.
+-- Recursive functions in a call-by-value block, `let fix` in each of its forms, run end to end.
 --
--- No region has arithmetic, so each answer is chosen by the shape of the
+-- No block has arithmetic, so each answer is chosen by the shape of the
 -- recursion: most functions swap two arguments at each step, so the depth's
 -- parity decides which comes back, and a wrong reading of the parameters, of
 -- the recursion, or of what the function returns gives the other one.
 --
--- Each region binds the built-in types it names, as `apply.zy` explains, and
+-- Each block binds the built-in types it names, as `apply.zy` explains, and
 -- declares the data types it recurs over.
 begin
   param (/Thk; /Ret; /Int; /Unit; /OS; /int; /process) : @(import("../../std/builtin.zy")) that

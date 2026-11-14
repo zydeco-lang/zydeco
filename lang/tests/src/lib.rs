@@ -210,18 +210,18 @@ pub mod utils {
         }
     }
 
-    /// Call-by-value regions in case sources.
+    /// Call-by-value blocks in case sources.
     ///
     /// A namespace rather than a value, as [`SourceLiteral`] is.
-    pub struct CbvRegion;
+    pub struct CbvBlock;
 
-    impl CbvRegion {
-        /// The source built-ins, bound inside a region.
+    impl CbvBlock {
+        /// The source built-ins, bound inside a block.
         ///
-        /// A region is closed over types and kinds as it is over terms, so
-        /// `Int` and `VType` named outside it are not the region's to name: an
+        /// A block is closed over types and kinds as it is over terms, so
+        /// `Int` and `VType` named outside it are not the block's to name: an
         /// outside type enters by type abstraction, and a built-in one is
-        /// written with its intrinsic. A case that opens its regions with these
+        /// written with its intrinsic. A case that opens its blocks with these
         /// bindings reads as though the built-ins were the source language's
         /// own names.
         pub const BUILTINS: &str = "let VType = @(intrinsic(vtype)) that
@@ -232,7 +232,7 @@ pub mod utils {
   let String : VType = @(intrinsic(string)) that
   ";
 
-        /// `source` with every region in it, written `@[cbv] (…)`, opening
+        /// `source` with every block in it, written `@[cbv] (…)`, opening
         /// with [`Self::BUILTINS`].
         pub fn closed(source: &str) -> String {
             source.replace("@[cbv] (", &format!("@[cbv] ({}", Self::BUILTINS))

@@ -52,7 +52,7 @@ pub enum DesugarError {
         #[source]
         source: CbvMetaError,
     },
-    #[error("`@[cbn]` is reserved for call-by-name regions, which are not implemented yet")]
+    #[error("`@[cbn]` is reserved for call-by-name blocks, which are not implemented yet")]
     CbnNotImplemented(Sp<t::TermId>),
     #[error("Invalid typeof annotation: {source}")]
     InvalidTypeOfMeta {

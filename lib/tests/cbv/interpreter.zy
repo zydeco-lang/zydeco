@@ -1,4 +1,4 @@
--- A small call-by-value interpreter, written in a call-by-value region and run
+-- A small call-by-value interpreter, written in a call-by-value block and run
 -- end to end.
 --
 -- Its environment holds values and its closures hold environments, so the two
@@ -6,7 +6,7 @@
 -- de Bruijn indices. Each answer is chosen so that a wrong lookup, or a closure
 -- that kept the wrong environment, gives another number.
 --
--- Each region binds the built-in types it names, as `apply.zy` explains.
+-- Each block binds the built-in types it names, as `apply.zy` explains.
 begin
   param (/Thk; /Ret; /Int; /Unit; /OS; /int; /process) : @(import("../../std/builtin.zy")) that
   def ! require (want : Int) (got : Int) (k : Thk OS) : OS =

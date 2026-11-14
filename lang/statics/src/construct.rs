@@ -24,7 +24,7 @@
 //! [`crate::elaborate::monadic::construct`]. Computation abstraction and application over types
 //! are defined there as well: they share [`Abs`] and [`App`] with the value forms that every
 //! environment uses and are told apart by [`cs::Ty`], and only the translations build them.
-//! A call-by-value region defines the ones it builds, with `ret` and `do`, beside its judgments.
+//! A call-by-value block defines the ones it builds, with `ret` and `do`, beside its judgments.
 //!
 //!
 //! ## Comparison with [`Alloc`]

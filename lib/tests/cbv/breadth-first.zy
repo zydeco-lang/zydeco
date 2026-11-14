@@ -6,7 +6,7 @@
 -- each step is a `do` and each function a thunk. Here the evaluation order is
 -- the language's, and the translation writes those in.
 --
--- Arithmetic is a host operation, so the region takes it as parameters.
+-- Arithmetic is a host operation, so the block takes it as parameters.
 begin
   param (/Thk; /Ret; /Int; /Unit; /OS; /int; /process) : @(import("../../std/builtin.zy")) that
   def ! require (want : Int) (got : Int) (k : Thk OS) : OS =
