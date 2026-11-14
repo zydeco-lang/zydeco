@@ -1,11 +1,11 @@
--- Polymorphism and type operators in a call-by-value region, run end to end.
+-- Polymorphism and type operators in a call-by-value block, run end to end.
 --
--- Every observation below is a value the region computed through a type-level
--- construct: a quantifier written inside the region, a type operator bound inside
+-- Every observation below is a value the block computed through a type-level
+-- construct: a quantifier written inside the block, a type operator bound inside
 -- it, an operator passed as a type argument, a sealed parameterized type, and
 -- binders that take their kinds from what is expected.
 -- Each answer distinguishes the construct working from a plausible wrong reading.
--- Each region binds the built-in types and the kind it names, as `apply.zy`
+-- Each block binds the built-in types and the kind it names, as `apply.zy`
 -- explains.
 begin
   param (/Thk; /Ret; /Int; /Unit; /OS; /int; /process) : @(import("../../std/builtin.zy")) that
@@ -13,7 +13,7 @@ begin
     ! int/eq OS want got k { ! process/exit 1 }
   that
 
-  -- a quantifier written inside the region, and a type abstraction checked
+  -- a quantifier written inside the block, and a type abstraction checked
   -- against it, instantiated at a function type: the argument must be
   -- translated before it is substituted, or the identity would not type
   do a <- @[cbv] (
@@ -24,7 +24,7 @@ begin
   );
   ! require 4 a {
 
-  -- a type operator bound inside the region and applied twice
+  -- a type operator bound inside the block and applied twice
   do b <- @[cbv] (
     let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
     let Pair : VType -> VType = fn (X : VType) => X * X that
@@ -34,8 +34,8 @@ begin
   ! require 6 b {
 
   -- an operator passed as a type argument; the host supplies the polymorphic
-  -- function, so the instantiation crosses the region's boundary, at a type the
-  -- region writes
+  -- function, so the instantiation crosses the block's boundary, at a type the
+  -- block writes
   do c <- @[cbv] (
     let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
     let Id : VType -> VType = fn (X : VType) => X that
@@ -55,7 +55,7 @@ begin
   );
   ! require 8 d {
 
-  -- an existential written inside the region, packed and opened; the payload
+  -- an existential written inside the block, packed and opened; the payload
   -- leaves only through the operation packed with it
   do e <- @[cbv] (
     let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that

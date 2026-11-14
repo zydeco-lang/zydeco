@@ -1,7 +1,7 @@
--- Call-by-value regions inside monadic blocks that declare recursive data types
+-- Call-by-value blocks inside monadic blocks that declare recursive data types
 -- and recur over them, run end to end.
 --
--- The block translates a declaration with the rest of its payload, so the
+-- The monadic block translates a declaration with the rest of its payload, so the
 -- recursion runs under the carrier. Under `State Int` the final state says which
 -- element was written last, so the walk is checked beside its counterfactual:
 -- the same two steps the other way round, which must flip it.

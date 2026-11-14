@@ -91,12 +91,12 @@ pub struct Tycker<'a> {
     /// Classifiers of pattern annotations decided before their pattern is
     /// checked.
     ///
-    /// Inside a call-by-value region the `A` in a binder's `(p : A)` is a
-    /// source type, which ordinary synthesis cannot read, so the region
+    /// Inside a call-by-value block the `A` in a binder's `(p : A)` is a
+    /// source type, which ordinary synthesis cannot read, so the block
     /// translates it first and records the result here; the annotation rule
     /// takes a recorded classifier instead of synthesizing one. A type
-    /// binder's `(X : K)` records the kind the region's own kind judgment
-    /// decided, for the same reason. Empty outside such regions.
+    /// binder's `(X : K)` records the kind the block's own kind judgment
+    /// decided, for the same reason. Empty outside such blocks.
     settled_pattern_annotations: ArenaAssoc<su::TermId, AnnId>,
     /// Resolved terms selected for canonical synthesis, including imported
     /// providers, classifier queries, and monadic blocks.

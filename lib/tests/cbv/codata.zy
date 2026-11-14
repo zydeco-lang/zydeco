@@ -1,11 +1,11 @@
--- Call-by-value regions over codata, run end to end.
+-- Call-by-value blocks over codata, run end to end.
 --
 -- A codata type is negative, so its translation keeps the shift outside and
 -- every field becomes a suspended computation. That puts a by-name corner
 -- inside a call-by-value source language, and the last observation below is
 -- what witnesses it.
 --
--- Each region binds the built-in types it names, as `apply.zy` explains, and
+-- Each block binds the built-in types it names, as `apply.zy` explains, and
 -- writes the codata types it uses in its own syntax: a field is a source type,
 -- and the translation supplies the `Ret` and the `Thk`.
 begin

@@ -3,8 +3,8 @@
 -- Each block's result is compared with the value its source term denotes under
 -- call-by-value, so a translation that changed the meaning would exit nonzero.
 --
--- A region is closed over types as over terms, so the host's `Int` is not the
--- region's to name: each region binds the built-in types it uses to their
+-- A block is closed over types as over terms, so the host's `Int` is not the
+-- block's to name: each block binds the built-in types it uses to their
 -- intrinsics, and a kind as well, since `VType` is a host name too.
 begin
   param (/Thk; /Ret; /Int; /Unit; /OS; /int; /process) : @(import("../../std/builtin.zy")) that

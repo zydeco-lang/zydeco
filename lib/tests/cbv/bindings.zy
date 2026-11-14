@@ -2,7 +2,7 @@
 --
 -- Each block's result is compared with the value its source term denotes under
 -- call-by-value, so a translation that changed the meaning would exit nonzero.
--- Each region binds the built-in types it names, as `apply.zy` explains.
+-- Each block binds the built-in types it names, as `apply.zy` explains.
 begin
   param (/Thk; /Ret; /Int; /Unit; /OS; /int; /process) : @(import("../../std/builtin.zy")) that
   def ! require (want : Int) (got : Int) (k : Thk OS) : OS =

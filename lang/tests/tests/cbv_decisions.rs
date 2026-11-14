@@ -7,24 +7,25 @@
 //! and a change to the behaviour turns this file red.
 
 use zydeco_statics::TyckDiagnosticCode;
-use zydeco_tests::utils::{CbvRegion, SourceCase};
+use zydeco_tests::utils::{CbvBlock, SourceCase};
 
 /// This file's case helpers, a namespace as `SourceCase` is.
-struct RegionCase;
+struct CbvCase;
 
-impl RegionCase {
-    /// A block is a computation, so it needs a computation position. Its regions
-    /// open with the source built-ins, by [`CbvRegion::closed`].
+impl CbvCase {
+    /// A call-by-value block is a computation, so it needs a computation
+    /// position. Each block in `source` opens with the source built-ins, by
+    /// [`CbvBlock::closed`].
     fn block(source: &str) -> String {
-        CbvRegion::closed(&format!("do case_result <- {source};\nret ()"))
+        CbvBlock::closed(&format!("do case_result <- {source};\nret ()"))
     }
 
     fn accept(source: &str) {
-        SourceCase::assert_accepted(SourceCase::check_invariants(&RegionCase::block(source)));
+        SourceCase::assert_accepted(SourceCase::check_invariants(&CbvCase::block(source)));
     }
 
     fn reject(source: &str, expected: TyckDiagnosticCode) {
-        SourceCase::assert_rejected(SourceCase::check(&RegionCase::block(source)), expected);
+        SourceCase::assert_rejected(SourceCase::check(&CbvCase::block(source)), expected);
     }
 }
 
@@ -40,27 +41,27 @@ impl RegionCase {
 /// internal error, the host's own `ret (_ : Int)` included.
 #[test]
 fn a_hole_is_admitted_where_a_type_is_expected() {
-    SourceCase::assert_accepted(SourceCase::check(&RegionCase::block("@[cbv] ((_ : Int))")));
+    SourceCase::assert_accepted(SourceCase::check(&CbvCase::block("@[cbv] ((_ : Int))")));
 }
 
 /// With nothing expected there is nothing to report the hole at.
 #[test]
 fn a_hole_is_refused_with_nothing_expected() {
-    RegionCase::reject("@[cbv] (_)", TyckDiagnosticCode::MissingAnnotation);
+    CbvCase::reject("@[cbv] (_)", TyckDiagnosticCode::MissingAnnotation);
 }
 
 /* -------------------------------- metadata -------------------------------- */
 
 /// The table decides `@[doc]`, `@[debug]` and `@[format]` are admitted
 /// **transparently**, re-attached to the emitted term so that `@[debug]`'s
-/// observation survives the region, and they are: the body is translated as
+/// observation survives the block, and they are: the body is translated as
 /// though the annotation were absent, and `@[debug]` observes the translation.
 /// This test asserted the refusal until the decision was implemented, on
 /// 2026-10-06.
 #[test]
 fn transparent_metadata_is_admitted() {
     for annotation in ["doc", "debug", "format"] {
-        RegionCase::accept(&format!("@[cbv] (@[{annotation}] 5)"));
+        CbvCase::accept(&format!("@[cbv] (@[{annotation}] 5)"));
     }
 }
 
@@ -68,16 +69,16 @@ fn transparent_metadata_is_admitted() {
 /// catch-all rather than by a clause.
 #[test]
 fn other_metadata_is_rejected() {
-    RegionCase::reject("@[cbv] (@[typeof] 5)", TyckDiagnosticCode::Expressivity);
+    CbvCase::reject("@[cbv] (@[typeof] 5)", TyckDiagnosticCode::Expressivity);
 }
 
 /* --------------------------- nominal definitions -------------------------- */
 
-/// A `def` name declared outside the region is **refused**, whatever it
-/// unfolds to: a region is closed over types as over terms, and an outside type
+/// A `def` name declared outside the block is **refused**, whatever it
+/// unfolds to: a block is closed over types as over terms, and an outside type
 /// enters by type abstraction. The decision was that such a name is admitted
 /// when its unfolding is in the image of the type translation, which an image
-/// test decided by unfolding the nominal, until regions were closed.
+/// test decided by unfolding the nominal, until blocks were closed.
 #[test]
 fn a_nominal_name_declared_outside_is_refused() {
     SourceCase::assert_rejected(
@@ -86,16 +87,16 @@ fn a_nominal_name_declared_outside_is_refused() {
   def Nat : VType = data | +Zero : Unit | +Succ : Nat end that
   {}
 end",
-            RegionCase::block("@[cbv] (param n : Nat that 1)")
+            CbvCase::block("@[cbv] (param n : Nat that 1)")
         )),
         TyckDiagnosticCode::Expressivity,
     );
 }
 
-/// Its accepted neighbour, the same declaration made in the region.
+/// Its accepted neighbour, the same declaration made in the block.
 #[test]
-fn a_nominal_declared_in_the_region_is_admitted() {
-    RegionCase::accept(
+fn a_nominal_declared_in_the_block_is_admitted() {
+    CbvCase::accept(
         "@[cbv] (def Nat : VType = data | +Zero : Unit | +Succ : Nat end that let f = fn (n : Nat) => 1 that 0)",
     );
 }
@@ -107,47 +108,47 @@ fn a_nominal_declared_in_the_region_is_admitted() {
 /// that decision on evidence — admit an inner block, reject only a `that` that
 /// would escape — and the row was never updated. Both are accepted.
 #[test]
-fn a_that_binding_inside_a_region_is_accepted() {
-    RegionCase::accept("@[cbv] (let x = 5 that x)");
+fn a_that_binding_inside_a_block_is_accepted() {
+    CbvCase::accept("@[cbv] (let x = 5 that x)");
 }
 
 #[test]
 fn an_inner_block_is_accepted() {
-    RegionCase::accept("@[cbv] (begin 5 end)");
+    CbvCase::accept("@[cbv] (begin 5 end)");
 }
 
 /// The premise the narrowing rested on is **also stale**: it recorded that a bare
-/// `that` hoists past the region, leaving its name visible outside. It does not,
-/// since a region became a binding boundary. The binding stays inside, so there is
+/// `that` hoists past the block, leaving its name visible outside. It does not,
+/// since a block became a binding boundary. The binding stays inside, so there is
 /// nothing for the rule to reject — and the error is a scoping one from outside the
-/// region rather than an expressivity one from within it.
+/// block rather than an expressivity one from within it.
 #[test]
-fn a_that_binding_does_not_escape_the_region() {
-    SourceCase::assert_resolve_error(SourceCase::check(&CbvRegion::closed(
+fn a_that_binding_does_not_escape_the_block() {
+    SourceCase::assert_resolve_error(SourceCase::check(&CbvBlock::closed(
         "do a <- @[cbv] (let y = 7 that 1);\ndo b <- ret y;\nret ()",
     )));
 }
 
 /* ------------------------------- target forms ----------------------------- */
 
-/// The translation's own output vocabulary is not source syntax. A region that
+/// The translation's own output vocabulary is not source syntax. A block that
 /// could mention a shift would not be call-by-value, so each of these is refused
 /// where it would otherwise be read as the thing the translation produces. The
-/// shifts are refused as names the region did not bind, and written with their
+/// shifts are refused as names the block did not bind, and written with their
 /// intrinsics as intrinsics that name no source primitive.
 #[test]
 fn the_translations_own_vocabulary_is_rejected() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (param x : Thk (Int -> Ret Int) that 1)",
         TyckDiagnosticCode::Expressivity,
     );
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (param x : (@(intrinsic(thk))) (Int -> (@(intrinsic(ret))) Int) that 1)",
         TyckDiagnosticCode::Expressivity,
     );
-    RegionCase::reject("@[cbv] (ret 5)", TyckDiagnosticCode::Expressivity);
-    RegionCase::reject("@[cbv] (do x <- ret 5; ret x)", TyckDiagnosticCode::Expressivity);
-    RegionCase::reject("@[cbv] (fix g => 5)", TyckDiagnosticCode::Expressivity);
+    CbvCase::reject("@[cbv] (ret 5)", TyckDiagnosticCode::Expressivity);
+    CbvCase::reject("@[cbv] (do x <- ret 5; ret x)", TyckDiagnosticCode::Expressivity);
+    CbvCase::reject("@[cbv] (fix g => 5)", TyckDiagnosticCode::Expressivity);
 }
 
 /* --------------------------- interleaved copattern ------------------------ */
@@ -157,7 +158,7 @@ fn the_translations_own_vocabulary_is_rejected() {
 /// required instead.
 #[test]
 fn an_interleaved_copattern_is_rejected() {
-    RegionCase::reject(
+    CbvCase::reject(
         "@[cbv] (let Fn : VType = codata | .at : Int -> Int end that ((comatch | .at n => n end) : Fn))",
         TyckDiagnosticCode::Expressivity,
     );
@@ -167,7 +168,7 @@ fn an_interleaved_copattern_is_rejected() {
 /// rejection above is about interleaving and not about the field.
 #[test]
 fn the_un_interleaved_spelling_is_accepted() {
-    RegionCase::accept(
+    CbvCase::accept(
         "@[cbv] (let Fn : VType = codata | .at : Int -> Int end that
   ((comatch | .at => fn (n : Int) => n end) : Fn))",
     );

@@ -14,22 +14,22 @@ use pretty::RcDoc;
 use zydeco_syntax::Pretty;
 
 impl BitterBuilder {
-    /// Build a region node, with its payload wrapped in a block.
+    /// Build a call-by-value block node, with its payload wrapped in a `Block`.
     ///
-    /// The wrapper is what makes a region a **binding boundary**. Mobile
-    /// bindings — both `MobileBind` and `MobileParam` — are hoisted to the
-    /// nearest block that owns them, and the candidate collector stops at a
-    /// `Block` because a nested block owns its own candidates. Without the
-    /// wrapper a region is transparent to collection, so a `that` written
-    /// inside one is owned by the *enclosing* block and its name escapes:
-    /// `@[cbv] (let y = 7 that 1)` left `y` visible outside the region.
+    /// The wrapper is what makes a call-by-value block a **binding boundary**.
+    /// Mobile bindings — both `MobileBind` and `MobileParam` — are hoisted to
+    /// the nearest block that owns them, and the candidate collector stops at
+    /// a `Block` because a nested block owns its own candidates. Without the
+    /// wrapper a call-by-value block is transparent to collection, so a `that`
+    /// written inside one is owned by the *enclosing* block and its name
+    /// escapes: `@[cbv] (let y = 7 that 1)` left `y` visible outside it.
     ///
-    /// Inserting the block reuses that existing ownership rule instead of
+    /// Inserting the `Block` reuses that existing ownership rule instead of
     /// adding a second one, so no separate escape judgment and no channel for
     /// carrying ownership facts into type checking are needed. It also closes
-    /// an inference region at the region's own boundary, which is where a
-    /// region's inference should close. An unannotated block adds no effect or
-    /// existential boundary, so nothing else about the payload changes.
+    /// an inference region at the call-by-value block's own boundary, which is
+    /// where its inference should close. An unannotated `Block` adds no effect
+    /// or existential boundary, so nothing else about the payload changes.
     pub(crate) fn cbv(&mut self, body: b::TermId, source: t::EntityId) -> b::TermId {
         let body = Alloc::alloc(self, b::Block(body).into(), source);
         Alloc::alloc(self, b::CbvBlock { body }.into(), source)

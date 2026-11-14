@@ -3,7 +3,7 @@ use zydeco_tests::e2e_sources;
 e2e_sources!({
     apply => "tests/cbv/apply.zy",
     bindings => "tests/cbv/bindings.zy",
-    regions => "tests/cbv/regions.zy",
+    blocks => "tests/cbv/blocks.zy",
     data => "tests/cbv/data.zy",
     codata => "tests/cbv/codata.zy",
     packages => "tests/cbv/packages.zy",

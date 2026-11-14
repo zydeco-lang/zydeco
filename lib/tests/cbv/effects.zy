@@ -1,9 +1,10 @@
--- Call-by-value regions inside monadic blocks, run end to end.
+-- Call-by-value blocks inside monadic blocks, run end to end.
 --
--- Alone, a region's only effect is divergence, which cannot tell one evaluation
--- order from another. Nested in `@[monadic]`, the block reinterprets every `Ret`
--- and `do` the region emitted under its carrier, and the region abstracts over
--- the operations the block supplies. Under `State Int` the final state then
+-- Alone, a call-by-value block's only effect is divergence, which cannot tell
+-- one evaluation order from another. Nested in `@[monadic]`, the monadic block
+-- reinterprets every `Ret` and `do` the call-by-value block emitted under its
+-- carrier, and the call-by-value block abstracts over the operations the
+-- monadic block supplies. Under `State Int` the final state then
 -- says which call ran last, so each order below is checked beside its
 -- counterfactual: the same two calls, the other way round, which must flip it.
 begin
@@ -17,10 +18,11 @@ begin
     def ! require (want : Int) (got : Int) (k : Thk OS) : OS =
       ! int/eq OS want got k { ! process/exit 1 }
     that
-    -- Each region binds the built-in types and the kind it names, and declares
-    -- the types it uses: a region is closed over types, so the host's `Int` is
-    -- not the region's to name. The bindings are static, so the block's
-    -- reinterpretation of the region's `Ret` and `do` meets none of them.
+    -- Each call-by-value block binds the built-in types and the kind it names,
+    -- and declares the types it uses: a call-by-value block is closed over
+    -- types, so the host's `Int` is not its to name. The bindings are static,
+    -- so the monadic block's reinterpretation of the call-by-value block's
+    -- `Ret` and `do` meets none of them.
 
     -- a tuple runs its components left to right: `b` sets 2 last
     def ! tuple_ab =

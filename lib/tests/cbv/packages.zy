@@ -1,11 +1,11 @@
--- Existential packages and named fields in a call-by-value region, run end to
+-- Existential packages and named fields in a call-by-value block, run end to
 -- end.
 --
--- Both families reach a region the way `data` and `codata` do: the region
--- writes the type and binds it to a name. What the region then does with it is
+-- Both families reach a block the way `data` and `codata` do: the block
+-- writes the type and binds it to a name. What the block then does with it is
 -- the point — it builds a package, opens one, and reads a field.
 --
--- The regions here are closed, so no host operation appears inside one, and
+-- The blocks here are closed, so no host operation appears inside one, and
 -- each binds the built-in types it names, as `apply.zy` explains. What
 -- distinguishes a real observation from a vacuous one is instead a *pair* of
 -- values at the same type: two packages differing only in the operation they
@@ -25,7 +25,7 @@ begin
   ! require 7 a {
 
   -- an abstract package used through its own operation. The payload's type is
-  -- opaque inside the region and the only thing that may consume it is the
+  -- opaque inside the block and the only thing that may consume it is the
   -- function the package carries, which is what an existential is for.
   do b <- @[cbv] (
     let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
@@ -55,7 +55,7 @@ begin
   );
   ! require 4 d {
 
-  -- a record built and read in one region, by projection
+  -- a record built and read in one block, by projection
   do e <- @[cbv] (
     let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
     let Lib : VType = (#id :: Int -> Int, #base :: Int) that

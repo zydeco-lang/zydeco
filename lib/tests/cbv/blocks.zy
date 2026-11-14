@@ -1,10 +1,10 @@
--- Call-by-value regions as binding boundaries, run end to end.
+-- Call-by-value blocks as binding boundaries, run end to end.
 --
--- A `that` binding written inside a region is lifted to the block that
--- desugaring inserts around the region's payload, so it is translated and
--- evaluated inside the region rather than by the host around it. The bindings
--- of the built-in types each region names, as `apply.zy` explains, are `that`
--- bindings of the same kind.
+-- A `that` binding written inside a call-by-value block is lifted to the
+-- `begin ... end` block that desugaring inserts around its payload, so it is
+-- translated and evaluated inside the call-by-value block rather than by the
+-- host around it. The bindings of the built-in types each block names, as
+-- `apply.zy` explains, are `that` bindings of the same kind.
 begin
   param (/Thk; /Ret; /Int; /Unit; /OS; /int; /process) : @(import("../../std/builtin.zy")) that
   def ! require (want : Int) (got : Int) (k : Thk OS) : OS =
@@ -19,7 +19,7 @@ begin
     let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
     let p = 3 that let q = (fn (x : Int) => x) p that q);
   ! require 3 b {
-  -- `param` inside a region is the call-by-value lambda, so the region returns
+  -- `param` inside a block is the call-by-value lambda, so the block returns
   -- a thunk rather than becoming a function itself
   do c <- @[cbv] (
     let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
@@ -28,7 +28,7 @@ begin
   ! require 9 c' {
   do d <- @[cbv] (let (m, n) = (5, 6) that n);
   ! require 6 d {
-  -- a region-local name for a source arrow: `Int -> Int` is ill-kinded in the
+  -- a block-local name for a source arrow: `Int -> Int` is ill-kinded in the
   -- host, so no host binding can stand for it and only the translation can
   do e <- @[cbv] (
     let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that

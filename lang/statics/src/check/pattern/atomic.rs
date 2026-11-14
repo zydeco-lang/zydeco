@@ -9,7 +9,7 @@ impl PatternChecker<'_> {
     ) -> Result<CheckedPattern> {
         Ok({
             let su::Ann { tm, ty } = pat;
-            // A classifier a call-by-value region already translated; see
+            // A classifier a call-by-value block already translated; see
             // `Tycker::settled_pattern_annotations`.
             let settled = tycker.settled_pattern_annotations.get(&ty).copied();
             let ty_tm: AnnId = match settled {
