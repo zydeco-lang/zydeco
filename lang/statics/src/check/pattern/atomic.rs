@@ -9,17 +9,22 @@ impl PatternChecker<'_> {
     ) -> Result<CheckedPattern> {
         Ok({
             let su::Ann { tm, ty } = pat;
-            let ty_out_ann = self.mk(ty).tyck(tycker, Action::syn())?;
-            let ty_tm: AnnId = match ty_out_ann {
-                | TermAnnId::Kind(kd) => kd.into(),
-                | TermAnnId::Type(ty, _) => ty.into(),
-                | TermAnnId::Hole(_) => {
-                    // Fixme: I forgor
-                    tycker.err(TyckError::SortMismatch)?
-                }
-                | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
-                    tycker.err(TyckError::SortMismatch)?
-                }
+            // A classifier a call-by-value block already translated; see
+            // `Tycker::settled_pattern_annotations`.
+            let settled = tycker.settled_pattern_annotations.get(&ty).copied();
+            let ty_tm: AnnId = match settled {
+                | Some(settled) => settled,
+                | None => match self.mk(ty).tyck(tycker, Action::syn())? {
+                    | TermAnnId::Kind(kd) => kd.into(),
+                    | TermAnnId::Type(ty, _) => ty.into(),
+                    | TermAnnId::Hole(_) => {
+                        // Fixme: I forgor
+                        tycker.err(TyckError::SortMismatch)?
+                    }
+                    | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
+                        tycker.err(TyckError::SortMismatch)?
+                    }
+                },
             };
             match switch {
                 | Switch::Syn => self

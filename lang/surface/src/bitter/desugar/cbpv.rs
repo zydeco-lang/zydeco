@@ -29,7 +29,7 @@ impl BitterBuilder {
             | Introduction::Return => self.ret(source),
         };
         let hole = Alloc::alloc(self, b::Hole.into(), source);
-        let ty = Alloc::alloc(self, b::App(constructor, hole).into(), source);
+        let ty = Alloc::alloc(self, b::App(constructor, vec![hole]).into(), source);
         Alloc::alloc(self, b::Ann { tm, ty }.into(), source)
     }
 }

@@ -22,10 +22,10 @@ impl<'arena, P: DebugArena> Formatter<'arena, P> {
 
     fn view_pattern_head(&'arena self, view: TermId) -> RcDoc<'arena> {
         let (head, arguments) = ViewSpine::parts(view, &|view| {
-            let Term::App(App(function, argument)) = self.arena.lookup_term(view) else {
+            let Term::App(App(function, arguments)) = self.arena.lookup_term(view) else {
                 return None;
             };
-            Some((*function, vec![*argument]))
+            Some((*function, arguments.clone()))
         });
         ViewSpine::bracketed(head, arguments, self)
     }
@@ -130,7 +130,16 @@ impl<'a, P: DebugArena> Pretty<'a, Formatter<'a, P>> for TermId {
                 RcDoc::text(" => "),
                 body.pretty(f),
             ]),
-            | Term::App(t) => t.pretty(f),
+            | Term::App(App(head, arguments)) => {
+                let arguments =
+                    arguments.iter().map(|arg| RcDoc::concat([RcDoc::text(" "), arg.pretty(f)]));
+                RcDoc::concat([
+                    RcDoc::text("("),
+                    head.pretty(f),
+                    RcDoc::concat(arguments),
+                    RcDoc::text(")"),
+                ])
+            }
             | Term::Fix(t) => t.pretty(f),
             | Term::Pi(t) => t.pretty(f),
             | Term::ValPi(t) => t.pretty(f),
@@ -148,6 +157,7 @@ impl<'a, P: DebugArena> Pretty<'a, Formatter<'a, P>> for TermId {
             | Term::Block(t) => t.pretty(f),
             | Term::RecGroup(t) => t.pretty(f),
             | Term::MoBlock(t) => t.pretty(f),
+            | Term::CbvBlock(t) => t.pretty(f),
             | Term::Data(t) => t.pretty(f),
             | Term::CoData(t) => t.pretty(f),
             | Term::Ctor(t) => t.pretty(f),
@@ -344,6 +354,14 @@ where
     }
 }
 
+impl<'a, P: DebugArena> Pretty<'a, Formatter<'a, P>> for Abs<Vec<PatId>, TermId> {
+    fn pretty(&self, f: &'a Formatter<'a, P>) -> RcDoc<'a> {
+        let Abs(binders, t) = self;
+        let binders = RcDoc::intersperse(binders.iter().map(|p| p.pretty(f)), RcDoc::text(" "));
+        RcDoc::concat([RcDoc::text("fn "), binders, RcDoc::text(" => "), t.pretty(f)])
+    }
+}
+
 impl<'a, P: DebugArena> Pretty<'a, Formatter<'a, P>> for Abs<PatId, TermId> {
     fn pretty(&self, f: &'a Formatter<'a, P>) -> RcDoc<'a> {
         let Abs(p, t) = self;
@@ -360,8 +378,9 @@ impl<'a, P: DebugArena> Pretty<'a, Formatter<'a, P>> for Fix<PatId, TermId> {
 
 impl<'a, P: DebugArena> Pretty<'a, Formatter<'a, P>> for Pi {
     fn pretty(&self, f: &'a Formatter<'a, P>) -> RcDoc<'a> {
-        let Pi(p, t) = self;
-        RcDoc::concat([RcDoc::text("pi "), p.pretty(f), RcDoc::text(" . "), t.pretty(f)])
+        let Pi(binders, t) = self;
+        let binders = RcDoc::intersperse(binders.iter().map(|p| p.pretty(f)), RcDoc::text(" "));
+        RcDoc::concat([RcDoc::text("pi "), binders, RcDoc::text(" . "), t.pretty(f)])
     }
 }
 

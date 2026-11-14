@@ -50,7 +50,7 @@ fn shared_pattern_annotations_copy_every_occurrence_and_retain_origins() {
     let definition = fixture.definition("x");
     let binder = fixture.pattern(definition);
     let occurrence = fixture.term(Term::Var(VarName("x".into())));
-    let provider = fixture.term(Abs(binder, occurrence));
+    let provider = fixture.term(Abs(vec![binder], occurrence));
     let source = fixture.term(SourceBoundary(provider));
     let signature = fixture.term(SignatureBoundary(provider));
     let classifier = fixture.term(Term::Cons(vec![source, signature]));
@@ -196,8 +196,13 @@ fn annotated_abstractions_resolve_each_generated_binder_independently() {
     let output =
         SourceUnitDesugarer { spans: &parser.spans, textual: &parser.arena }.run(source).unwrap();
     let Term::Ann(Ann { tm, ty }) = output.arena.terms[&output.root] else { panic!() };
-    let Term::Abs(Abs(term_pattern, body)) = output.arena.terms[&tm] else { panic!() };
-    let Term::Pi(Pi(type_pattern, classifier)) = output.arena.terms[&ty] else { panic!() };
+    let Term::Abs(Abs(term_patterns, body)) = &output.arena.terms[&tm] else { panic!() };
+    let Term::Pi(Pi(type_patterns, classifier)) = &output.arena.terms[&ty] else { panic!() };
+    let ([term_pattern], [type_pattern]) = (&term_patterns[..], &type_patterns[..]) else {
+        panic!()
+    };
+    let (term_pattern, type_pattern, body, classifier) =
+        (*term_pattern, *type_pattern, *body, *classifier);
     let Pattern::Var(term_definition) = output.arena.pats[&term_pattern] else { panic!() };
     let Pattern::Var(type_definition) = output.arena.pats[&type_pattern] else { panic!() };
     assert_ne!(term_definition, type_definition);
@@ -222,8 +227,13 @@ fn binding_classifiers_copy_parameter_binders_before_resolution() {
         SourceUnitDesugarer { spans: &parser.spans, textual: &parser.arena }.run(source).unwrap();
     let Term::Let(binding) = &output.arena.terms[&output.root] else { panic!() };
     let Term::Ann(Ann { tm, ty }) = output.arena.terms[&binding.bindee] else { panic!() };
-    let Term::Abs(Abs(term_pattern, body)) = output.arena.terms[&tm] else { panic!() };
-    let Term::Pi(Pi(type_pattern, classifier)) = output.arena.terms[&ty] else { panic!() };
+    let Term::Abs(Abs(term_patterns, body)) = &output.arena.terms[&tm] else { panic!() };
+    let Term::Pi(Pi(type_patterns, classifier)) = &output.arena.terms[&ty] else { panic!() };
+    let ([term_pattern], [type_pattern]) = (&term_patterns[..], &type_patterns[..]) else {
+        panic!()
+    };
+    let (term_pattern, type_pattern, body, classifier) =
+        (*term_pattern, *type_pattern, *body, *classifier);
     let Pattern::Var(term_definition) = output.arena.pats[&term_pattern] else { panic!() };
     let Pattern::Var(type_definition) = output.arena.pats[&type_pattern] else { panic!() };
     assert_ne!(term_definition, type_definition);

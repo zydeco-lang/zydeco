@@ -2763,6 +2763,7 @@ dependencies = [
  "zydeco-stackir",
  "zydeco-statics",
  "zydeco-surface",
+ "zydeco-syntax",
 ]
 
 [[package]]

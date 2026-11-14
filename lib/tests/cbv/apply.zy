@@ -1,0 +1,40 @@
+-- Call-by-value blocks: the accepted fragment, run end to end.
+--
+-- Each block's result is compared with the value its source term denotes under
+-- call-by-value, so a translation that changed the meaning would exit nonzero.
+--
+-- A block is closed over types as over terms, so the host's `Int` is not the
+-- block's to name: each block binds the built-in types it uses to their
+-- intrinsics, and a kind as well, since `VType` is a host name too.
+begin
+  param (/Thk; /Ret; /Int; /Unit; /OS; /int; /process) : @(import("../../std/builtin.zy")) that
+
+  def ! require (want : Int) (got : Int) (k : Thk OS) : OS =
+    ! int/eq OS want got k { ! process/exit 1 }
+  that
+
+  -- a literal
+  do a <- @[cbv] 5;
+  ! require 5 a {
+    -- an application
+    do b <- @[cbv] (
+      let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+      (fn (x : Int) => x) 7);
+    ! require 7 b {
+      -- a higher-order application, whose result is itself a translated function
+      do c <- @[cbv] (
+        let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+        (fn (f : Int -> Int) => f) (fn (y : Int) => y));
+      do c' <- ! c 9;
+      ! require 9 c' {
+        -- a variable bound by an enclosing lambda
+        do d <- @[cbv] (
+          let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+          (fn (x : Int) => fn (_ : Int) => x) 3);
+        do d' <- ! d 0;
+        ! require 3 d' {
+          ! process/exit 0 }
+      }
+    }
+  }
+end

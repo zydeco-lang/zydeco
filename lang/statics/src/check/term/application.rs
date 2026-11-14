@@ -4,11 +4,34 @@ use super::*;
 
 impl TermChecker<'_> {
     pub(super) fn check_app<'db>(
-        &self, tycker: &mut Tycker<'db>, term: su::App<su::TermId, su::TermId>,
+        &self, tycker: &mut Tycker<'db>, term: su::App<su::TermId, Vec<su::TermId>>,
         switch: Switch<AnnId>, prepared_environment: Option<ss::TyEnv>,
     ) -> Result<TermAnnId> {
-        let su::App(f, a) = term;
-        let f_out_ann = self.mk(f).tyck(tycker, Action::syn())?;
+        let su::App(head, arguments) = term;
+        let (last, earlier) = arguments.split_last().expect("an application has an argument");
+        let head = self.mk(head).tyck(tycker, Action::syn())?;
+        // Each earlier argument is a further occurrence of this term, entering
+        // a site of its own, so the core applications it produces stay distinct.
+        let head = earlier.iter().try_fold(head, |head, argument| {
+            tycker.guarded(|tycker| {
+                tycker.tasks.push_back_mut(TyckTask::Term(self.inner, Switch::Syn));
+                tycker.enter_site(su::EntityId::Term(self.inner));
+                let result = self.check_app_argument(tycker, head, *argument, Switch::Syn, None);
+                if let Ok(out_ann) = result {
+                    self.record_layer_source(tycker, out_ann);
+                }
+                tycker.allocator.exit();
+                result
+            })
+        })?;
+        self.check_app_argument(tycker, head, *last, switch, prepared_environment)
+    }
+
+    /// Apply a checked head to one argument.
+    fn check_app_argument(
+        &self, tycker: &mut Tycker<'_>, f_out_ann: TermAnnId, a: su::TermId, switch: Switch<AnnId>,
+        prepared_environment: Option<ss::TyEnv>,
+    ) -> Result<TermAnnId> {
         match f_out_ann {
             | TermAnnId::Hole(_) | TermAnnId::Kind(_) => tycker.err(TyckError::SortMismatch),
             | TermAnnId::Type(f_ty, f_kd) => self.check_type_app(tycker, f_ty, f_kd, a, switch),

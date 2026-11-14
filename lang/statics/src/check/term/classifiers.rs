@@ -18,7 +18,16 @@ impl TermChecker<'_> {
     pub(super) fn check_pi<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::Pi, switch: Switch<AnnId>,
     ) -> Result<TermAnnId> {
-        let su::Pi(binder, body) = term;
+        let su::Pi(binders, body) = term;
+        let (binder, tail) = TelescopeTail::split(self.inner, TelescopeForm::Pi, binders, body);
+        self.check_pi_binder(tycker, binder, tail, switch)
+    }
+
+    /// Check one binder of a pi over what follows it.
+    pub(super) fn check_pi_binder<'db>(
+        &self, tycker: &mut Tycker<'db>, binder: su::PatId, body: TelescopeTail,
+        switch: Switch<AnnId>,
+    ) -> Result<TermAnnId> {
         match switch {
             | Switch::Syn => self.check_pi_syn(tycker, binder, body),
             | Switch::Ana(AnnId::Set) => tycker.err(TyckError::SortMismatch),
@@ -39,7 +48,7 @@ impl TermChecker<'_> {
     /// Synthesize a pi from its binder: a type binder forms a kind arrow or a
     /// universal type, a value binder a computation arrow.
     fn check_pi_syn(
-        &self, tycker: &mut Tycker<'_>, binder: su::PatId, body: su::TermId,
+        &self, tycker: &mut Tycker<'_>, binder: su::PatId, body: TelescopeTail,
     ) -> Result<TermAnnId> {
         let binder_out_ann = self.mk(binder).tyck(tycker, PatternAction::syn())?;
         match binder_out_ann.annotation {
@@ -56,7 +65,7 @@ impl TermChecker<'_> {
     /// Synthesize the body of a pi over a type binder: a kind body forms a
     /// kind arrow, a computation-type body a universal type.
     fn check_pi_syn_type_binder(
-        &self, tycker: &mut Tycker<'_>, tpat: ss::TPatId, kd_1: ss::KindId, body: su::TermId,
+        &self, tycker: &mut Tycker<'_>, tpat: ss::TPatId, kd_1: ss::KindId, body: TelescopeTail,
     ) -> Result<TermAnnId> {
         let abst = Alloc::alloc(tycker, tpat, (), &());
         let subst_vec = {
@@ -137,7 +146,7 @@ impl TermChecker<'_> {
     /// Check a pi against `CType`: a type binder forms a universal type, a
     /// value binder a computation arrow.
     fn check_pi_ana_ctype(
-        &self, tycker: &mut Tycker<'_>, binder: su::PatId, body: su::TermId,
+        &self, tycker: &mut Tycker<'_>, binder: su::PatId, body: TelescopeTail,
     ) -> Result<TermAnnId> {
         // synthesize the binder
         let binder_out_ann = self.mk(binder).tyck(tycker, PatternAction::syn())?;
@@ -172,7 +181,7 @@ impl TermChecker<'_> {
 
     /// Check a pi against a kind arrow, forming a kind arrow.
     fn check_pi_ana_kind_arrow(
-        &self, tycker: &mut Tycker<'_>, binder: su::PatId, body: su::TermId,
+        &self, tycker: &mut Tycker<'_>, binder: su::PatId, body: TelescopeTail,
         kd_arr: ss::Arrow<ss::KindId, ss::KindId>,
     ) -> Result<TermAnnId> {
         let ss::Arrow(kd_1, kd_2) = kd_arr;

@@ -250,31 +250,29 @@ impl DesugarFolder<'_> {
             | Tm::ValAbs(term) => self.value_abstraction(term, id)?,
             | Tm::App(term) => {
                 let t::Appli(terms) = term;
-                let mut iter = terms.into_iter();
-                let mut inputs = Vec::new();
-                if let Some(head) = iter.next() {
-                    if let Tm::App(t::Appli(inner)) = self.lookup_term(head) {
-                        inputs.extend(inner);
-                    } else {
-                        inputs.push(head);
-                    }
+                // Juxtaposition nests to the left while parsing, and all of it
+                // is one application. Parentheses end the spine.
+                let mut inputs = terms;
+                while let Some(Tm::App(t::Appli(inner))) =
+                    inputs.first().map(|head| self.lookup_term(*head))
+                {
+                    inputs.splice(0..1, inner);
                 }
-                inputs.extend(iter);
                 let terms = self.terms(inputs)?;
                 match terms.len() {
                     // app with no term is invalid
                     | 0 => unreachable!(),
                     // app with one term is just the term itself
                     | 1 => terms.into_iter().next().unwrap(),
-                    // if there are more than one term, expand the app into a chain of apps
+                    // otherwise the head and its arguments stay together
                     | _ => {
                         let mut iter = terms.into_iter();
-                        let mut body = b::App(iter.next().unwrap(), iter.next().unwrap()).into();
-                        for term in iter {
-                            let id = Alloc::alloc(&mut self.builder, body, id.into());
-                            body = b::App(id, term).into()
-                        }
-                        Alloc::alloc(&mut self.builder, body, id.into())
+                        let head = iter.next().unwrap();
+                        Alloc::alloc(
+                            &mut self.builder,
+                            b::App(head, iter.collect()).into(),
+                            id.into(),
+                        )
                     }
                 }
             }
@@ -308,7 +306,7 @@ impl DesugarFolder<'_> {
                 );
                 // ann & ty_out -> pi
                 let ty_out = self.term(ty_out)?;
-                Alloc::alloc(&mut self.builder, b::Pi(ann, ty_out).into(), id.into())
+                Alloc::alloc(&mut self.builder, b::Pi(vec![ann], ty_out).into(), id.into())
             }
             | Tm::Forall(term) => {
                 let t::Forall(params, ty) = term;
@@ -379,9 +377,11 @@ impl DesugarFolder<'_> {
                 let (binder, tail) = (binder?, tail?);
                 match placement {
                     | t::Placement::In => match flavor {
-                        | t::ParameterFlavor::Plain => {
-                            Alloc::alloc(&mut self.builder, b::Abs(binder, tail).into(), id.into())
-                        }
+                        | t::ParameterFlavor::Plain => Alloc::alloc(
+                            &mut self.builder,
+                            b::Abs(vec![binder], tail).into(),
+                            id.into(),
+                        ),
                         | t::ParameterFlavor::Value => Alloc::alloc(
                             &mut self.builder,
                             b::Term::ValAbs(b::Abs(binder, tail)),
@@ -398,7 +398,7 @@ impl DesugarFolder<'_> {
             | Tm::Pipeline(t::Pipeline { direction: _, subject, function }) => {
                 let (subject, function) = (self.term(subject), self.term(function));
                 let (subject, function) = (subject?, function?);
-                Alloc::alloc(&mut self.builder, b::App(function, subject).into(), id.into())
+                Alloc::alloc(&mut self.builder, b::App(function, vec![subject]).into(), id.into())
             }
             | Tm::ContextBind(term) => {
                 let t::ContextBind { mode, binding, placement, tail } = term;

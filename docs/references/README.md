@@ -33,7 +33,7 @@ Chapter contents provide the detailed topic indexes.
 | Value functions and views | [L8](language.md#8-value-functions-and-views) | [C6: static elaboration](compiler.md#static-elimination) |
 | Packed values, witnesses, and fields | [L9](language.md#9-polymorphism-and-packed-values) | [C5: witness evidence](compiler.md#witness-evidence-and-field-lookup) |
 | Required static elimination | [L10](language.md#10-static-elimination) | [C6: elaboration](compiler.md#static-elimination) |
-| Relative monads | [L11](language.md#11-relative-monads) | [C6: translation](compiler.md#monadic-and-copattern-elaboration) |
+| Relative monads | [L11](language.md#relative-monads) | [C6: translation](compiler.md#monadic-and-copattern-elaboration) |
 | Core prelude | [L12: default vocabulary and exceptions](language.md#core-prelude) | [C3: source prefix](compiler.md#source-loading-and-package-selection), [C4: lookup](compiler.md#name-resolution) |
 | Sources and source packages | [L12: abstraction levels](language.md#abstraction-levels) and [source rules](language.md#12-sources-imports-and-entry) | [C3: implementation representations](compiler.md#implementation-representations), [loading and sessions](compiler.md#c3-source-loading-sessions-queries-and-memory-retention), [C4: assembly](compiler.md#c4-parsing-desugaring-and-name-resolution) |
 | Memory layouts and views | [L13: memory](language.md#manual-memory) | [C6: static elimination](compiler.md#static-elimination), [C14: host contracts](compiler.md#c14-builtin-contracts-primitive-operations-and-foreign-calls) |

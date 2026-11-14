@@ -16,6 +16,8 @@ mod prelude;
 pub use prelude::*;
 mod discovery;
 pub use discovery::*;
+mod cbv;
+pub use cbv::*;
 
 /// A compiler-recognized metadata annotation.
 ///
@@ -45,6 +47,8 @@ pub enum MetadataKind {
     Builtin,
     Ffi,
     Monadic,
+    Cbv,
+    Cbn,
     Prelude,
     TypeOf,
     Partial,
@@ -84,6 +88,10 @@ impl MetadataKind {
             | Self::Monadic => {
                 "Translate a type, value, or computation using the lexical monadic basis."
             }
+            | Self::Cbv => "Elaborate a call-by-value expression into the CBPV core.",
+            | Self::Cbn => {
+                "Reserved for elaborating a call-by-name expression into the CBPV core; refused until implemented."
+            }
             | Self::Prelude => "Disable or replace the implicit core prelude.",
             | Self::TypeOf => "Extract an expression's type or kind without running it.",
             | Self::Partial => "Allow the annotated computation's own binding patterns to fail.",
@@ -99,9 +107,12 @@ impl MetadataKind {
             | Self::Prelude => PreludeMeta::arguments(),
             | Self::Package => MetadataArguments::Package,
             | Self::Discover => MetadataArguments::Discovery,
-            | Self::Literal | Self::Monadic | Self::TypeOf | Self::Partial => {
-                MetadataArguments::None
-            }
+            | Self::Literal
+            | Self::Monadic
+            | Self::Cbv
+            | Self::Cbn
+            | Self::TypeOf
+            | Self::Partial => MetadataArguments::None,
             | Self::Intrinsic => MetadataArguments::Positional(vec![MetadataParameter::new(
                 "role",
                 MetadataValue::Identifier(

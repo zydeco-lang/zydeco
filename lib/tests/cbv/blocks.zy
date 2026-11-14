@@ -1,0 +1,56 @@
+-- Call-by-value blocks as binding boundaries, run end to end.
+--
+-- A `that` binding written inside a call-by-value block is lifted to the
+-- `begin ... end` block that desugaring inserts around its payload, so it is
+-- translated and evaluated inside the call-by-value block rather than by the
+-- host around it. The bindings of the built-in types each block names, as
+-- `apply.zy` explains, are `that` bindings of the same kind.
+begin
+  param (/Thk; /Ret; /Int; /Unit; /OS; /int; /process) : @(import("../../std/builtin.zy")) that
+  def ! require (want : Int) (got : Int) (k : Thk OS) : OS =
+    ! int/eq OS want got k { ! process/exit 1 }
+  that
+  do a <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let y = (fn (x : Int) => x) 7 that y);
+  ! require 7 a {
+  -- a chain, whose later bindee refers to the name an earlier one bound
+  do b <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let p = 3 that let q = (fn (x : Int) => x) p that q);
+  ! require 3 b {
+  -- `param` inside a block is the call-by-value lambda, so the block returns
+  -- a thunk rather than becoming a function itself
+  do c <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    param x : Int that x);
+  do c' <- ! c 9;
+  ! require 9 c' {
+  do d <- @[cbv] (let (m, n) = (5, 6) that n);
+  ! require 6 d {
+  -- a block-local name for a source arrow: `Int -> Int` is ill-kinded in the
+  -- host, so no host binding can stand for it and only the translation can
+  do e <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Fn : VType = Int -> Int that
+    let g : Fn = fn (x : Int) => x that
+    g 7);
+  ! require 7 e {
+  -- local names for a primitive and for a product built from one
+  do f <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that
+    let N : VType = @(intrinsic(int)) that
+    let P : VType = N * N that
+    let p : P = (3, 4) that
+    let (m, n) = p that
+    n);
+  ! require 4 f {
+  -- the analysis direction: the binder takes its type from the ascription, and
+  -- the result is applied, so a wrong domain would not merely fail to check
+  do g <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    (fn x => x) : Int -> Int);
+  do g' <- ! g 7;
+  ! require 7 g' {
+  ! process/exit 0 }}}}}}}
+end

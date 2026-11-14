@@ -309,7 +309,7 @@ fn composed_visitors_stop_at_the_first_break_in_event_order() {
     let mut fixture = Fixture::new();
     let first = fixture.term(Triv);
     let second = fixture.term(Hole);
-    let root = fixture.term(App(first, second));
+    let root = fixture.term(App(first, vec![second]));
     let expected = [
         (Event::Enter, root),
         (Event::Enter, first),

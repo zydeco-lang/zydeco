@@ -101,7 +101,7 @@ impl<'a> Tyck<'a> for TyEnvT<ComputationPiFormation> {
 
         // Elaboration may inspect a value through `typeof`. Only the resulting
         // static type participates in the arrow; it cannot retain value terms.
-        let codomain = TyEnvT::new(binder.info.clone(), *codomain).tyck(tycker, action)?;
+        let codomain = TyEnvT::new(binder.info.clone(), codomain.clone()).tyck(tycker, action)?;
         let (codomain, codomain_kind) = codomain.try_as_type(tycker, TyckError::SortMismatch)?;
         let pi = match tycker.kind_filled(&codomain_kind)?.to_owned() {
             | ss::Kind::VType(_) => tycker.err(TyckError::Expressivity(

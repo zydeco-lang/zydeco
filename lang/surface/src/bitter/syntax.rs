@@ -85,9 +85,9 @@ impl CoPatternSpine {
 #[derive(Clone, Debug)]
 pub struct TypeOf(pub TermId);
 
-/// One binder of a desugared `pi` telescope.
+/// A `pi` telescope: its binders in source order, never empty, and the body they scope over.
 #[derive(Clone, Debug)]
-pub struct Pi(pub PatId, pub TermId);
+pub struct Pi(pub Vec<PatId>, pub TermId);
 
 /// One binder of a desugared `val pi` telescope.
 #[derive(Clone, Debug)]
@@ -139,6 +139,16 @@ pub struct MonadicBasis {
 pub struct MoBlock {
     pub body: TermId,
     pub basis: MonadicBasis,
+}
+
+/// Call-by-value block body kept as a single node until type checking.
+///
+/// Unlike [`MoBlock`], the target of this translation is the CBPV core itself,
+/// so there is no basis to carry: `Thk` and `Ret` are the only structure the
+/// elaboration needs.
+#[derive(Clone, Debug)]
+pub struct CbvBlock {
+    pub body: TermId,
 }
 
 /// A term whose nested `that` forms contribute to one block context.
@@ -232,10 +242,12 @@ pub enum Term<Ref> {
     Label(Label<FieldName, TermId>),
     Triv(Triv),
     Cons(Vec<TermId>),
-    Abs(Abs<PatId, TermId>),
+    /// An abstraction: its consecutive parameters in source order, never empty.
+    Abs(Abs<Vec<PatId>, TermId>),
     #[from(ignore)]
     ValAbs(Abs<PatId, TermId>),
-    App(App<TermId, TermId>),
+    /// An application: its head and its consecutive arguments, never empty.
+    App(App<TermId, Vec<TermId>>),
     Fix(Fix<PatId, TermId>),
     Pi(Pi),
     ValPi(ValPi),
@@ -257,6 +269,7 @@ pub enum Term<Ref> {
     Block(Block),
     RecGroup(RecGroup),
     MoBlock(Box<MoBlock>),
+    CbvBlock(CbvBlock),
     Data(Data),
     CoData(CoData),
     Ctor(Ctor<CtorName, TermId>),

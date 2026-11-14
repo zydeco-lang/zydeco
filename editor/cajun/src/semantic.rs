@@ -457,15 +457,14 @@ impl<'arena> ParameterDefinitions<'arena> {
         self.scoped
             .terms
             .iter()
-            .filter_map(|(_, term)| match term {
-                | Term::Abs(Abs(pattern, _))
+            .flat_map(|(_, term)| match term {
+                | Term::Abs(Abs(patterns, _)) | Term::Pi(Pi(patterns, _)) => patterns.as_slice(),
                 | Term::ValAbs(Abs(pattern, _))
-                | Term::Pi(Pi(pattern, _))
                 | Term::ValPi(ValPi(pattern, _))
-                | Term::Sigma(Sigma(pattern, _)) => Some(pattern),
-                | Term::ManifestExists(term) => Some(&term.binder),
-                | Term::Pack(term) => Some(&term.binder),
-                | _ => None,
+                | Term::Sigma(Sigma(pattern, _)) => std::slice::from_ref(pattern),
+                | Term::ManifestExists(term) => std::slice::from_ref(&term.binder),
+                | Term::Pack(term) => std::slice::from_ref(&term.binder),
+                | _ => &[],
             })
             .for_each(|pattern| self.collect_pattern(pattern, &mut definitions));
         definitions

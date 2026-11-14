@@ -214,10 +214,18 @@ impl TermChecker<'_> {
     }
 
     pub(super) fn check_abs<'db>(
-        &self, tycker: &mut Tycker<'db>, term: su::Abs<su::PatId, su::TermId>,
+        &self, tycker: &mut Tycker<'db>, term: su::Abs<Vec<su::PatId>, su::TermId>,
         switch: Switch<AnnId>,
     ) -> Result<TermAnnId> {
-        let su::Abs(pat, body) = term;
+        let su::Abs(binders, body) = term;
+        let (binder, tail) = TelescopeTail::split(self.inner, TelescopeForm::Abs, binders, body);
+        self.check_abs_binder(tycker, binder, tail, switch)
+    }
+
+    /// Check one binder of an abstraction over what follows it.
+    pub(super) fn check_abs_binder<'db>(
+        &self, tycker: &mut Tycker<'db>, pat: su::PatId, body: TelescopeTail, switch: Switch<AnnId>,
+    ) -> Result<TermAnnId> {
         match switch {
             | Switch::Syn => self.check_abs_syn(tycker, pat, body),
             | Switch::Ana(AnnId::Set) => tycker.err(TyckError::SortMismatch),
@@ -230,7 +238,7 @@ impl TermChecker<'_> {
     /// type function or a polymorphic computation, a value binder a
     /// computation arrow.
     fn check_abs_syn<'db>(
-        &self, tycker: &mut Tycker<'db>, pat: su::PatId, body: su::TermId,
+        &self, tycker: &mut Tycker<'db>, pat: su::PatId, body: TelescopeTail,
     ) -> Result<TermAnnId> {
         let pat_out_ann = self.mk(pat).tyck(tycker, PatternAction::syn())?;
         match pat_out_ann.annotation {
@@ -257,7 +265,7 @@ impl TermChecker<'_> {
     }
 
     fn check_abs_syn_type_binder<'db>(
-        &self, tycker: &mut Tycker<'db>, tpat: ss::TPatId, kd: ss::KindId, body: su::TermId,
+        &self, tycker: &mut Tycker<'db>, tpat: ss::TPatId, kd: ss::KindId, body: TelescopeTail,
     ) -> Result<TermAnnId> {
         // could be either type-polymorphic function or type function
         let abst = Alloc::alloc(tycker, tpat, (), &());
@@ -326,7 +334,7 @@ impl TermChecker<'_> {
 
     fn check_abs_syn_value_binder<'db>(
         &self, tycker: &mut Tycker<'db>, pat: su::PatId, pat_out_ann: &CheckedPattern,
-        vpat: ss::VPatId, ty: ss::TypeId, body: su::TermId,
+        vpat: ss::VPatId, ty: ss::TypeId, body: TelescopeTail,
     ) -> Result<TermAnnId> {
         ValuePatternShape::require_binding(tycker, pat, vpat)?;
         // A value-pattern abstraction is pure when its body is a value
@@ -388,7 +396,7 @@ impl TermChecker<'_> {
 
     /// Check a type function against a kind arrow.
     fn check_abs_ana_kind<'db>(
-        &self, tycker: &mut Tycker<'db>, pat: su::PatId, body: su::TermId, kd: ss::KindId,
+        &self, tycker: &mut Tycker<'db>, pat: su::PatId, body: TelescopeTail, kd: ss::KindId,
     ) -> Result<TermAnnId> {
         // type function in f omega
         // expecting a kind arrow
@@ -425,7 +433,7 @@ impl TermChecker<'_> {
     /// Check an abstraction against a computation type: an arrow, a
     /// package-dependent arrow, or a universal type.
     fn check_abs_ana_type<'db>(
-        &self, tycker: &mut Tycker<'db>, pat: su::PatId, body: su::TermId, ty: ss::TypeId,
+        &self, tycker: &mut Tycker<'db>, pat: su::PatId, body: TelescopeTail, ty: ss::TypeId,
     ) -> Result<TermAnnId> {
         // could be either a term function or a type-polymorphic term function
         let kind = tycker.statics.type_kind(ty);
@@ -452,7 +460,7 @@ impl TermChecker<'_> {
     }
 
     fn check_abs_ana_arrow<'db>(
-        &self, tycker: &mut Tycker<'db>, pat: su::PatId, body: su::TermId,
+        &self, tycker: &mut Tycker<'db>, pat: su::PatId, body: TelescopeTail,
         arrow: ss::Arrow<ss::TypeId, ss::TypeId>,
     ) -> Result<TermAnnId> {
         // a term-term function
@@ -472,7 +480,7 @@ impl TermChecker<'_> {
     }
 
     fn check_abs_ana_forall<'db>(
-        &self, tycker: &mut Tycker<'db>, pat: su::PatId, body: su::TermId, forall: ss::Forall,
+        &self, tycker: &mut Tycker<'db>, pat: su::PatId, body: TelescopeTail, forall: ss::Forall,
     ) -> Result<TermAnnId> {
         let ss::Forall(source_binder, ty_body) = forall;
         let domain_kind = source_binder.domain_kind(tycker);

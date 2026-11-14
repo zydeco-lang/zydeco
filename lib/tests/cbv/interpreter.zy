@@ -1,0 +1,83 @@
+-- A small call-by-value interpreter, written in a call-by-value block and run
+-- end to end.
+--
+-- Its environment holds values and its closures hold environments, so the two
+-- declarations mention each other and form one recursive group. Variables are
+-- de Bruijn indices. Each answer is chosen so that a wrong lookup, or a closure
+-- that kept the wrong environment, gives another number.
+--
+-- Each block binds the built-in types it names, as `apply.zy` explains.
+begin
+  param (/Thk; /Ret; /Int; /Unit; /OS; /int; /process) : @(import("../../std/builtin.zy")) that
+  def ! require (want : Int) (got : Int) (k : Thk OS) : OS =
+    ! int/eq OS want got k { ! process/exit 1 }
+  that
+
+  -- `(fn x => fn y => x) 30 31`: the outer argument is one binder further out
+  do a <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Unit : VType = @(intrinsic(unit)) that
+    def Nat : VType = data | +Zero : Unit | +Succ : Nat end that
+    def Expr : VType = data | +Var : Nat | +Lam : Expr | +App : Expr * Expr | +Lit : Int end that
+    def Env : VType = data | +Empty : Unit | +Bind : Value * Env end that
+    def Value : VType = data | +Closure : Env * Expr | +Num : Int end that
+    let fix lookup (env : Env) (n : Nat) : Value =
+      match env
+      | +Empty _ => +Num 2
+      | +Bind b => let (v, rest) = b in match n | +Zero _ => v | +Succ m => lookup rest m end
+      end
+    in
+    let fix eval (env : Env) (e : Expr) : Value =
+      match e
+      | +Var n => lookup env n
+      | +Lam body => +Closure (env, body)
+      | +App p =>
+        let (f, a) = p in
+        match eval env f
+        | +Closure c => let (captured, body) = c in eval (+Bind (eval env a, captured)) body
+        | +Num _ => +Num 3
+        end
+      | +Lit i => +Num i
+      end
+    in
+    let k : Expr = +Lam (+Lam (+Var (+Succ (+Zero ())))) in
+    match eval (+Empty ()) (+App (+App (k, +Lit 30), +Lit 31)) | +Num i => i | +Closure _ => 4 end);
+  ! require 30 a {
+
+  -- `(fn f => (fn x => f 0) 50) ((fn x => fn y => x) 51)`: `f` is applied where
+  -- `x` is 50, and answers the 51 its closure kept; an environment taken from
+  -- the call site would answer 50
+  do b <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Unit : VType = @(intrinsic(unit)) that
+    def Nat : VType = data | +Zero : Unit | +Succ : Nat end that
+    def Expr : VType = data | +Var : Nat | +Lam : Expr | +App : Expr * Expr | +Lit : Int end that
+    def Env : VType = data | +Empty : Unit | +Bind : Value * Env end that
+    def Value : VType = data | +Closure : Env * Expr | +Num : Int end that
+    let fix lookup (env : Env) (n : Nat) : Value =
+      match env
+      | +Empty _ => +Num 2
+      | +Bind b => let (v, rest) = b in match n | +Zero _ => v | +Succ m => lookup rest m end
+      end
+    in
+    let fix eval (env : Env) (e : Expr) : Value =
+      match e
+      | +Var n => lookup env n
+      | +Lam body => +Closure (env, body)
+      | +App p =>
+        let (f, a) = p in
+        match eval env f
+        | +Closure c => let (captured, body) = c in eval (+Bind (eval env a, captured)) body
+        | +Num _ => +Num 3
+        end
+      | +Lit i => +Num i
+      end
+    in
+    let one : Nat = +Succ (+Zero ()) in
+    let k : Expr = +Lam (+Lam (+Var one)) in
+    let outer : Expr = +Lam (+App (+Lam (+App (+Var one, +Lit 0)), +Lit 50)) in
+    match eval (+Empty ()) (+App (outer, +App (k, +Lit 51))) | +Num i => i | +Closure _ => 4 end);
+  ! require 51 b {
+
+  ! process/exit 0 }}
+end

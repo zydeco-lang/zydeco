@@ -185,6 +185,17 @@ impl StagedBoundary {
 }
 
 impl ScopedForm {
+    /// Whether a nested scope of this form means the same as a longer telescope.
+    ///
+    /// Consecutive parameters of a function form one group, which a nested
+    /// function does not, so those stay as written.
+    fn merges_nested_scopes(self) -> bool {
+        match self {
+            | Self::Function | Self::Pi | Self::Forall => false,
+            | Self::ValueFunction | Self::ValPi | Self::Sigma => true,
+        }
+    }
+
     fn keyword(self) -> &'static str {
         match self {
             | Self::Function => "fn",
@@ -1884,7 +1895,7 @@ impl<'arena> PrettyFormatter<'arena> {
         };
         let head = LayoutFragment::entity(
             (*head).into(),
-            self.term_through(*head, TermPrecedence::Application),
+            self.term_through(*head, self.application_head_precedence(*head)),
         );
         let arguments = self
             .separated(
@@ -1896,6 +1907,17 @@ impl<'arena> PrettyFormatter<'arena> {
             )
             .expect("applications contain at least one argument");
         self.join(head, BoundaryLayout::hanging("", self.indent()), arguments).document
+    }
+
+    /// How loose an application's head may be. A parenthesized application stays
+    /// parenthesized: `(f x) y` applies a result, and `f x y` is one application.
+    fn application_head_precedence(&self, head: TermId) -> TermPrecedence {
+        let parenthesized = matches!(self.arena.terms[&head], Term::Paren(_));
+        if parenthesized && self.term_layout_subsumes_group(head) {
+            TermPrecedence::Prefix
+        } else {
+            TermPrecedence::Application
+        }
     }
 
     fn named_term(&self, term: TermId, field: &FieldName, inner: TermId) -> RcDoc<'arena> {
@@ -2013,6 +2035,9 @@ impl<'arena> PrettyFormatter<'arena> {
 
     fn scoped_telescope(&self, root: TermId, form: ScopedForm) -> ScopeTelescope<CoPatId> {
         let layers = std::iter::successors(Some(root), |current| {
+            if !form.merges_nested_scopes() {
+                return None;
+            }
             let (parameter, nested) = form.split(&self.arena.terms[current])?;
             form.split(&self.arena.terms[&nested])?;
             self.scope_boundary_allows_merging(parameter, nested).then_some(nested)
@@ -2921,9 +2946,9 @@ mod tests {
             ),
             (
                 "forall (A : Type) . forall (B : Type) . A -> B",
-                "forall (A : Type) (B : Type) . A -> B\n",
+                "forall (A : Type) . forall (B : Type) . A -> B\n",
             ),
-            ("fn x => fn y => x", "fn x y => x\n"),
+            ("fn x => fn y => x", "fn x => fn y => x\n"),
             (
                 "do x <- first; do y <- second; ret y",
                 concat!("do x <- first;\n", "do y <- second;\n", "ret y\n"),
@@ -3837,12 +3862,13 @@ mod tests {
     #[test]
     fn merges_joined_consecutive_scopes_into_one_telescope() {
         let cases = [
-            ("fn a => fn b => body", "fn a b => body\n"),
-            ("fn a b => fn c d => body", "fn a b c d => body\n"),
-            ("pi (A : VType) . pi (B : VType) . Body", "pi (A : VType) (B : VType) . Body\n"),
+            // A group of parameters and a nested function are different programs.
+            ("fn a => fn b => body", "fn a => fn b => body\n"),
+            ("fn a b => fn c d => body", "fn a b => fn c d => body\n"),
+            ("pi (A : VType) . pi (B : VType) . Body", "pi (A : VType) . pi (B : VType) . Body\n"),
             (
                 "forall (A : VType) . forall (B : VType) . Body",
-                "forall (A : VType) (B : VType) . Body\n",
+                "forall (A : VType) . forall (B : VType) . Body\n",
             ),
             (
                 "sigma (A : VType) . sigma (B : VType) . Body",
@@ -3897,6 +3923,19 @@ mod tests {
             let reparsed = ParsedSource::new(&formatted);
             assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape(), "source: {source}");
             assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
+        });
+    }
+
+    #[test]
+    fn keeps_a_parenthesized_application_head() {
+        let cases = [("(f x) y", "(f x) y\n"), ("f x y", "f x y\n"), ("(f) x", "f x\n")];
+
+        cases.into_iter().for_each(|(source, expected)| {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Ignore);
+            assert_eq!(formatted, expected, "source: {source}");
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape(), "source: {source}");
         });
     }
 
@@ -4733,7 +4772,7 @@ mod tests {
             ("A *\nB", "A * B\n"),
             ("A *\n\nB", "  A\n\n* B\n"),
             // A single break before a nested scope no longer stops the fold.
-            ("fn a =>\nfn b => body", "fn a b => body\n"),
+            ("fn a =>\nfn b => body", "fn a => fn b => body\n"),
             // A blank line before the nested introducer still stops it,
             // while the inner scope remains compact when it fits.
             ("fn a =>\n\nfn b => body", "fn a =>\n\n  fn b => body\n"),

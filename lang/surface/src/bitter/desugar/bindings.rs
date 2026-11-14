@@ -20,22 +20,55 @@ struct Abstraction {
 }
 
 impl Abstraction {
-    fn parameter(
-        self, builder: &mut BitterBuilder, pattern: b::PatId, flavor: t::ParameterFlavor,
+    /// Abstract the body over a run of consecutive parameters, given in source order.
+    ///
+    /// Plain parameters stay together as one abstraction, and a following classifier as one
+    /// telescope, so that checking sees what was written. Value functions stay curried.
+    fn parameters(
+        self, builder: &mut BitterBuilder, patterns: Vec<b::PatId>, flavor: t::ParameterFlavor,
         source: t::EntityId,
     ) -> Self {
-        let term = match flavor {
-            | t::ParameterFlavor::Plain => b::Term::Abs(b::Abs(pattern, self.body)),
-            | t::ParameterFlavor::Value => b::Term::ValAbs(b::Abs(pattern, self.body)),
+        if patterns.is_empty() {
+            return self;
+        }
+        match flavor {
+            | t::ParameterFlavor::Plain => self.plain_parameters(builder, patterns, source),
+            | t::ParameterFlavor::Value => patterns
+                .into_iter()
+                .rev()
+                .fold(self, |this, pattern| this.value_parameter(builder, pattern, source)),
+        }
+    }
+
+    fn plain_parameters(
+        self, builder: &mut BitterBuilder, patterns: Vec<b::PatId>, source: t::EntityId,
+    ) -> Self {
+        let classifier = match self.classifier {
+            | Classifier::Telescope(classifier) => {
+                let binders = patterns
+                    .iter()
+                    .map(|pattern| FreshenFolder { builder }.fold_pat(*pattern).unwrap())
+                    .collect();
+                Classifier::Telescope(Alloc::alloc(
+                    builder,
+                    b::Pi(binders, classifier).into(),
+                    source,
+                ))
+            }
+            | classifier => classifier,
         };
-        let body = Alloc::alloc(builder, term, source);
+        let body = Alloc::alloc(builder, b::Term::Abs(b::Abs(patterns, self.body)), source);
+        Self { body, classifier }
+    }
+
+    fn value_parameter(
+        self, builder: &mut BitterBuilder, pattern: b::PatId, source: t::EntityId,
+    ) -> Self {
+        let body = Alloc::alloc(builder, b::Term::ValAbs(b::Abs(pattern, self.body)), source);
         let classifier = match self.classifier {
             | Classifier::Telescope(classifier) => {
                 let pattern = FreshenFolder { builder }.fold_pat(pattern).unwrap();
-                let ty = match flavor {
-                    | t::ParameterFlavor::Plain => b::Pi(pattern, classifier).into(),
-                    | t::ParameterFlavor::Value => b::ValPi(pattern, classifier).into(),
-                };
+                let ty = b::ValPi(pattern, classifier).into();
                 Classifier::Telescope(Alloc::alloc(builder, ty, source))
             }
             | classifier => classifier,
@@ -79,23 +112,27 @@ impl DesugarFolder<'_> {
         let binder = binder?;
         let mut abstraction = Abstraction { body: bindee?, classifier: classifier? };
         if let Some(b::Appli(params)) = params? {
+            let parameter_flavor = if flavor == t::BindingFlavor::Value {
+                t::ParameterFlavor::Value
+            } else {
+                t::ParameterFlavor::Plain
+            };
+            let mut run = Vec::new();
             for parameter in params.into_iter().rev() {
                 match parameter {
-                    | b::CoPatternItem::Pat(pattern) => {
-                        let flavor = if flavor == t::BindingFlavor::Value {
-                            t::ParameterFlavor::Value
-                        } else {
-                            t::ParameterFlavor::Plain
-                        };
-                        abstraction =
-                            abstraction.parameter(&mut self.builder, pattern, flavor, source);
-                    }
+                    | b::CoPatternItem::Pat(pattern) => run.insert(0, pattern),
                     | b::CoPatternItem::Dtor(dtor) => {
                         if flavor == t::BindingFlavor::Value {
                             return Err(self.value_parameter_error(
                                 parameter_origin.expect("a parameter telescope"),
                             ));
                         }
+                        abstraction = abstraction.parameters(
+                            &mut self.builder,
+                            std::mem::take(&mut run),
+                            parameter_flavor,
+                            source,
+                        );
                         abstraction.destructor(&mut self.builder, dtor, source);
                         let hole = Alloc::alloc(&mut self.builder, b::Hole.into(), source);
                         abstraction.classifier = if follows_parameters {
@@ -106,6 +143,7 @@ impl DesugarFolder<'_> {
                     }
                 }
             }
+            abstraction = abstraction.parameters(&mut self.builder, run, parameter_flavor, source);
         }
         if flavor == t::BindingFlavor::Recursive {
             let binder = FreshenFolder { builder: &mut self.builder }.fold_pat(binder).unwrap();
@@ -119,7 +157,7 @@ impl DesugarFolder<'_> {
                 let thunk = self.builder.thunk(source);
                 abstraction.classifier = Classifier::Telescope(Alloc::alloc(
                     &mut self.builder,
-                    b::App(thunk, ty).into(),
+                    b::App(thunk, vec![ty]).into(),
                     source,
                 ));
             }
@@ -140,22 +178,24 @@ impl DesugarFolder<'_> {
         };
         let b::Appli(params) = params?;
         let mut abstraction = Abstraction { body: tail?, classifier: classifier? };
+        let mut run = Vec::new();
         for parameter in params.into_iter().rev() {
             match parameter {
-                | b::CoPatternItem::Pat(pattern) => {
-                    abstraction = abstraction.parameter(
+                | b::CoPatternItem::Pat(pattern) => run.insert(0, pattern),
+                | b::CoPatternItem::Dtor(dtor) => {
+                    abstraction = abstraction.parameters(
                         &mut self.builder,
-                        pattern,
+                        std::mem::take(&mut run),
                         t::ParameterFlavor::Plain,
                         id.into(),
                     );
-                }
-                | b::CoPatternItem::Dtor(dtor) => {
                     abstraction.destructor(&mut self.builder, dtor, id.into());
                     abstraction.classifier = Classifier::Absent;
                 }
             }
         }
+        abstraction =
+            abstraction.parameters(&mut self.builder, run, t::ParameterFlavor::Plain, id.into());
         Ok(abstraction.finish(&mut self.builder, id.into()))
     }
 
@@ -171,12 +211,7 @@ impl DesugarFolder<'_> {
             let b::CoPatternItem::Pat(pattern) = parameter else {
                 return Err(self.value_parameter_error(origin));
             };
-            abstraction = abstraction.parameter(
-                &mut self.builder,
-                pattern,
-                t::ParameterFlavor::Value,
-                id.into(),
-            );
+            abstraction = abstraction.value_parameter(&mut self.builder, pattern, id.into());
         }
         Ok(abstraction.finish(&mut self.builder, id.into()))
     }

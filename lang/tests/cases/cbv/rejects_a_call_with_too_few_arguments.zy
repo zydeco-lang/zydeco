@@ -1,0 +1,8 @@
+-- expect: reject(tyck.expressivity)
+
+do _ <- @[cbv] (
+  let VType = @(intrinsic(vtype)) that
+  let Int : VType = @(intrinsic(int)) that
+  (fn (x : Int) (y : Int) => y) 1
+);
+ret ()

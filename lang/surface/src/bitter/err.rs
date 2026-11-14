@@ -1,6 +1,7 @@
 use super::syntax as b;
 use crate::metadata::{
-    BuiltinMetaError, FfiMetaError, IntrinsicMetaError, MetadataValidationError, MonadicMetaError,
+    BuiltinMetaError, CbvMetaError, FfiMetaError, IntrinsicMetaError, MetadataValidationError,
+    MonadicMetaError,
 };
 use crate::textual::syntax as t;
 use thiserror::Error;
@@ -45,6 +46,14 @@ pub enum DesugarError {
         #[source]
         source: MonadicMetaError,
     },
+    #[error("Invalid cbv annotation: {source}")]
+    InvalidCbvMeta {
+        term: Sp<t::TermId>,
+        #[source]
+        source: CbvMetaError,
+    },
+    #[error("`@[cbn]` is reserved for call-by-name blocks, which are not implemented yet")]
+    CbnNotImplemented(Sp<t::TermId>),
     #[error("Invalid typeof annotation: {source}")]
     InvalidTypeOfMeta {
         term: Sp<t::TermId>,
@@ -104,6 +113,8 @@ impl DesugarError {
             | Self::InvalidIntrinsicMeta { term, .. }
             | Self::InvalidPreludeMeta { term, .. }
             | Self::InvalidMonadicMeta { term, .. }
+            | Self::InvalidCbvMeta { term, .. }
+            | Self::CbnNotImplemented(term)
             | Self::InvalidTypeOfMeta { term, .. }
             | Self::InvalidPartialMeta { term, .. }
             | Self::PartialPayloadNotBinding(term)

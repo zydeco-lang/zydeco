@@ -1,0 +1,87 @@
+-- Call-by-value blocks over data types they declare, run end to end.
+--
+-- `data` is the route by which a block can finally compute: a decreasing
+-- structure makes a terminating recursive function writable with nothing but
+-- what the block already has, and no arithmetic appears anywhere below.
+--
+-- Each block binds the built-in types it names, as `apply.zy` explains, and
+-- declares the data types it uses: a block is closed over types, so a type
+-- declared outside it would have to enter by type abstraction.
+begin
+  param (/Thk; /Ret; /Int; /Unit; /OS; /int; /process) : @(import("../../std/builtin.zy")) that
+  def ! require (want : Int) (got : Int) (k : Thk OS) : OS =
+    ! int/eq OS want got k { ! process/exit 1 }
+  that
+
+  -- a constructor and a match; the application's domain is what tells `+On`
+  -- which declaration it belongs to, so the argument needs no annotation
+  do a <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Unit : VType = @(intrinsic(unit)) that
+    def Flag : VType = data | +Off : Unit | +On : Int end that
+    let f : Flag -> Int = fn (x : Flag) =>
+      match x | +Off(_) => 0 | +On(n) => n end in f (+On(7)));
+  ! require 7 a {
+  do b <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Unit : VType = @(intrinsic(unit)) that
+    def Flag : VType = data | +Off : Unit | +On : Int end that
+    let f : Flag -> Int = fn (x : Flag) =>
+      match x | +Off(_) => 3 | +On(n) => n end in f (+Off(())));
+  ! require 3 b {
+  -- structural recursion, witnessed by two inputs with different answers
+  do c <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Unit : VType = @(intrinsic(unit)) that
+    def Nat : VType = data | +Zero : Unit | +Succ : Nat end that
+    let fix parity (n : Nat) : Int =
+      match n | +Zero(_) => 0 | +Succ(m) => match m | +Zero(_) => 1 | +Succ(k) => parity k end end
+    in parity (+Succ(+Succ(+Succ(+Zero())))));
+  ! require 1 c {
+  do d <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Unit : VType = @(intrinsic(unit)) that
+    def Nat : VType = data | +Zero : Unit | +Succ : Nat end that
+    let fix parity (n : Nat) : Int =
+      match n | +Zero(_) => 0 | +Succ(m) => match m | +Zero(_) => 1 | +Succ(k) => parity k end end
+    in parity (+Succ(+Succ(+Succ(+Succ(+Zero()))))));
+  ! require 0 d {
+  -- recursion over an applied seal, a parameterized type written as std
+  -- writes `List`; the last element distinguishes reaching the end of the list
+  -- from stopping at its head
+  do e <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Unit : VType = @(intrinsic(unit)) that
+    def List (X : VType) : VType = data | +Nil : Unit | +Cons : X * List X end that
+    let fix last (l : List Int) : Int =
+      match l
+      | +Nil(_) => 0
+      | +Cons(c) => let (h, t) = c in match t | +Nil(_) => h | +Cons(r) => last t end
+      end
+    in last (+Cons((7, +Cons((8, +Nil(())))))));
+  ! require 8 e {
+  -- a single-constructor pattern taken apart by binding rather than by
+  -- matching, in a `let` and as a parameter; the second component tells a
+  -- correct binding from one that read the wrong position
+  do f <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    def Point : VType = data | +Pt : Int * Int end that
+    let p : Point = +Pt((10, 11)) in let +Pt((x, y)) = p in y);
+  ! require 11 f {
+  do g <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    def Point : VType = data | +Pt : Int * Int end that
+    let snd = fn (+Pt((x, y)) : Point) => y in snd (+Pt((12, 13))));
+  ! require 13 g {
+  -- a recursive function of three parameters that swaps the last two at each
+  -- step: three steps answer the second argument, two would answer the first
+  do h <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Unit : VType = @(intrinsic(unit)) that
+    def Nat : VType = data | +Zero : Unit | +Succ : Nat end that
+    let fix pick (m : Nat) (a : Int) (b : Int) : Int =
+      match m | +Zero(_) => a | +Succ(k) => pick k b a end
+    in pick (+Succ(+Succ(+Succ(+Zero(()))))) 15 16);
+  ! require 16 h {
+  ! process/exit 0 }}}}}}}}
+end

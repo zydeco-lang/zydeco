@@ -1666,7 +1666,7 @@ value
         };
         assert_eq!(
             fenced_zydeco_sources(&contents.value),
-            vec!["(! id Int) : Int -> Ret Int"],
+            vec!["((! id Int) 0) : Ret Int"],
             "hovering between the parts of an application should report the innermost term:\n{}",
             contents.value
         );

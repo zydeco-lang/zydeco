@@ -88,6 +88,16 @@ pub struct Tycker<'a> {
     /// how many times each scoped entity has been checked; supplies the
     /// derivation occurrence so re-checked entities get distinct sites
     check_counts: ArenaAssoc<su::EntityId, u32>,
+    /// Classifiers of pattern annotations decided before their pattern is
+    /// checked.
+    ///
+    /// Inside a call-by-value block the `A` in a binder's `(p : A)` is a
+    /// source type, which ordinary synthesis cannot read, so the block
+    /// translates it first and records the result here; the annotation rule
+    /// takes a recorded classifier instead of synthesizing one. A type
+    /// binder's `(X : K)` records the kind the block's own kind judgment
+    /// decided, for the same reason. Empty outside such blocks.
+    settled_pattern_annotations: ArenaAssoc<su::TermId, AnnId>,
     /// Resolved terms selected for canonical synthesis, including imported
     /// providers, classifier queries, and monadic blocks.
     checked_terms: CheckedTermRepository,

@@ -1,0 +1,28 @@
+-- Call-by-value blocks: `let` and products, run end to end.
+--
+-- Each block's result is compared with the value its source term denotes under
+-- call-by-value, so a translation that changed the meaning would exit nonzero.
+-- Each block binds the built-in types it names, as `apply.zy` explains.
+begin
+  param (/Thk; /Ret; /Int; /Unit; /OS; /int; /process) : @(import("../../std/builtin.zy")) that
+  def ! require (want : Int) (got : Int) (k : Thk OS) : OS =
+    ! int/eq OS want got k { ! process/exit 1 }
+  that
+  do a <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let y = (fn (x : Int) => x) 7 in y);
+  ! require 7 a {
+  do b <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let (p, q) = ((fn (x : Int) => x) 3, 4) in q);
+  ! require 4 b {
+  do c <- @[cbv] (let (p, q) = (5, 6) in p);
+  ! require 5 c {
+  -- components annotated at source arrows, which the host could not read;
+  -- calling the second tells the components apart
+  do d <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let (f : Int -> Int, g : Int -> Int) = (fn (x : Int) => 8, fn (x : Int) => 9) in g 0);
+  ! require 9 d {
+  ! process/exit 0 }}}}
+end

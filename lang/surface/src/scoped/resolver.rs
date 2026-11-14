@@ -147,6 +147,17 @@ impl<O: ResolutionObserver> ResolveFolder<'_, O> {
         Term::Var(binding.definition)
     }
 
+    /// Resolve binders in source order, each one in scope for those after it.
+    fn telescope<'e>(
+        &mut self, binders: Vec<PatId>, env: ResolveEnv<'e>,
+    ) -> FoldResult<(Vec<PatId>, ResolveEnv<'e>)> {
+        binders.into_iter().try_fold((Vec::new(), env), |(mut resolved, env), binder| {
+            let binder = self.pattern(binder, env)?;
+            resolved.push(binder.pattern);
+            Ok((resolved, binder.env))
+        })
+    }
+
     pub(super) fn pattern<'e>(
         &mut self, id: PatId, mut env: ResolveEnv<'e>,
     ) -> FoldResult<ResolvedPattern<'e>> {
@@ -235,10 +246,10 @@ impl<O: ResolutionObserver> ResolveFolder<'_, O> {
                 let tm = self.term(tm, env);
                 Ann { tm: tm?, ty: ty? }.into()
             }
-            | Term::Abs(Abs(binder, body)) => {
-                let binder = self.pattern(binder, env)?;
-                self.term(body, binder.env)?;
-                Abs(binder.pattern, body).into()
+            | Term::Abs(Abs(binders, body)) => {
+                let (binders, env) = self.telescope(binders, env)?;
+                self.term(body, env)?;
+                Abs(binders, body).into()
             }
             | Term::ValAbs(Abs(binder, body)) => {
                 let binder = self.pattern(binder, env)?;
@@ -250,10 +261,10 @@ impl<O: ResolutionObserver> ResolveFolder<'_, O> {
                 self.term(body, binder.env)?;
                 Fix(binder.pattern, body).into()
             }
-            | Term::Pi(Pi(binder, body)) => {
-                let binder = self.pattern(binder, env)?;
-                self.term(body, binder.env)?;
-                Pi(binder.pattern, body).into()
+            | Term::Pi(Pi(binders, body)) => {
+                let (binders, env) = self.telescope(binders, env)?;
+                self.term(body, env)?;
+                Pi(binders, body).into()
             }
             | Term::ValPi(ValPi(binder, body)) => {
                 let binder = self.pattern(binder, env)?;
@@ -327,6 +338,11 @@ impl<O: ResolutionObserver> ResolveFolder<'_, O> {
                 Residual(term.tail).into()
             }
             | Term::Block(Block(body)) => self.resolve_block(id, body, env)?,
+            | Term::CbvBlock(term) => {
+                let body = self.term(term.body, env);
+                body?;
+                term.into()
+            }
             | Term::MoBlock(term) => {
                 let monad = self.term(term.basis.monad, env.clone());
                 let algebra = self.term(term.basis.algebra, env.clone());

@@ -1,0 +1,153 @@
+-- Recursive functions in a call-by-value block, `let fix` in each of its forms, run end to end.
+--
+-- No block has arithmetic, so each answer is chosen by the shape of the
+-- recursion: most functions swap two arguments at each step, so the depth's
+-- parity decides which comes back, and a wrong reading of the parameters, of
+-- the recursion, or of what the function returns gives the other one.
+--
+-- Each block binds the built-in types it names, as `apply.zy` explains, and
+-- declares the data types it recurs over.
+begin
+  param (/Thk; /Ret; /Int; /Unit; /OS; /int; /process) : @(import("../../std/builtin.zy")) that
+  def ! require (want : Int) (got : Int) (k : Thk OS) : OS =
+    ! int/eq OS want got k { ! process/exit 1 }
+  that
+
+  -- one parameter, returning data: the last element, as an option
+  do a <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Unit : VType = @(intrinsic(unit)) that
+    def Opt (X : VType) : VType = data | +None : Unit | +Some : X end that
+    def List (X : VType) : VType = data | +Nil : Unit | +Cons : X * List X end that
+    let fix lastOpt (l : List Int) : Opt Int =
+      match l
+      | +Nil(_) => +None(())
+      | +Cons(c) => let (h, t) = c in match t | +Nil(_) => +Some(h) | +Cons(r) => lastOpt t end
+      end
+    in match lastOpt (+Cons((20, +Cons((21, +Nil(())))))) | +None(_) => 0 | +Some(v) => v end);
+  ! require 21 a {
+
+  -- a returned function that recurs from inside its own body: depth three
+  -- answers the second argument
+  do b <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Unit : VType = @(intrinsic(unit)) that
+    def Nat : VType = data | +Zero : Unit | +Succ : Nat end that
+    let fix alt (n : Nat) (x : Int) : Int -> Int =
+      match n
+      | +Zero(_) => fn (y : Int) => x
+      | +Succ(k) => fn (y : Int) => (alt k y) x
+      end
+    in alt (+Succ(+Succ(+Succ(+Zero(()))))) 22 23);
+  ! require 23 b {
+
+  -- a type parameter after the first, instantiated at a product
+  do c <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Unit : VType = @(intrinsic(unit)) that
+    def Nat : VType = data | +Zero : Unit | +Succ : Nat end that
+    let fix rep (n : Nat) (X : VType) (x : X) : X =
+      match n | +Zero(_) => x | +Succ(k) => rep k X x end
+    in let (p, q) = rep (+Succ(+Succ(+Zero(())))) (Int * Int) (24, 25) in q);
+  ! require 25 c {
+
+  -- constructor patterns as parameters, first and recurring
+  do d <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Unit : VType = @(intrinsic(unit)) that
+    def Nat : VType = data | +Zero : Unit | +Succ : Nat end that
+    def Box (X : VType) : VType = data | +Box : X end that
+    let fix unbox (+Box n : Box Nat) (x : Int) (y : Int) : Int =
+      match n | +Zero(_) => x | +Succ(k) => unbox (+Box k) y x end
+    in unbox (+Box (+Succ(+Zero(())))) 26 27);
+  ! require 27 d {
+
+  -- an annotated parameter whose component is a function, applied at the end
+  do e <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Unit : VType = @(intrinsic(unit)) that
+    def Nat : VType = data | +Zero : Unit | +Succ : Nat end that
+    let fix run ((f : Int -> Int, n) : (Int -> Int) * Nat) : Int =
+      match n | +Zero(_) => f 0 | +Succ(k) => run (f, k) end
+    in run (fn (x : Int) => 28, +Succ(+Succ(+Zero(())))));
+  ! require 28 e {
+
+  -- a function as an argument, threaded through every call
+  do f <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Unit : VType = @(intrinsic(unit)) that
+    def Nat : VType = data | +Zero : Unit | +Succ : Nat end that
+    let fix iter (n : Nat) (g : Int -> Int) (x : Int) : Int =
+      match n | +Zero(_) => x | +Succ(k) => iter k g (g x) end
+    in iter (+Succ(+Zero(()))) (fn (x : Int) => 29) 0);
+  ! require 29 f {
+
+  -- a nested `let fix` whose body calls the outer one: depth two ends in the
+  -- outer function's base case, depth one would end in the inner one's
+  do g <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Unit : VType = @(intrinsic(unit)) that
+    def Nat : VType = data | +Zero : Unit | +Succ : Nat end that
+    let fix outer (n : Nat) : Int =
+      let fix inner (m : Nat) : Int = match m | +Zero(_) => 30 | +Succ(k) => outer k end in
+      match n | +Zero(_) => 31 | +Succ(k) => inner k end
+    in outer (+Succ(+Succ(+Zero(())))));
+  ! require 31 g {
+
+  -- the recursive name captured by a closure that escapes the definition and
+  -- is called after it
+  do h <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Unit : VType = @(intrinsic(unit)) that
+    def Nat : VType = data | +Zero : Unit | +Succ : Nat end that
+    let fix swap (x : Int) (y : Int) : Nat -> Int =
+      fn (m : Nat) => match m | +Zero(_) => x | +Succ(k) => (swap y x) k end
+    in let later = swap 32 33 in later (+Succ(+Zero(()))));
+  ! require 33 h {
+
+  -- a polymorphic result, built from a type abstraction and instantiated after
+  -- the recursion returns
+  do i <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Unit : VType = @(intrinsic(unit)) that
+    def Nat : VType = data | +Zero : Unit | +Succ : Nat end that
+    let fix poly (n : Nat) : forall (X : VType) . X -> X =
+      match n | +Zero(_) => fn (X : VType) => fn (x : X) => x | +Succ(k) => poly k end
+    in poly (+Succ(+Zero(()))) Int 34);
+  ! require 34 i {
+
+  -- a product result, swapped on the way back up
+  do j <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Unit : VType = @(intrinsic(unit)) that
+    def Nat : VType = data | +Zero : Unit | +Succ : Nat end that
+    let fix pair (n : Nat) : Int * Int =
+      match n | +Zero(_) => (35, 36) | +Succ(k) => let (p, q) = pair k in (q, p) end
+    in let (x, y) = pair (+Succ(+Zero(()))) in x);
+  ! require 36 j {
+
+  -- a package result: the payload leaves only through the operation packed
+  -- with it
+  do k <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let Unit : VType = @(intrinsic(unit)) that
+    def Nat : VType = data | +Zero : Unit | +Succ : Nat end that
+    let fix pk (n : Nat) : exists (X : VType) . X * (X -> Int) =
+      match n | +Zero(_) => (Int, 37, fn (v : Int) => v) | +Succ(m) => pk m end
+    in let (X, v, use) = pk (+Succ(+Zero(()))) in use v);
+  ! require 37 k {
+
+  -- polymorphic recursion: the recursive call is at `X * X`, not at `X`, and
+  -- each level keeps the second half, so a wrong position or a wrong level
+  -- answers one of the other three numbers
+  do l <- @[cbv] (
+    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    -- a nested data type: each level doubles the element type
+    def Nest (X : VType) : VType = data | +Flat : X | +Deep : Nest (X * X) end that
+    let fix pick (X : VType) (n : Nest X) : X =
+      match n | +Flat(x) => x | +Deep(m) => let (a, b) = pick (X * X) m in b end
+    in pick Int (+Deep(+Deep(+Flat(((1, 2), (3, 38)))))));
+  ! require 38 l {
+
+  ! process/exit 0 }}}}}}}}}}}}
+end
