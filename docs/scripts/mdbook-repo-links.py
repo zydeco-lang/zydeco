@@ -5,8 +5,6 @@ Behavior:
 - Same-book links remain relative `.md` links (handled natively by mdBook).
 - Cross-book links between sibling books under `docs/references/` rewrite to relative `.html`
   paths in the combined static site (e.g., `../compiler/architecture.html#...`).
-- Links to `docs/references/README.md` (root or `#rule-ownership`) rewrite to the site landing
-  page (`../index.html`).
 - Links to other repository files and directories rewrite to GitHub `blob`/`tree` URLs while
   validating that every target path and Markdown heading anchor exists in the checkout.
 
@@ -314,7 +312,6 @@ def process_chapter_content(
     """Validate and rewrite all links in one book chapter."""
     chapter_resolved = chapter_file.resolve()
     book_src_resolved = book_src_dir.resolve()
-    refs_readme = (repo_root / "docs" / "references" / "README.md").resolve()
     current_src_rel = chapter_resolved.relative_to(book_src_resolved).as_posix()
     current_html = _chapter_html_path(book_name, current_src_rel)
     current_slugs = anchor_cache.slugs_for(chapter_resolved, content)
@@ -376,12 +373,7 @@ def process_chapter_content(
             rel_html = posixpath.relpath(target_html, posixpath.dirname(current_html))
             return f"{rel_html}#{frag}" if (has_hash and frag) else rel_html
 
-        # 3. Link to docs/references/README.md root or #rule-ownership -> site landing page.
-        if target_abs == refs_readme and (not has_hash or frag in ("", "rule-ownership")):
-            rel_index = posixpath.relpath("index.html", posixpath.dirname(current_html))
-            return f"{rel_index}#{frag}" if (has_hash and frag) else rel_index
-
-        # 4. Any other repository file/directory -> GitHub blob/tree URL.
+        # 3. Any other repository file/directory -> GitHub blob/tree URL.
         if is_image and target_abs.is_file():
             return f"{repo_url_clean}/raw/{git_ref}/{target_repo_rel}"
         kind = "tree" if target_abs.is_dir() else "blob"

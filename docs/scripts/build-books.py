@@ -266,352 +266,107 @@ def check_incoming_repo_links(root: Path, anchor_cache: Any) -> list[str]:
     return errors
 
 
-def _render_inline_md_to_html(
-    text: str,
-    *,
-    readme_dir: Path,
-    root: Path,
-    sibling_books: dict[str, Path],
-    repo_url: str,
-    git_ref: str,
-) -> str:
-    """Render simple inline Markdown (links and code spans) from docs/references/README.md to HTML."""
-    repo_url_clean = repo_url.rstrip("/")
-
-    def convert_href(url: str) -> str:
-        if url.startswith(("http://", "https://", "mailto:", "#")):
-            return url
-        path_part, has_hash, frag = url.partition("#")
-        target = (readme_dir / path_part).resolve()
-        for book_name, src_dir in sibling_books.items():
-            try:
-                rel = target.relative_to(src_dir).as_posix()
-            except ValueError:
-                continue
-            html_path = PREPROCESSOR._chapter_html_path(book_name, rel)
-            return f"./{html_path}#{frag}" if (has_hash and frag) else f"./{html_path}"
-        repo_rel = target.relative_to(root.resolve()).as_posix()
-        kind = "tree" if target.is_dir() else "blob"
-        suffix = f"#{frag}" if (has_hash and frag) else ""
-        return f"{repo_url_clean}/{kind}/{git_ref}/{repo_rel}{suffix}"
-
-    # Tokenize inline code and links cleanly.
-    out: list[str] = []
-    i = 0
-    n = len(text)
-    while i < n:
-        if text[i] == "`":
-            end = text.find("`", i + 1)
-            if end != -1:
-                out.append(f"<code>{html.escape(text[i + 1 : end])}</code>")
-                i = end + 1
-                continue
-        if text[i] == "[":
-            close_b = text.find("]", i + 1)
-            if close_b != -1 and close_b + 1 < n and text[close_b + 1] == "(":
-                close_p = text.find(")", close_b + 2)
-                if close_p != -1:
-                    label = text[i + 1 : close_b]
-                    href = convert_href(text[close_b + 2 : close_p])
-                    label_html = _render_inline_md_to_html(
-                        label,
-                        readme_dir=readme_dir,
-                        root=root,
-                        sibling_books=sibling_books,
-                        repo_url=repo_url,
-                        git_ref=git_ref,
-                    )
-                    out.append(f'<a href="{html.escape(href, quote=True)}">{label_html}</a>')
-                    i = close_p + 1
-                    continue
-        out.append(html.escape(text[i]))
-        i += 1
-    return "".join(out)
-
-
-def parse_rule_ownership_rows(readme_path: Path) -> list[tuple[str, str, str]]:
-    """Extract `(topic, source_contract, implementation_contract)` rows from docs/references/README.md."""
-    lines = readme_path.read_text(encoding="utf-8").splitlines()
-    in_section = False
-    rows: list[tuple[str, str, str]] = []
-    for line in lines:
-        if line.strip() == "## Rule Ownership":
-            in_section = True
-            continue
-        if in_section and line.startswith("## "):
-            break
-        if not in_section or not line.strip().startswith("|"):
-            continue
-        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-        if len(cells) != 3:
-            continue
-        if cells[0] == "Topic" or all(set(c) <= {"-", " ", ":"} for c in cells):
-            continue
-        rows.append((cells[0], cells[1], cells[2]))
-    if not rows:
-        raise RuntimeError(f"no Rule Ownership rows found in {readme_path}")
-    return rows
-
-
 def render_landing_page(
-    root: Path,
+    _root: Path,
     *,
     repo_url: str = PREPROCESSOR.DEFAULT_REPO_URL,
     git_ref: str = PREPROCESSOR.DEFAULT_GIT_REF,
 ) -> str:
-    """Generate the combined static site landing page from `docs/references/README.md`."""
-    refs_root = root / "docs" / "references"
-    readme_path = refs_root / "README.md"
-    sibling_books = PREPROCESSOR.discover_sibling_books(refs_root)
+    """Generate a minimal landing page linking to both books and the language guide."""
     repo_url_clean = repo_url.rstrip("/")
-
     guide_url = f"{repo_url_clean}/blob/{git_ref}/docs/tutorial/zydeco-guide.md"
-    std_url = f"{repo_url_clean}/blob/{git_ref}/lib/std/README.md"
-    cli_url = f"{repo_url_clean}/blob/{git_ref}/cli/README.md"
-    contributing_url = f"{repo_url_clean}/blob/{git_ref}/CONTRIBUTING.md"
-    calculus_url = f"{repo_url_clean}/blob/{git_ref}/lang/statics/type-system.typ"
-
-    rows_html: list[str] = []
-    for topic, source_md, impl_md in parse_rule_ownership_rows(readme_path):
-        topic_html = _render_inline_md_to_html(
-            topic,
-            readme_dir=refs_root,
-            root=root,
-            sibling_books=sibling_books,
-            repo_url=repo_url,
-            git_ref=git_ref,
-        )
-        source_html = _render_inline_md_to_html(
-            source_md,
-            readme_dir=refs_root,
-            root=root,
-            sibling_books=sibling_books,
-            repo_url=repo_url,
-            git_ref=git_ref,
-        )
-        impl_html = _render_inline_md_to_html(
-            impl_md,
-            readme_dir=refs_root,
-            root=root,
-            sibling_books=sibling_books,
-            repo_url=repo_url,
-            git_ref=git_ref,
-        )
-        rows_html.append(
-            f"            <tr><td>{topic_html}</td><td>{source_html}</td><td>{impl_html}</td></tr>"
-        )
-    table_body = "\n".join(rows_html)
 
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Zydeco Documentation</title>
+  <title>Zydeco</title>
   <style>
     :root {{
       color-scheme: light dark;
       --bg: #ffffff;
-      --surface: #f7f7f9;
-      --border: #dfe2e8;
-      --fg: #1b1f24;
-      --muted: #57606a;
-      --accent: #0969da;
-      --accent-hover: #0550ae;
-      --code-bg: #eff1f5;
+      --fg: #14171a;
+      --muted: #656d76;
+      --rule: #e6e8ec;
     }}
     @media (prefers-color-scheme: dark) {{
       :root {{
-        --bg: #161923;
-        --surface: #1e2230;
-        --border: #31374a;
-        --fg: #e6edf3;
-        --muted: #9aa4b5;
-        --accent: #6cb6ff;
-        --accent-hover: #96d0ff;
-        --code-bg: #272c3d;
+        --bg: #111318;
+        --fg: #eceff4;
+        --muted: #8b949e;
+        --rule: #242934;
       }}
     }}
     * {{ box-sizing: border-box; }}
     body {{
       margin: 0;
+      min-height: 100vh;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       background: var(--bg);
       color: var(--fg);
-      line-height: 1.6;
+      line-height: 1.5;
     }}
     main {{
-      max-width: 980px;
+      max-width: 420px;
       margin: 0 auto;
-      padding: 3rem 1.5rem 4rem;
+      padding: 18vh 1.5rem 3rem;
     }}
-    header {{ margin-bottom: 2rem; }}
     h1 {{
-      margin: 0 0 0.5rem;
-      font-size: 2.1rem;
+      margin: 0 0 2rem;
+      font-size: 1.5rem;
+      font-weight: 600;
       letter-spacing: -0.02em;
     }}
-    header p {{
+    ul {{
+      list-style: none;
       margin: 0;
-      color: var(--muted);
-      max-width: 68ch;
+      padding: 0;
+      border-top: 1px solid var(--rule);
     }}
-    .cards {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 1rem;
-      margin: 2rem 0 1.5rem;
+    li {{
+      border-bottom: 1px solid var(--rule);
     }}
-    .card {{
+    li a {{
       display: flex;
-      flex-direction: column;
-      padding: 1.25rem 1.35rem;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      text-decoration: none;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.9rem 0;
       color: inherit;
-      transition: border-color 0.15s ease, transform 0.15s ease;
+      text-decoration: none;
+      font-size: 1.05rem;
     }}
-    .card:hover {{
-      border-color: var(--accent);
-      transform: translateY(-1px);
-    }}
-    .card-kicker {{
-      font-size: 0.78rem;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
+    li a span {{
       color: var(--muted);
-      margin-bottom: 0.35rem;
+      transition: transform 0.15s ease, color 0.15s ease;
     }}
-    .card h2 {{
-      margin: 0 0 0.5rem;
-      font-size: 1.2rem;
-      color: var(--accent);
+    li a:hover span {{
+      color: var(--fg);
+      transform: translateX(2px);
     }}
-    .card p {{
-      margin: 0;
-      font-size: 0.95rem;
-      color: var(--muted);
-    }}
-    .quick-links {{
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.75rem 1.25rem;
-      margin: 0 0 2.5rem;
-      font-size: 0.94rem;
-    }}
-    a {{ color: var(--accent); }}
-    a:hover {{ color: var(--accent-hover); }}
-    h2#rule-ownership {{
-      margin: 2rem 0 0.5rem;
-      font-size: 1.45rem;
-      border-bottom: 1px solid var(--border);
-      padding-bottom: 0.4rem;
-    }}
-    .table-wrap {{ overflow-x: auto; margin-top: 1rem; }}
-    table {{
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.93rem;
-    }}
-    th, td {{
-      text-align: left;
-      padding: 0.6rem 0.75rem;
-      border-bottom: 1px solid var(--border);
-      vertical-align: top;
-    }}
-    th {{
-      background: var(--surface);
-      font-weight: 600;
-    }}
-    code {{
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 0.88em;
-      padding: 0.12em 0.32em;
-      background: var(--code-bg);
-      border-radius: 4px;
-    }}
-    footer {{
-      margin-top: 3rem;
-      padding-top: 1rem;
-      border-top: 1px solid var(--border);
+    .repo {{
+      display: inline-block;
+      margin-top: 2rem;
       font-size: 0.88rem;
       color: var(--muted);
+      text-decoration: none;
+    }}
+    .repo:hover {{
+      color: var(--fg);
     }}
   </style>
 </head>
 <body>
   <main>
-    <header>
-      <h1>Zydeco Documentation</h1>
-      <p>
-        Canonical references for Zydeco, a call-by-push-value language prototype exploring explicit
-        control flow, stack-manipulating computation, and relative monads.
-      </p>
-    </header>
-
-    <section class="cards" aria-label="Documentation books and guides">
-      <a class="card" href="./language/">
-        <span class="card-kicker">Reference Book</span>
-        <h2>Language Reference</h2>
-        <p>
-          Source syntax, typing, evaluation, static composition, translations into the core,
-          packages, capabilities, foreign interfaces, and execution profiles.
-        </p>
-      </a>
-      <a class="card" href="./compiler/">
-        <span class="card-kicker">Reference Book</span>
-        <h2>Compiler Implementation Reference</h2>
-        <p>
-          Phase contracts, pass composition, intermediate representations, checking, lowering,
-          native and WebAssembly runtimes, tooling, and validation.
-        </p>
-      </a>
-      <a class="card" href="{html.escape(guide_url, quote=True)}">
-        <span class="card-kicker">Tutorial on GitHub</span>
-        <h2>Language Guide</h2>
-        <p>
-          Source-level walkthrough of values, computations, modules, relative monads, and running
-          programs with the Zydeco CLI.
-        </p>
-      </a>
-    </section>
-
-    <nav class="quick-links" aria-label="Additional repository guides">
-      <a href="{html.escape(repo_url_clean, quote=True)}">GitHub Repository</a>
-      <a href="{html.escape(std_url, quote=True)}">Standard Library Guide</a>
-      <a href="{html.escape(cli_url, quote=True)}">CLI Guide</a>
-      <a href="{html.escape(calculus_url, quote=True)}">Formal Calculus</a>
-      <a href="{html.escape(contributing_url, quote=True)}">Contributing</a>
+    <h1>Zydeco</h1>
+    <nav aria-label="Documentation">
+      <ul>
+        <li><a href="./language/">Language Reference<span aria-hidden="true">&rarr;</span></a></li>
+        <li><a href="./compiler/">Compiler Reference<span aria-hidden="true">&rarr;</span></a></li>
+        <li><a href="{html.escape(guide_url, quote=True)}">Language Guide<span aria-hidden="true">&#8599;</span></a></li>
+      </ul>
     </nav>
-
-    <section aria-labelledby="rule-ownership">
-      <h2 id="rule-ownership">Rule Ownership</h2>
-      <p>
-        Each chapter owns its semantic boundary. This map connects source contracts in the language
-        reference to their implementation accounts in the compiler reference.
-      </p>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Topic</th>
-              <th>Source contract</th>
-              <th>Implementation contract</th>
-            </tr>
-          </thead>
-          <tbody>
-{table_body}
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <footer>
-      Built with <a href="https://rust-lang.github.io/mdBook/">mdBook</a> from
-      <a href="{html.escape(repo_url_clean, quote=True)}">zydeco-lang/zydeco</a>.
-    </footer>
+    <a class="repo" href="{html.escape(repo_url_clean, quote=True)}">GitHub</a>
   </main>
 </body>
 </html>
@@ -818,7 +573,10 @@ class BookToolingTests(unittest.TestCase):
             out_content = out_book[schema_key][0]["Chapter"]["content"]
             self.assertIn("[Scope](../bindings-and-scope.md)", out_content)
             self.assertIn("[C8](../../compiler/sps.html#correspondence-with-sps)", out_content)
-            self.assertIn("[Map](../../index.html#rule-ownership)", out_content)
+            self.assertIn(
+                "[Map](https://example.invalid/org/repo/blob/v1.2.3/docs/references/README.md#rule-ownership)",
+                out_content,
+            )
             self.assertIn("[Cargo](https://example.invalid/org/repo/blob/v1.2.3/Cargo.toml)", out_content)
             self.assertIn(
                 "[Effect lib](https://example.invalid/org/repo/tree/v1.2.3/lib/std/effect)",
@@ -869,7 +627,7 @@ class BookToolingTests(unittest.TestCase):
                 self.assertNotEqual(proc.returncode, 0, msg=f"expected failure for {label}")
                 self.assertIn(expected_err, proc.stderr)
 
-    def test_landing_page_includes_books_guide_and_rule_ownership(self) -> None:
+    def test_landing_page_is_minimal_with_books_and_guide(self) -> None:
         root = repo_root()
         page = render_landing_page(
             root,
@@ -879,9 +637,8 @@ class BookToolingTests(unittest.TestCase):
         self.assertIn('href="./language/"', page)
         self.assertIn('href="./compiler/"', page)
         self.assertIn("https://github.com/zydeco-lang/zydeco/blob/main/docs/tutorial/zydeco-guide.md", page)
-        self.assertIn('id="rule-ownership"', page)
-        self.assertIn('href="./language/bindings-and-scope.html"', page)
-        self.assertIn('href="./compiler/parsing-and-resolution.html#name-resolution"', page)
+        self.assertIn('href="https://github.com/zydeco-lang/zydeco"', page)
+        self.assertNotIn("<table", page)
 
     def test_verify_built_site_accepts_clean_and_rejects_broken_html(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
