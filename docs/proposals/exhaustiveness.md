@@ -2,11 +2,11 @@
 
 Coverage must preserve relationships among fields.
 Arms `(+True(_), _)` and `(_, +False(_))` mention both Boolean constructors but leave `(+False(_), +True(_))` uncovered.
-This motivates the typed pattern matrix described in the [compiler reference](../references/compiler.md#coverage):
+This motivates the typed pattern matrix described in the [compiler reference](../references/compiler/src/elaboration-and-validation.md#coverage):
 typing determines constructor spaces, product arities, and erased witness components
 before the matrix enumerates missing shapes.
-The [language reference](../references/language.md#7-patterns-and-coverage) owns source acceptance and catch-all rules;
-[SPS lowering](../references/compiler.md#pattern-decisions-and-validation) owns compiled pattern decisions.
+The [language reference](../references/language/src/patterns-and-coverage.md) owns source acceptance and catch-all rules;
+[SPS lowering](../references/compiler/src/sps/operations-and-patterns.md#pattern-decisions-and-validation) owns compiled pattern decisions.
 
 The remaining extensions change what a row can observe or how rows interact.
 They should preserve correlated coverage and source-order fallthrough across interpreter and compiled execution.
@@ -29,7 +29,7 @@ Several constructor members may refine the same payload or make the conjunction 
 failure of a later member must have a defined relationship to the following match arm.
 Views introduce another observation whose duplication and ordering must remain explicit.
 Review these cases together with usefulness checking
-and the [shared-bindee demand rule](../references/compiler.md#consumer-demands).
+and the [shared-bindee demand rule](../references/compiler/src/sps/normalization-and-demand.md#consumer-demands).
 
 An unrestricted binary as-pattern remains an alternative when only a whole-value alias
 and one refutable member are needed.
@@ -51,7 +51,7 @@ on existential witnesses opened by the argument.
 Several clauses require a dependent form of the generated argument match
 that preserves those witnesses across alternatives.
 Ordinary arrows, universal arguments, and nested destructor paths already use
-[shared argument elaboration](../references/compiler.md#monadic-and-copattern-elaboration).
+[shared argument elaboration](../references/compiler/src/elaboration-and-validation.md#monadic-and-copattern-elaboration).
 
 A proposed extension should show complete and incomplete clause matrices, witness non-escape,
 and agreement between generated matching and direct witness-dependent abstraction.

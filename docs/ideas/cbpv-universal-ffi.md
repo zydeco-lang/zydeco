@@ -77,7 +77,7 @@ The type exposes callback invocation and return, but does not itself establish n
 buffer validity, or termination.
 
 CBPV also lets the source implementation abstract over the caller's remaining computation protocol.
-Following Zydeco's [public CPS convention](../references/language.md#ret-and-explicit-cps),
+Following Zydeco's [public CPS convention](../references/language/src/computations-and-control.md#ret-and-explicit-cps),
 an effectful visitor and callback could instead expose:
 
 ```text
@@ -192,9 +192,9 @@ The repository supplies preliminary engineering evidence, with each current cont
 
 | Foundation | Evidence and limit |
 | --- | --- |
-| Foreign entry and exit | [C imports and scalar exports](../references/language.md#14-foreign-interfaces) exercise concrete conversions. Foreign callbacks and general exported values remain deferred. |
-| Separate compilation | [Native unit artifacts](../references/compiler.md#native-unit-artifacts) carry explicit structural interfaces and support source-free composition. They do not provide a persistent foreign host API. |
-| Representation discipline | [Scalar boundaries](../references/compiler.md#scalar-value-boundaries) distinguish ordinary values from raw bits and verify local scalar programs. This is bounded compiler validation, not an interoperability soundness theorem. |
+| Foreign entry and exit | [C imports and scalar exports](../references/language/src/foreign-interfaces.md) exercise concrete conversions. Foreign callbacks and general exported values remain deferred. |
+| Separate compilation | [Native unit artifacts](../references/compiler/src/native-emission.md#native-unit-artifacts) carry explicit structural interfaces and support source-free composition. They do not provide a persistent foreign host API. |
+| Representation discipline | [Scalar boundaries](../references/compiler/src/native-runtime.md#scalar-value-boundaries) distinguish ordinary values from raw bits and verify local scalar programs. This is bounded compiler validation, not an interoperability soundness theorem. |
 | Compilation costs | The [typed memory study](../evaluations/2026-09-15-typed-memory/README.md) records reproducible code-site counts. They establish neither general FFI overhead nor runtime speedups. |
 
 The concrete [foreign-interface proposal](../proposals/c-ffi.md)

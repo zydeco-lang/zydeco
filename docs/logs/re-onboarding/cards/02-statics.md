@@ -9,8 +9,8 @@ checked or rejected outcome. Within that boundary it checks bidirectional kind, 
 judgments; solves inference constraints; resolves holes and normalizes the typed graph; validates coverage inside the
 check and offers execution-readiness validation to later consumers; and statically eliminates the residual program. It
 also owns the Salsa query surface through which the session requests a check and the typed-arena representation that
-surface returns ([C3 query ownership](../../../../docs/references/compiler.md#query-and-checker-ownership),
-[C2 identities and arenas](../../../../docs/references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance)).
+surface returns ([C3 query ownership](../../../references/compiler/src/sessions-and-queries.md#query-and-checker-ownership),
+[C2 identities and arenas](../../../references/compiler/src/compiler-data.md)).
 
 The crate is organized around the durable representation, not the checking driver:
 `syntax` and `arena` define the typed products, `check` elaborates source into them,
@@ -41,10 +41,10 @@ Downstream, the session keeps keyed analysis facts and materializes the full are
 the session database implements `TyckDb` (`lang/session/src/source/query.rs:282`), and `materialize_arena`,
 `checked_program`, and `executable_program` recover shared arenas from the coarse memo (`:501`, `:512`).
 The interpreter linker consumes the residual root
-([C7](../../../../docs/references/compiler.md#c7-linking-and-the-reference-interpreter)); SPS lowering
-consumes the same arena ([C8](../../../../docs/references/compiler.md#c8-sps-lowering-normalization-and-demand));
+([C7](../../../references/compiler/src/reference-interpreter.md)); SPS lowering
+consumes the same arena ([C8](../../../references/compiler/src/sps.md));
 hovers and diagnostics render typed types through `lang/statics/src/fmt.rs`
-([C15 elaborated type rendering](../../../../docs/references/compiler.md#elaborated-type-rendering)).
+([C15 elaborated type rendering](../../../references/compiler/src/tooling/formatting-and-rendering.md#elaborated-type-rendering)).
 
 ## 3. Entry Points and Key Types
 
@@ -73,21 +73,21 @@ hovers and diagnostics render typed types through `lang/statics/src/fmt.rs`
   The thunk rule shows the pattern: `lang/statics/src/check/term/computation.rs:27` calls `judge`,
   and `lang/statics/src/query/computation.rs:18-54` derives the two node identities and returns three arena payloads.
   Site entry and occurrence tracking live in `lang/statics/src/check/driver.rs:97-116`.
-  Canonical boundary: [C3](../../../../docs/references/compiler.md#query-and-checker-ownership); identity rules:
-  [C2](../../../../docs/references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance).
+  Canonical boundary: [C3](../../../references/compiler/src/sessions-and-queries.md#query-and-checker-ownership); identity rules:
+  [C2](../../../references/compiler/src/compiler-data.md).
 
 - **One memo orders the phases and publishes once.** `check_source` (above) runs judgments, finishes them,
   resolves holes, normalizes and validates, elaborates the static root, strips checker state,
   and only then builds the outcome (`lang/statics/src/query/source.rs:152-190`).
   Rejected runs still publish the arena for diagnostics and tooling but expose no checked root (`:177-188`).
   Canonical account:
-  [C3 analysis facts and materialization](../../../../docs/references/compiler.md#analysis-facts-and-materialization).
+  [C3 analysis facts and materialization](../../../references/compiler/src/sessions-and-queries.md#analysis-facts-and-materialization).
 
 - **A successful check leaves typed-arena invariants.** Every kind and type cell has left its fill form;
   every allocated value, computation, pattern, and type carries an annotation of the right kind;
   no residual hole survives except a foreign import's placeholder.
   Compilation does not enforce these; tests do (`lang/tests/src/invariants.rs`,
-  named in [C6 typed-arena invariants](../../../../docs/references/compiler.md#typed-arena-invariants)).
+  named in [C6 typed-arena invariants](../../../references/compiler/src/elaboration-and-validation.md#typed-arena-invariants)).
   The checker's own finalization code that establishes them is `lang/statics/src/check/driver.rs:166-204`.
 
 - **Inference closes at a source boundary before import reconciliation.** `InferenceRegion` records the fills inherited
@@ -95,28 +95,28 @@ hovers and diagnostics render typed types through `lang/statics/src/fmt.rs`
   that remain incomplete (`lang/statics/src/check/source.rs:100`, `:203`, `:208`).
   Failed speculative fills restore solutions and scopes, and lexical
   or abstract substitution follows solved holes before rewriting.
-  Canonical rules: [C5 inference and reuse](../../../../docs/references/compiler.md#inference-and-reuse)
-  and [L4](../../../../docs/references/language.md#4-classification-and-inference).
+  Canonical rules: [C5 inference and reuse](../../../references/compiler/src/checking-and-inference.md#inference-and-reuse)
+  and [L4](../../../references/language/src/classification-and-inference.md).
 
 - **Checked synthesis is reused only under a context extension.** `CheckedTermRepository` keeps one
   canonical synthesis result per resolved term; a later request must extend the original typing context,
   and repeated or nested successes must agree on the arena root.
   A nested failure supersedes a retained root without rechecking (`lang/statics/src/check/source.rs:118`, `:160-190`).
-  Canonical account: [C5 inference and reuse](../../../../docs/references/compiler.md#inference-and-reuse).
+  Canonical account: [C5 inference and reuse](../../../references/compiler/src/checking-and-inference.md#inference-and-reuse).
 
 - **Finalization shares caches after inference freezes.** `HoleResolver`
   and `FilledNormalizer` each hold one pass-wide memo used
   across every arena root (`lang/statics/src/normalize/resolution.rs:8`,
   `lang/statics/src/normalize/filled.rs:12`); unchanged nodes keep their existing IDs
   and only changed paths enter `kinds_normalized`/`types_normalized` (`:73-78`, `:161`).
-  Canonical account: [C5 finalization](../../../../docs/references/compiler.md#finalization).
+  Canonical account: [C5 finalization](../../../references/compiler/src/checking-and-inference.md#finalization).
 
 - **Static elaboration separates the source root from an optional residual.** `StaticElaboration` records
   the original root plus a residual when one exists, so an unapplied static library value can be checked
   without a runtime representation (`lang/statics/src/elaborate/static_values/mod.rs:63`, `:224`).
   Linking and SPS lowering enter through `execution_value`/`execution_compu` (`lang/statics/src/arena.rs:719`, `:732`).
-  Canonical rules: [C6 static elimination](../../../../docs/references/compiler.md#static-elimination)
-  and [L10](../../../../docs/references/language.md#10-static-elimination).
+  Canonical rules: [C6 static elimination](../../../references/compiler/src/elaboration-and-validation.md#static-elimination)
+  and [L10](../../../references/language/src/static-elimination.md).
 
 ## 5. Data Flow
 
@@ -196,39 +196,39 @@ Scratch inputs live under `target/study-statics/` (ignored).
    shared caches, and the refinement drift.
 9. `lang/statics/src/elaborate/static_values/mod.rs:63-231`, `lang/statics/src/traverse.rs:162`,
    and `lang/statics/src/validate/`: the C6 tail.
-10. References: [C2](../../../../docs/references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance),
-    [C3](../../../../docs/references/compiler.md#c3-source-loading-sessions-queries-and-memory-retention),
-    [C5](../../../../docs/references/compiler.md#c5-typed-representation-judgments-and-inference),
-    [C6](../../../../docs/references/compiler.md#c6-typed-elaboration-residualization-and-validation),
+10. References: [C2](../../../references/compiler/src/compiler-data.md),
+    [C3](../../../references/compiler/src/sessions-and-queries.md),
+    [C5](../../../references/compiler/src/checking-and-inference.md),
+    [C6](../../../references/compiler/src/elaboration-and-validation.md),
     then the two retired studies' statics findings.
 
 ## 8. Checkpoint Questions
 
 1. Which query owns one complete source check, and why does that bound any reuse claim?
    → `lang/statics/src/query/source.rs:100`;
-   [C3 analysis facts](../../../../docs/references/compiler.md#analysis-facts-and-materialization).
+   [C3 analysis facts](../../../references/compiler/src/sessions-and-queries.md#analysis-facts-and-materialization).
 2. Why do producer queries derive identifiers from an entity, occurrence, and slot instead of allocating directly?
-   → [C3 query ownership](../../../../docs/references/compiler.md#query-and-checker-ownership);
+   → [C3 query ownership](../../../references/compiler/src/sessions-and-queries.md#query-and-checker-ownership);
    `lang/statics/src/query/computation.rs:44-46`.
 3. Where does an occurrence come from, and why must re-checking the same entity derive distinct IDs?
    → `lang/statics/src/check/driver.rs:97-109`;
-   [C2](../../../../docs/references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance).
+   [C2](../../../references/compiler/src/compiler-data.md).
 4. Trace `{ ret 1 }`: which checker function, which producer query, which arena tables?
    → `lang/statics/src/check/term/computation.rs:6-39`; `lang/statics/src/query/computation.rs:18-54`.
 5. What runs between `finish_judgments` and `strip_checker_state`, and in what order?
    → `lang/statics/src/check/driver.rs:153-229`;
-   [C6](../../../../docs/references/compiler.md#c6-typed-elaboration-residualization-and-validation).
+   [C6](../../../references/compiler/src/elaboration-and-validation.md).
 6. What happens to a rejected check's arena, and who may still read it?
    → `lang/statics/src/query/source.rs:177-188`;
-   [C5 checker recovery](../../../../docs/references/compiler.md#checker-recovery).
+   [C5 checker recovery](../../../references/compiler/src/checking-and-inference.md#checker-recovery).
 7. Which tables disappear before publication, and why is dropping them safe?
    → `lang/statics/src/check/driver.rs:220-229`; `lang/statics/src/arena.rs:678-694`;
-   [C3 analysis facts](../../../../docs/references/compiler.md#analysis-facts-and-materialization).
+   [C3 analysis facts](../../../references/compiler/src/sessions-and-queries.md#analysis-facts-and-materialization).
 8. What are the typed-arena invariants, and why does compilation not enforce them?
-   → [C6 typed-arena invariants](../../../../docs/references/compiler.md#typed-arena-invariants);
+   → [C6 typed-arena invariants](../../../references/compiler/src/elaboration-and-validation.md#typed-arena-invariants);
    `lang/tests/src/invariants.rs`.
 9. How do the interpreter and SPS lowering select a residual root? → `lang/statics/src/arena.rs:719-740`;
-   [C6 static elimination](../../../../docs/references/compiler.md#static-elimination).
+   [C6 static elimination](../../../references/compiler/src/elaboration-and-validation.md#static-elimination).
 10. Why does `(head, _, _)` reject while `(head, _)` passes, and what tracks the gap?
     → `lang/statics/src/normalize/inference.rs:45-52`;
     [compiler-boundaries n-ary](../../../../docs/todos/compiler-boundaries.md#n-ary-product-inference-refinement);
@@ -246,7 +246,7 @@ Both retired studies call their findings proposals, not decisions.
 | # | Signal | Evidence | Status | Assessment |
 | --- | --- | --- | --- | --- |
 | 1 | Per-judgment `no_eq` producer queries duplicate every typing rule; the coarse check already memoizes the whole result. | `lang/statics/src/query/` 2,307 lines with 45 `no_eq` tracked functions (38 syntax-family rule producers); thunk rule glue `lang/statics/src/check/term/computation.rs:6-39`; [audit §per-judgment](../../../proposals/checker-query-retirement.md#per-judgment-checker-queries); [size §judgment queries](../../../proposals/checker-query-retirement.md#judgment-queries-duplicate-every-checker-rule) | `decision needed` | Appendix B1 `open — reference gate`. Direct allocation is the audit's first suggested removal and the size analysis's ≈5k–6k structural simplification; it changes C3/C5 query-ownership text, so it needs approval, and the ≈30% overhead figure is a dated measurement to re-run. |
-| 2 | Derived-identifier registry exists only to make producer-query identities replay-stable. | `lang/statics/src/alloc/identity.rs:31`, `:80`; `lang/statics/src/query/intrinsic.rs:40-46`; [C2 registry](../../../../docs/references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance) | `decision needed` | Audited as retained "derived identifiers, which keep Salsa replay stable" ([audit §retained](../../../proposals/artifact-boundary.md#retained-after-review)); the size analysis removes it together with signal 1 in favor of a sequential issuer. Conditional on that decision, not independently removable. |
+| 2 | Derived-identifier registry exists only to make producer-query identities replay-stable. | `lang/statics/src/alloc/identity.rs:31`, `:80`; `lang/statics/src/query/intrinsic.rs:40-46`; [C2 registry](../../../references/compiler/src/compiler-data.md) | `decision needed` | Audited as retained "derived identifiers, which keep Salsa replay stable" ([audit §retained](../../../proposals/artifact-boundary.md#retained-after-review)); the size analysis removes it together with signal 1 in favor of a sequential issuer. Conditional on that decision, not independently removable. |
 | 3 | Sort dispatchers and union-typed rule results make rules narrow with `as_*`/`try_as_*` conversions. | `lang/statics/src/syntax.rs:23`, `:31`, `:40`, `:47`, `:53`, `:88`, `:95`; [size §sort dispatchers](../../../proposals/checker-query-retirement.md#sort-dispatchers) | `decision needed` | The size analysis's fix is a core representation whose sorts are visible in the syntax so each rule returns one sort; that depends on the IR-boundary decision and touches C5's representation table. |
 | 4 | Closed types: per-node typing environments and the `subst_env` calls they require. | Six tables stripped at `lang/statics/src/check/driver.rs:220-229`; declarations at `lang/statics/src/arena.rs:678-694`; 44 `subst_env` mentions in `lang/statics/src`; [size §structural simplifications](../../../proposals/artifact-boundary.md#structural-simplifications) | `decision needed` | Appendix C lists this as `open (evaluation)` gated on the IR/elaboration decision (≈0.8k–1.2k estimate). Removing the tables changes the C2/C5 representation contract, so it is not a code-only cleanup. |
 | 5 | `unreachable!` glue around producer results and sort narrowing. | 152 occurrences in `lang/statics/src`; 42 sites whose message says the result is query-produced (e.g. `lang/statics/src/check/judgment.rs:98`, `lang/statics/src/check/term/atomic.rs:91`); [size §sort dispatchers](../../../proposals/checker-query-retirement.md#sort-dispatchers) | `open` | Not separately actionable: roughly the producer-unwrapping share disappears with signal 1, the narrowing share with signal 3. Count is already down from the size analysis's 203 at `6aae43d0`. |

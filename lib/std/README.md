@@ -18,7 +18,7 @@ let stop : Thk (Int -> OS) = process/exit in
 ! stop 0
 ```
 
-The [core prelude contract](../../docs/references/language.md#core-prelude) owns the vocabulary,
+The [core prelude contract](../../docs/references/language/src/sources/core-prelude.md) owns the vocabulary,
 lookup rules, and `@[prelude(none)]` / `@[prelude(from(view))]` exceptions.
 Keep dependent operations and the retained provider alias on one shared opening.
 
@@ -49,7 +49,7 @@ but never construct library-defined `Bool`, `Option`, `Either`, `List`, or `Byte
 whose sealed type its final `pack` introduction synthesizes.
 
 Types and the definitions that use them live in the same source package.
-The [organization rule](../../docs/references/language.md#standard-library-organization)
+The [organization rule](../../docs/references/language/src/sources/standard-library.md)
 distinguishes manifest structural interfaces from abstract representation witnesses.
 A module with a reusable input or output contract exports that contract together with its `make` value function.
 For example, `data/package.zy` exports `DataPackage`, `BoolModule`, and `make`:
@@ -81,7 +81,7 @@ while the files under `data/` and the derived operations in the topic packages r
 Apply it to the Builtin packed value directly when a list is unnecessary; `process/arg_list` uses the same builder.
 Callers of the former Builtin `args/fold` should instantiate this builder and call its `fold` field.
 Tails are ordinary reusable computations, and host runtimes need no special closure implementation.
-[Argument semantics](../../docs/references/language.md#13-primitive-values-and-capabilities) specify lookup failures
+[Argument semantics](../../docs/references/language/src/primitives-and-capabilities.md) specify lookup failures
 and repeated forcing.
 
 The optional `memory/package.zy` builder is imported directly, like the effect libraries.
@@ -94,7 +94,7 @@ See [explicit storage](#explicit-storage).
 The primitive leaf and closed default view are `std/primitive` and `std/prelude`.
 Builtin is `std/builtin`; topic entries are `std/data`, `std/text`, `std/numeric`, `std/system`, and `std/memory`.
 These names identify source terms; fields and factory applications remain ordinary language structure.
-The [source-package rules](../../docs/references/language.md#source-packages) govern selection and relationships.
+The [source-package rules](../../docs/references/language/src/sources/packages.md#source-packages) govern selection and relationships.
 
 The repository's [workspace.zy](../../workspace.zy) explicitly includes entry files and the std test tree.
 From the repository root:
@@ -124,7 +124,7 @@ There is no separate version resolver or hosted registry.
 
 ## Source layout
 
-The [organization rule](../../docs/references/language.md#standard-library-organization) separates value data,
+The [organization rule](../../docs/references/language/src/sources/standard-library.md) separates value data,
 general-purpose dictionaries, effects, and runtime capabilities.
 The current files are:
 
@@ -175,7 +175,7 @@ effect/nondet.zy           MonadNonDet interface and make factory for ordered se
 ```
 
 The public `Either` type
-and `either` operation bundle follow the [shared binary-sum contract](../../docs/references/language.md#either-values).
+and `either` operation bundle follow the [shared binary-sum contract](../../docs/references/language/src/sources/standard-library.md#either-values).
 Fallible APIs put errors on the left and successful values on the right.
 
 Topic implementations are independently checkable source terms; open `make` from entries that also export contracts.
@@ -203,7 +203,7 @@ operations, and capabilities alike, and every selection shares the contract's id
 Fixed representations are compiler-canonical intrinsics, so independent selections share one `Int` identity.
 Opening the runtime-owned system capabilities introduces fresh abstract witnesses.
 A composition root that must pass the dependency onward keeps the whole-alias `builtin` beside its selections.
-The [primitive and capability rules](../../docs/references/language.md#13-primitive-values-and-capabilities)
+The [primitive and capability rules](../../docs/references/language/src/primitives-and-capabilities.md)
 define these identity boundaries.
 The Builtin contracts and primitive leaf bootstrap their canonical types with `@(intrinsic(name))`.
 Higher-level libraries use the default vocabulary instead of repeating those bindings or importing the leaf.
@@ -227,7 +227,7 @@ Here `Reader` and primitive `io` come from one Builtin opening; `builtin` forwar
 `Bytes`, convenient `bytes`, and `fs` share the std opening.
 For low-level memory composition, open `make` from `text/bytes.zy`, instantiate it once,
 and pass that packed value to dependent builders.
-Slash selection follows the [language rules](../../docs/references/language.md#9-polymorphism-and-packed-values),
+Slash selection follows the [language rules](../../docs/references/language/src/polymorphism-and-packed-values.md),
 including nested products and ambiguity.
 A view such as `make_std ~> (/bytes; /fs)` combines application and opening.
 
@@ -248,7 +248,7 @@ in
 ```
 
 The annotation discloses the kind equations, while the inner `pack` supplies a type constructor.
-The [module-interface rules](../../docs/references/language.md#module-interfaces-and-shared-openings) explain
+The [module-interface rules](../../docs/references/language/src/polymorphism-and-packed-values.md#module-interfaces-and-shared-openings) explain
 when inferred and authored interfaces serve different maintenance needs.
 
 ## Explicit runtime contracts
@@ -316,17 +316,17 @@ the combined `IStateExn` interface composes both effects inside that boundary.
 Each effect module's `instance` builder supplies a concrete carrier and its dictionaries;
 generic clients use a witness-dependent `pi`.
 Ret, Optional, and NonDet use an `instance` value rather than a parameterized builder.
-[L11](../../docs/references/language.md#packed-effect-instances) owns the packed boundary
+[L11](../../docs/references/language/src/translations/relative-monads.md#packed-effect-instances) owns the packed boundary
 and its connection to monadic-block translation.
 The [capability walkthrough](../../docs/tutorial/zydeco-guide.md#10-capability-dictionaries) shows how
 to open a concrete instance and pass it to a generic client.
 
-The [elementary effect reference](../../docs/references/language.md#elementary-effect-instances)
+The [elementary effect reference](../../docs/references/language/src/translations/effects-and-transformers.md#elementary-effect-instances)
 specifies Reader's scoped replacement, Writer's pure monoid contract, and Optional's short-circuiting.
 Import [Ret](effect/ret.zy), [Reader](effect/reader.zy), [Writer](effect/writer.zy),
 or [Option](effect/option.zy) explicitly with the same Builtin value used by other modules.
 Reader, Writer, Option, State, Exception, and NonDet use the shared
-[derived transformer interface](../../docs/references/language.md#derived-relative-monad-transformers).
+[derived transformer interface](../../docs/references/language/src/translations/effects-and-transformers.md#derived-relative-monad-transformers).
 Their transformer instances package a lift together with the monad and effect operations.
 The [translated example](../tests/effects/effect-monadic.zy) shows their carrier-polymorphic clients,
 and the [composition example](../tests/effects/effect-operations.zy) exercises the transformers together.
@@ -339,9 +339,9 @@ Use each module's `transformer_instance` builder when the program needs that eff
 Effect configuration comes first, followed by the base carrier and its monad dictionary.
 The computation-level `transformer` exposes the common `MonadTrans` interface for generic transformer clients,
 accepting the base as one `MonadInstance` argument after effect configuration: `! state/transformer S (M, base)`.
-[The packed-base contract](../../docs/references/language.md#derived-relative-monad-transformers) keeps
+[The packed-base contract](../../docs/references/language/src/translations/effects-and-transformers.md#derived-relative-monad-transformers) keeps
 the result indexed by the supplied carrier while the generated monadic interface stays curried internally.
-[The reference](../../docs/references/language.md#elementary-transformers) lists the exact constructors and runners.
+[The reference](../../docs/references/language/src/translations/effects-and-transformers.md#elementary-transformers) lists the exact constructors and runners.
 
 For example, StateT over Writer keeps state operations and base output at one transformed carrier:
 
@@ -378,7 +378,7 @@ that encoding before adding an ambient continuation primitive to `Ret`.
 The historical exploration points to [the HOPE talk](http://maxsnew.com/publications.html#hope22)
 and [the delimcc API discussion](https://okmij.org/ftp/continuations/implementations.html#delimcc-paper).
 These encodings do not capture native suspension IDs;
-[native lifetime rules](../../docs/references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission)
+[native lifetime rules](../../docs/references/compiler/src/native-emission.md)
 remain a separate implementation contract.
 
 ### Ordered depth-first search
@@ -403,7 +403,7 @@ This library term observes the two answers `3, 1` and returns their length.
 The module supplies `choose`, `guard`, `observe_first`, `observe_many`, and `observe_all`.
 Use `transformer_instance M base` for an explicit base carrier and invoke `lift A computation` on that instance.
 The `_t` observers also take `M base` to build their observation algebras.
-The [search reference](../../docs/references/language.md#ordered-depth-first-nondeterminism) owns
+The [search reference](../../docs/references/language/src/translations/effects-and-transformers.md#ordered-depth-first-nondeterminism) owns
 the continuation protocol, observation limits, and interaction with base effects.
 The [backtracking example](../tests/monadic/backtrack.zydeco) is a complete executable client;
 the [translated clients](../tests/effects/nondet-monadic.zy) demonstrate `@[monadic]` composition.
@@ -425,7 +425,7 @@ surrogate code points, and values above the Unicode range with `none`.
 
 `Bytes` is an abstract source-defined immutable sequence of octets with no encoding attached.
 [text/bytes.zy](text/bytes.zy) supplies the type and algorithms using explicitly retained memory;
-[the owning design](../../docs/references/language.md#immutable-owners-and-source-bytes) specifies publication
+[the owning design](../../docs/references/language/src/primitives-and-capabilities/views-and-buffers.md#immutable-owners-and-source-bytes) specifies publication
 and retention.
 The compiler has no byte-sequence type or operation family.
 Positions and lengths count octets, not scalars, and `bytes/get` reports one octet as a `UInt8`.
@@ -445,7 +445,7 @@ of these foundational operations.
 
 Import [std/memory](memory/package.zy) directly with a shared Builtin opening.
 Its `fixed` builder calculates placement in source value functions; `dynamic` accepts runtime inputs.
-The [language reference](../../docs/references/language.md#manual-memory) owns memory state,
+The [language reference](../../docs/references/language/src/primitives-and-capabilities/manual-memory.md#manual-memory) owns memory state,
 layout laws, unsafe obligations, and retention.
 The library introduces no lifetimes or borrow checker.
 
@@ -481,7 +481,7 @@ and expose field paths plus partial-initialization accessors.
 Arrays supply direct element access and an explicit initialized-prefix builder.
 General views interpret thin, fat, header, or indirect handles independently of the storage layout.
 Fixed recipes specialize through value functions; `DynamicView` and `DynamicField` make runtime selection explicit.
-The [view and layout contracts](../../docs/references/language.md#typed-records-and-field-paths) describe their types,
+The [view and layout contracts](../../docs/references/language/src/primitives-and-capabilities/layouts-and-aggregates.md#typed-records-and-field-paths) describe their types,
 costs, and caller obligations.
 
 | Need | API or example |
@@ -535,7 +535,7 @@ The counts below describe payload work; Wasm host address lookup and ordinary so
 std includes these operations in its numeric modules.
 The low-level packed value for bytes groups `from_retained`, `with_window`, `copy_to`,
 and fixed-size `build` under `bytes/unsafe`.
-Their [caller contracts](../../docs/references/language.md#immutable-owners-and-source-bytes) cover initialized extents,
+Their [caller contracts](../../docs/references/language/src/primitives-and-capabilities/views-and-buffers.md#immutable-owners-and-source-bytes) cover initialized extents,
 retention, immutable aliases, and one completion per fill.
 A future [memory-backed writer](../../docs/ideas/README.md#growable-byte-builders-and-incremental-streams)
 would provide incremental construction without changing immutable-byte observations.
@@ -568,11 +568,11 @@ The public library reifies a successful branch with `option/some` and a failed b
 Neither backend has a hidden sentinel, and malformed input does not panic the host runtime.
 
 The integer types are `Int8`, `Int16`, `Int32`, `Int64`, `Int`, `UInt8`, `UInt16`, `UInt32`, `UInt64`, and `UInt`.
-Their domains and arithmetic follow [L13](../../docs/references/language.md#13-primitive-values-and-capabilities).
+Their domains and arithmetic follow [L13](../../docs/references/language/src/primitives-and-capabilities.md).
 `Int` and `UInt` are tagged machine integers; the numbered integer types have exact widths.
 `int64/from_int` and `uint64/from_uint` widen machine integers without loss.
 `int64/to_int` and `uint64/to_uint` select failure or success continuations according to the destination range;
-see the [conversion contract](../../docs/references/language.md#13-primitive-values-and-capabilities).
+see the [conversion contract](../../docs/references/language/src/primitives-and-capabilities.md).
 Integer division and remainder are not yet wrapped in checked operations.
 The generic numeric capability layer deliberately excludes them;
 a future checked-arithmetic capability should make their failure behavior explicit.
@@ -623,7 +623,7 @@ These interfaces describe operations rather than proving algebraic laws.
 For example, IEEE equality is not reflexive on NaN, which motivates `PartialEquality`.
 Division, integer remainder, rendering, extrema,
 and other representation-specific operations stay in the width modules. The numeric layer inherits the
-[literal and conversion rules](../../docs/references/language.md#13-primitive-values-and-capabilities).
+[literal and conversion rules](../../docs/references/language/src/primitives-and-capabilities.md).
 
 A library can also expose the selected carrier together with its dictionary in a packed value with a manifest carrier.
 The following complete example names the disclosed type `Int`, renames it to `Carrier` when opening,
@@ -642,9 +642,9 @@ let _ : Numeric Bool Carrier = operations in
 ! operations/additive/add (21 : Carrier) 21
 ```
 
-The [manifest type rules](../../docs/references/language.md#9-polymorphism-and-packed-values)
+The [manifest type rules](../../docs/references/language/src/polymorphism-and-packed-values.md)
 supply the disclosed equation;
-[field selection](../../docs/references/language.md#9-polymorphism-and-packed-values) governs the shared opening.
+[field selection](../../docs/references/language/src/polymorphism-and-packed-values.md) governs the shared opening.
 Naming a manifest field after its carrier avoids imposing a generic role label on each consumer.
 When exporting several instances, use distinctive value names such as `int_instance` and `float32_instance`
 so their selection is unambiguous.
@@ -652,7 +652,7 @@ so their selection is unambiguous.
 Selection remains explicit value flow: lexical bindings and arguments determine which dictionary is used.
 Several implementations for one carrier can coexist without global instance search or coherence checking.
 A wrapper can carry additional abstract or manifest type fields under the same witness scope rules.
-Its static components obey the [static elimination contract](../../docs/references/language.md#10-static-elimination);
+Its static components obey the [static elimination contract](../../docs/references/language/src/static-elimination.md);
 ordinary dictionary thunks may remain at runtime.
 The [runtime contract design](README.md#explicit-runtime-contracts) describes adapters
 when operations must be dynamically selectable.

@@ -2,12 +2,12 @@
 
 This guide introduces current Zydeco source syntax, CBPV control, library composition, and monadic blocks.
 It assumes familiarity with typed functional programming.
-The [language reference](../references/language.md) gives the precise rules; implementation details belong
-to the [compiler reference](../references/compiler.md).
+The [language reference](../references/language/src/introduction.md) gives the precise rules; implementation details belong
+to the [compiler reference](../references/compiler/src/introduction.md).
 
 Examples use complete source terms except where the surrounding prose describes an intentional rejection.
 Imports are relative to this guide's directory, `docs/tutorial/`; adjust them when copying an example elsewhere.
-The [core prelude](../references/language.md#core-prelude) supplies common kind and type names by default.
+The [core prelude](../references/language/src/sources/core-prelude.md) supplies common kind and type names by default.
 Provider choices and operations remain explicit; the examples sometimes select fields explicitly
 to illustrate their package boundaries.
 Blocks marked `text` describe syntax or signatures with schematic names.
@@ -102,7 +102,7 @@ A nested `begin` starts a new mobile-binding boundary.
 Use `let` for a carrier alias such as `State S A = S -> Ret (A * S)` when clients need its arrow equation.
 Use `def` for nominal `data` or `codata` types.
 A `foo.zy` implementation may have an independently checked `foo.zyi` type companion;
-[the source rules](../references/language.md#12-sources-imports-and-entry) describe that boundary.
+[the source rules](../references/language/src/sources.md) describe that boundary.
 
 ### The `!` in a binding is part of the copattern
 
@@ -123,7 +123,7 @@ Both names can also be passed directly wherever their thunk type is expected.
 A packed value uses plain `let` or `def`; adding `!` would require its body to be a computation.
 
 Documentation uses `--|` Markdown blocks attached to a following `@[doc]` annotation.
-Use `--` for ordinary comments; see [the documentation reference](../references/language.md#source-documentation)
+Use `--` for ordinary comments; see [the documentation reference](../references/language/src/meta-annotations.md#source-documentation)
 for attachment and text preservation.
 
 ## 3. Kinds, types, and type-level terms
@@ -177,7 +177,7 @@ let identity : Thk (forall (A : VType) . A -> Ret A) = {
 ```
 
 Existential types describe type witnesses together with a value payload.
-The [language reference](../references/language.md#9-polymorphism-and-packed-values) defines existential values,
+The [language reference](../references/language/src/polymorphism-and-packed-values.md) defines existential values,
 the broader term packed value, and abstract and manifest witnesses.
 The abstract and manifest forms are:
 
@@ -279,7 +279,7 @@ For an abstract interface, write an expected `exists` type and supply its witnes
 An abstract `pack (X : K) is T where value end` also exists,
 but cannot infer an arbitrary hidden interface from concrete payload values.
 Kind witnesses currently require an annotated packed value rather than `pack`.
-[The packed value reference](../references/language.md#9-polymorphism-and-packed-values) covers these boundaries.
+[The packed value reference](../references/language/src/polymorphism-and-packed-values.md) covers these boundaries.
 
 Type-level named projection uses the same slash: if `T : (#field :: K)`, then `T/field : K`.
 For a manifest named type, `(#field = A)/field` reduces to `A`.
@@ -317,7 +317,7 @@ ret (value, whole)
 ```
 
 Value functions can construct packed values, return thunks, and compose other value functions.
-They undergo [static elimination](../references/language.md#10-static-elimination) before execution;
+They undergo [static elimination](../references/language/src/static-elimination.md) before execution;
 a runtime-selectable callable should have an explicit thunked computation type.
 
 `match` may produce a value when its arms produce values of the same type.
@@ -357,7 +357,7 @@ Constructor nesting may use a whitespace-guided spine such as `+Some +Pair(left,
 `let` and ordinary function parameters require irrefutable patterns;
 use `match` when choosing between constructors or literals.
 Partial computation binders require explicit `@[partial]`;
-[the pattern rules](../references/language.md#7-patterns-and-coverage) describe its scope and failure behavior.
+[the pattern rules](../references/language/src/patterns-and-coverage.md) describe its scope and failure behavior.
 
 A `codata` term forms a computation type, describing observable residual protocols.
 `comatch` implements its destructors, and `M .field` selects one.
@@ -415,9 +415,9 @@ The standard library supplies immutable `Bytes`;
 `Representation`, and static `Plan` recipes over Builtin's address and I/O capabilities.
 Those explicit storage interfaces coexist with compiler-managed ordinary values.
 `args/at` supports indexed access; the standard argument fold composes it in ordinary CBPV.
-The [primitive reference](../references/language.md#13-primitive-values-and-capabilities) lists current contracts.
+The [primitive reference](../references/language/src/primitives-and-capabilities.md) lists current contracts.
 
-Returning [C imports](../references/language.md#14-foreign-interfaces) are another explicit boundary.
+Returning [C imports](../references/language/src/foreign-interfaces.md) are another explicit boundary.
 Current signatures support fixed-width integer scalars, borrowed `Bytes`, and `Ret Unit` for a C `void` result.
 Use the documented ABI subset when writing a binding.
 
@@ -502,7 +502,7 @@ Here `Top` is empty codata. The extra `Thk Top` supplies the structure needed fo
 The effect library's `raise` and `catch` adapters accept that structure argument
 after their packed effect input, introduced below.
 More general polymorphic translation is described
-in [the relative-monad reference](../references/language.md#relative-monads).
+in [the relative-monad reference](../references/language/src/translations/relative-monads.md#relative-monads).
 
 ## 9. Effect modules
 
@@ -553,7 +553,7 @@ See [packed value composition](../../lib/std/README.md#packed-value-composition)
 ## 10. Capability dictionaries
 
 Use a packed instance when a generic client needs a carrier, its monad dictionary, and effect operations together.
-The [packed-effect contract](../references/language.md#packed-effect-instances) specifies this boundary.
+The [packed-effect contract](../references/language/src/translations/relative-monads.md#packed-effect-instances) specifies this boundary.
 `IState S M` and `IException E M` describe operations at a supplied carrier;
 `WithMonad` packages such an interface with its carrier and monad dictionary.
 A witness-dependent `pi` lets the client's result refer to the carrier opened from its argument.
@@ -659,9 +659,9 @@ let val f P = V in term        total value-function binding
 
 ## 13. Where to look next
 
-- [Language reference](../references/language.md) — source rules and execution boundaries.
+- [Language reference](../references/language/src/introduction.md) — source rules and execution boundaries.
 - [Standard library guide](../../lib/std/README.md) — current capabilities, storage, and packed value composition.
 - [Effect examples](../../lib/tests/effects/) — complete programs using effect modules and capability dictionaries.
 - [OOPSLA artifact overview](../../lib/tests/oopsla/README.md) — paper examples, transformers,
   and evaluation instructions.
-- [Compiler reference](../references/compiler.md) — phase contracts and maintenance entry points.
+- [Compiler reference](../references/compiler/src/introduction.md) — phase contracts and maintenance entry points.

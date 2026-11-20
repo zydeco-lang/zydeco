@@ -5,18 +5,18 @@ initialize selected fields, and update an element without manufacturing a logica
 
 **Ordinary values** leave their physical representation to the compiler.
 **Explicit memory interfaces** establish programmer-selected storage contracts; optimization must preserve them. This
-applies the existing [storage and representation boundary](../references/compiler.md#storage-evidence-and-machine-calls)
+applies the existing [storage and representation boundary](../references/compiler/src/zasm.md#storage-evidence-and-machine-calls)
 to the proposed interfaces and lowering.
 
 The worked example follows a header-array update from source types to machine code.
 The proposal retains the gaps identified on 2026-09-14 and gives them concrete interfaces and implementation boundaries.
 
-The implemented foundation remains [L13](../references/language.md#manual-memory).
-[`Storage`, `DynamicStorage`, `Codec`, `DynamicCodec`, and `StaticAlloc`](../references/language.md#independent-storage-and-codecs)
+The implemented foundation remains [L13](../references/language/src/primitives-and-capabilities/manual-memory.md#manual-memory).
+[`Storage`, `DynamicStorage`, `Codec`, `DynamicCodec`, and `StaticAlloc`](../references/language/src/primitives-and-capabilities/manual-memory.md#independent-storage-and-codecs)
 and the geometry-only record/array factories are implemented. Their contracts now live in L13.
-[Pure address calculations](../references/compiler.md#address-calculations) and
-[ordered scalar accesses](../references/compiler.md#ordered-scalar-memory-accesses) are implemented.
-[Bounded raw memory kernels](../references/compiler.md#raw-memory-kernels) connect wide scalar accesses to arithmetic;
+[Pure address calculations](../references/compiler/src/sps/operations-and-patterns.md#address-calculations) and
+[ordered scalar accesses](../references/compiler/src/sps/operations-and-patterns.md#ordered-scalar-memory-accesses) are implemented.
+[Bounded raw memory kernels](../references/compiler/src/native-runtime.md#raw-memory-kernels) connect wide scalar accesses to arithmetic;
 the [typed field/header comparison](../evaluations/2026-09-15-typed-memory/README.md) verifies that local boundary while
 exposing remaining allocation sites around checked views. Raw component transport across calls remains proposed compiler
 work. No source lifetimes, linearity rules, or new universe of layout types is required.
@@ -117,19 +117,19 @@ Lifetime, alias, and synchronization obligations remain those of the selected op
 
 ### Keep geometry static until runtime data is requested
 
-The [storage contract](../references/language.md#independent-storage-and-codecs) owns validated construction,
+The [storage contract](../references/language/src/primitives-and-capabilities/manual-memory.md#independent-storage-and-codecs) owns validated construction,
 explicit materialization, layout identity, and retention of runtime geometry.
 Fixed constructors enforce static operands; a value-function type alone does not prove its captured integers static.
 Geometry remains bounded by nonnegative `Int`.
 A full pointer-width size/offset interface and compiler-supplied target facts remain part
 of the [storage-boundary ideas](../ideas/README.md#further-storage-boundaries).
-The [integer and storage contracts](../references/language.md#storage-and-foreign-transport) determine
+The [integer and storage contracts](../references/language/src/foreign-interfaces.md#storage-and-foreign-transport) determine
 numeric domains independently of temporary boxing costs.
 
 ### Compose storage before selecting a logical codec
 
-[Records](../references/language.md#typed-records-and-field-paths) compose `Storage Left` and `Storage Right`;
-[arrays](../references/language.md#array-storage-and-element-builders) take element storage, capacity, and alignment.
+[Records](../references/language/src/primitives-and-capabilities/layouts-and-aggregates.md#typed-records-and-field-paths) compose `Storage Left` and `Storage Right`;
+[arrays](../references/language/src/primitives-and-capabilities/layouts-and-aggregates.md#array-storage-and-element-builders) take element storage, capacity, and alignment.
 Both expose geometry without requiring a whole-value codec.
 Optional `codecs/product` and array codec selection supply logical conversion afterward.
 Fixed and dynamic `Plan`/`Representation` conveniences use the same split.
@@ -236,10 +236,10 @@ Required dynamic checks, requested logical values, and deliberately materialized
 Additional packaging, allocation, copying, dispatch, or retained control storage needs justification.
 Matching the raw Zydeco API is an intermediate milestone because that path also has avoidable overhead.
 
-[Static elimination](../references/language.md#10-static-elimination) already removes fixed recipes and type witnesses.
+[Static elimination](../references/language/src/static-elimination.md) already removes fixed recipes and type witnesses.
 `Ptr L S` has no state or layout fields, and fixed fields need no carried displacement.
 Ordinary products, operation thunks, captured values,
-and continuation frames still follow the [compiler representation policy](../references/compiler.md#policy-selection).
+and continuation frames still follow the [compiler representation policy](../references/compiler/src/zasm.md#policy-selection).
 The [typed field/header comparison](../evaluations/2026-09-15-typed-memory/README.md) shows a fixed view forming
 the same local kernel as its raw baseline, while the checked header abstraction retains extra generated sites.
 Its counts are static code sites, not executed allocations or timings.
@@ -248,8 +248,8 @@ Its counts are static code sites, not executed allocations or timings.
 
 Fixed layout construction can still produce ordinary operation records containing integers and thunks.
 Erasing the static recipe does not prove that all of those residual values disappear.
-Current [local reductions](../references/compiler.md#local-reductions)
-and [consumer demands](../references/compiler.md#consumer-demands) have limited sharing and call visibility;
+Current [local reductions](../references/compiler/src/sps/normalization-and-demand.md#local-reductions)
+and [consumer demands](../references/compiler/src/sps/normalization-and-demand.md#consumer-demands) have limited sharing and call visibility;
 they do not provide general recursive or interprocedural specialization.
 
 Propagate known layout operations and callbacks through helpers, shared calls, and recursive loops.
@@ -267,8 +267,8 @@ recursive specialization needs a finite cache and a conservative fallback, not u
 
 ### 4.2 Represent memory effects in the IR
 
-The compiler implements [pure address calculations](../references/compiler.md#address-calculations)
-and [ordered scalar memory accesses](../references/compiler.md#ordered-scalar-memory-accesses).
+The compiler implements [pure address calculations](../references/compiler/src/sps/operations-and-patterns.md#address-calculations)
+and [ordered scalar memory accesses](../references/compiler/src/sps/operations-and-patterns.md#ordered-scalar-memory-accesses).
 Those references own builtin recognition, effect order, scalar-domain validation, exact carrier widths,
 unaligned access, native instructions, and interpreter/Wasm adapters.
 The [current typed probe](../evaluations/2026-09-15-typed-memory/README.md) measures fields
@@ -299,7 +299,7 @@ Compatibility of ambient stacks and entry contracts must survive lowering.
 Host operations need explicit retention and invocation contracts before their callbacks qualify.
 
 Preserve invocation multiplicity, effects, and escaping or unknown uses.
-The [Ret/CPS convention](../references/language.md#ret-and-explicit-cps) does not prove purity to the optimizer,
+The [Ret/CPS convention](../references/language/src/computations-and-control.md#ret-and-explicit-cps) does not prove purity to the optimizer,
 single use, nonescape, cleanup, or bounded stack extent.
 Frame reclamation belongs to the [native environment proposal](native-frames.md#remaining-decisions).
 
@@ -312,7 +312,7 @@ Contification alone supplies neither a stack-allocation lifetime nor permission 
 
 ### 4.4 Carry raw components only across agreeing entries
 
-The implemented [raw memory kernels](../references/compiler.md#raw-memory-kernels) handle
+The implemented [raw memory kernels](../references/compiler/src/native-runtime.md#raw-memory-kernels) handle
 bounded load–arithmetic–store chains of wide scalars with no implicit allocation inside the kernel.
 The [typed field/header comparison](../evaluations/2026-09-15-typed-memory/README.md) separately counts
 ordinary boundary costs; raw stack homes and Wasm virtual-memory imports remain.
@@ -321,14 +321,14 @@ Unknown callbacks, shared results, and other control edges still use the existin
 so the broader worker and component transport below remains proposed.
 
 Once a codec supplies an ordinary value, scalar representation and ABI design determine its transport.
-The [scalar representation contract](../references/compiler.md#scalar-value-boundaries) owns the current implementation;
+The [scalar representation contract](../references/compiler/src/native-runtime.md#scalar-value-boundaries) owns the current implementation;
 the [escape and unboxing proposal](escape-unboxing.md) owns its remaining extensions.
 The [machine-call proposal](escape-unboxing.md#remaining-machine-call-boundary) owns entry and tracing prerequisites.
 This memory proposal requires compatible lowering across those boundaries, without fixing the unfinished `Int64` ABI.
 Both `Ret Int64` and a CPS successor accepting `Int64` can use raw transport when their entry contracts support it.
 Their control protocols do not themselves select boxing.
 
-[Local unboxing](../references/compiler.md#product-layout-and-local-unboxing) removes some product cells
+[Local unboxing](../references/compiler/src/zasm.md#product-layout-and-local-unboxing) removes some product cells
 while retaining the tagged-word field convention.
 Wide scalars can still box; pairs, fat handles, array builders, and closure environments can still allocate,
 especially when passed or captured.
@@ -364,7 +364,7 @@ An unknown callback using the word convention may therefore retain wide-scalar b
 after the load itself becomes a native instruction.
 
 C already transports `Int64` as raw `int64_t`
-under the [foreign contract](../references/language.md#storage-and-foreign-transport).
+under the [foreign contract](../references/language/src/foreign-interfaces.md#storage-and-foreign-transport).
 Eliminating intermediate boxes around a C call remains a representation optimization; all surviving adapters count.
 Declaring stored bytes never supplies a C aggregate classifier or changes the ordinary Zydeco call contract.
 
@@ -463,9 +463,9 @@ Treat each successful target as a scoped guarantee before expanding its domain.
 
 | Slice | Files/boundary to change | Required evidence |
 | --- | --- | --- |
-| Source interfaces (implemented) | [L13](../references/language.md#independent-storage-and-codecs), std factories and callers | Shared witnesses; storage-only array composition; explicit logical conversion; fixed/runtime carrier rejection |
+| Source interfaces (implemented) | [L13](../references/language/src/primitives-and-capabilities/manual-memory.md#independent-storage-and-codecs), std factories and callers | Shared witnesses; storage-only array composition; explicit logical conversion; fixed/runtime carrier rejection |
 | Static target facts | Layout factory inputs and compiler target/profile identity | Pointer width/alignment and geometry bounds known before static layout reduction; runtime inputs rejected on the fixed path |
-| Memory operations (address/scalar access and bounded kernels implemented) | [C8](../references/compiler.md#ordered-scalar-memory-accesses), [C12](../references/compiler.md#raw-memory-kernels); copy/fill and stronger access evidence remain | Source-domain validation and exact access width/endian/alignment; wrapping addresses; ordered effects; no zero-offset host call |
+| Memory operations (address/scalar access and bounded kernels implemented) | [C8](../references/compiler/src/sps/operations-and-patterns.md#ordered-scalar-memory-accesses), [C12](../references/compiler/src/native-runtime.md#raw-memory-kernels); copy/fill and stronger access evidence remain | Source-domain validation and exact access width/endian/alignment; wrapping addresses; ordered effects; no zero-offset host call |
 | Known workers and contification | SPS use analysis and normalization before closure conversion | Shared/recursive calls, stack compatibility, unknown/escaping/repeated callbacks |
 | Raw component transport | Representation analysis, low entry contracts, native preparation, root maps, emitters | Matching entries and adapters; wide scalar extremes; mixed references surviving collection |
 | Cost regression and diagnostics | Paired code-generation fixtures and execution counters | Allocations, copies, retained frames, code size, compilation cost, and scoped strict-contract failures |

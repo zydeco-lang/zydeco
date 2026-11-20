@@ -37,7 +37,7 @@ environment and stack dependencies from them. Code interfaces transport those fa
 This document owns the proposed reachability and region-retirement rules. The existing
 #link("escape-unboxing.md")[escape and unboxing proposal] owns representation selection;
 #link("native-frames.md")[native activation frames] and
-#link("../references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission")[compiler reference C11]
+#link("../references/compiler/src/native-emission.md")[compiler reference C11]
 own the implemented frame-lifetime contract. Neither is replaced by this draft.
 
 = Motivation and chosen boundary <boundary>

@@ -43,7 +43,7 @@ Keep multi-file imports, desugared-variant checks, arena mutation, emitted-code 
 and exact I/O in the Rust harness, which can express their relationships.
 When a fixture also needs typed-arena linting or cross-stage assertions, load it with `include_str!`
 in Rust and leave its declared source-level expectation to this runner.
-The [compiler reference](../../../docs/references/compiler.md#source-fixtures-and-runtime-oracles) explains discovery,
+The [compiler reference](../../../docs/references/compiler/src/validation-and-extending.md#source-fixtures-and-runtime-oracles) explains discovery,
 diagnostic-code ownership, runtime oracles, and the `.zy.in` template helper for long shared Rust-test skeletons.
 
 The parser reserves `backends`, `input`, `output`, `args`, and `setup`

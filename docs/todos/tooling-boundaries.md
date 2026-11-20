@@ -7,7 +7,7 @@ the [reference ownership map](../references/README.md#rule-ownership) locates th
 
 ## Duplicate runtime digest and platform computation
 
-[C11 compilation-unit preparation and artifacts](../references/compiler.md#compilation-unit-preparation-and-artifacts)
+[C11 compilation-unit preparation and artifacts](../references/compiler/src/native-emission.md#compilation-unit-preparation-and-artifacts)
 and the [CLI native executable workflow](../../cli/README.md#native-executables) govern the native build boundary.
 On every `build -t exe`, the CLI build path
 at [cli/src/main.rs:499-514](../../cli/src/main.rs) computes `LibraryPlatform::for_target`
@@ -24,8 +24,8 @@ The change has no other behavior effect.
 
 ## Installed binaries and the build checkout
 
-[C3 source loading](../references/compiler.md#source-loading-and-package-selection) owns the default prelude loader, and
-[C15 interactive tooling](../references/compiler.md#c15-diagnostics-formatting-documentation-and-interactive-tooling)
+[C3 source loading](../references/compiler/src/sessions-and-queries.md#source-loading-and-package-selection) owns the default prelude loader, and
+[C15 interactive tooling](../references/compiler/src/tooling.md)
 owns the REPL surfaces.
 The [prelude loader](../../lang/session/src/source/prelude.rs) computes the standard-library root
 from `env!("CARGO_MANIFEST_DIR")` at `prelude.rs:13`, so a CLI installed

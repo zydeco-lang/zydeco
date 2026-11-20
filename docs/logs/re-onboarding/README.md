@@ -98,8 +98,8 @@ verification commands, reading order, checkpoint questions, cleanup signals, and
 ## Sources
 
 The structure follows the repository's own organization:
-the [documentation index](../../README.md), the [compiler reference](../../references/compiler.md),
-the [language reference](../../references/language.md), and the two retired 2026-10 studies,
+the [documentation index](../../README.md), the [compiler reference](../../references/compiler/src/introduction.md),
+the [language reference](../../references/language/src/introduction.md), and the two retired 2026-10 studies,
 distilled into [Artifact boundary and mainline admission](../../proposals/artifact-boundary.md)
 and [Checker query retirement](../../proposals/checker-query-retirement.md).
 Module cards cite the code they describe; the references remain the authority.

@@ -4,7 +4,7 @@
 
 Zydeco is a proof-of-concept programming language based on call-by-push-value (CBPV).
 It explores explicit control flow, stack-manipulating computation, and relative monads.
-Its [term-oriented design](docs/references/language.md#term-oriented-composition) uses expressions
+Its [term-oriented design](docs/references/language/src/conventions.md#term-oriented-composition) uses expressions
 for type construction, local programming, and library composition.
 
 The repository includes an interpreter, a terminal REPL, a compiler to native AMD64 executables,
@@ -49,7 +49,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md#build-the-cli) for release builds and addi
 
 A source file contains one complete term.
 Quoted imports are relative to the importing file; there is no ambient provider or distinguished `main` declaration.
-The [core prelude](docs/references/language.md#core-prelude) supplies common kind and type names by default;
+The [core prelude](docs/references/language/src/sources/core-prelude.md) supplies common kind and type names by default;
 provider choice remains explicit, and `OS` refers to the selected opening's witness.
 The example above explicitly accepts the host's Builtin value and selects the operations it needs.
 The launcher supplies it when running the program.
@@ -82,7 +82,8 @@ Both `run` and `test` default to the interpreter; `-t` (`--target`) selects a ba
 Repeat it for a test matrix: `zydeco test lib/tests/std/bool.zy -t interpreter -t exe`.
 Quoted file imports and direct CLI paths also work without named package declarations.
 See the [CLI guide](cli/README.md#run-and-test-programs) for command examples
-and the [source package reference](docs/references/language.md#source-packages) for declarations and discovery.
+and the [source package reference](docs/references/language/src/sources/packages.md#source-packages)
+for declarations and discovery.
 
 ## Interactive REPL
 
@@ -110,7 +111,7 @@ zydeco build hello-world.zy --target exe --target-arch x86-64
 
 `build` defaults to the host architecture, so an ARM host passes `--target-arch x86-64`.
 The [native executable guide](cli/README.md#native-executables) lists the required tools,
-and the [compiler reference](docs/references/compiler.md#selecting-and-inspecting-passes) explains how
+and the [compiler reference](docs/references/compiler/src/architecture.md#selecting-and-inspecting-passes) explains how
 to inspect the stack-passing-style program with `--target zir`.
 
 ## Editor Support
@@ -129,9 +130,11 @@ The [editor guide](editor/README.md) describes shared behavior and runtime confi
 ## Documentation and Examples
 
 - [Language guide](docs/tutorial/zydeco-guide.md): a source-level walkthrough.
-- [References](docs/references/README.md): language and compiler implementation references.
+- [References](docs/references/README.md): `mdBook` language and compiler implementation references (published
+  at https://zydeco-lang.github.io/zydeco/).
 - [Outstanding discrepancies](docs/todos/README.md): documentation and implementation drift requiring repair.
-- [Source documentation](docs/references/language.md#source-documentation): `@[doc]` annotations and attached prose.
+- [Source documentation](docs/references/language/src/meta-annotations.md#source-documentation):
+  `@[doc]` annotations and attached prose.
 - [DESIGN.md](DESIGN.md): semantics, implementation boundaries, and current limitations.
 - [CONTRIBUTING.md](CONTRIBUTING.md): build, test, formatting, and contribution workflows.
 - [Standard library](lib/std/README.md): types, capabilities, and library composition.

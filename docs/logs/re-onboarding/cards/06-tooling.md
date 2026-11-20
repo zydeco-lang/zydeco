@@ -42,7 +42,7 @@ The split is contractual, and the references assign it explicitly.
 - **The session owns revisioned source state.** `CompilerSession` manages source revisions,
   snapshots, and cached queries; it expands a project's discovery rules,
   records editor overlays as `SourceInput` fields, resolves packages, and publishes analysis snapshots
-  ([C3](../../../../docs/references/compiler.md#c3-source-loading-sessions-queries-and-memory-retention),
+  ([C3](../../../references/compiler/src/sessions-and-queries.md),
   `docs/references/compiler.md:589-600`).
   It never chooses a backend, writes an artifact, or parses command-line text.
 - **The CLI owns command policy and the boundary outward.** It selects `package.zy` / `workspace.zy` roots,
@@ -50,15 +50,15 @@ The split is contractual, and the references assign it explicitly.
   writes or links artifacts, and executes backends ([cli/README.md](../../../../cli/README.md#run-and-test-programs)).
   The execution runner consumes checked `ExecutableProgram` snapshots, shares immutable arenas across targets,
   lowers once for compiled backends, and owns temporary artifacts (`docs/references/compiler.md:651-654`);
-  backend execution policy itself is [L15](../../../../docs/references/language.md#selecting-an-execution-backend).
+  backend execution policy itself is [L15](../../../references/language/src/execution-profiles.md#selecting-an-execution-backend).
 - **The TUI, Cajun, and the test harness are consumers.** The TUI is the interactive front end
-  for the same session ([C15 §Interactive Engine](../../../../docs/references/compiler.md#interactive-engine));
+  for the same session ([C15 §Interactive Engine](../../../references/compiler/src/tooling/interactive-and-docs.md#interactive-engine));
   Cajun adapts session facts to LSP and discards superseded results
-  ([C15](../../../../docs/references/compiler.md#c15-diagnostics-formatting-documentation-and-interactive-tooling),
+  ([C15](../../../references/compiler/src/tooling.md),
   [editor/README.md](../../../../editor/README.md)).
   `lang/tests` drives CLI types, not a second compiler. Everything lands
-  in [C15](../../../../docs/references/compiler.md#c15-diagnostics-formatting-documentation-and-interactive-tooling)
-  and [C16](../../../../docs/references/compiler.md#c16-validation-debugging-and-extending-the-implementation);
+  in [C15](../../../references/compiler/src/tooling.md)
+  and [C16](../../../references/compiler/src/validation-and-extending.md);
   the [rule-ownership map](../../../../docs/references/README.md#rule-ownership) says where a change belongs.
 
 The session crate has no hidden phase. `lang/session/src/lib.rs:1-10` re-exports `source`,
@@ -98,38 +98,38 @@ They are local checkout leftovers, not architecture; treat them as noise (see §
   `refresh_disk` replaces only the disk input while an overlay stays effective;
   `clear_overlay` drops the overlay and re-reads disk (`lang/session/src/source/query.rs:430-476`).
   Every analysis is paired with the session state it was computed from, so a consumer that mixes revisions is wrong by
-  construction ([C3](../../../../docs/references/compiler.md#c3-source-loading-sessions-queries-and-memory-retention)).
+  construction ([C3](../../../references/compiler/src/sessions-and-queries.md)).
 - **An analysis is a fact snapshot, not a typed tree.** `ProgramAnalysis` retains keyed indexes; full occurrence payload
   is recovered by re-running the coarse check (`materialize_arena`, `checked_program`, `executable_program`;
   `lang/session/src/source/query.rs:497-552`), whose memo keeps only the latest root (`lru = 1`). Calling these on a
   stale analysis re-checks it
-  ([C3 §Analysis Facts and Materialization](../../../../docs/references/compiler.md#analysis-facts-and-materialization)).
+  ([C3 §Analysis Facts and Materialization](../../../references/compiler/src/sessions-and-queries.md#analysis-facts-and-materialization)).
 - **Package identity is structural.** The merge pass interns each file's shape — syntax variants, scalar data,
   attached text, relevant meta annotations, signatures, prelude edge, and resolved import targets —
   and reuses an existing merged source when the key matches (`lang/session/src/source/package/resolution.rs:196-242`,
   `lang/session/src/source/package/shape.rs:48-109`).
   Copy identity
-  therefore follows [copy/resolve/merge/analyze](../../../../docs/references/language.md#copy-resolve-merge-analyze),
+  therefore follows [copy/resolve/merge/analyze](../../../references/language/src/sources/packages.md#copy-resolve-merge-analyze),
   not file paths.
 - **Diagnostics are complete collections, but their order is not an API.** Parsing retains every issue;
   the session concatenates typed collections per phase;
   CLI and TUI enumerate them independently (`lang/session/src/source/query.rs:199-238`, `cli/src/diagnostics.rs:13-50`).
   Tests compare contents, multiplicity,
-  and locations ([C15 §Diagnostic Collection](../../../../docs/references/compiler.md#diagnostic-collection)).
+  and locations ([C15 §Diagnostic Collection](../../../references/compiler/src/tooling.md#diagnostic-collection)).
 - **Execution shares one checked snapshot and one lowering per command.** `ExecutionRunner::prepare` validates first,
   lowers only if a compiled target was requested, and reuses that lowering for all selected backends;
   preparation never executes (`cli/src/execution.rs:110-178`).
-  Backend policy stays in [L15](../../../../docs/references/language.md#selecting-an-execution-backend).
+  Backend policy stays in [L15](../../../references/language/src/execution-profiles.md#selecting-an-execution-backend).
 - **The harness is declaration-driven.** A `.zy` case states stage, prelude, and expectation in leading comments;
   `case_fixtures()` discovers one trial per file without Rust registration (`lang/tests/src/lib.rs:790-808`,
   `lang/tests/tests/cases.rs:12-16`). Whole-program execution moves to the directive runner only when a fixture declares
   `-- stage: run` (`lang/tests/tests/directives.rs:16-40`); `.zy.in` templates substitute named parameters verbatim and
   cannot loop
-  ([C16 §Source Fixtures and Runtime Oracles](../../../../docs/references/compiler.md#source-fixtures-and-runtime-oracles)).
+  ([C16 §Source Fixtures and Runtime Oracles](../../../references/compiler/src/validation-and-extending.md#source-fixtures-and-runtime-oracles)).
 - **Formatting policy lives in the source, not in each frontend.** `zydeco fmt` parses, prints,
   and compares (`cli/src/format.rs:60-74`); Cajun calls the same textual formatter (`editor/cajun/src/format.rs:33-49`).
   The CLI and Cajun must not introduce independent rules
-  ([C15 §Formatting and Typed Rendering](../../../../docs/references/compiler.md#formatting-and-typed-rendering)).
+  ([C15 §Formatting and Typed Rendering](../../../references/compiler/src/tooling/formatting-and-rendering.md)).
 
 ## 5. Data Flow
 
@@ -188,7 +188,7 @@ The `test-resume` probe reads an older saved state, not a fresh run.
 
 ## 7. Reading Order
 
-1. [C3](../../../../docs/references/compiler.md#c3-source-loading-sessions-queries-and-memory-retention):
+1. [C3](../../../references/compiler/src/sessions-and-queries.md):
    session responsibilities, loading, package selection, facts, retention.
 2. `lang/session/src/lib.rs` → `source/mod.rs` → the public half of `lang/session/src/source/query.rs` (`:240-673`):
    types, snapshots, overlays, materialization.
@@ -198,7 +198,7 @@ The `test-resume` probe reads an older saved state, not a fresh run.
 5. `cli/src/cli.rs` → `main.rs` → `compile.rs` → `execution.rs` → `diagnostics.rs`: command policy,
    adaptation, lowering, execution, rendering.
 6. [`cli/README.md`](../../../../cli/README.md)
-   and [L15](../../../../docs/references/language.md#selecting-an-execution-backend):
+   and [L15](../../../references/language/src/execution-profiles.md#selecting-an-execution-backend):
    user-facing behavior and backend policy.
 7. `editor/cajun/src/lib.rs` (capabilities,
    revision gate) → `analysis.rs` (project state) → `completion.rs` / `document_links.rs` (semantic projections).
@@ -212,11 +212,11 @@ The `test-resume` probe reads an older saved state, not a fresh run.
 ## 8. Checkpoint Questions
 
 1. Which object owns a source revision, and what does `snapshot` promise?
-   → §4 bullet 1; [C3](../../../../docs/references/compiler.md#c3-source-loading-sessions-queries-and-memory-retention).
+   → §4 bullet 1; [C3](../../../references/compiler/src/sessions-and-queries.md).
 2. Why can a `ProgramAnalysis` not answer an arbitrary typed query directly? → §4 bullet 2;
-   [C3 §Analysis Facts and Materialization](../../../../docs/references/compiler.md#analysis-facts-and-materialization).
+   [C3 §Analysis Facts and Materialization](../../../references/compiler/src/sessions-and-queries.md#analysis-facts-and-materialization).
 3. What makes two package copies merge or stay distinct?
-   → §4 bullet 3; [copy/resolve/merge/analyze](../../../../docs/references/language.md#copy-resolve-merge-analyze).
+   → §4 bullet 3; [copy/resolve/merge/analyze](../../../references/language/src/sources/packages.md#copy-resolve-merge-analyze).
 4. Where does a `.zy` file enter the pipeline, and how many times is it parsed?
    → §5 steps 1–2; `lang/session/src/source/loader.rs:428-526` caches `SourceTemplate` per canonical path.
 5. Which runner executes `-- stage: run` fixtures, and what does the other one reject?
@@ -236,15 +236,15 @@ The `test-resume` probe reads an older saved state, not a fresh run.
 
 | # | Signal | Evidence | Status | Assessment |
 | --- | --- | --- | --- | --- |
-| 1 | Package hierarchy: opaque roots, unnamed packages, structural copies, `discover` globs, `test(of(...))` relationships | [Audit §Package hierarchy](../../../proposals/artifact-boundary.md#package-hierarchy) estimates ≈1.5k Rust + ≈2k test + 212 reference lines; session package modules measure 1,065 lines, with 570 more in dedicated test files; clients are `show` (`cli/src/main.rs:218-220`), Cajun document links (`editor/cajun/src/document_links.rs:76-114`), and the merge key (`lang/session/src/source/package/resolution.rs:209-212`) | decision needed | Removal changes approved reference text ([language.md §Source Packages](../../../../docs/references/language.md#source-packages), [§Package Hierarchy](../../../../docs/references/language.md#package-hierarchy)) and copy identity, so it needs owner approval and same-change tool rework |
-| 2 | Root substitution / project registrations | `with_registration` is constructed only in session tests (`lang/session/src/source/package/tests.rs:102`, `:342`); production code only consumes registrations (`lang/session/src/source/loader.rs:265-284`, `lang/session/src/source/query.rs:376-382`); the call is documented in [compiler.md:597](../../../../docs/references/compiler.md#source-loading-and-package-selection) | decision needed | Falls with row 1; deleting the constructor also edits the C3 loading paragraph |
+| 1 | Package hierarchy: opaque roots, unnamed packages, structural copies, `discover` globs, `test(of(...))` relationships | [Audit §Package hierarchy](../../../proposals/artifact-boundary.md#package-hierarchy) estimates ≈1.5k Rust + ≈2k test + 212 reference lines; session package modules measure 1,065 lines, with 570 more in dedicated test files; clients are `show` (`cli/src/main.rs:218-220`), Cajun document links (`editor/cajun/src/document_links.rs:76-114`), and the merge key (`lang/session/src/source/package/resolution.rs:209-212`) | decision needed | Removal changes approved reference text ([language.md §Source Packages](../../../references/language/src/sources/packages.md#source-packages), [§Package Hierarchy](../../../references/language/src/sources/packages.md#package-hierarchy)) and copy identity, so it needs owner approval and same-change tool rework |
+| 2 | Root substitution / project registrations | `with_registration` is constructed only in session tests (`lang/session/src/source/package/tests.rs:102`, `:342`); production code only consumes registrations (`lang/session/src/source/loader.rs:265-284`, `lang/session/src/source/query.rs:376-382`); the call is documented in [compiler.md:597](../../../references/compiler/src/sessions-and-queries.md#source-loading-and-package-selection) | decision needed | Falls with row 1; deleting the constructor also edits the C3 loading paragraph |
 | 3 | Glob discovery walker | 127-line walker in `lang/session/src/source/package/discovery.rs`, tested by 181 lines; serves two `workspace.zy` files (root and `cli/tests/fixtures/packages/workspace.zy`) per the [audit](../../../proposals/artifact-boundary.md#package-hierarchy) | decision needed | Same package decision; would otherwise leave the two workspace files unselectable |
 | 4 | Test-harness multiplicity, 13 registration mechanisms | [Size analysis §Tooling at product standard](../../../proposals/artifact-boundary.md#tooling-at-product-standard) counts 72 targets and thirteen mechanisms; verified here: four public macros plus two internal (`lang/tests/src/lib.rs:811-917`), `.zy` case discovery (`lang/tests/src/lib.rs:790-808`, `lang/tests/tests/cases.rs:12-16`), directive runner (`lang/tests/tests/directives.rs:16-40`), `.zy.in` templates (`lang/tests/src/template.rs:10`), 46 Rust integration files, 13 CLI test files; `cargo metadata` reports 74 test targets in the dirty tree | open | The recorded direction is "one test harness per crate" ([§Structural simplifications](../../../proposals/artifact-boundary.md#structural-simplifications)); no reference text blocks it |
 | 5 | Resumable test runner plus tracked completions/tree-sitter parser | Audit update records that the repository **declined** these removals ([cleanup audit, intro update paragraph, lines 26–28](../../../proposals/artifact-boundary.md)); retained evidence: `xtask/src` 2,361 lines, `cli/completions` 1,235 tracked lines generated by `cli/build.rs:19-24`, `editor/tree-sitter-zydeco/src/parser.c` 19,916 tracked lines, documented at [CONTRIBUTING §Iterate with Resumable Tests](../../../../CONTRIBUTING.md#iterate-with-resumable-tests) | resolved | Deliberately retained; `.cargo/config.toml:17-18` makes `cargo test-resume` a first-class alias |
 | 6 | `env!("CARGO_MANIFEST_DIR")` paths in installed binaries | [Audit §Defects](../../../proposals/artifact-boundary.md#defects-found-during-the-audit); production uses are `lang/session/src/source/prelude.rs:11-22` and `tui/src/engine.rs:44`; the bundled fallback (`lang/session/src/source/prelude.rs:58-70`) covers five bootstrap files but the test asserts `builtin.zy` is not bundled (`:84`), which the TUI imports | open | Unrecorded drift: `grep` finds no entry in `docs/todos`, while the audit says it "belongs there before repair" |
 | 7 | Duplicate runtime digest and platform computation on every `-t exe` build | [Audit §Defects](../../../proposals/artifact-boundary.md#defects-found-during-the-audit) cites `cli/src/main.rs:496-513`; HEAD still calls `LibraryDigest::runtime` and `LibraryPlatform::for_target` twice (`cli/src/main.rs:496-514`), before any check that either import list is nonempty | open | Unrecorded drift; a local deduplication that changes no reference text |
 | 8 | `--target-arch` accepts `Aarch64` but supports only AMD64 | [Audit §Test-only generality](../../../proposals/artifact-boundary.md#test-only-generality) and [post-audit verification](../../../proposals/artifact-boundary.md#post-audit-verification); values at `cli/src/cli.rs:107-130`, early rejection at `cli/src/main.rs:370-372` (moved there by HEAD `e2dd8979`); documented override in [README.md:108-111](../../../../README.md) and [cli/README.md:83-85](../../../../cli/README.md#native-executables) | open | HEAD already moved rejection before compiling; the option remains documented as the only way for an ARM host to request AMD64, so narrowing the value set still needs a CLI-docs decision |
-| 9 | Cajun live editor configuration for two hover settings | [Audit §Test-only generality](../../../proposals/artifact-boundary.md#test-only-generality) estimates ≈270 lines; measured `editor/cajun/src/configuration.rs` is 268 lines (production 1-186, tests 187-268); documented at [editor/README.md:59-101](../../../../editor/README.md#runtime-configuration) and referenced from [C15](../../../../docs/references/compiler.md#cursor-based-selection) | decision needed | Removing it edits the editor guide and C15's "configured endpoint policy" account, so it needs approval |
+| 9 | Cajun live editor configuration for two hover settings | [Audit §Test-only generality](../../../proposals/artifact-boundary.md#test-only-generality) estimates ≈270 lines; measured `editor/cajun/src/configuration.rs` is 268 lines (production 1-186, tests 187-268); documented at [editor/README.md:59-101](../../../../editor/README.md#runtime-configuration) and referenced from [C15](../../../references/compiler/src/tooling.md#cursor-based-selection) | decision needed | Removing it edits the editor guide and C15's "configured endpoint policy" account, so it needs approval |
 | 10 | CLI and TUI repeat diagnostic dispatch, and the TUI hand-writes an ANSI stripper | [Audit §Parallel implementations](../../../proposals/artifact-boundary.md#parallel-implementations); `cli/src/diagnostics.rs:13-50` vs `tui/src/diagnostics.rs:6-38`; escape state machine at `tui/src/diagnostics.rs:40-76`; both already share `SourceCaches`/`TyckReport` | open | Merge behind one session-side renderer; no approved rule changes |
 | 11 | `docs/evaluations` tracked data volume | The retired size analysis recorded 90,248 tracked lines at `6aae43d0` ([§Repository weight outside Rust](../../../proposals/artifact-boundary.md#repository-weight-outside-rust)); measured now: 31,647 lines, because `9bebc585` and `118b8ab1` (2026-10-28) retired four study directories; the remaining 29,695 lines are the CBPV runtime evidence that [`docs/evaluations/README.md`](../../../../docs/evaluations/README.md) retains | resolved | The record's figure no longer describes HEAD; further reduction is a release-asset decision, not code cleanup |
 | 12 | Tooling scope sits outside the artifact boundary | [Size analysis §Design decisions for the artifact](../../../proposals/artifact-boundary.md#design-decisions-for-the-artifact) moves session overlays, Cajun, TUI, packages/discovery, and xtask to an extras workspace | decision needed | Largest structural cleanup, but it changes the artifact claim and approved reference text; the review says this decision comes first |

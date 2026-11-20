@@ -3,7 +3,7 @@
 ## Motivation and boundary
 
 Producing one procedure body and direct jumps does not necessarily eliminate capture transport.
-The [current procedure lowering](../references/compiler.md#correspondence-with-sps_l) uses a local label
+The [current procedure lowering](../references/compiler/src/closure-conversion.md#correspondence-with-sps_l) uses a local label
 when every call lies in its binding block.
 A call from a continuation block instead requires a closed label whose callers push the procedure's free variables.
 This is correct, but can copy the same captured values at each call.
@@ -32,7 +32,7 @@ Preserve structured procedure provenance through closure conversion: the binding
 ordered captured definitions, their entry bindings, the original body boundary, and associated direct calls.
 This information should describe the executable SPSLow program, not introduce another executable copy of its body.
 Validate it against the actual capture pushes and entry preamble, following the existing treatment
-of [continuation provenance](../references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission).
+of [continuation provenance](../references/compiler/src/native-emission.md).
 Do not infer a source capture relation from generated names or from a coincidentally similar block layout.
 
 Native preparation must establish all of the following before replacing the closed entry:
@@ -105,5 +105,5 @@ Preserve the existing interpreter and Wasm behavior even when they do not receiv
 Measure capture words transported, activation entries, frame high-water usage, and GC roots separately.
 Empty-capture examples cannot establish a capture-copying improvement;
 retained storage must also be checked for keeping dead values alive.
-The [activation-lifetime contract](../references/compiler.md#activation-lifetime) remains the governing
+The [activation-lifetime contract](../references/compiler/src/native-emission.md#activation-lifetime) remains the governing
 implemented boundary until a reviewed extension replaces it.

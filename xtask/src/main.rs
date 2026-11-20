@@ -1,13 +1,14 @@
 //! Repository task runner for the Zydeco workspace.
 //!
-//! The task of interest is `cargo test-resume`: it builds the workspace test
-//! targets with Cargo, runs the tests target by target, and records every
-//! outcome under the Cargo target directory. A later invocation reuses those
-//! records, so fixing a failure and rerunning continues from the failure
-//! instead of repeating the whole suite.
+//! Supported tasks:
+//! - `cargo test-resume`: build workspace test targets with Cargo, run them
+//!   target by target, and reuse saved passes across invocations.
+//! - `cargo xtask docs <check|build|serve|test>`: validate, build, serve, and
+//!   test the mdBook language and compiler references via `docs/scripts/build-books.py`.
 
 mod cargo;
 mod cli;
+mod docs;
 mod runner;
 mod state;
 
@@ -26,6 +27,9 @@ pub enum Error {
     /// An external Cargo invocation failed.
     #[error("cargo failed: {0}")]
     Cargo(String),
+    /// A documentation script invocation failed to start.
+    #[error("docs task failed: {0}")]
+    Docs(String),
     /// Reading or writing resumable-execution state failed.
     #[error("{0}")]
     State(String),
@@ -41,13 +45,22 @@ pub enum Error {
 }
 
 fn main() -> ExitCode {
-    match cli::Invocation::parse(std::env::args_os().skip(1)) {
-        | Ok(cli::Parsed::Help) => {
-            print!("{}", cli::USAGE);
+    match cli::Parsed::parse(std::env::args_os().skip(1)) {
+        | Ok(cli::Parsed::Help(usage)) => {
+            print!("{usage}");
             ExitCode::SUCCESS
         }
-        | Ok(cli::Parsed::Invocation(invocation)) => match runner::run(invocation) {
-            | Ok(outcome) => ExitCode::from(outcome.exit_code()),
+        | Ok(cli::Parsed::Task(cli::Task::TestResume(invocation))) => {
+            match runner::run(invocation) {
+                | Ok(outcome) => ExitCode::from(outcome.exit_code()),
+                | Err(error) => {
+                    eprintln!("error: {error}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
+        | Ok(cli::Parsed::Task(cli::Task::Docs(invocation))) => match invocation.run() {
+            | Ok(code) => ExitCode::from(code),
             | Err(error) => {
                 eprintln!("error: {error}");
                 ExitCode::FAILURE

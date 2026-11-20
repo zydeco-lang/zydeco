@@ -14,7 +14,7 @@ This establishes the existing mechanism for an already factored program;
 it does not establish automatic conversion of the original program.
 Merely finding any procedure in its output is insufficient because `read_bool` is also shared.
 
-The [current normalization and procedure rules](../references/compiler.md#second-class-procedures) preserve
+The [current normalization and procedure rules](../references/compiler/src/sps/normalization-and-demand.md#second-class-procedures) preserve
 unknown branch joins and inline only singly called general closures or procedures.
 This proposal supplies sharing-aware control-flow transformations before closure conversion.
 It does not add source procedure syntax, change the source evaluation order, or require recursive procedure groups.
@@ -85,12 +85,12 @@ neither is required to make the short-circuit example reach its shared false tar
 Use independent analyses for candidate discovery, free-variable availability, call uses, and cost.
 Share their structural event stream when their scope and scheduling contracts agree.
 Reconstruct approved candidates with an `Explicit` folder following the
-[traversal selection](../references/compiler.md#choosing-and-composing-traversals)
-and [resumable execution](../references/compiler.md#resumable-folder-execution) rules.
+[traversal selection](../references/compiler/src/compiler-data.md#choosing-and-composing-traversals)
+and [resumable execution](../references/compiler/src/compiler-data.md#resumable-folder-execution) rules.
 Do not make an analyzer mutate the program while another analyzer still depends on its original facts.
 
 Expose the experiment
-through the existing [SPS pass selection](../references/compiler.md#selecting-and-inspecting-passes)
+through the existing [SPS pass selection](../references/compiler/src/architecture.md#selecting-and-inspecting-passes)
 before changing the default plan.
 Compare these two integration choices:
 

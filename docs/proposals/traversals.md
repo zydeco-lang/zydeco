@@ -2,9 +2,9 @@
 
 This proposal retains unfinished extensions to compiler traversal and diagnostic recovery.
 The implemented surface, classifier, runtime, and SPS interfaces are indexed
-by [choosing and composing traversals](../references/compiler.md#choosing-and-composing-traversals).
+by [choosing and composing traversals](../references/compiler/src/compiler-data.md#choosing-and-composing-traversals).
 That reference owns their shared design rules and links to the detailed phase contracts.
-The [diagnostic collection contract](../references/compiler.md#diagnostic-collection) records current recovery
+The [diagnostic collection contract](../references/compiler/src/tooling.md#diagnostic-collection) records current recovery
 and reporting behavior.
 
 ## Diagnostic collection and recovery
@@ -31,7 +31,7 @@ Establish recoverable structural regions before batching dependent contract chec
 malformed ownership and cyclic input cannot supply the evidence those checks expect.
 
 More checker recovery should begin with a demonstrated diagnostic or tooling gap.
-The implemented [checker recovery](../references/compiler.md#checker-recovery) covers independent components,
+The implemented [checker recovery](../references/compiler/src/checking-and-inference.md#checker-recovery) covers independent components,
 arms, closed imports, and finalization roots.
 Recovery through failed sequential bindings, telescope witnesses,
 or ambiguous clause prefixes would require an explicit representation of unavailable evidence
@@ -44,10 +44,10 @@ or the phase's acceptance boundary.
 
 ## Further resumable folder migrations
 
-The implemented [resumable execution contract](../references/compiler.md#resumable-folder-execution) provides
+The implemented [resumable execution contract](../references/compiler/src/compiler-data.md#resumable-folder-execution) provides
 an explicit-stack driver for residual lowering, Builtin packed value materialization,
 SPS reconstruction and pattern decisions, closure conversion, SPSLow structural analysis, local unboxing,
-and [CPS assembly lowering](../references/compiler.md#cps-assembly-lowering).
+and [CPS assembly lowering](../references/compiler/src/zasm.md#cps-assembly-lowering).
 Their behavior and depth checks support using the interface for those boundaries.
 The following sections record boundaries skipped after evaluation because their ownership
 or consumer interfaces need a further design choice.
@@ -128,7 +128,7 @@ A later complete resolver migration must also retain global environments beyond 
 and resume block dependency collection through its existing success and abort boundaries.
 The [resolver](../../lang/surface/src/scoped/resolver.rs)
 and [block handling](../../lang/surface/src/scoped/blocks.rs) show those current lifetimes;
-the [name-resolution reference](../references/compiler.md#name-resolution) owns their semantic contract.
+the [name-resolution reference](../references/compiler/src/parsing-and-resolution.md#name-resolution) owns their semantic contract.
 
 Acceptance should cover repeated source and signature boundaries, fresh binder identities,
 origins, annotation and view children, and copattern spines.
@@ -138,7 +138,7 @@ A direct deep fixture must cross pattern-to-term edges and include destruction o
 
 ### SPSLow semantic evidence
 
-The implemented [SPSLow scan](../references/compiler.md#spslow-traversal-and-analyzers) covers structural ownership
+The implemented [SPSLow scan](../references/compiler/src/closure-conversion.md#spslow-traversal-and-analyzers) covers structural ownership
 and variable summaries.
 The [entry-contract validator](../../lang/stackir/src/low/contracts.rs)
 and [protocol validator](../../lang/stackir/src/low/protocols.rs) require more than the same structural events.
@@ -162,7 +162,7 @@ and drop retained facts and error payloads on the small test stack.
 
 ### Normalization fact ownership
 
-Borrowed [pattern decisions](../references/compiler.md#pattern-decisions-and-validation) now use the common driver,
+Borrowed [pattern decisions](../references/compiler/src/sps/operations-and-patterns.md#pattern-decisions-and-validation) now use the common driver,
 including suffix views that borrow existing physical fields.
 The remaining owned [producer facts](../../lang/stackir/src/high/normalize.rs)
 and [consumer demands](../../lang/stackir/src/high/demand.rs) are a medium–high difficulty case,
@@ -227,10 +227,10 @@ Further typed migrations must identify the graph they observe.
 [Type support collection](../../lang/statics/src/normalize/scope.rs) depends on occurrence-specific scope constraints;
 a replacement needs a context-sensitive traversal or a justified memo key under the reference's cache rules.
 The raw classifier folder and residual runtime iterator provide distinct starting points. Further SPS
-rebuilding must preserve the established [consumer-demand schedule](../references/compiler.md#consumer-demands).
+rebuilding must preserve the established [consumer-demand schedule](../references/compiler/src/sps/normalization-and-demand.md#consumer-demands).
 
 Residual lowering and SPS normalization now use explicit reconstruction frames,
-as recorded in [C8](../references/compiler.md#c8-sps-lowering-normalization-and-demand).
+as recorded in [C8](../references/compiler/src/sps.md).
 Further depth work should distinguish those completed migrations from recursive semantic helpers:
 normalization's owned known-value construction, structured demand and protocol operations,
 and low verification still have recursive paths.
@@ -264,7 +264,7 @@ The benefit is evidence of the overall effect and identification of any memory r
 ## Migration acceptance
 
 For each extension, identify the client and its repeated structural rule,
-then apply the [reference's traversal selection criteria](../references/compiler.md#choosing-and-composing-traversals).
+then apply the [reference's traversal selection criteria](../references/compiler/src/compiler-data.md#choosing-and-composing-traversals).
 Remove the superseded recursion and update callers in the same change.
 Compare accepted behavior and rejected inputs, including error multiplicity and locations,
 arena identities, provenance, and the absence of invalid normal products.

@@ -8,8 +8,8 @@ They record current limitations and intended repairs, without promoting a wider 
 
 ## N-ary product inference refinement
 
-[L5](../references/language.md#5-values-products-and-data) preserves n-ary products;
-[L4](../references/language.md#4-classification-and-inference) describes expected-shape refinement.
+[L5](../references/language/src/values-products-and-data.md) preserves n-ary products;
+[L4](../references/language/src/classification-and-inference.md) describes expected-shape refinement.
 The [refinement helper](../../lang/statics/src/normalize/inference.rs) fills an unknown expected product
 with exactly two fresh component types.
 The formal calculus retains this implementation detail in REFINE-PROD; it is not an association law.
@@ -30,8 +30,8 @@ Review arity-directed refinement and retain all three probes when implementing a
 
 ## Nested witness diagnostic
 
-[L9](../references/language.md#9-polymorphism-and-packed-values)
-and [C5](../references/compiler.md#witness-evidence-and-field-lookup) govern witness evidence.
+[L9](../references/language/src/polymorphism-and-packed-values.md)
+and [C5](../references/compiler/src/checking-and-inference.md#witness-evidence-and-field-lookup) govern witness evidence.
 Computation binders can collect witnesses beneath product patterns,
 but [application instantiation](../../lang/statics/src/check/functions/application.rs)
 traverses a leading existential prefix.
@@ -57,7 +57,7 @@ Improving the rejection diagnostic does not require accepting that extension.
 
 ## Monadic closure validation
 
-The approved [closed translation boundary](../references/language.md#closed-translation-boundary)
+The approved [closed translation boundary](../references/language/src/translations/algebra-translation.md#closed-translation-boundary)
 requires external types to enter through type parameters inside the monadic annotation.
 The implementation's [environment filter](../../lang/statics/src/environment.rs) retains lexical type bindings,
 and the translator starts with an empty structure environment.
@@ -89,15 +89,15 @@ The retained lexical witness is implementation drift, not an invitation to infer
 - [ ] Migrate examples whose type parameters precede the annotation, including the effect examples
   under `lib/tests/effects/`, to the explicit interface and update argument order and structure arguments together.
 
-Implemented [nominal translation](../references/language.md#applicative-nominal-translation) rejects external
+Implemented [nominal translation](../references/language/src/translations/algebra-translation.md#applicative-nominal-translation) rejects external
 nominal declarations and free external witnesses in reachable local nominal definitions.
-It and [value-function translation](../references/language.md#polymorphic-value-functions) do not establish
+It and [value-function translation](../references/language/src/translations/algebra-translation.md#polymorphic-value-functions) do not establish
 the complete closure validation still required above.
 
 ## Inferred higher-order value-function witnesses
 
-[L4](../references/language.md#4-classification-and-inference) governs inferred classifiers,
-and [L8](../references/language.md#8-value-functions-and-views) permits higher-order value functions.
+[L4](../references/language/src/classification-and-inference.md) governs inferred classifiers,
+and [L8](../references/language/src/value-functions-and-views.md) permits higher-order value functions.
 Observed on 2026-09-25 while implementing monadic value functions, this ordinary program rejects
 at `specialize make` with `tyck.type-mismatch`, reporting distinct identities for the two bound `B` witnesses:
 
@@ -121,9 +121,9 @@ The monadic higher-order tests currently use the explicit signature.
 
 ## Source-load diagnostic locations
 
-[C2](../references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance) keeps source coordinates
+[C2](../references/compiler/src/compiler-data.md) keeps source coordinates
 with their owning file,
-and [C15](../references/compiler.md#c15-diagnostics-formatting-documentation-and-interactive-tooling)
+and [C15](../references/compiler/src/tooling.md)
 owns source-facing diagnostics.
 The [source errors](../../lang/session/src/source/err.rs) retain local byte ranges,
 but import-path and cycle `Display` implementations render spans directly;
@@ -142,8 +142,8 @@ Replacing the child's import with `()` passes.
 
 ## Partial annotation scope during formatting
 
-The [formatter's semantic-identity law](../references/compiler.md#semantic-identity)
-and [partial-binder scope](../references/language.md#7-patterns-and-coverage) govern this boundary.
+The [formatter's semantic-identity law](../references/compiler/src/tooling/formatting-and-rendering.md#semantic-identity)
+and [partial-binder scope](../references/language/src/patterns-and-coverage.md) govern this boundary.
 Observed during the 2026-10-13 fixture migration, formatting this source fragment merges the two function headers:
 
 ```zydeco
@@ -162,7 +162,7 @@ Add a formatter round-trip regression for this pair.
 
 Sealing in `pack` rewrites the disclosed witness's occurrences in the payload type
 into the abstract binder, so a payload that speaks only in concrete primitive types produces
-a witness-independent body ([L9](../references/language.md#9-polymorphism-and-packed-values);
+a witness-independent body ([L9](../references/language/src/polymorphism-and-packed-values.md);
 [Packed Value Introduction](../../DESIGN.md#packed-value-introduction) gives the mechanism account).
 The payload is checked against the disclosed witness, so an explicit annotation naming the abstract binder is accepted
 without abstracting the synthesized body.
@@ -180,7 +180,7 @@ This difference is not reported.
 ## Unused non-query source lifecycle
 
 Observed at `e2dd8979` on 2026-11-05; unchanged at `c6c90588`.
-[C3 query and checker ownership](../references/compiler.md#query-and-checker-ownership)
+[C3 query and checker ownership](../references/compiler/src/sessions-and-queries.md#query-and-checker-ownership)
 gives allocation-producing judgments producer queries with immutable outcomes
 and keeps the coarse source query as the single owner of the mutable checker pipeline.
 The checker also exposes a second source lifecycle:
@@ -205,8 +205,8 @@ while `run_source` returns early on that failure.
 ## Host-call arity above the SysV register limit
 
 Observed at `e2dd8979` on 2026-11-05; unchanged at `c6c90588`.
-[C14 foreign calls](../references/compiler.md#foreign-calls)
-and [C11 native emission](../references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission)
+[C14 foreign calls](../references/compiler/src/builtins-and-foreign-calls.md#foreign-calls)
+and [C11 native emission](../references/compiler/src/native-emission.md)
 govern host calls.
 The host-call loop in the [AMD64 emitter](../../lang/amd64/src/emit.rs) at `emit.rs:927-938` pops arguments
 into SysV registers for indices 1 through 6 and reaches `todo!()` at `emit.rs:936` for index 7 and above.

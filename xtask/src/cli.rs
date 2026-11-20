@@ -1,10 +1,21 @@
-//! Command-line interpretation for the test-resume task.
+//! Command-line interpretation for workspace tasks.
 
 use std::ffi::OsString;
 
+use crate::docs::{DocsAction, DocsInvocation};
 use crate::{Error, Result};
 
 pub const USAGE: &str = "\
+Usage: cargo xtask <subcommand> [options]
+
+Subcommands:
+  test-resume   build and run workspace tests, reusing passed results
+  docs          validate, build, serve, or test the reference mdBooks
+
+Run `cargo xtask <subcommand> --help` for subcommand options.
+";
+
+pub const TEST_RESUME_USAGE: &str = "\
 Usage: cargo test-resume [options] [cargo options] [-- test options]
 
 Builds the workspace test targets with Cargo, then runs the tests that were not
@@ -28,6 +39,21 @@ Test options after `--` are forwarded to every test executable, for example
 `--test-threads=2`, `--nocapture`, or a test-name filter.
 ";
 
+pub const DOCS_USAGE: &str = "\
+Usage: cargo xtask docs <check|build|serve|test> [options]
+
+Dispatches to `docs/scripts/build-books.py` using Python (`PYTHON` or `python3`).
+
+Actions:
+  check       validate book summaries, theme parity, and internal/repo links
+  build       build both reference mdBooks and the combined landing site
+  serve       build and serve the combined site locally over HTTP
+  test        run unit tests for the documentation scripts
+
+Extra options after the action are forwarded to `docs/scripts/build-books.py`
+(for example `--output target/site`, `--port 8000`, or `--git-ref main`).
+";
+
 /// What the invocation should do after opening the saved results.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
@@ -39,13 +65,52 @@ pub enum Action {
     Clear,
 }
 
+/// Selected workspace task.
+#[derive(Debug)]
+pub enum Task {
+    /// Resumable workspace test runner.
+    TestResume(Invocation),
+    /// Reference mdBook tooling.
+    Docs(DocsInvocation),
+}
+
 /// Parsed command line.
 #[derive(Debug)]
 pub enum Parsed {
     /// Print the usage message.
-    Help,
-    /// Execute this invocation.
-    Invocation(Invocation),
+    Help(&'static str),
+    /// Execute this task.
+    Task(Task),
+}
+
+impl Parsed {
+    /// Parses a top-level `xtask` command line.
+    pub fn parse(mut args: impl Iterator<Item = OsString>) -> Result<Self> {
+        let Some(subcommand) = args.next() else {
+            return Err(Error::Usage("missing subcommand (`test-resume` or `docs`)".into()));
+        };
+        match subcommand.to_string_lossy().as_ref() {
+            | "test-resume" => Invocation::parse_after_subcommand(args),
+            | "docs" => parse_docs(args),
+            | "-h" | "--help" | "help" => Ok(Self::Help(USAGE)),
+            | other => Err(Error::Usage(format!("unknown subcommand `{other}`"))),
+        }
+    }
+}
+
+fn parse_docs(mut args: impl Iterator<Item = OsString>) -> Result<Parsed> {
+    let Some(action_arg) = args.next() else {
+        return Err(Error::Usage(
+            "missing `docs` action (`check`, `build`, `serve`, or `test`)".into(),
+        ));
+    };
+    let action_str = action_arg.to_string_lossy();
+    if matches!(action_str.as_ref(), "-h" | "--help" | "help") {
+        return Ok(Parsed::Help(DOCS_USAGE));
+    }
+    let action = DocsAction::parse(&action_str)?;
+    let rest: Vec<OsString> = args.collect();
+    Ok(Parsed::Task(Task::Docs(DocsInvocation { action, args: rest })))
 }
 
 /// One `cargo test-resume` invocation.
@@ -62,16 +127,7 @@ pub struct Invocation {
 
 impl Invocation {
     /// Parses arguments following the `test-resume` subcommand name.
-    pub fn parse(mut args: impl Iterator<Item = OsString>) -> Result<Parsed> {
-        let Some(subcommand) = args.next() else {
-            return Err(Error::Usage("missing subcommand `test-resume`".into()));
-        };
-        match subcommand.to_string_lossy().as_ref() {
-            | "test-resume" => {}
-            | "-h" | "--help" | "help" => return Ok(Parsed::Help),
-            | other => return Err(Error::Usage(format!("unknown subcommand `{other}`"))),
-        }
-
+    fn parse_after_subcommand(args: impl Iterator<Item = OsString>) -> Result<Parsed> {
         let mut action = Action::Run;
         let mut force = false;
         let mut dry_run = false;
@@ -90,7 +146,7 @@ impl Invocation {
                 | "--dry-run" => dry_run = true,
                 | "--status" => set_action(&mut action, Action::Status)?,
                 | "--clear" => set_action(&mut action, Action::Clear)?,
-                | "-h" | "--help" => return Ok(Parsed::Help),
+                | "-h" | "--help" => return Ok(Parsed::Help(TEST_RESUME_USAGE)),
                 | _ => cargo_args.push(arg),
             }
         }
@@ -111,7 +167,13 @@ impl Invocation {
                 "`{flag}` selects doctests, which `cargo test-resume` does not cover; run `cargo test-doc-all` instead"
             )));
         }
-        Ok(Parsed::Invocation(Invocation { action, force, dry_run, cargo_args, test_args }))
+        Ok(Parsed::Task(Task::TestResume(Invocation {
+            action,
+            force,
+            dry_run,
+            cargo_args,
+            test_args,
+        })))
     }
 
     /// Cargo arguments for building and selecting targets.
@@ -289,10 +351,43 @@ mod tests {
 
     fn parse(arguments: &[&str]) -> Invocation {
         let arguments = arguments.iter().copied().map(OsString::from);
-        match Invocation::parse(arguments).expect("arguments parse") {
-            | Parsed::Invocation(invocation) => invocation,
-            | Parsed::Help => panic!("expected an invocation"),
+        match Parsed::parse(arguments).expect("arguments parse") {
+            | Parsed::Task(Task::TestResume(invocation)) => invocation,
+            | other => panic!("expected a test-resume invocation, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn docs_subcommand_parses_actions_and_forwards_args() {
+        let arguments =
+            ["docs", "build", "--output", "target/site"].into_iter().map(OsString::from);
+        match Parsed::parse(arguments).expect("docs invocation parses") {
+            | Parsed::Task(Task::Docs(invocation)) => {
+                assert_eq!(invocation.action, DocsAction::Build);
+                assert_eq!(
+                    invocation.args,
+                    [OsString::from("--output"), OsString::from("target/site")]
+                );
+            }
+            | other => panic!("expected docs invocation, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn docs_help_returns_docs_usage() {
+        let arguments = ["docs", "--help"].into_iter().map(OsString::from);
+        match Parsed::parse(arguments).expect("docs help parses") {
+            | Parsed::Help(usage) => assert_eq!(usage, DOCS_USAGE),
+            | other => panic!("expected help, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn docs_rejects_missing_or_unknown_action() {
+        let missing = ["docs"].into_iter().map(OsString::from);
+        assert!(Parsed::parse(missing).is_err());
+        let unknown = ["docs", "deploy"].into_iter().map(OsString::from);
+        assert!(Parsed::parse(unknown).is_err());
     }
 
     #[test]
@@ -328,13 +423,13 @@ mod tests {
     #[test]
     fn doctests_are_rejected() {
         let arguments = ["test-resume", "--doc"].iter().copied().map(OsString::from);
-        assert!(Invocation::parse(arguments).is_err());
+        assert!(Parsed::parse(arguments).is_err());
     }
 
     #[test]
     fn status_and_clear_conflict() {
         let arguments = ["test-resume", "--status", "--clear"].iter().copied().map(OsString::from);
-        assert!(Invocation::parse(arguments).is_err());
+        assert!(Parsed::parse(arguments).is_err());
     }
 
     #[test]

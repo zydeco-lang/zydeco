@@ -17,17 +17,17 @@ at unbounded width (`lang/syntax/src/lib.rs:1075`, `:1087`; `lang/syntax/src/fmt
 - **formatter** — a semantics-preserving normalizer over the same textual arena,
   shared by `zydeco fmt` and Cajun (`lang/surface/src/textual/pretty.rs`).
 
-[C4](../../../../docs/references/compiler.md#c4-parsing-desugaring-and-name-resolution) owns parsing,
+[C4](../../../references/compiler/src/parsing-and-resolution.md) owns parsing,
 desugaring, and resolution; the formatting half
-of [C15](../../../../docs/references/compiler.md#c15-diagnostics-formatting-documentation-and-interactive-tooling)
+of [C15](../../../references/compiler/src/tooling.md)
 owns source layout.
-[L2](../../../../docs/references/language.md#2-lexical-structure-and-syntax)
-and [L3](../../../../docs/references/language.md#3-bindings-and-scope) own surface syntax and binding scope.
+[L2](../../../references/language/src/lexical-and-syntax.md)
+and [L3](../../../references/language/src/bindings-and-scope.md) own surface syntax and binding scope.
 
 Out of scope: source graph, packages, overlays, session assembly, and CLI driver — see the [tooling card](06-tooling.md)
-and [C3](../../../../docs/references/compiler.md#c3-source-loading-sessions-queries-and-memory-retention);
+and [C3](../../../references/compiler/src/sessions-and-queries.md);
 typed syntax, checking, and typed arenas — see the [statics card](02-statics.md)
-and [C5](../../../../docs/references/compiler.md#c5-typed-representation-judgments-and-inference).
+and [C5](../../../references/compiler/src/checking-and-inference.md).
 This card ends at the `ScopedProgram` product.
 
 ## 2. Position in the Pipeline
@@ -36,21 +36,21 @@ Upstream, the session parses each file (`SourceTemplate::parse` calls `StrictPar
 and `SourceInventory::scan`, `lang/session/src/source/loader.rs:46-71`)
 and assembles one merged `TextualProgram` (`lang/session/src/source/program.rs:15-21`).
 Loading, package context,
-and assembly are [C3's boundary](../../../../docs/references/compiler.md#source-loading-and-package-selection)
-and [L12](../../../../docs/references/language.md#12-sources-imports-and-entry);
+and assembly are [C3's boundary](../../../references/compiler/src/sessions-and-queries.md#source-loading-and-package-selection)
+and [L12](../../../references/language/src/sources.md);
 the [tooling card](06-tooling.md) covers them.
 
 The phase seams are three concrete products in `lang/session/src/source/pipeline.rs:16-62`:
 `TextualProgram::desugar` → `BitterProgram` → `BitterProgram::resolve` → `ScopedProgram` → statics.
-[C1's product table](../../../../docs/references/compiler.md#c1-architecture-and-a-programs-path-through-the-compiler)
+[C1's product table](../../../references/compiler/src/architecture.md)
 is the canonical version of that chain.
 
 Formatting takes a different route: `zydeco fmt` reads one file, runs `StrictParser::source`,
 and renders with `PrettyFormatter::with_source` (`cli/src/format.rs:67-74`); it builds no program
-and resolves no names ([C15 formatting](../../../../docs/references/compiler.md#formatting-and-typed-rendering)).
+and resolves no names ([C15 formatting](../../../references/compiler/src/tooling/formatting-and-rendering.md)).
 Editor completion uses the recovering parser plus a request-local resolution run instead
 (`lang/session/src/source/query/completion.rs:124`;
-[C4 recovering parsing](../../../../docs/references/compiler.md#recovering-parsing)).
+[C4 recovering parsing](../../../references/compiler/src/parsing-and-resolution.md#recovering-parsing)).
 
 Assembly rebuilds syntax into a fresh `Parser` arena (`lang/session/src/source/program.rs:50-53`)
 and never calls `capture_source_information`; source-fidelity data stays
@@ -80,11 +80,11 @@ Formatter and editor presentation therefore consume a per-file parse, not the me
 - **One grammar, two explicit outcomes.** Both modes run the same generated parser;
   strict mode accepts only a returned root with an empty issue list (`lang/surface/src/textual/parser.rs:430-455`).
   Recovery policy lives in the grammar's `!` productions, not in a second parser
-  ([C4 trust boundary](../../../../docs/references/compiler.md#trust-boundary-and-recovery-contracts)).
+  ([C4 trust boundary](../../../references/compiler/src/parsing-and-resolution.md#trust-boundary-and-recovery-contracts)).
 - **Recovery identity is typed.** A completion hole
   and a recovery node are distinct values carrying their own entity IDs and spans; a completion is exposed only
   if its allocated hole stays reachable from the returned root (`lang/surface/src/textual/parser.rs:124-151`,
-  `:492-533`; [C4 recovering parsing](../../../../docs/references/compiler.md#recovering-parsing)).
+  `:492-533`; [C4 recovering parsing](../../../references/compiler/src/parsing-and-resolution.md#recovering-parsing)).
 - **Terminals and diagnostics share generated metadata.** Logos attributes generate canonical spellings
   and parser terminal names; `define` and `def` both lex as `Define`
   with canonical spelling `def` (`lang/surface/src/textual/lexer.rs:44-47`;
@@ -93,24 +93,24 @@ Formatter and editor presentation therefore consume a per-file parse, not the me
   boundary break intents, and comment anchors keyed by `EntityId`; the AST gains no layout-only variants,
   and a formatter may ignore the intentions but not the trivia (`lang/surface/src/textual/syntax.rs:498-604`,
   `lang/surface/src/textual/intention.rs:125-138`, `lang/surface/src/textual/trivia.rs:13-25`;
-  [C15 retained source information](../../../../docs/references/compiler.md#retained-source-information)).
+  [C15 retained source information](../../../references/compiler/src/tooling/formatting-and-rendering.md#retained-source-information)).
 - **Desugaring is all-or-nothing and provenance-preserving.** A memo table prevents duplicate reporting
   of a reused rejected source term; a rejected source publishes no bitter arena,
   and every allocation stores its textual origin (`lang/surface/src/bitter/desugar/mod.rs:33-36`,
   `:62-72`; `lang/surface/src/bitter/alloc.rs:31-64`;
-  [C4 desugaring folders](../../../../docs/references/compiler.md#desugaring-folders)).
+  [C4 desugaring folders](../../../references/compiler/src/parsing-and-resolution.md#desugaring-folders)).
 - **Resolution owns scope and scheduling, and publishes strictly.** Block candidates are collected
   before bodies are visited, dependency graphs order bindings,
   and any strict-policy diagnostic rejects the whole program while observations remain available
   to tooling (`lang/surface/src/scoped/blocks.rs:69-78`,
   `lang/surface/src/scoped/dependencies.rs:6-35`, `lang/surface/src/scoped/resolver.rs:99-126`;
-  [C4 name resolution](../../../../docs/references/compiler.md#name-resolution),
-  [L3](../../../../docs/references/language.md#3-bindings-and-scope)).
+  [C4 name resolution](../../../references/compiler/src/parsing-and-resolution.md#name-resolution),
+  [L3](../../../references/language/src/bindings-and-scope.md)).
 - **Formatting is a semantics-preserving normalizer with source-driven policy.** Reparse,
   desugared-shape equality, comment retention, and idempotence are checked
   over the repository corpus (`lang/surface/src/textual/pretty/corpus.rs:61-88`); options come from `@[format(...)]`
-  in the source, not frontend settings ([C15 formatter laws](../../../../docs/references/compiler.md#formatter-laws),
-  [components and policy](../../../../docs/references/compiler.md#components-and-policy)).
+  in the source, not frontend settings ([C15 formatter laws](../../../references/compiler/src/tooling/formatting-and-rendering.md#formatter-laws),
+  [components and policy](../../../references/compiler/src/tooling/formatting-and-rendering.md#components-and-policy)).
   A live exception to the identity law is recorded in §10.
 
 ## 5. Data Flow
@@ -169,11 +169,11 @@ The formatter corpus test takes about 75 s on this host.
 
 ## 7. Reading Order
 
-1. [C4](../../../../docs/references/compiler.md#c4-parsing-desugaring-and-name-resolution) whole chapter,
-   then [C15 formatting and typed rendering](../../../../docs/references/compiler.md#formatting-and-typed-rendering)
+1. [C4](../../../references/compiler/src/parsing-and-resolution.md) whole chapter,
+   then [C15 formatting and typed rendering](../../../references/compiler/src/tooling/formatting-and-rendering.md)
    with its retained-source and formatter-law subsections.
-2. [L2](../../../../docs/references/language.md#2-lexical-structure-and-syntax)
-   and [L3](../../../../docs/references/language.md#3-bindings-and-scope) for the surface the code must accept.
+2. [L2](../../../references/language/src/lexical-and-syntax.md)
+   and [L3](../../../references/language/src/bindings-and-scope.md) for the surface the code must accept.
 3. `lang/surface/src/textual/README.md`: the textual model in one page.
 4. `lang/surface/src/textual/lexer.rs` with `lang/derive/src/lib.rs` (the `TokenMetadata` macro),
    then `lang/surface/src/textual/parser/grammar.lalrpop:428-583` (precedence summary and `SourceUnit`).
@@ -195,31 +195,31 @@ The formatter corpus test takes about 75 s on this host.
 
 1. What exactly separates strict from recovering parsing, and why can no strict caller accept a recovered root?
    → `lang/surface/src/textual/parser.rs:430-455`;
-   [C4 strict and recovering modes](../../../../docs/references/compiler.md#strict-and-recovering-modes).
+   [C4 strict and recovering modes](../../../references/compiler/src/parsing-and-resolution.md#strict-and-recovering-modes).
 2. Where does `define` become `def`, and which layer owns that decision?
    → `lang/surface/src/textual/lexer.rs:44-47`; test at `lang/surface/src/textual/parser/tests.rs:424-441`;
-   [C4 terminal metadata](../../../../docs/references/compiler.md#trust-boundary-and-recovery-contracts).
+   [C4 terminal metadata](../../../references/compiler/src/parsing-and-resolution.md#trust-boundary-and-recovery-contracts).
 3. What is the difference between a completion hole and a recovery node, and when is a hole visible to tooling?
    → `lang/surface/src/textual/parser.rs:124-151`, `:492-533`;
-   [C4 recovering parsing](../../../../docs/references/compiler.md#recovering-parsing).
+   [C4 recovering parsing](../../../references/compiler/src/parsing-and-resolution.md#recovering-parsing).
 4. Which information lives outside the textual syntax tree, and who may ignore it?
    → `lang/surface/src/textual/intention.rs:27-47`, `:125-138`; `lang/surface/src/textual/trivia.rs:13-25`;
-   [C15 retained source information](../../../../docs/references/compiler.md#retained-source-information).
+   [C15 retained source information](../../../references/compiler/src/tooling/formatting-and-rendering.md#retained-source-information).
 5. Why does the formatter need the raw source string as well as the arena?
    → `PrettyFormatter::with_source` and `format_verbatim` in `lang/surface/src/textual/pretty.rs:378-404`,
-   `:1772-1797`; [C15 formatter directives](../../../../docs/references/compiler.md#formatter-directives).
+   `:1772-1797`; [C15 formatter directives](../../../references/compiler/src/tooling/formatting-and-rendering.md#formatter-directives).
 6. What does the desugarer memoize, and why does a rejected source produce no bitter program?
    → `lang/surface/src/bitter/desugar/mod.rs:33-36`, `:62-72`;
-   [C4 desugaring folders](../../../../docs/references/compiler.md#desugaring-folders).
+   [C4 desugaring folders](../../../references/compiler/src/parsing-and-resolution.md#desugaring-folders).
 7. When does resolution publish a `ScopedProgram`, and what remains observable after rejection?
    → `lang/surface/src/scoped/resolver.rs:24-30`, `:99-126`;
-   [C4 name resolution](../../../../docs/references/compiler.md#name-resolution).
+   [C4 name resolution](../../../references/compiler/src/parsing-and-resolution.md#name-resolution).
 8. Which module makes forward references inside `begin ... end` resolve before their definitions are visited?
    → `lang/surface/src/scoped/blocks.rs:69-120`, `lang/surface/src/scoped/dependencies.rs:6-35`;
-   [C4 name resolution](../../../../docs/references/compiler.md#name-resolution).
+   [C4 name resolution](../../../references/compiler/src/parsing-and-resolution.md#name-resolution).
 9. Which spellings does the formatter guarantee to converge, and what is the only frontend option?
    → `lang/surface/src/textual/pretty/config.rs:103-121`;
-   [C15 components and policy](../../../../docs/references/compiler.md#components-and-policy);
+   [C15 components and policy](../../../references/compiler/src/tooling/formatting-and-rendering.md#components-and-policy);
    the sweep in §6 shows current convergence for `define` and `comatch`.
 
 ## 9. Redundancy and Cleanup Signals
@@ -234,21 +234,21 @@ Both retired studies call their findings proposals, not decisions.
 
 | # | Signal | Evidence | Status | Assessment |
 | --- | --- | --- | --- | --- |
-| 1 | `define` alias of `def` | `lang/surface/src/textual/lexer.rs:44-47`; [L2](../../../../docs/references/language.md#2-lexical-structure-and-syntax); [appendix F](../appendix-cleanup-candidates.md#f-surface-form-counts-at-e2dd8979) | decision needed | 0 uses in 629 tracked sources at `e2dd8979`; a documented synonym, so deletion updates L2 and the parser expectation list. Appendix F `open — reference gate`. |
-| 2 | `comatch p => M end` abbreviation of `fn` | `lang/surface/src/textual/parser/grammar.lalrpop:447`; the parsed `Abs` prints as `fn` (`lang/surface/src/textual/pretty.rs:188-200`) | decision needed | 0 uses and undocumented; the grammar is C4's syntax specification, so the gate is narrow. The arm form `comatch \| ... end` is separate, documented in [L6](../../../../docs/references/language.md#6-computations-and-control), and stays. |
-| 3 | `sigma` binder | `lang/surface/src/textual/parser/grammar.lalrpop:527`; [L4](../../../../docs/references/language.md#4-classification-and-inference) | decision needed | 4 uses, all compiler cases; equals `exists` for type binders and `*` for value binders. Documented, so removal changes L4. |
-| 4 | `<\|` backward application | `lang/surface/src/textual/parser/grammar.lalrpop:512`; [L2](../../../../docs/references/language.md#2-lexical-structure-and-syntax); [style guide](../../../../docs/style.md) | decision needed | 7 uses in 6 files, but `docs/style.md:26-27` endorses it for multiline abstractions; it costs a precedence level and a formatter case. |
-| 5 | `~>` view patterns | `lang/surface/src/textual/parser/grammar.lalrpop:268`; [L8](../../../../docs/references/language.md#8-value-functions-and-views); [audit §surface forms](../../../proposals/artifact-boundary.md#surface-forms) | decision needed | 16 uses in 6 files plus about 130 arms/references in 9 crates (audit estimate); `match f v` expresses the same matching. Documented in L8. |
-| 6 | `param ... that` hoisting | [L3](../../../../docs/references/language.md#3-bindings-and-scope); `lang/surface/src/textual/parser/grammar.lalrpop:359-362`, `:546-551` | decision needed | 45 uses in 30 files (std 15); the hoisting form overlaps `param ... in` plus block placement. Distinct from `begin ... end` with `that`, which the audit retains as the only recursive-sealed-type form. |
-| 7 | `.zyi` companions | `lang/session/src/source/graph.rs:97-108`; [L12](../../../../docs/references/language.md#source-boundaries); [appendix F](../appendix-cleanup-candidates.md#f-surface-form-counts-at-e2dd8979) | decision needed | 0 tracked `.zyi` files; the machinery is live (checked via §6) and also motivates the separate `.zydeco` extension. Session-owned, so the [tooling card](06-tooling.md) must carry the decision. |
-| 8 | `@[doc]`, `@(literal)`, and `--\|` text blocks | [L2](../../../../docs/references/language.md#2-lexical-structure-and-syntax), [source documentation](../../../../docs/references/language.md#source-documentation); `lang/surface/src/textual/source/scan.rs:200-246` | decision needed | 0 `@[doc]` uses, 1 `@(literal)` splice, 53 text blocks; no documentation tooling consumes the retained text ([C15](../../../../docs/references/compiler.md#source-documentation-annotations)), and `check` warns per unattached block (10 on OOPSLA `core.zydeco`). |
+| 1 | `define` alias of `def` | `lang/surface/src/textual/lexer.rs:44-47`; [L2](../../../references/language/src/lexical-and-syntax.md); [appendix F](../appendix-cleanup-candidates.md#f-surface-form-counts-at-e2dd8979) | decision needed | 0 uses in 629 tracked sources at `e2dd8979`; a documented synonym, so deletion updates L2 and the parser expectation list. Appendix F `open — reference gate`. |
+| 2 | `comatch p => M end` abbreviation of `fn` | `lang/surface/src/textual/parser/grammar.lalrpop:447`; the parsed `Abs` prints as `fn` (`lang/surface/src/textual/pretty.rs:188-200`) | decision needed | 0 uses and undocumented; the grammar is C4's syntax specification, so the gate is narrow. The arm form `comatch \| ... end` is separate, documented in [L6](../../../references/language/src/computations-and-control.md), and stays. |
+| 3 | `sigma` binder | `lang/surface/src/textual/parser/grammar.lalrpop:527`; [L4](../../../references/language/src/classification-and-inference.md) | decision needed | 4 uses, all compiler cases; equals `exists` for type binders and `*` for value binders. Documented, so removal changes L4. |
+| 4 | `<\|` backward application | `lang/surface/src/textual/parser/grammar.lalrpop:512`; [L2](../../../references/language/src/lexical-and-syntax.md); [style guide](../../../../docs/style.md) | decision needed | 7 uses in 6 files, but `docs/style.md:26-27` endorses it for multiline abstractions; it costs a precedence level and a formatter case. |
+| 5 | `~>` view patterns | `lang/surface/src/textual/parser/grammar.lalrpop:268`; [L8](../../../references/language/src/value-functions-and-views.md); [audit §surface forms](../../../proposals/artifact-boundary.md#surface-forms) | decision needed | 16 uses in 6 files plus about 130 arms/references in 9 crates (audit estimate); `match f v` expresses the same matching. Documented in L8. |
+| 6 | `param ... that` hoisting | [L3](../../../references/language/src/bindings-and-scope.md); `lang/surface/src/textual/parser/grammar.lalrpop:359-362`, `:546-551` | decision needed | 45 uses in 30 files (std 15); the hoisting form overlaps `param ... in` plus block placement. Distinct from `begin ... end` with `that`, which the audit retains as the only recursive-sealed-type form. |
+| 7 | `.zyi` companions | `lang/session/src/source/graph.rs:97-108`; [L12](../../../references/language/src/sources.md#source-boundaries); [appendix F](../appendix-cleanup-candidates.md#f-surface-form-counts-at-e2dd8979) | decision needed | 0 tracked `.zyi` files; the machinery is live (checked via §6) and also motivates the separate `.zydeco` extension. Session-owned, so the [tooling card](06-tooling.md) must carry the decision. |
+| 8 | `@[doc]`, `@(literal)`, and `--\|` text blocks | [L2](../../../references/language/src/lexical-and-syntax.md), [source documentation](../../../references/language/src/meta-annotations.md#source-documentation); `lang/surface/src/textual/source/scan.rs:200-246` | decision needed | 0 `@[doc]` uses, 1 `@(literal)` splice, 53 text blocks; no documentation tooling consumes the retained text ([C15](../../../references/compiler/src/tooling/interactive-and-docs.md#source-documentation-annotations)), and `check` warns per unattached block (10 on OOPSLA `core.zydeco`). |
 | 9 | Duplicate builtin/intrinsic annotation validation | scanner: `lang/surface/src/textual/source/analyzers.rs:147-215`, `lang/surface/src/textual/source.rs:380-470`; desugarer: `lang/surface/src/bitter/desugar/meta.rs:60-80`, `:108-121`; [audit §parallel implementations](../../../proposals/artifact-boundary.md#parallel-implementations) | open | About 420 audit lines; the scanner and the desugarer decode the same catalog entries into separate error types (`BuiltinDirectiveError`/`IntrinsicDirectiveError` versus `DesugarError`). Folding into one typed decode is behavior-preserving for source (appendix B3). |
 | 10 | Metadata catalog decoding sites | `lang/surface/src/metadata.rs:38-68`, `:149-161`; directive types `lang/surface/src/textual/source.rs:113-206`; prelude decodes at `lang/surface/src/bitter/desugar/meta.rs:32-44`, `lang/surface/src/scoped/blocks.rs:141`, `lang/surface/src/scoped/resolver.rs:213`, `lang/session/src/source/program.rs:154`; [size §structural simplifications](../../../proposals/artifact-boundary.md#structural-simplifications) | open | The size analysis notes `intrinsic` alone has six types across catalog/directive/analyzer and `prelude` is decoded at four sites (≈0.9k–1.2k). Decoding once into a typed annotation node during desugaring is a structural simplification, not a source change. |
-| 11 | Three front-end syntax families | [C4](../../../../docs/references/compiler.md#c4-parsing-desugaring-and-name-resolution); [size §representation multiplication](../../../proposals/artifact-boundary.md#representation-multiplication); shared mitigations `lang/surface/src/fold.rs:1-27`, `lang/surface/src/debug.rs:1-30` | decision needed | ≈2k for merging desugar and resolution into one representation. The shared `fold.rs` family and the shared debug formatter already remove the worst duplication; a merge rewrites C4's phase contracts, so it is design work. |
+| 11 | Three front-end syntax families | [C4](../../../references/compiler/src/parsing-and-resolution.md); [size §representation multiplication](../../../proposals/artifact-boundary.md#representation-multiplication); shared mitigations `lang/surface/src/fold.rs:1-27`, `lang/surface/src/debug.rs:1-30` | decision needed | ≈2k for merging desugar and resolution into one representation. The shared `fold.rs` family and the shared debug formatter already remove the worst duplication; a merge rewrites C4's phase contracts, so it is design work. |
 | 12 | Formatter source-fidelity cost | [size §formatter fidelity](../../../proposals/artifact-boundary.md#formatter-fidelity); `lang/surface/src/textual/pretty.rs:2599` (inline tests start); `lang/surface/src/textual/pretty/corpus.rs:61-88` | decision needed | 4,587 production lines with fidelity support at the measured revision; `pretty.rs` is 5,489 lines now (2,598 before inline tests). The size analysis says a canonical printer without retention would be "a fraction"; C15's retention laws would change. |
-| 13 | Reserved formatter options | `lang/surface/src/metadata.rs:954-965`; `lang/surface/src/textual/pretty/config.rs:103-153`; [C15](../../../../docs/references/compiler.md#formatter-directives) | resolved | `width`, `indent`, `layout`, and `parentheses` stay as reserved knobs; the audit's removal was declined ([update paragraph](../../../proposals/artifact-boundary.md#post-audit-verification)). Only `verbatim` appears in tracked sources (`lib/tests/core/gc-stress.zy:29`). |
+| 13 | Reserved formatter options | `lang/surface/src/metadata.rs:954-965`; `lang/surface/src/textual/pretty/config.rs:103-153`; [C15](../../../references/compiler/src/tooling/formatting-and-rendering.md#formatter-directives) | resolved | `width`, `indent`, `layout`, and `parentheses` stay as reserved knobs; the audit's removal was declined ([update paragraph](../../../proposals/artifact-boundary.md#post-audit-verification)). Only `verbatim` appears in tracked sources (`lib/tests/core/gc-stress.zy:29`). |
 | 14 | Test-only parser entry points and the textual ugly printer | commit `0f0f311f`; [audit update](../../../proposals/artifact-boundary.md#post-audit-verification); `lang/surface/src/textual/parser.rs:430`, `:463` | resolved | Removed; `textual/ugly.rs` is gone and the only public parse entries are strict and recovering. |
-| 15 | Parser diagnostics spell canonical `def` | `lang/surface/src/textual/lexer.rs:44-47`; test `lang/surface/src/textual/parser/tests.rs:424-441`; commit `b652ff4e`; [C4](../../../../docs/references/compiler.md#trust-boundary-and-recovery-contracts) | resolved | `define` still parses, but expectation lists and messages print `def`; the test asserts the message contains `def` and not `define`. |
+| 15 | Parser diagnostics spell canonical `def` | `lang/surface/src/textual/lexer.rs:44-47`; test `lang/surface/src/textual/parser/tests.rs:424-441`; commit `b652ff4e`; [C4](../../../references/compiler/src/parsing-and-resolution.md#trust-boundary-and-recovery-contracts) | resolved | `define` still parses, but expectation lists and messages print `def`; the test asserts the message contains `def` and not `define`. |
 
 ## 10. Uncertainties and Drift
 
@@ -277,7 +277,7 @@ Both retired studies call their findings proposals, not decisions.
   I did not audit every session/Cajun consumer to prove that none expects merged trivia.
 - **Companion behavior scope.** The `.zyi` probe used a direct CLI path;
   package-selected or imported companion resolution is session-owned and belongs
-  to [C3](../../../../docs/references/compiler.md#source-loading-and-package-selection)
+  to [C3](../../../references/compiler/src/sessions-and-queries.md#source-loading-and-package-selection)
   and the [tooling card](06-tooling.md).
 - **Corpus size drift.** `pretty.rs` is 5,489 lines now against 5,273 in the size analysis;
   I did not bisect the difference or re-classify production versus test lines with the evaluation's rule.

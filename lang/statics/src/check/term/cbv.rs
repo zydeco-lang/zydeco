@@ -28,7 +28,8 @@
 //! ```
 //!
 //! That is the split, not the whole translation: the three tables, every
-//! source form a block translates, are in `docs/references/language.md`
+//! source form a block translates, are in
+//! `docs/references/language/src/translations/call-by-value-and-call-by-name.md`
 //! under *Call-by-Value Blocks*.
 //!
 //! The block always exposes the *term* translation, so its classifier is

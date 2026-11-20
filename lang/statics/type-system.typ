@@ -20,7 +20,7 @@
 
 The calculus is the checked core after desugaring and name resolution.
 Surface wrappers are given only where they affect checking or elaboration.
-Terminology follows the #link("../../docs/references/language.md#9-polymorphism-and-packed-values")[language reference].
+Terminology follows the #link("../../docs/references/language/src/polymorphism-and-packed-values.md")[language reference].
 Below, $Pi^"pkg"$ denotes the witness-dependent computation classifier implemented by `PackPi`.
 
 = Syntax

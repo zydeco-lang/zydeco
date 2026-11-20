@@ -1,0 +1,152 @@
+# Algebra Translation Semantics
+
+## Closed Translation Boundary
+
+Algebra translation is defined on closed payloads.
+Supply external runtime values and operations through function parameters bound inside the annotation;
+supply external types and type constructors through type abstractions inside it.
+Instantiating the translated function supplies those arguments after the carrier and, for value or computation roots,
+the monad implementation, together with any structure arguments introduced by translation.
+This parameter-passing boundary is intentional.
+Implicit runtime capture and importing algebra evidence from the enclosing lexical environment are outside the design.
+
+Closure is measured after resolving the fixed language intrinsics and expanding available closed definitions.
+The lexically selected `Monad` and `Algebra` constructors configure the translation itself.
+A source name for a closed, inlinable definition can therefore be reinterpreted with the payload;
+an enclosing runtime variable or abstract type witness is not such a definition.
+In particular, knowing an external type's name does not supply its algebra.
+Pass that type through a type parameter of the translated function.
+
+The implementation rejects non-inlinable free term references, but currently retains lexical type bindings,
+including existential witnesses.
+Some direct uses of those types still pass checking;
+[closure validation](../../../../todos/compiler-boundaries.md#monadic-closure-validation) tracks this discrepancy
+with the approved boundary.
+It is not a planned mechanism for importing external structure evidence.
+
+## Polymorphic Value Functions
+
+A translated value function may assemble suspended code that sequences into an abstract computation type.
+Translation supplies that type's algebra at the value-function binder,
+using the same structure-passing convention as computation polymorphism.
+The value function still disappears through [static elimination](../static-elimination.md).
+
+Write `Sig_M,K(T)` for the computation type of the structure required by a target type `T : K`.
+The existing kind-directed signature rules are:
+
+```text
+Sig_M,VType(T)    = Top
+Sig_M,CType(T)    = Algebra M T
+Sig_M,K1->K2(F)  = forall (X : K1) . Thk (Sig_M,K1(X)) -> Sig_M,K2(F X)
+```
+
+`Top` is empty codata; named kinds use their payload projection.
+Let `Str_M(T)` construct evidence of type `Sig_M,K(L_M(T))` from the source type `T`.
+Each type parameter introduces exactly one following structure parameter, including the trivial structure at `VType`:
+
+```text
+L_M(val pi (X : K) . A)
+  = val pi (X' : K) (s_X : Thk (Sig_M,K(X'))) . L_M(A)
+L_M(val (X : K) => v)
+  = val (X' : K) (s_X : Thk (Sig_M,K(X'))) => L_M(v)
+L_M(f T)
+  = (L_M(f) L_M(T)) { Str_M(T) }
+```
+
+The body uses the renamed witness `X'` and the structure bound by `s_X`.
+Named type patterns retain their shape. Ordinary value parameters still receive one translated argument;
+parameters that open packages use the structures already carried by those packages.
+This uniform interface supports annotated, partially applied, and higher-order value functions
+without requiring source-level structure arguments at calls inside the block.
+
+For example, this local factory can sequence into `B` even before the caller instantiates it:
+
+```zydeco
+@[monadic] begin
+  let val make (B : CType) = {
+    fn (k : Thk B) => do _ <- ret (); ! k
+  } in
+  ! (make (Ret Int)) { ret 1 }
+end
+```
+
+Its translated classifier is schematically `val pi (B : CType) (alg_B : Thk (Algebra M B)) . Thk (Thk B -> B)`.
+The application supplies `M Int` and the structure for the source `Ret Int`.
+The selected monad implementation may remain runtime data:
+static specialization forwards the structure thunk without executing it.
+Unknown value-function implementations still fail at a runtime boundary.
+An [inference discrepancy](../../../../todos/compiler-boundaries.md#inferred-higher-order-value-function-witnesses)
+currently requires an explicit signature for some higher-order factories even without monadic translation.
+
+## Applicative Nominal Translation
+
+A closed monadic payload can define its own nominal data and codata types,
+including parameterized and mutually recursive definitions.
+Translation preserves their constructors, patterns, and observations through a nominal type family
+for each source declaration.
+Transparent aliases retain their existing behavior.
+
+The family takes the carrier, the selected `Algebra` type constructor,
+and the declaration's free type dependencies as explicit type arguments.
+The `Algebra` parameter accounts for structure fields introduced into existential packages
+and polymorphic value functions.
+Equal arguments select the same nominal identity; distinct source declarations remain distinct.
+Choosing `Ret` does not identify a translated declaration with its untranslated source.
+
+Write `L` for translation with carrier `M` and algebra constructor `G`.
+For a local nominal definition `N` with body `T` and free type dependencies `D1 ... Dn`:
+
+```text
+L(N)          = N_alg M G L(D1) ... L(Dn)
+body(N_alg)   = fn M G D1 ... Dn => L(T)
+kind(N_alg)   = (VType -> CType) -> kind(G) -> kind(D1) -> ... -> kind(Dn) -> kind(N)
+L(N U)        = L(N) L(U)
+```
+
+The parameters on the right bind the translated dependencies in `L(T)`.
+Recursive references reuse the same family, including at different type arguments.
+A shared closed definition retains its translated identity across blocks, and nested translation composes families.
+Runtime application never allocates a fresh nominal identity.
+
+The monad implementation is an ordinary argument to the generated algebra code.
+It can be evaluated dynamically or inlined without changing nominal type identity.
+Nominal value types have the trivial structure; nominal codata algebras act through their observations.
+Recursive algebras share a suspended dictionary whose methods receive the required type and structure arguments.
+Constructing or passing that dictionary performs no source effects; observations demand its methods.
+This finite construction does not impose a new positivity or productivity rule on recursive source definitions.
+
+For example, the type parameter and recursive constructor below both belong to the annotated payload:
+
+```zydeco
+param (/VType; /Unit; builtin) : @(import("../../lib/std/builtin.zy")) in
+let basis = @(import("../../lib/std/effect/monad.zy")) in
+let (/Monad; /Algebra) = basis in
+@[monadic] fn (A : VType) (item : A) =>
+  begin
+    def List (X : VType) : VType =
+      data
+      | +Nil : Unit
+      | +Cons : X * List X
+      end
+    that
+    ret (+Cons(item, +Nil()) : List A)
+  end
+```
+
+External nominal types still enter through type parameters inside the annotation.
+Knowing their seal bodies does not authorize opening them or constructing an enclosing algebra implicitly.
+The [compiler reference](../../../compiler/src/elaboration-and-validation.md#nominal-algebra-construction)
+describes ownership and recursive construction.
+
+## Translation Coverage
+
+Type, value, and computation roots use the same structural translation rules.
+Pure modules are translated according to their ordinary type or value sort, with no separate module mechanism.
+Type roots construct applicative nominal families without generating runtime algebra dictionaries.
+Value and computation roots bind the shared lazy dictionary inside their carrier and monad parameters.
+Polymorphic value functions and local nominal data/codata follow the rules above.
+Supported nominal definitions have a data or codata body after their type parameters.
+Other sealed heads, including nominal aliases of arrows, `Ret`, or abstract constructors,
+remain unsupported: they need their own typed introduction and algebra construction rules.
+
+Library-encoded delimited control does not imply primitive capture or duplication of the native machine stack.

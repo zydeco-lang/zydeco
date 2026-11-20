@@ -1,0 +1,70 @@
+name: Docs
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: docs-${{ github.event_name == 'pull_request' && github.ref || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  MDBOOK_VERSION: 0.5.4
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Test documentation scripts
+      run: python3 docs/scripts/build-books.py test
+
+    - name: Install mdBook
+      run: |
+        set -euo pipefail
+        mkdir -p "$HOME/.local/bin"
+        curl -fsSL "https://github.com/rust-lang/mdBook/releases/download/v${MDBOOK_VERSION}/mdbook-v${MDBOOK_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+          | tar -xz -C "$HOME/.local/bin" mdbook
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        "$HOME/.local/bin/mdbook" --version
+
+    - name: Configure Pages
+      if: github.event_name != 'pull_request'
+      uses: actions/configure-pages@v6
+
+    - name: Build reference books and landing site
+      env:
+        DOCS_GIT_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || 'main' }}
+      run: |
+        python3 docs/scripts/build-books.py build \
+          --output target/site \
+          --git-ref "$DOCS_GIT_REF"
+
+    - name: Upload Pages artifact
+      if: github.event_name != 'pull_request'
+      uses: actions/upload-pages-artifact@v5
+      with:
+        path: target/site
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v5

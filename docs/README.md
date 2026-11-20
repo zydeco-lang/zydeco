@@ -5,7 +5,7 @@ and [DESIGN](../DESIGN.md) for the project overview and repository map.
 [CONTRIBUTING](../CONTRIBUTING.md) covers building, testing, formatting, and documentation maintenance.
 
 The [references](references/README.md) own approved, implemented language and compiler contracts,
-with one home for each rule.
+with one home for each rule; they are built as `mdBook` sites at https://zydeco-lang.github.io/zydeco/.
 [Proposals](proposals/README.md) contain concrete unfinished designs;
 [ideas](ideas/README.md) contain exploratory questions;
 [evaluations](evaluations/README.md) retain dated experimental reports and their evidence;
@@ -14,8 +14,8 @@ The [ownership map](references/README.md#rule-ownership) connects source rules t
 
 | Material | Reader's purpose |
 | --- | --- |
-| [Language reference](references/language.md) | Look up syntax, typing, behavior, packages, capabilities, and execution boundaries |
-| [Compiler reference](references/compiler.md) | Find phase contracts, representations, algorithms, runtimes, and validation |
+| [Language reference](references/language/src/introduction.md) | Look up syntax, typing, behavior, packages, capabilities, and execution boundaries |
+| [Compiler reference](references/compiler/src/introduction.md) | Find phase contracts, representations, algorithms, runtimes, and validation |
 | [CLI guide](../cli/README.md) | Run programs, use the REPL, and build artifacts |
 | [Standard library guide](../lib/std/README.md) | Use current interfaces, capabilities, and library composition |
 | [Code style](style.md) | Choose readable names, source layout, and composition idioms |
@@ -35,8 +35,8 @@ Choose the corresponding reference section or design record below.
 
 | Task | Home |
 | --- | --- |
-| Attach prose to `@[doc]` | [Source documentation](references/language.md#source-documentation) |
-| Understand annotation and text attachment | [Shared source analysis](references/compiler.md#shared-source-analysis) |
+| Attach prose to `@[doc]` | [Source documentation](references/language/src/meta-annotations.md#source-documentation) |
+| Understand annotation and text attachment | [Shared source analysis](references/compiler/src/sessions-and-queries.md#shared-source-analysis) |
 | Improve completion or generated type/source text | [Completion ideas](ideas/README.md#structural-completion-and-last-successful-state), [type-layout ideas](ideas/README.md#elaborated-type-layout), [source-generation ideas](ideas/README.md#source-generation-from-elaborated-terms) |
 | Review, consolidate, format, and verify repository documentation | [Contribution workflow](../CONTRIBUTING.md#maintain-documentation) |
 | Repair an observed disagreement or duplicated account | [Reference drift](todos/reference-drift.md) |

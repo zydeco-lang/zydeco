@@ -1,7 +1,7 @@
 # 02 — Vertical Slice
 
 > Scratch study note for re-onboarding. This chapter traces one tiny program through every
-> compiler product; the [compiler reference](../../references/compiler.md) owns the contracts.
+> compiler product; the [compiler reference](../../references/compiler/src/introduction.md) owns the contracts.
 
 ## Purpose and Setup
 
@@ -74,7 +74,7 @@ The interpreter does not re-check: `lang/dynamics/src/link.rs` erases the checke
 the runtime AST and materializes the Builtin package, then `lang/dynamics/src/eval.rs` steps it.
 The reference interpreter is the oracle every backend is compared against; keep it working when
 changing lowering. See the [execution card](cards/05-execution.md) and
-[C7](../../references/compiler.md#c7-linking-and-the-reference-interpreter).
+[C7](../../references/compiler/src/reference-interpreter.md).
 
 ## Step 3: ZIR — High SPS, Normalized, Then SPSLow
 
@@ -87,7 +87,7 @@ $ target/debug/zydeco build target/study/hello.zy -t zir
 ```
 
 This five-line output is already the **first-order SPSLow**, not high SPS: `-t zir` renders the
-product after closure conversion ([C9](../../references/compiler.md#c9-closure-conversion-and-first-order-spslow)).
+product after closure conversion ([C9](../../references/compiler/src/closure-conversion.md)).
 Read it inside out:
 
 - The root block declares one type parameter `a0 : CType`; the linked Builtin package introduces it.
@@ -100,7 +100,7 @@ Read it inside out:
 
 Inspect intermediate stages with the same command plus `--sps-passes none` (skip optional SPS passes)
 or `--trace-passes` (timing per pass). The [stack IR card](cards/03-stackir.md) maps the options to
-[C8](../../references/compiler.md#c8-sps-lowering-normalization-and-demand).
+[C8](../../references/compiler/src/sps.md).
 
 ## Step 4: Why Normalization Matters
 
@@ -142,7 +142,7 @@ $ target/debug/zydeco build target/study/hello.zy -t zasm
 The block and its entry label became explicit, the closure package became `pack <product:2/2>`,
 and the call became a control transfer that consumes the constructed stack. ZASM is where the
 "stack" stops being lexical and becomes a machine resource; stack analysis and local
-representation choices live here ([C10](../../references/compiler.md#c10-zasm-stack-analysis-and-local-representation-choices)).
+representation choices live here ([C10](../../references/compiler/src/zasm.md)).
 
 ## Step 6: AMD64 Assembly
 
@@ -207,7 +207,7 @@ SPSLow reaches `lang/wasm-sps` without passing through ZASM. `wasm-sps` preserve
 structure: each block becomes a Wasm function and jumps cross blocks through a private function
 table, with host imports under one namespace. The runtime contract (tagged words, bump allocator,
 host-call ABI) is in `lang/wasm-common`; the Node host is `cli/wasm/wasm-host.mjs`.
-See [C13](../../references/compiler.md#c13-webassembly-backend-and-embedding). The abstract-machine
+See [C13](../../references/compiler/src/webassembly.md). The abstract-machine
 Wasm backend and the ZASM interpreter were removed on 2026-10-25; do not look for them.
 
 ## Step 9: Watch the Pass Pipeline
@@ -233,7 +233,7 @@ SPS selection: normalize
 ```
 
 The required checks bracket the optional passes; the optional stage is a value composed by the
-[pass framework](../../references/compiler.md#compiler-pass-composition). This is the concrete
+[pass framework](../../references/compiler/src/architecture.md#compiler-pass-composition). This is the concrete
 place to experiment before touching `lang/stackir`: `--sps-passes none`, individual names,
 duplicates, and `--sps-scheme dup|br|full` are all exposed.
 
@@ -271,7 +271,7 @@ $ target/debug/zydeco check target/study/reject.zy
 
 The failure happens before executable selection: the inference region cannot close, so no backend
 input exists. Diagnostics carry a stable code (`tyck.unconstrained-inference`) so tests and docs can
-refer to them; the [diagnostic index](../../references/language.md#diagnostic-index) is the catalog.
+refer to them; the [diagnostic index](../../references/language/src/diagnostic-index.md) is the catalog.
 
 ## Practical Notes
 

@@ -27,14 +27,14 @@ The repository is easier to navigate when you keep three numbering systems apart
 
 | System | Home | What it answers |
 | --- | --- | --- |
-| Language rules `L1`–`L15` | [language.md](../../references/language.md) | What source programs mean: syntax, typing, evaluation, packages, host boundaries, execution profiles |
-| Compiler phases `C1`–`C16` | [compiler.md](../../references/compiler.md) | How the implementation realizes the rules: contracts, representations, algorithms, runtimes, tooling |
+| Language rules `L1`–`L15` | [language.md](../../references/language/src/introduction.md) | What source programs mean: syntax, typing, evaluation, packages, host boundaries, execution profiles |
+| Compiler phases `C1`–`C16` | [compiler.md](../../references/compiler/src/introduction.md) | How the implementation realizes the rules: contracts, representations, algorithms, runtimes, tooling |
 | Code | `lang/`, `cli/`, `runtime/`, `editor/` | The concrete modules, types, and functions that carry the phases |
 
 The bridges are explicit:
 
 - [Rule Ownership](../../references/README.md#rule-ownership) maps each source rule to its implementation account.
-- [C1 Architecture](../../references/compiler.md#c1-architecture-and-a-programs-path-through-the-compiler)
+- [C1 Architecture](../../references/compiler/src/architecture.md)
   maps each phase to the `Program` product it publishes and to its consumer.
 - [DESIGN.md](../../../DESIGN.md#implementation-architecture) maps responsibilities to crates
   but restates some reference material; the [reference-drift todo](../../todos/reference-drift.md) tracks
@@ -42,7 +42,7 @@ The bridges are explicit:
 
 ## A Program's Path
 
-This is [C1's diagram](../../references/compiler.md#c1-architecture-and-a-programs-path-through-the-compiler),
+This is [C1's diagram](../../references/compiler/src/architecture.md),
 with the crate that owns each step added.
 
 ```mermaid
@@ -66,15 +66,15 @@ Use these products as signposts when reading code:
 
 | Product | Establishing entry point | Consumer | C chapter |
 | --- | --- | --- | --- |
-| `TextualProgram`, `BitterProgram`, `ScopedProgram` | `lang/session/src/source/pipeline.rs` | Next front-end phase | [C3–C4](../../references/compiler.md#c4-parsing-desugaring-and-name-resolution) |
-| `ProgramAnalysis` | `CompilerSession::analyze` | Diagnostics, tooling facts | [C3](../../references/compiler.md#c3-source-loading-sessions-queries-and-memory-retention) |
-| `CheckedProgram` | `CompilerSession::checked_program` | Typed-tree inspection | [C5–C6](../../references/compiler.md#c5-typed-representation-judgments-and-inference) |
-| `ExecutableProgram` | `CompilerSession::executable_program` | Interpreter linking or SPS lowering | [C1](../../references/compiler.md#c1-architecture-and-a-programs-path-through-the-compiler) |
-| `DynamicsProgram` | `lang/dynamics/src/link.rs` | Reference interpreter | [C7](../../references/compiler.md#c7-linking-and-the-reference-interpreter) |
-| `FragmentProgram` | `lang/stackir/src/high/lower.rs` | SPS passes, then closure conversion | [C8](../../references/compiler.md#c8-sps-lowering-normalization-and-demand) |
-| `SpsLowProgram` | `lang/stackir/src/pipeline.rs` | Wasm or assembly lowering | [C9](../../references/compiler.md#c9-closure-conversion-and-first-order-spslow) |
-| `AssemblyProgram` | `lang/assembly/src/pipeline.rs` | ZASM rendering, frame validation | [C10](../../references/compiler.md#c10-zasm-stack-analysis-and-local-representation-choices) |
-| `NativeProgram` | `LoweringPipeline::with_native_frames` | AMD64 emitter and linker | [C11](../../references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission) |
+| `TextualProgram`, `BitterProgram`, `ScopedProgram` | `lang/session/src/source/pipeline.rs` | Next front-end phase | [C3–C4](../../references/compiler/src/parsing-and-resolution.md) |
+| `ProgramAnalysis` | `CompilerSession::analyze` | Diagnostics, tooling facts | [C3](../../references/compiler/src/sessions-and-queries.md) |
+| `CheckedProgram` | `CompilerSession::checked_program` | Typed-tree inspection | [C5–C6](../../references/compiler/src/checking-and-inference.md) |
+| `ExecutableProgram` | `CompilerSession::executable_program` | Interpreter linking or SPS lowering | [C1](../../references/compiler/src/architecture.md) |
+| `DynamicsProgram` | `lang/dynamics/src/link.rs` | Reference interpreter | [C7](../../references/compiler/src/reference-interpreter.md) |
+| `FragmentProgram` | `lang/stackir/src/high/lower.rs` | SPS passes, then closure conversion | [C8](../../references/compiler/src/sps.md) |
+| `SpsLowProgram` | `lang/stackir/src/pipeline.rs` | Wasm or assembly lowering | [C9](../../references/compiler/src/closure-conversion.md) |
+| `AssemblyProgram` | `lang/assembly/src/pipeline.rs` | ZASM rendering, frame validation | [C10](../../references/compiler/src/zasm.md) |
+| `NativeProgram` | `LoweringPipeline::with_native_frames` | AMD64 emitter and linker | [C11](../../references/compiler/src/native-emission.md) |
 
 Nine syntax families appear in the pipeline: textual, bitter, scoped, statics,
 dynamics, high SPS, SPSLow, ZASM, and AMD64.
@@ -89,25 +89,25 @@ Dependencies flow down the table.
 
 | Crate | Owns | Depends on (workspace) | Reference |
 | --- | --- | --- | --- |
-| `lang/utils` | Spans, arenas, the `CompilerPass` framework, fold/graph/context utilities | — | [C1–C2](../../references/compiler.md#c1-architecture-and-a-programs-path-through-the-compiler) |
+| `lang/utils` | Spans, arenas, the `CompilerPass` framework, fold/graph/context utilities | — | [C1–C2](../../references/compiler/src/architecture.md) |
 | `lang/derive` | Proc macros for syntax boilerplate | — | — |
-| `lang/syntax` | Shared syntax vocabulary: names, spans, word/primitive/scalar/memory/text bases | derive, machine, utils | [C2](../../references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance) |
-| `lang/machine` | Runtime contracts: word encoding, native boundary, frames, closure and GC metadata; `no_std` | — | [C12](../../references/compiler.md#c12-shared-native-model-allocation-and-collection) |
-| `lang/surface` | Textual/bitter/scoped syntax, LALRPOP parser, desugaring, resolution, formatter, metadata catalog | syntax, utils, derive | [C4](../../references/compiler.md#c4-parsing-desugaring-and-name-resolution) |
-| `lang/statics` | Typed syntax, bidirectional checker, inference, normalization, static elaboration/elimination, queries, typed arenas | surface, syntax, utils | [C2](../../references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance), [C5–C6](../../references/compiler.md#c5-typed-representation-judgments-and-inference) |
-| `lang/dynamics` | Runtime AST, linker from checked syntax, small-step interpreter, builtin implementations | statics, machine | [C7](../../references/compiler.md#c7-linking-and-the-reference-interpreter) |
-| `lang/stackir` | High SPS (`FragmentProgram`), normalization/localization, closure conversion, SPSLow, protocol extraction, SPS checks | statics, surface, syntax, utils | [C8–C9](../../references/compiler.md#c8-sps-lowering-normalization-and-demand) |
-| `lang/assembly` | ZASM, stack analysis, representation policies, frame validation | stackir, machine | [C10](../../references/compiler.md#c10-zasm-stack-analysis-and-local-representation-choices) |
-| `lang/amd64` | AMD64 emission, SysV boundary, GC/root metadata emission | assembly, machine | [C11](../../references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission) |
-| `lang/wasm-common` | Wasm runtime contract: tagged words, allocator, host-call ABI | syntax | [C13](../../references/compiler.md#c13-webassembly-backend-and-embedding) |
-| `lang/wasm-sps` | Structured Wasm emission from SPSLow | stackir, wasm-common | [C13](../../references/compiler.md#c13-webassembly-backend-and-embedding) |
-| `lang/session` | Revisioned source inputs, overlays, package discovery, analysis queries, completion/recovery, backend scheduling | every compiler crate | [C3](../../references/compiler.md#c3-source-loading-sessions-queries-and-memory-retention), [C15](../../references/compiler.md#c15-diagnostics-formatting-documentation-and-interactive-tooling) |
-| `lang/tests` | Integration harness, source templates, end-to-end macros, typed-arena invariants | cli, session, backend crates | [C16](../../references/compiler.md#c16-validation-debugging-and-extending-the-implementation) |
-| `cli` | `zydeco` driver: compile pipeline, diagnostics, execution, native packaging, formatter, Wasm host | workspace compiler crates, tui | [C1](../../references/compiler.md#c1-architecture-and-a-programs-path-through-the-compiler), [C14–C15](../../references/compiler.md#c14-builtin-contracts-primitive-operations-and-foreign-calls) |
-| `tui` | Ratatui REPL frontend | session, statics | [C15](../../references/compiler.md#c15-diagnostics-formatting-documentation-and-interactive-tooling) |
-| `editor/cajun` | LSP server: diagnostics, hover, completion, rename, formatting, semantic tokens | session, statics, surface | [C15](../../references/compiler.md#c15-diagnostics-formatting-documentation-and-interactive-tooling) |
+| `lang/syntax` | Shared syntax vocabulary: names, spans, word/primitive/scalar/memory/text bases | derive, machine, utils | [C2](../../references/compiler/src/compiler-data.md) |
+| `lang/machine` | Runtime contracts: word encoding, native boundary, frames, closure and GC metadata; `no_std` | — | [C12](../../references/compiler/src/native-runtime.md) |
+| `lang/surface` | Textual/bitter/scoped syntax, LALRPOP parser, desugaring, resolution, formatter, metadata catalog | syntax, utils, derive | [C4](../../references/compiler/src/parsing-and-resolution.md) |
+| `lang/statics` | Typed syntax, bidirectional checker, inference, normalization, static elaboration/elimination, queries, typed arenas | surface, syntax, utils | [C2](../../references/compiler/src/compiler-data.md), [C5–C6](../../references/compiler/src/checking-and-inference.md) |
+| `lang/dynamics` | Runtime AST, linker from checked syntax, small-step interpreter, builtin implementations | statics, machine | [C7](../../references/compiler/src/reference-interpreter.md) |
+| `lang/stackir` | High SPS (`FragmentProgram`), normalization/localization, closure conversion, SPSLow, protocol extraction, SPS checks | statics, surface, syntax, utils | [C8–C9](../../references/compiler/src/sps.md) |
+| `lang/assembly` | ZASM, stack analysis, representation policies, frame validation | stackir, machine | [C10](../../references/compiler/src/zasm.md) |
+| `lang/amd64` | AMD64 emission, SysV boundary, GC/root metadata emission | assembly, machine | [C11](../../references/compiler/src/native-emission.md) |
+| `lang/wasm-common` | Wasm runtime contract: tagged words, allocator, host-call ABI | syntax | [C13](../../references/compiler/src/webassembly.md) |
+| `lang/wasm-sps` | Structured Wasm emission from SPSLow | stackir, wasm-common | [C13](../../references/compiler/src/webassembly.md) |
+| `lang/session` | Revisioned source inputs, overlays, package discovery, analysis queries, completion/recovery, backend scheduling | every compiler crate | [C3](../../references/compiler/src/sessions-and-queries.md), [C15](../../references/compiler/src/tooling.md) |
+| `lang/tests` | Integration harness, source templates, end-to-end macros, typed-arena invariants | cli, session, backend crates | [C16](../../references/compiler/src/validation-and-extending.md) |
+| `cli` | `zydeco` driver: compile pipeline, diagnostics, execution, native packaging, formatter, Wasm host | workspace compiler crates, tui | [C1](../../references/compiler/src/architecture.md), [C14–C15](../../references/compiler/src/builtins-and-foreign-calls.md) |
+| `tui` | Ratatui REPL frontend | session, statics | [C15](../../references/compiler/src/tooling.md) |
+| `editor/cajun` | LSP server: diagnostics, hover, completion, rename, formatting, semantic tokens | session, statics, surface | [C15](../../references/compiler/src/tooling.md) |
 | `xtask` | Resumable test runner and repository tasks | — | [CONTRIBUTING](../../../CONTRIBUTING.md#run-tests) |
-| `runtime/` | Native runtime sources: launcher, allocation, collection, stubs; built per executable | (non-workspace; consumes `zydeco-machine`) | [C12](../../references/compiler.md#c12-shared-native-model-allocation-and-collection) |
+| `runtime/` | Native runtime sources: launcher, allocation, collection, stubs; built per executable | (non-workspace; consumes `zydeco-machine`) | [C12](../../references/compiler/src/native-runtime.md) |
 
 `lang/frontend/` exists on disk as an empty directory; it is not a workspace crate.
 Do not mistake it for a phase.
@@ -158,8 +158,8 @@ the difference is mostly measurement data removed by later cleanup.
 | Area | Home | Use it for |
 | --- | --- | --- |
 | Source-level walkthrough | [tutorial/zydeco-guide.md](../../tutorial/zydeco-guide.md) | First contact with CBPV syntax and idioms |
-| Language reference | [references/language.md](../../references/language.md) | Canonical source rules (L1–L15, meta annotations) |
-| Compiler reference | [references/compiler.md](../../references/compiler.md) | Canonical phase contracts (C1–C16) |
+| Language reference | [references/language.md](../../references/language/src/introduction.md) | Canonical source rules (L1–L15, meta annotations) |
+| Compiler reference | [references/compiler.md](../../references/compiler/src/introduction.md) | Canonical phase contracts (C1–C16) |
 | Project overview | [DESIGN.md](../../../DESIGN.md) | Orientation, repository map, current limitations |
 | Proposals | [proposals/README.md](../../proposals/README.md) | Concrete unfinished designs; not implemented contracts |
 | Ideas | [ideas/README.md](../../ideas/README.md) | Open research questions |

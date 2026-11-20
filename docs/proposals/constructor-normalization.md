@@ -14,7 +14,7 @@ case b | True() -> p4 ! • | False() -> p5 ! • end
 ```
 
 The tag and unit payload suffice to choose the false arm, but the current normalizer retains the match.
-The [local-reduction contract](../references/compiler.md#local-reductions) deliberately distinguishes knowing a tag
+The [local-reduction contract](../references/compiler/src/sps/normalization-and-demand.md#local-reductions) deliberately distinguishes knowing a tag
 from extracting a stored payload.
 That distinction protects evaluation and sharing; the proposed extension should remove redundant tests
 without discarding that protection.
@@ -63,12 +63,12 @@ and the [pattern decision folder](../../lang/stackir/src/high/normalize/decision
 Extend their semantic facts rather than teaching each caller a separate alias-chasing simplifier.
 Payload availability and consumer demand should remain distinguishable inputs to a reduction decision.
 
-Reuse the [normalization reconstruction schedule](../references/compiler.md#normalization-reconstruction):
+Reuse the [normalization reconstruction schedule](../references/compiler/src/sps/normalization-and-demand.md#normalization-reconstruction):
 producer facts flow forward, and completed consumers determine demands.
 If an unused-payload decision requires the rebuilt arm, represent the deferred decision in an explicit folder frame;
 do not run a nested normalization traversal or guess demand before rebuilding the consumer.
 New structural analysis should use the shared SPS traversal, and any reconstruction should follow the
-[resumable folder interface](../references/compiler.md#resumable-folder-execution).
+[resumable folder interface](../references/compiler/src/compiler-data.md#resumable-folder-execution).
 
 Facts must respect definition identity, shadowing, closure boundaries, and their producing environment.
 Preserve source provenance and protocol evidence on rebuilt nodes, and validate lexical ownership

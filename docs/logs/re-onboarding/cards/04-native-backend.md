@@ -12,29 +12,29 @@ and AMD64 emission together with the native runtime and packaging path (shared m
 SysV conventions, collector roots, host ABI).
 It does not own SPS or closure conversion (the stack IR module), the Wasm backend (the execution module),
 or general CLI/editor tooling (the tooling module). The canonical phase accounts are
-[C10](../../../references/compiler.md#c10-zasm-stack-analysis-and-local-representation-choices),
-[C11](../../../references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission),
-and [C12](../../../references/compiler.md#c12-shared-native-model-allocation-and-collection);
+[C10](../../../references/compiler/src/zasm.md),
+[C11](../../../references/compiler/src/native-emission.md),
+and [C12](../../../references/compiler/src/native-runtime.md);
 the operations the generated code calls belong
-to [C14](../../../references/compiler.md#c14-builtin-contracts-primitive-operations-and-foreign-calls)
-and [L13](../../../references/language.md#13-primitive-values-and-capabilities),
-and the execution profile to [L15](../../../references/language.md#15-execution-profiles).
+to [C14](../../../references/compiler/src/builtins-and-foreign-calls.md)
+and [L13](../../../references/language/src/primitives-and-capabilities.md),
+and the execution profile to [L15](../../../references/language/src/execution-profiles.md).
 
 Two products, not one, leave assembly lowering: the portable `AssemblyProgram`
 for ZASM rendering and representation analysis, and the frame-aware `NativeProgram` selected
 by `LoweringPipeline::with_native_frames` ([pipeline.rs:36](../../../../lang/assembly/src/pipeline.rs#L36),
 [lower.rs:65](../../../../lang/assembly/src/lower.rs#L65),
-[C10](../../../references/compiler.md#c10-zasm-stack-analysis-and-local-representation-choices)).
+[C10](../../../references/compiler/src/zasm.md)).
 Native preparation is a validator, not a convenience: emission consumes a checked `FramePlan`,
 and invalid input is a `FramePlanError` ([frames.rs:18](../../../../lang/assembly/src/frames.rs#L18),
 [frames.rs:37](../../../../lang/assembly/src/frames.rs#L37),
-[C11](../../../references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission)).
+[C11](../../../references/compiler/src/native-emission.md)).
 
 ## 2. Position in the Pipeline (upstream/downstream, doc anchors; SPSLow → ZASM → AMD64, plus runtime packaging/linking)
 
 Upstream, `SpsLowProgram` is fixed by `SpsLowPipeline`; this module starts when `LoweringPipeline` reads it
-([C1 products](../../../references/compiler.md#c1-architecture-and-a-programs-path-through-the-compiler),
-[C9](../../../references/compiler.md#c9-closure-conversion-and-first-order-spslow)).
+([C1 products](../../../references/compiler/src/architecture.md),
+[C9](../../../references/compiler/src/closure-conversion.md)).
 The `Lowerer` is the only lowering producer: it collects local unboxing opportunities under the selected policy,
 forms scalar plans, and runs the CPS assembly folder ([lower.rs:25](../../../../lang/assembly/src/lower.rs#L25),
 [unbox.rs:32](../../../../lang/assembly/src/unbox.rs#L32)).
@@ -51,7 +51,7 @@ the shared CLI entry point is `BackendProgram` ([compile.rs:279](../../../../cli
 `Amd64Artifact` couples emission output to what linking needs: assembly text plus the foreign imports
 and libraries collected from that same native program, so the CLI and tests link
 after one lowering pass ([compile.rs:317](../../../../cli/src/compile.rs#L317),
-[C11 artifacts](../../../references/compiler.md#compilation-unit-preparation-and-artifacts)).
+[C11 artifacts](../../../references/compiler/src/native-emission.md#compilation-unit-preparation-and-artifacts)).
 Packaging then copies the runtime sources, writes the compiler's embedded model
 to `build/machine/`, rewrites the runtime manifest's model path, and invokes NASM, `ar`,
 and Cargo ([native.rs:34](../../../../cli/src/native.rs#L34), [native.rs:98](../../../../cli/src/native.rs#L98),
@@ -90,33 +90,33 @@ so a mismatched pair fails at link time ([lib.rs:21](../../../../lang/machine/sr
   and resumption-context validity, and emission cannot fall back to an unchecked layout.
   Evidence: [pipeline.rs:36](../../../../lang/assembly/src/pipeline.rs#L36),
   [frames.rs:118](../../../../lang/assembly/src/frames.rs#L118); canonical:
-  [C11 opening](../../../references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission).
+  [C11 opening](../../../references/compiler/src/native-emission.md).
 - **Slot assignment preserves pending continuations.** A later result may reuse a dead slot only
   when no pending continuation still needs its binding; a write interferes with everything preserved across it;
   deterministic greedy coloring assigns canonical definitions to slots and aliases inherit their source slot;
   the same offsets feed accesses, capture descriptors, and root maps.
   Evidence: [frames.rs:255](../../../../lang/assembly/src/frames.rs#L255),
   [frames.rs:285](../../../../lang/assembly/src/frames.rs#L285); canonical:
-  [C11 activation lifetime](../../../references/compiler.md#activation-lifetime).
+  [C11 activation lifetime](../../../references/compiler/src/native-emission.md#activation-lifetime).
 - **Frame actions are static descriptors consumed by the model.** Enter, Suspend, Resume, and Roots serialize
   as header words plus trailing slot indices in read-only data; generated code calls `zydeco_frame_step`;
   transitions validate layout, slots, and suspension nesting and never collect the managed heap.
   Evidence: [emit.rs:345](../../../../lang/amd64/src/emit.rs#L345),
   [frames.rs:296](../../../../lang/machine/src/frames.rs#L296); canonical:
-  [C12 environment actions and roots](../../../references/compiler.md#environment-actions-and-roots).
+  [C12 environment actions and roots](../../../references/compiler/src/native-runtime.md#environment-actions-and-roots).
 - **Tagged words and scalar homes stay distinct.** Odd words are immediate and aligned even words pointer-shaped;
   `Int64`/`UInt64`/`Float64` cross general value boundaries as opaque boxes,
   while verified scalar regions get checked value homes and untraced raw homes below the collector's root cursor.
   Evidence: [word.rs:43](../../../../lang/machine/src/word.rs#L43),
   [primitive.rs:85](../../../../lang/amd64/src/emit/primitive.rs#L85); canonical:
-  [C12 scalar value boundaries](../../../references/compiler.md#scalar-value-boundaries),
-  [L13](../../../references/language.md#13-primitive-values-and-capabilities).
+  [C12 scalar value boundaries](../../../references/compiler/src/native-runtime.md#scalar-value-boundaries),
+  [L13](../../../references/language/src/primitives-and-capabilities.md).
 - **Model identity is a source fingerprint, not an ABI promise.** `lang/machine/build.rs` hashes the model's
   `Cargo.toml`, `build.rs`, and `src/` with FNV-1a; the compiler embeds the same sources and copies them
   into the build directory, so process and unit entry symbols include the fingerprint and stale pairs fail to link.
   Evidence: [build.rs:32](../../../../lang/machine/build.rs#L32), [native.rs:76](../../../../cli/src/native.rs#L76),
   [native_model.rs:9](../../../../lang/tests/tests/native_model.rs#L9); canonical:
-  [C11 artifacts](../../../references/compiler.md#compilation-unit-preparation-and-artifacts),
+  [C11 artifacts](../../../references/compiler/src/native-emission.md#compilation-unit-preparation-and-artifacts),
   [DESIGN](../../../../DESIGN.md#shared-rust-runtime-model).
 - **Host calls cross a SysV boundary with a declared result protocol.** Host operations are exported
   as `zydeco_*` `extern "sysv64"` functions; the emitter places arguments in SysV registers
@@ -125,13 +125,13 @@ so a mismatched pair fails at link time ([lib.rs:21](../../../../lang/machine/sr
   `nm` shows bare `zydeco_frame_step`).
   Evidence: [emit.rs:910](../../../../lang/amd64/src/emit.rs#L910),
   [native.rs:63](../../../../lang/machine/src/native.rs#L63),
-  [C14 foreign calls](../../../references/compiler.md#foreign-calls).
+  [C14 foreign calls](../../../references/compiler/src/builtins-and-foreign-calls.md#foreign-calls).
 - **Generated stack alignment is a static-dataflow fact.** `rsp` parity propagates
   from the root through static edges; frame entries start with both parities,
   and calls at either-parity points align dynamically and restore the saved `rsp`.
   Evidence: [emit.rs:140](../../../../lang/amd64/src/emit.rs#L140),
   [emit.rs:291](../../../../lang/amd64/src/emit.rs#L291); canonical:
-  [C11 emission paragraph](../../../references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission).
+  [C11 emission paragraph](../../../references/compiler/src/native-emission.md).
 
 ## 5. Data Flow
 
@@ -197,8 +197,8 @@ see §10 for the unverified parts.
 
 ## 7. Reading Order
 
-1. [C10](../../../references/compiler.md#c10-zasm-stack-analysis-and-local-representation-choices)
-   and [C11](../../../references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission):
+1. [C10](../../../references/compiler/src/zasm.md)
+   and [C11](../../../references/compiler/src/native-emission.md):
    phase boundaries and the native contract before any code.
 2. [02 — Vertical Slice](../02-vertical-slice.md), steps 4–7: the same products this card describes, on one program.
 3. [lib.rs](../../../../lang/assembly/src/lib.rs) and [syntax.rs](../../../../lang/assembly/src/syntax.rs):
@@ -224,35 +224,35 @@ see §10 for the unverified parts.
 ## 8. Checkpoint Questions
 
 1. Which two products can one assembly lowering run publish, and what selects the second?
-   → [C10](../../../references/compiler.md#c10-zasm-stack-analysis-and-local-representation-choices),
+   → [C10](../../../references/compiler/src/zasm.md),
    [pipeline.rs:36](../../../../lang/assembly/src/pipeline.rs#L36).
 2. What does `NativeProgram::prepare` check that `StackAnalyzer` cannot?
-   → [C11 opening](../../../references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission),
+   → [C11 opening](../../../references/compiler/src/native-emission.md),
    [frames.rs:118](../../../../lang/assembly/src/frames.rs#L118).
 3. Why can a dead write still interfere with a live binding, and when may a result reuse a dead slot?
-   → [C11 activation lifetime](../../../references/compiler.md#activation-lifetime),
+   → [C11 activation lifetime](../../../references/compiler/src/native-emission.md#activation-lifetime),
    [frames.rs:285](../../../../lang/assembly/src/frames.rs#L285).
 4. Which frame transitions become static descriptors, and who executes them?
-   → [C12 environment actions and roots](../../../references/compiler.md#environment-actions-and-roots),
+   → [C12 environment actions and roots](../../../references/compiler/src/native-runtime.md#environment-actions-and-roots),
    [emit.rs:345](../../../../lang/amd64/src/emit.rs#L345).
 5. Why do block entries start with unknown `rsp` parity, and what does the emitter do when parity is unknown? →
-   [C11 emission paragraph](../../../references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission),
+   [C11 emission paragraph](../../../references/compiler/src/native-emission.md),
    [emit.rs:140](../../../../lang/amd64/src/emit.rs#L140).
 6. How do the emitter and the stub agree on closure offsets, transfer offsets, and action words?
    → [DESIGN shared model](../../../../DESIGN.md#shared-rust-runtime-model),
    [native.rs:63](../../../../lang/machine/src/native.rs#L63).
 7. Where does the runtime's copy of the machine model come from, and why can a stale pair fail to link?
-   → [C11 artifacts](../../../references/compiler.md#compilation-unit-preparation-and-artifacts),
+   → [C11 artifacts](../../../references/compiler/src/native-emission.md#compilation-unit-preparation-and-artifacts),
    [build.rs:32](../../../../lang/machine/build.rs#L32), [native.rs:76](../../../../cli/src/native.rs#L76).
 8. Why is `Int64` boxed while `Int` fits in a word, and why may raw scalar homes not be traced?
-   → [C12 scalar value boundaries](../../../references/compiler.md#scalar-value-boundaries),
-   [L13](../../../references/language.md#13-primitive-values-and-capabilities).
+   → [C12 scalar value boundaries](../../../references/compiler/src/native-runtime.md#scalar-value-boundaries),
+   [L13](../../../references/language/src/primitives-and-capabilities.md).
 9. What does `--representation` change, and which backend does it not reach?
-   → [C10 policy selection](../../../references/compiler.md#policy-selection),
+   → [C10 policy selection](../../../references/compiler/src/zasm.md#policy-selection),
    [cli guide](../../../../cli/README.md#representation-experiments).
 10. Which frame storage experiments were removed, and why is frame planning still the default?
     → [native-frames proposal](../../../proposals/native-frames.md#removed-experiments),
-    [C11 activation lifetime](../../../references/compiler.md#activation-lifetime).
+    [C11 activation lifetime](../../../references/compiler/src/native-emission.md#activation-lifetime).
 
 ## 9. Redundancy and Cleanup Signals
 
@@ -266,7 +266,7 @@ The shared inventory is [appendix-cleanup-candidates.md](../appendix-cleanup-can
 | 1 | Explicit frame planning versus fixed slots | [size analysis backend shape](../../../proposals/artifact-boundary.md#design-decisions-for-the-artifact) (≈1.1k; `wasm-am` fixed-slot precedent); [appendix D4](../appendix-cleanup-candidates.md) | decision needed | Frame planning is explicitly [retained after review](../../../proposals/artifact-boundary.md#retained-after-review), so fixed slots are a design decision about the SPS implementation claim, not housekeeping. |
 | 2 | Representation policies selected by `build --representation` | [audit post-update](../../../proposals/artifact-boundary.md) dropped the finding; [representation.rs:80](../../../../lang/assembly/src/representation.rs#L80); my boxed/shared measurement in §6 | resolved | Kept: four policies, default `Local`; the CLI translates its own spelling at entry ([lib.rs:40](../../../../cli/src/lib.rs#L40)) and the option reaches ZASM, asm, exe, Wasm, and — through `CommandCompiler` — library/unit lowering. |
 | 3 | Duplicate runtime digest and platform computation on every `build -t exe` | [main.rs:497](../../../../cli/src/main.rs#L497)–[514](../../../../cli/src/main.rs#L514) hashes the runtime at lines 503 and 512 and builds `LibraryPlatform` twice; [audit defect](../../../proposals/artifact-boundary.md#defects-found-during-the-audit) | open | Compute both once before the two `validate_*` calls; code-only change. Still absent from `docs/todos`, although the audit says it belongs there before repair. |
-| 4 | Host ABI written once per consumer; `runtime/stub.rs` is 1,264 lines with 59 `export_name` sites | [size analysis builtins](../../../proposals/artifact-boundary.md#builtins-written-once-per-consumer) (≈2k for one table); [audit parallel implementations](../../../proposals/artifact-boundary.md#parallel-implementations); appendix B3 | decision needed | The direction is one table generating role signatures and stubs for interpreter, stub, and Node host; it changes the [C14](../../../references/compiler.md#c14-builtin-contracts-primitive-operations-and-foreign-calls) contract, and giving arithmetic an intrinsic body is the prerequisite. |
+| 4 | Host ABI written once per consumer; `runtime/stub.rs` is 1,264 lines with 59 `export_name` sites | [size analysis builtins](../../../proposals/artifact-boundary.md#builtins-written-once-per-consumer) (≈2k for one table); [audit parallel implementations](../../../proposals/artifact-boundary.md#parallel-implementations); appendix B3 | decision needed | The direction is one table generating role signatures and stubs for interpreter, stub, and Node host; it changes the [C14](../../../references/compiler/src/builtins-and-foreign-calls.md) contract, and giving arithmetic an intrinsic body is the prerequisite. |
 | 5 | Product-suffix layouts lack end-to-end coverage | [todos: suffix layouts](../../../todos/README.md); emitter branches [emit.rs:1005](../../../../lang/amd64/src/emit.rs#L1005) and [emit.rs:1047](../../../../lang/amd64/src/emit.rs#L1047) | open | Source lowering emits only full-arity layouts, so the `elements < arity` branches are reachable only through constructed programs; add backend fixtures before any source producer. |
 | 6 | `--target-arch` accepts one supported value | [cli.rs:107](../../../../cli/src/cli.rs#L107)–[111](../../../../cli/src/cli.rs#L111); rejection at [main.rs:370](../../../../cli/src/main.rs#L370); [audit test-only](../../../proposals/artifact-boundary.md#test-only-generality) and [post-audit](../../../proposals/artifact-boundary.md#post-audit-verification) | open | `Aarch64` parses and is rejected before compiling; HEAD `e2dd8979` moved the rejection earlier and documented the requirement. Removing the option(s) changes `cli/README.md` text, so it is a reference-gated cleanup. |
 | 7 | The AMD64-only gate is repeated at three layers | [main.rs:370](../../../../cli/src/main.rs#L370), [native.rs:103](../../../../cli/src/native.rs#L103), [library.rs:56](../../../../cli/src/library.rs#L56) (`for_target`), plus host selection at [execution.rs:62](../../../../cli/src/execution.rs#L62) | open | Mechanical dedupe once signal 6 settles the CLI surface; today each layer guards its own public entry point. |
@@ -288,7 +288,7 @@ The shared inventory is [appendix-cleanup-candidates.md](../appendix-cleanup-can
 - **Library/unit representation scope.** The code applies the selected strategy
   through `CommandCompiler::lower_export`/`lower_unit` ([compile.rs:142](../../../../cli/src/compile.rs#L142),
   [compile.rs:163](../../../../cli/src/compile.rs#L163)), while C10's sentence names ZASM, assemblies/executables,
-  and Wasm ([C10](../../../references/compiler.md#policy-selection)).
+  and Wasm ([C10](../../../references/compiler/src/zasm.md#policy-selection)).
   I did not build a C library or native unit to confirm the end-to-end effect,
   so the reference's intended scope is unverified.
 - **Evaluation figures are dated.** The retired studies describe `7e5ee4c1` and `6aae43d0`;

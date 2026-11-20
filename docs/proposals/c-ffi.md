@@ -1,10 +1,10 @@
 # Foreign interfaces: concrete boundaries and next extensions
 
 Returning C imports and named scalar C export libraries are implemented.
-Their source obligations belong to [L14](../references/language.md#14-foreign-interfaces),
-and their validated call plan and target adapters to [C14](../references/compiler.md#foreign-calls).
+Their source obligations belong to [L14](../references/language/src/foreign-interfaces.md),
+and their validated call plan and target adapters to [C14](../references/compiler/src/builtins-and-foreign-calls.md#foreign-calls).
 The [xxHash binding](../../lib/ffi/xxhash.zy) demonstrates the current pointer-and-length borrow.
-The implemented [storage and transport boundary](../references/language.md#storage-and-foreign-transport)
+The implemented [storage and transport boundary](../references/language/src/foreign-interfaces.md#storage-and-foreign-transport)
 also owns raw pointer obligations and foreign field decoding.
 This proposal contains the next foreign boundaries.
 
@@ -12,7 +12,7 @@ The [CBPV interoperability research proposal](../ideas/cbpv-universal-ffi.md) in
 boundaries could participate in a language for composing adapters across multiple ABI profiles.
 
 Review extensions here through the
-[shared design of compilation units, FFI, and package management](../references/compiler.md#compilation-unit-preparation-and-artifacts).
+[shared design of compilation units, FFI, and package management](../references/compiler/src/native-emission.md#compilation-unit-preparation-and-artifacts).
 
 ## Examples and observed gaps
 
@@ -74,8 +74,8 @@ Method invocation and code-pointer loading require the separate foreign-call ext
 
 ## Source continuation adapters
 
-The [FFI reference](../references/language.md#14-foreign-interfaces) owns how raw C returns coexist
-with the [public Ret and CPS convention](../references/language.md#ret-and-explicit-cps).
+The [FFI reference](../references/language/src/foreign-interfaces.md) owns how raw C returns coexist
+with the [public Ret and CPS convention](../references/language/src/computations-and-control.md#ret-and-explicit-cps).
 Status interpretation belongs to the individual binding, including which failures occurred before C entry
 and which were reported after C may have changed memory.
 
@@ -94,9 +94,9 @@ and result successors that immediately perform another allowed operation on the 
 
 ## Following boundary
 
-The first scalar export boundary is implemented in [L14](../references/language.md#compiled-libraries-and-c-exports),
-with [artifact preparation](../references/compiler.md#compilation-unit-preparation-and-artifacts)
-and [instance ownership](../references/compiler.md#runtime-instances) defined in the compiler reference.
+The first scalar export boundary is implemented in [L14](../references/language/src/foreign-interfaces.md#compiled-libraries-and-c-exports),
+with [artifact preparation](../references/compiler/src/native-emission.md#compilation-unit-preparation-and-artifacts)
+and [instance ownership](../references/compiler/src/native-runtime.md#runtime-instances) defined in the compiler reference.
 The next profiles may admit recoverable status returns, retained instances, and incoming ownership-bearing handles.
 An `OS` export additionally needs an explicit process-termination contract.
 
@@ -157,7 +157,7 @@ The remaining shapes are deferred with distinct prerequisites:
 The [aligned record example](../../lib/tests/ffi/static-layout.zy) constructs a record in manual storage
 and passes its address to C. This aggregate-pointer path is independent of aggregate calling conventions.
 The source static builder also computes `Plan A`, but its inspectable shape is not target ABI classification evidence.
-The [storage design](../references/language.md#static-layout-plans) owns this distinction.
+The [storage design](../references/language/src/primitives-and-capabilities/layouts-and-aggregates.md#static-layout-plans) owns this distinction.
 Keep argument order and flattening in one validated representation consumed by every target as these shapes are added.
 
 Header-based validation could check some declaration mistakes but would introduce a separate source of ABI evidence.

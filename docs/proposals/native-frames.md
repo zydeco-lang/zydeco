@@ -1,8 +1,8 @@
 # Native environment alternatives and evaluation
 
 Retained activation frames are implemented and remain the AMD64 default.
-[C11](../references/compiler.md#activation-lifetime) owns their preparation and lifetime justification;
-[C12](../references/compiler.md#environment-actions-and-roots) owns default environment transitions and roots.
+[C11](../references/compiler/src/native-emission.md#activation-lifetime) owns their preparation and lifetime justification;
+[C12](../references/compiler/src/native-runtime.md#environment-actions-and-roots) owns default environment transitions and roots.
 This proposal keeps the alternatives that remain to be compared and the decisions that would precede a new default.
 
 The remaining work compares storage choices and integrates stronger lifetime or relocation mechanisms.
@@ -67,7 +67,7 @@ Existing native programs, including effect-library examples and returning C impo
 Focused tests should compare interpreter results with each candidate native scheme and check heap pointer survival
 under forced collection.
 
-Use the existing [native model and GC regressions](../references/compiler.md#activation-lifetime) as the baseline
+Use the existing [native model and GC regressions](../references/compiler/src/native-emission.md#activation-lifetime) as the baseline
 when introducing another engine; extend them with its distinct failure and relocation cases.
 
 Measure execution time, capture allocations, value words copied, collection work,
@@ -127,7 +127,7 @@ without choosing a new default:
 - Remove provably local control transitions when known entry contexts establish
   that no suspension bookkeeping is needed.
   Preserve the full protocol for indirect returns and host callbacks;
-  [primitive normalization](../references/compiler.md#primitive-calls) is the implemented starting point.
+  [primitive normalization](../references/compiler/src/sps/operations-and-patterns.md#primitive-calls) is the implemented starting point.
 - Compare activation-level shared captures with selective retention for dense, overlapping suspensions.
   Measure copying, duplicate roots, metadata, and total reserved space; older captures must survive inner resumptions.
 - Reclaim word storage and metadata together during deep-to-shallow phases.

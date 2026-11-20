@@ -24,8 +24,8 @@ or [Tree-sitter development workflow](editor/tree-sitter-zydeco/README.md#develo
 Use the [repository map](DESIGN.md#repository-layout) to locate the implementation
 and the [references](docs/references/README.md) to find its contract.
 Follow [AGENTS.md](AGENTS.md) for code conventions and design approval. Compiler pass changes should follow
-the shared [traversal](docs/references/compiler.md#choosing-and-composing-traversals)
-and [resumable execution](docs/references/compiler.md#resumable-folder-execution) guidance.
+the shared [traversal](docs/references/compiler/src/compiler-data.md#choosing-and-composing-traversals)
+and [resumable execution](docs/references/compiler/src/compiler-data.md#resumable-folder-execution) guidance.
 
 Retain bug reproducers as regression tests.
 When changing validation, pair accepted inputs with rejected counterparts and assert the intended error.
@@ -42,9 +42,9 @@ cargo test -p zydeco-tests --test cases -- literal-pattern/
 ```
 
 Use [source cases](lang/tests/cases/README.md) for individual language behaviors.
-Put whole-program regressions under `lib/tests/` and register them in `lang/tests/tests/`;
-the [test harness reference](docs/references/compiler.md#source-fixtures-and-runtime-oracles) explains backend coverage,
-I/O assertions, and source templates.
+Put whole-program regressions under `lib/tests/` and register them in `lang/tests/tests/`; the
+[test harness reference](docs/references/compiler/src/validation-and-extending.md#source-fixtures-and-runtime-oracles)
+explains backend coverage, I/O assertions, and source templates.
 Native tests need the [AMD64 toolchain](cli/README.md#native-executables).
 WebAssembly tests use Node.js 24; `NODE` selects its executable.
 
@@ -109,7 +109,7 @@ cargo run --bin zydeco -- fmt path/to/source.zy
 ```
 
 Supply Zydeco files explicitly and format source embedded in Rust strings separately.
-See the [formatter reference](docs/references/compiler.md#formatting-and-typed-rendering)
+See the [formatter reference](docs/references/compiler/src/tooling/formatting-and-rendering.md)
 for source-level options and [AGENTS.md](AGENTS.md#validation-and-formatting) for repository-wide formatting.
 
 ## Work on Documentation
@@ -121,7 +121,8 @@ to choose the document to update.
 Follow the [documentation conventions](AGENTS.md#documentation-structure-and-design-records)
 when moving approved designs into the references or consolidating existing material.
 
-Check complete source examples with `zydeco check`, verify links and anchors, and read the edited document in order.
+Check complete source examples with `zydeco check`, verify links and anchors
+with `cargo xtask docs check`, and read the edited document in order.
 Reflow Markdown with:
 
 ```sh
@@ -131,14 +132,24 @@ python3 docs/scripts/reflow-markdown.py --check --changed
 
 ### Generate Documentation
 
-Build Rust API documentation for the affected package, or regenerate the literate chapters:
+Validate or build the `mdBook` reference books (published to GitHub Pages
+by [`.github/workflows/docs.yml`](.github/workflows/docs.yml)), build Rust API documentation for an affected package,
+or regenerate the literate chapters:
 
 ```sh
+cargo xtask docs check
+cargo xtask docs build
+cargo xtask docs serve
 cargo doc --package zydeco-statics --no-deps
 make -C docs/spell build
 ```
 
-Cargo writes to `target/doc/`; the chapter build uses `zsh` and `jq` and writes Markdown under `docs/spell/`.
+`cargo xtask docs` calls `docs/scripts/build-books.py` via Python (`PYTHON` or `python3`).
+`check` and `test` validate book summaries, shared theme assets, and repository links without needing `mdbook`;
+`build` and `serve` require `mdbook` (available via `nix develop`, `cargo install mdbook`,
+or GitHub Releases) and assemble the combined site under `target/site/`.
+Cargo writes Rust API docs to `target/doc/`; the chapter build uses `zsh` and `jq` and writes Markdown
+under `docs/spell/`.
 
 ## Submit the Change
 

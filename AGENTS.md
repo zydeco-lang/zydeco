@@ -37,8 +37,8 @@ Keep documentation examples consistent with the repository's CLI flags and scrip
   Retain compatibility layers only when the user explicitly requests a compatibility boundary;
   state its scope and intended removal condition.
 - For new or substantially changed compiler passes,
-  follow [traversal selection](docs/references/compiler.md#choosing-and-composing-traversals)
-  and [resumable execution](docs/references/compiler.md#resumable-folder-execution).
+  follow [traversal selection](docs/references/compiler/src/compiler-data.md#choosing-and-composing-traversals)
+  and [resumable execution](docs/references/compiler/src/compiler-data.md#resumable-folder-execution).
   Reuse shared traversals, keep analyzers independent, and prefer `Explicit` folders for suitable reconstruction.
   Explain a different execution model when those interfaces do not fit.
 - When changing validation or behavior with rejection cases, pair valid inputs with rejected counterparts.

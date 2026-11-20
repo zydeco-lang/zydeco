@@ -4,7 +4,7 @@ This 2026-09-15 study measures raw memory kernels through the implemented storag
 typed fields, fixed views, and checked array access.
 The source migration is `7d3e3772`; the address-binding planner change and these measurements are committed together.
 Check out the commit containing this study to reproduce its compiler and library.
-The [compiler reference](../../references/compiler.md#raw-memory-kernels) owns the implemented contract;
+The [compiler reference](../../references/compiler/src/native-runtime.md#raw-memory-kernels) owns the implemented contract;
 [memory compilation](../../proposals/memory-compilation.md#first-acceptance-target-and-order) owns the remaining costs.
 
 ## Workloads and boundaries

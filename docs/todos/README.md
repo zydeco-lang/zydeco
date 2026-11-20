@@ -32,7 +32,7 @@ Remove resolved entries once their repair and durable rationale have reached the
   At `e00b91f0` a 5,000-cell list took 2.4 seconds and 15,000 cells 22 seconds,
   and a 20,000-cell value overflowed the host stack; those thresholds were not rerun.
 - Evaluate long-running host-resource retention
-  under the current [runtime-instance lifetime](../references/compiler.md#runtime-instances)
+  under the current [runtime-instance lifetime](../references/compiler/src/native-runtime.md#runtime-instances)
   and [byte ownership questions](../ideas/README.md#functional-byte-updates-with-allocation-reuse).
   Normal native entry teardown now releases its host resources; the older claim
   of permanently leaked `HostString::leak` allocations no longer describes that boundary.
@@ -49,7 +49,7 @@ Remove resolved entries once their repair and durable rationale have reached the
 - Exercise product-suffix layouts through the backend boundary.
   [ProductLayout](../../lang/assembly/src/syntax.rs) distinguishes physical arity
   from logical stack elements, so a final element may point into an existing product suffix
-  ([C10](../references/compiler.md#c10-zasm-stack-analysis-and-local-representation-choices)).
+  ([C10](../references/compiler/src/zasm.md)).
   Source lowering currently emits only full-arity layouts, leaving the suffix branches
   in the [AMD64 emitter](../../lang/amd64/src/emit.rs) without end-to-end coverage even
   though [GC regressions](../../lang/tests/tests/native_gc.rs) cover interior pointers.

@@ -7,9 +7,9 @@ the 2026-10-21 cleanup audit and the 2026-10-25 size analysis; it cites them by 
 Their line estimates are reviewer estimates from their own revisions, they overlap,
 and they are not current measurements.
 The canonical contracts stay where they are:
-[C2](../references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance) owns identities and arenas,
-[C3](../references/compiler.md#query-and-checker-ownership) owns the query and checker boundary,
-and [C5](../references/compiler.md#inference-and-reuse) owns checker-local reuse.
+[C2](../references/compiler/src/compiler-data.md) owns identities and arenas,
+[C3](../references/compiler/src/sessions-and-queries.md#query-and-checker-ownership) owns the query and checker boundary,
+and [C5](../references/compiler/src/checking-and-inference.md#inference-and-reuse) owns checker-local reuse.
 The query layer still implements that boundary at this revision, so this memo frames alternatives
 and a staged recommendation rather than an adopted design.
 
@@ -19,19 +19,19 @@ A source check owns two nested publication layers.
 The session resolves one source root into a scoped program and hands it
 to the coarse [`check_source`](../../lang/statics/src/query/source.rs) query, which runs the mutable checker,
 finalization, coverage, and static elaboration in one query and publishes an `Arc<StaticsArena>`.
-The [analysis-facts and materialization contract](../references/compiler.md#analysis-facts-and-materialization) owns
+The [analysis-facts and materialization contract](../references/compiler/src/sessions-and-queries.md#analysis-facts-and-materialization) owns
 that coarse layer, its `lru = 1` memo, and the retained keyed facts.
 Underneath it, every allocation-producing syntax judgment is a *producer query*:
 a tracked function that receives interned inputs, derives node identities,
 and returns an immutable outcome that the checker writes into the arena.
-The [query-and-checker-ownership contract](../references/compiler.md#query-and-checker-ownership) owns that split.
+The [query-and-checker-ownership contract](../references/compiler/src/sessions-and-queries.md#query-and-checker-ownership) owns that split.
 
 The layer's intended benefit is incrementality. The session's Salsa database owns query caching
-and revision ownership ([C1](../references/compiler.md#c1-architecture-and-a-programs-path-through-the-compiler)),
+and revision ownership ([C1](../references/compiler/src/architecture.md)),
 so a tracked function could, in principle, answer an unchanged judgment from its memo instead of re-running the rule.
 The [derived-identifier registry](../../lang/statics/src/alloc/identity.rs) makes the identities returned
 by such a replay stable,
-and [C2](../references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance) requires replay
+and [C2](../references/compiler/src/compiler-data.md) requires replay
 to recover the identifiers held by retained semantic facts after arena-memo eviction.
 The registry's own documentation states that purpose: it is "shared by a session's checker runs and producer queries"
 and is kept alive "across query eviction and replay" ([identity.rs:26-33](../../lang/statics/src/alloc/identity.rs)).
@@ -67,7 +67,7 @@ Four properties combine to prevent memo reuse:
   for returned values that do not implement `SalsaValue` (Salsa 0.28.2, [Cargo.toml](../../Cargo.toml));
 - the coarse `check_source` query keeps one arena memo (`lru = 1`
   [source.rs:100-103](../../lang/statics/src/query/source.rs)), and the test session explicitly triggers
-  LRU eviction between analyses ([C3 analysis-facts](../references/compiler.md#analysis-facts-and-materialization)).
+  LRU eviction between analyses ([C3 analysis-facts](../references/compiler/src/sessions-and-queries.md#analysis-facts-and-materialization)).
 
 Within one check the ordinary path also consults each syntax-family producer once:
 the term and pattern dispatchers enter a fresh allocation occurrence
@@ -79,7 +79,7 @@ because every intrinsic use derives from the same synthetic site; the checker al
 that singleton set once in `Tycker::new` ([driver.rs:13-19](../../lang/statics/src/check/driver.rs),
 [check/intrinsics.rs](../../lang/statics/src/check/intrinsics.rs)).
 The main other reuse inside a check belongs
-to `CheckedTermRepository` ([C5 inference and reuse](../references/compiler.md#inference-and-reuse)),
+to `CheckedTermRepository` ([C5 inference and reuse](../references/compiler/src/checking-and-inference.md#inference-and-reuse)),
 which is checker-local and independent of the producer memos.
 
 So each edit rechecks the whole root, and the producer memos are neither reused
@@ -134,7 +134,7 @@ intentionally runs the whole pipeline in one query; its inline comment records
 that splitting the phases into separate Salsa queries required deep-copying the full statics arena
 across every boundary, which dominated check memory.
 The coarse layer is therefore not part of the retirement question,
-and [C3](../references/compiler.md#analysis-facts-and-materialization) continues to own it.
+and [C3](../references/compiler/src/sessions-and-queries.md#analysis-facts-and-materialization) continues to own it.
 
 ## Judgment queries duplicate every checker rule
 
@@ -161,12 +161,12 @@ and `manifest_exists_syn_judgment` ([package.rs](../../lang/statics/src/query/pa
 on checker-computed arm descriptions and derive one `TypeId` per arm.
 Rejections also travel as data (`SigmaSynOutcome::Error(TyckError::Expressivity(...))`, `internal_judgment`),
 so the checker converts errors back into reported diagnostics after crossing a query boundary instead
-of reporting at the failure site, which the [diagnostic contract](../references/compiler.md#diagnostic-collection)
+of reporting at the failure site, which the [diagnostic contract](../references/compiler/src/tooling.md#diagnostic-collection)
 otherwise prescribes.
 
 Some duplication is not mechanical. The producer must reproduce the checker's allocation order exactly,
 because the derived identities are published in the arena and retained
-as editor facts ([C2](../references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance)).
+as editor facts ([C2](../references/compiler/src/compiler-data.md)).
 It must also reproduce the checker's handling of transparent wrappers, checking occurrences,
 and auxiliary entities that allocate at an enclosing site (`app_judgment_at`, `InternedSite`).
 The thunk example is simple; the package, function, and data families are not,
@@ -245,7 +245,7 @@ Adopt a staged sequence, with each stage gated by its own evidence:
    which re-measures the original claim, and the current tree against a direct-allocation pilot,
    which isolates the per-judgment producer cost that B would remove.
    Record the revision, workload, build profile, host, measured quantity, and default
-   or experimental representation as [C16](../references/compiler.md#following-a-change) requires.
+   or experimental representation as [C16](../references/compiler/src/validation-and-extending.md#following-a-change) requires.
    The record should show how much of the original overhead survives the leaf-pattern retirement
    and whether a measurable fraction remains.
 2. **If the measurement justifies it, implement option B in one change behind no flag.**
@@ -254,7 +254,7 @@ Adopt a staged sequence, with each stage gated by its own evidence:
    Removing the per-judgment layer is a bounded refactor only when it is done whole:
    a rule migrated halfway leaves two allocation paths and no clear ownership.
 3. **Decide option C separately, after B lands and is measured again.** Registry removal changes the retained-fact
-   contract in [C2](../references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance)
+   contract in [C2](../references/compiler/src/compiler-data.md)
    and the session's replay tests, so it needs its own evidence and approval.
 
 The recommendation is conditional in the right place: stage 1 can conclude
@@ -272,11 +272,11 @@ No change below should be made before that approval.
 
 | Reference passage | Required change |
 | --- | --- |
-| [C3 query and checker ownership](../references/compiler.md#query-and-checker-ownership) | Rewrite the opening producer-query paragraph to describe direct allocation at the checker's allocation site; keep the paragraph on the checker-owned algorithmic core; replace the intrinsic-singleton paragraph with the checker's materialized table; drop the sentence that the current boundary gives producers replay-stable identities, or restate it as the checker's derived allocation |
-| [C3 analysis facts and materialization](../references/compiler.md#analysis-facts-and-materialization) | Keep the coarse query, `lru = 1`, and keyed-fact paragraphs; remove the "fine-grained judgment memos have a different lifetime" sentence once no fine-grained judgment memos exist; re-read the materialization paragraph for wording that assumes producers |
-| [C2 compiler data, identities, arenas, and source provenance](../references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance) | Update the derived-allocation table row and the producer-query sentences; the registry, its site types, eviction/replay rule, and `DerivationFamily` discussion stay only if the producer family survives as a distinct allocation family or is replaced by an equivalent checker-side derivation |
-| [C5 inference and reuse](../references/compiler.md#inference-and-reuse) | No rule change under B: the checker-local `CheckedTermRepository` and its reuse conditions stay. Re-read the section when editing C3's pointer to it, and keep the publication boundary it defines |
-| [C6 typed-arena invariants](../references/compiler.md#typed-arena-invariants) | No rule change under B; the invariants are publication properties, not producer properties. The migration must keep them, including annotations on allocations that inference retries abandoned |
+| [C3 query and checker ownership](../references/compiler/src/sessions-and-queries.md#query-and-checker-ownership) | Rewrite the opening producer-query paragraph to describe direct allocation at the checker's allocation site; keep the paragraph on the checker-owned algorithmic core; replace the intrinsic-singleton paragraph with the checker's materialized table; drop the sentence that the current boundary gives producers replay-stable identities, or restate it as the checker's derived allocation |
+| [C3 analysis facts and materialization](../references/compiler/src/sessions-and-queries.md#analysis-facts-and-materialization) | Keep the coarse query, `lru = 1`, and keyed-fact paragraphs; remove the "fine-grained judgment memos have a different lifetime" sentence once no fine-grained judgment memos exist; re-read the materialization paragraph for wording that assumes producers |
+| [C2 compiler data, identities, arenas, and source provenance](../references/compiler/src/compiler-data.md) | Update the derived-allocation table row and the producer-query sentences; the registry, its site types, eviction/replay rule, and `DerivationFamily` discussion stay only if the producer family survives as a distinct allocation family or is replaced by an equivalent checker-side derivation |
+| [C5 inference and reuse](../references/compiler/src/checking-and-inference.md#inference-and-reuse) | No rule change under B: the checker-local `CheckedTermRepository` and its reuse conditions stay. Re-read the section when editing C3's pointer to it, and keep the publication boundary it defines |
+| [C6 typed-arena invariants](../references/compiler/src/elaboration-and-validation.md#typed-arena-invariants) | No rule change under B; the invariants are publication properties, not producer properties. The migration must keep them, including annotations on allocations that inference retries abandoned |
 | Module guides: [statics crate](../../lang/statics/src/lib.rs), [checker guide](../../lang/statics/src/check/README.md), [query module](../../lang/statics/src/query/mod.rs) | Remove or rewrite the producer-query descriptions; the query module keeps only database inputs and source orchestration under B |
 
 Option C would additionally rewrite C2's replay requirement, the registry paragraphs, and most of the identity section.
@@ -334,7 +334,7 @@ scripts/bench-check.sh 5
 
 Compare the current tree with a worktree at the commit before the change,
 and record peak RSS separately from wall time, since reservation, allocation counts,
-and elapsed time answer different questions ([C16](../references/compiler.md#following-a-change)).
+and elapsed time answer different questions ([C16](../references/compiler/src/validation-and-extending.md#following-a-change)).
 The 2026-08-14 figure was recorded against the earlier binary; a reproduction therefore needs two builds
 of the same workload, not an absolute number.
 

@@ -3,8 +3,8 @@
 Zydeco is a proof-of-concept language for studying call-by-push-value (CBPV),
 stack-manipulating computation, and relative monads.
 This document gives the project design and repository map.
-The [language reference](docs/references/language.md) specifies source behavior,
-and the [compiler reference](docs/references/compiler.md) follows phase contracts and maintenance entry points.
+The [language reference](docs/references/language/src/introduction.md) specifies source behavior,
+and the [compiler reference](docs/references/compiler/src/introduction.md) follows phase contracts and maintenance entry points.
 Linked proposals retain unimplemented extensions and open decisions; [CONTRIBUTING.md](CONTRIBUTING.md) covers tooling,
 and the [language guide](docs/tutorial/zydeco-guide.md) provides a longer source-level walkthrough.
 
@@ -28,7 +28,7 @@ Read `M : B` as saying that `M` can consume a stack with protocol `B`, not that 
 codata describes alternatives of observable frames.
 
 > **`Ret` is an installed continuation, not a stack-frame marker.** Stack extent can depend on runtime control flow,
-> including an unbounded number of argument pushes. The [source rule](docs/references/language.md#ret-and-stack-extent)
+> including an unbounded number of argument pushes. The [source rule](docs/references/language/src/computations-and-control.md#ret-and-stack-extent)
 > forbids inferring a fixed frame size or an allocation/reclamation boundary from `Ret` alone.
 
 Stack shape is a typed control protocol, not a physical layout: native code may use the machine stack,
@@ -52,25 +52,25 @@ exit  : Thk (Int -> OS)
 The successor is suspended code, not automatically a captured machine stack.
 An FFI must therefore return an `A` for `Ret A`, but select a successor or terminate for `OS`.
 
-The [foreign-interface reference](docs/references/language.md#14-foreign-interfaces) specifies supported classifiers
+The [foreign-interface reference](docs/references/language/src/foreign-interfaces.md) specifies supported classifiers
 and borrowing.
-The [compiler reference](docs/references/compiler.md#foreign-calls) owns the call plan shared
+The [compiler reference](docs/references/compiler/src/builtins-and-foreign-calls.md#foreign-calls) owns the call plan shared
 by the interpreter and native backend.
 
 ### Term-Oriented Composition
 
-Zydeco's [term-oriented design](docs/references/language.md#term-oriented-composition) uses ordinary binding,
+Zydeco's [term-oriented design](docs/references/language/src/conventions.md#term-oriented-composition) uses ordinary binding,
 abstraction, and application for both local expressions and library composition.
 Type constructors are functions on types; library builders can be functions that take dependencies and assemble values.
 
 Value functions and packed values support higher-order static composition
-under the shared [static elimination contract](docs/references/language.md#10-static-elimination).
+under the shared [static elimination contract](docs/references/language/src/static-elimination.md).
 Runtime callable contracts remain explicit computations behind `Thk`.
 
 ## Source Terms and Imports
 
 Every Zydeco source file contains exactly one complete term.
-A file receives the [default core vocabulary](docs/references/language.md#core-prelude);
+A file receives the [default core vocabulary](docs/references/language/src/sources/core-prelude.md);
 other names and provider dependencies are bound explicitly in its term.
 In particular, `param` and `param val` are ordinary term forms that construct abstractions;
 they do not declare file parameters.
@@ -98,7 +98,7 @@ Annotations preserve ordinary local scoping and structure; only explicit imports
 Typed relationships separate code requirements from operation-specific associations such as companion tests.
 Tests may declare their subjects with optional `of(...)` relationships; file-root discovery rules bound reverse lookup.
 The session owns term selection and test planning; the CLI executes the selected operation.
-The [source-package rules](docs/references/language.md#source-packages) define identities, roles, and relationships.
+The [source-package rules](docs/references/language/src/sources/packages.md#source-packages) define identities, roles, and relationships.
 
 An implementation source `foo.zy` may have an adjacent companion `foo.zyi`.
 The companion contains one ordinary type term and must itself synthesize a type.
@@ -109,7 +109,7 @@ Companion discovery applies to reusable `.zy` sources only; `.zydeco` program ro
 A checked source can be a kind, type, value, or computation.
 Standalone execution requires a root that accepts the Builtin value and ends in its `OS` computation protocol.
 Compiled libraries use their declared C or Zydeco ABI entry contract;
-the [source-package reference](docs/references/language.md#source-packages) defines these compilation-unit boundaries.
+the [source-package reference](docs/references/language/src/sources/packages.md#source-packages) defines these compilation-unit boundaries.
 For example, `ret 1` is a valid checked term and can be evaluated in the REPL, but is not a standalone CLI executable.
 [README.md](README.md#quick-start) shows the complete executable form.
 
@@ -138,22 +138,22 @@ The resulting condensation graph orders acyclic parameters and definitions;
 recursive type components retain an explicit `RecGroup` so the checker introduces identities before equations.
 The scoped elaboration uses `Abs`, `ValAbs`, `Let`, and `Sealed` for the corresponding ordinary judgments.
 Lexical `in` forms elaborate directly, while runtime recursion remains explicit through `fix`.
-The [term design](docs/references/language.md#3-bindings-and-scope) specifies the binding and scheduling rules.
-The [language reference](docs/references/language.md#2-lexical-structure-and-syntax) specifies surface syntax;
+The [term design](docs/references/language/src/bindings-and-scope.md) specifies the binding and scheduling rules.
+The [language reference](docs/references/language/src/lexical-and-syntax.md) specifies surface syntax;
 the [style guide](docs/style.md#reading-the-surface-syntax) explains how classifier arrows, term bodies,
 and constructor and destructor spines guide the reader.
 
 ## Products and Packed Values
 
 Products group values. Packed values also carry type components on which later components may depend.
-The [language reference](docs/references/language.md#9-polymorphism-and-packed-values) distinguishes existential values,
+The [language reference](docs/references/language/src/polymorphism-and-packed-values.md) distinguishes existential values,
 abstract witnesses, and manifest equations.
 A telescope is an ordered sequence of binders in which later classifiers may refer to earlier bindings.
 
 Packed values may be introduced by `pack`, opened by patterns, and composed through products,
 named components, constructors, other packed values, and function arguments and results.
 Their type-witness bindings and structural projection routes are resolved statically
-under the [shared phase contract](docs/references/language.md#10-static-elimination).
+under the [shared phase contract](docs/references/language/src/static-elimination.md).
 Representable packed value payloads may also flow through computation parameters and returns.
 [Module composition](lib/std/README.md#explicit-runtime-contracts) distinguishes this static composition
 from explicit runtime contracts, which may use products of thunks or thunked arrows, `forall`, codata,
@@ -302,7 +302,7 @@ A parenthesized semicolon pattern applies every member to the same bindee.
 For example, `((left, right); whole; copy)` destructures a pair and binds the complete pair twice.
 Semicolon is same-bindee composition, whereas comma assigns successive product components.
 Members retain source order and extend the pattern environment from left to right.
-Same-bindee aliases require [irrefutable value members](docs/references/language.md#7-patterns-and-coverage).
+Same-bindee aliases require [irrefutable value members](docs/references/language/src/patterns-and-coverage.md).
 A group of direct field projections may additionally select static and dynamic fields
 while opening one witness telescope.
 Irrefutable whole-value members retain that packed value for forwarding; general constructor aliases
@@ -329,7 +329,7 @@ then checks `pattern` against the unique payload.
 It associates to the right, allowing `/outer = /inner = payload` to express a staged path.
 Type checking elaborates the result into ordinary named and product patterns with typed holes outside the selected path.
 The pun `/field` expands to `/field = field`, while `/field : Type` annotates that generated payload binder.
-Projection payloads must be [irrefutable](docs/references/language.md#7-patterns-and-coverage);
+Projection payloads must be [irrefutable](docs/references/language/src/patterns-and-coverage.md);
 refutable nested constructor matching through this pattern form is not implemented.
 
 When a same-bindee group of direct projection patterns is checked against a packed value,
@@ -453,11 +453,11 @@ Juxtaposition, `value |> function`, `function <| value`, and the view pattern `f
 application can rearrange values, select known alternatives, and calculate integers without entering computations.
 Only the nested pattern of a view contributes bindings and refutability.
 Static composition admits partial applications, products, constructors, packed values, and higher-order parameters
-and results under the [shared residual contract](docs/references/language.md#10-static-elimination).
+and results under the [shared residual contract](docs/references/language/src/static-elimination.md).
 Runtime callable values remain explicit suspended computations behind `Thk`;
 failed static elimination does not implicitly construct one.
-[L8](docs/references/language.md#8-value-functions-and-views) specifies value functions and view patterns;
-[C6](docs/references/compiler.md#static-elimination) owns their implementation boundary.
+[L8](docs/references/language/src/value-functions-and-views.md) specifies value functions and view patterns;
+[C6](docs/references/compiler/src/elaboration-and-validation.md#static-elimination) owns their implementation boundary.
 
 Parameters accepting packed values may open existential witnesses used by the result classifier.
 Both computation witness-dependent arrows (`PackPi`) and value-function classifiers (`ValPi`) retain those witnesses;
@@ -480,12 +480,12 @@ and the distinction between polymorphism and a provider's hidden representation 
 
 `@[typeof] e` makes an existing synthesized classifier available to source annotations and static definitions.
 It preserves the operand's semantic identities while erasing its execution.
-The [language reference](docs/references/language.md#4-classification-and-inference) owns classifier extraction,
+The [language reference](docs/references/language/src/classification-and-inference.md) owns classifier extraction,
 staging, and inference;
-its [source-boundary account](docs/references/language.md#12-sources-imports-and-entry) covers imports and signatures.
+its [source-boundary account](docs/references/language/src/sources.md) covers imports and signatures.
 
 Classifier queries share the checked-term repository with source providers and monadic elaboration.
-The [compiler reference](docs/references/compiler.md#inference-and-reuse) owns the synthesize-once protocol,
+The [compiler reference](docs/references/compiler/src/checking-and-inference.md#inference-and-reuse) owns the synthesize-once protocol,
 context extension, and separation from ordinary metadata forwarding.
 
 ## Standard Library and Host Boundary
@@ -499,7 +499,7 @@ Fixed-width numbers, `Char`, and `String` are compiler-canonical types.
 `Bytes` is an abstract source-defined std type.
 `Reader`, `Writer`, and `OS` are abstract provider capabilities whose uses share one generative opening.
 This separates stable data representations from runtime ownership.
-The [primitive and capability rules](docs/references/language.md#13-primitive-values-and-capabilities) define
+The [primitive and capability rules](docs/references/language/src/primitives-and-capabilities.md) define
 that identity boundary and the resulting organization.
 
 `lib/std/std.zy` is a value function that assembles the public library from a Builtin argument.
@@ -508,7 +508,7 @@ topics that depend on the shared algebraic base accept that packed value alongsi
 The aggregate carries the library-defined types and modules; host types stay on the Builtin contract.
 Module factories are value functions, while effectful operations inside their results retain computation types.
 See the [standard library guide](lib/std/README.md) for current entry points and interface shapes.
-The [library organization rule](docs/references/language.md#standard-library-organization) assigns value data,
+The [library organization rule](docs/references/language/src/sources/standard-library.md) assigns value data,
 algebraic dictionaries, effect protocols, and runtime capabilities to their owning directories.
 
 ## Relative Monads and Monadic Blocks
@@ -518,7 +518,7 @@ The module exports a value function from Builtin to the packed value containing 
 so importing and opening it requires neither a thunk nor a returned computation.
 Zydeco also implements *monadic blocks*, a generalized do-notation selected by the `@[monadic]` meta annotation.
 The implemented payload is a computation;
-the [language reference](docs/references/language.md#closed-translation-boundary) owns its closed-term boundary,
+the [language reference](docs/references/language/src/translations/algebra-translation.md#closed-translation-boundary) owns its closed-term boundary,
 parameter-passing interface, and deferred root sorts.
 During type checking, its payload undergoes the algebra translation implemented
 in `lang/statics/src/elaborate/monadic/mod.rs` and invoked from `lang/statics/src/check/monadic.rs`.
@@ -531,7 +531,7 @@ It synthesizes the payload into the checker-wide checked-term repository,
 then algebra translation consumes that immutable handle.
 Each resolved monadic block retains one payload and one translated root;
 a use-site expectation is compared with the canonical synthesized classifier afterward.
-The [compiler reference](docs/references/compiler.md#monadic-and-copattern-elaboration)
+The [compiler reference](docs/references/compiler/src/elaboration-and-validation.md#monadic-and-copattern-elaboration)
 records the value-function translation, applicative nominal families and recursive algebra dictionaries,
 and the remaining closure-validation discrepancy.
 Monad operations are supplied at runtime, and there is no general specialization pass eliminating their dispatch.
@@ -539,57 +539,57 @@ Monad operations are supplied at runtime, and there is no general specialization
 ## Implementation Architecture
 
 The
-[compiler reference's phase map](docs/references/compiler.md#c1-architecture-and-a-programs-path-through-the-compiler)
+[compiler reference's phase map](docs/references/compiler/src/architecture.md)
 connects source loading and checking to interpretation, SPS lowering, and native or WebAssembly emission.
 SPS is stack-passing style: calls and continuations become explicit in the intermediate representation.
 SPS names the stack where its compilation scheme does, at branch joins by default;
 normalization simplifies known producers and consumers, and localization turns closures that are only called
 into second-class procedures, before closure conversion constructs first-order SPSLow with labels for them.
 SPSLow checks explicit environment/result entry roles and closure/continuation record provenance
-under the [word entry contract](docs/references/compiler.md#word-entry-contracts).
-It also preserves and checks [partial source protocols](docs/references/compiler.md#partial-source-protocols)
+under the [word entry contract](docs/references/compiler/src/closure-conversion/word-contracts-and-protocols.md#word-entry-contracts).
+It also preserves and checks [partial source protocols](docs/references/compiler/src/closure-conversion/word-contracts-and-protocols.md#partial-source-protocols)
 through normalization, including scoped type parameters, instantiated recursive codata, and returned thunks.
 ZASM makes the control-flow graph explicit for assembly-derived targets.
 
 | Responsibility | Owning reference | Implementation |
 | --- | --- | --- |
-| Source graph, overlays, and shared analysis | [C3](docs/references/compiler.md#c3-source-loading-sessions-queries-and-memory-retention) | `lang/session/src/source` |
-| Parsing, desugaring, and resolution | [C4](docs/references/compiler.md#c4-parsing-desugaring-and-name-resolution) | `lang/surface/src/{textual,bitter,scoped}` |
-| Typing, finalization, elaboration, and validation | [C5–C6](docs/references/compiler.md#c5-typed-representation-judgments-and-inference) | `lang/statics/src` |
-| Linking and interpretation | [C7](docs/references/compiler.md#c7-linking-and-the-reference-interpreter) | `lang/dynamics/src` |
-| SPS, demand, and closure conversion | [C8–C9](docs/references/compiler.md#c8-sps-lowering-normalization-and-demand) | `lang/stackir/src/{high,low}` |
-| ZASM and representation analysis | [C10](docs/references/compiler.md#c10-zasm-stack-analysis-and-local-representation-choices) | `lang/assembly/src` |
-| Native preparation, emission, and runtime | [C11–C12](docs/references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission) | `lang/{assembly,amd64,machine}`, `runtime` |
-| WebAssembly emission and embedding | [C13](docs/references/compiler.md#c13-webassembly-backend-and-embedding) | `lang/{wasm-sps,wasm-common}` |
+| Source graph, overlays, and shared analysis | [C3](docs/references/compiler/src/sessions-and-queries.md) | `lang/session/src/source` |
+| Parsing, desugaring, and resolution | [C4](docs/references/compiler/src/parsing-and-resolution.md) | `lang/surface/src/{textual,bitter,scoped}` |
+| Typing, finalization, elaboration, and validation | [C5–C6](docs/references/compiler/src/checking-and-inference.md) | `lang/statics/src` |
+| Linking and interpretation | [C7](docs/references/compiler/src/reference-interpreter.md) | `lang/dynamics/src` |
+| SPS, demand, and closure conversion | [C8–C9](docs/references/compiler/src/sps.md) | `lang/stackir/src/{high,low}` |
+| ZASM and representation analysis | [C10](docs/references/compiler/src/zasm.md) | `lang/assembly/src` |
+| Native preparation, emission, and runtime | [C11–C12](docs/references/compiler/src/native-emission.md) | `lang/{assembly,amd64,machine}`, `runtime` |
+| WebAssembly emission and embedding | [C13](docs/references/compiler/src/webassembly.md) | `lang/{wasm-sps,wasm-common}` |
 
 Each completed representation has one selected program root and the storage needed by its syntax.
 Phase-owned builders publish immutable products; later metadata lives in phase-local deltas.
-[C2](docs/references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance) defines allocation
+[C2](docs/references/compiler/src/compiler-data.md) defines allocation
 and provenance, and C8–C9 define lexical ownership before control-flow lowering.
 Local representation selection accepts a Rust policy type or a per-compilation strategy enum;
-[C10's policy boundary](docs/references/compiler.md#policy-selection) keeps preferences separate
+[C10's policy boundary](docs/references/compiler/src/zasm.md#policy-selection) keeps preferences separate
 from the evidence that permits removing a cell.
 Policies feed assembly lowering before stack and frame validation.
 
 ### Compiler Pass Composition
 
-See [compiler pass composition](docs/references/compiler.md#compiler-pass-composition).
+See [compiler pass composition](docs/references/compiler/src/architecture.md#compiler-pass-composition).
 
 ### Query-Based Analysis
 
 Source and statics queries share one Salsa database and revision system.
 Allocation-producing judgments return fragments for the checker to materialize;
 stateful inference and elaboration retain a mutable algorithmic core.
-[Query ownership](docs/references/compiler.md#query-and-checker-ownership) defines this boundary,
-and [analysis retention](docs/references/compiler.md#analysis-facts-and-materialization) distinguishes
+[Query ownership](docs/references/compiler/src/sessions-and-queries.md#query-and-checker-ownership) defines this boundary,
+and [analysis retention](docs/references/compiler/src/sessions-and-queries.md#analysis-facts-and-materialization) distinguishes
 keyed tooling facts from full typed-tree consumers and fine-grained memos.
 
 The [checker module guide](lang/statics/src/check/README.md) locates local judgments.
-[Finalization](docs/references/compiler.md#finalization) resolves and normalizes the shared type graph;
-[coverage](docs/references/compiler.md#coverage) validates typed matches;
-[static elaboration](docs/references/compiler.md#static-elimination) records the residual root used
+[Finalization](docs/references/compiler/src/checking-and-inference.md#finalization) resolves and normalizes the shared type graph;
+[coverage](docs/references/compiler/src/elaboration-and-validation.md#coverage) validates typed matches;
+[static elaboration](docs/references/compiler/src/elaboration-and-validation.md#static-elimination) records the residual root used
 by both interpreter linking and SPS lowering.
-Tests assert the [typed-arena invariants](docs/references/compiler.md#typed-arena-invariants) of the published artifact.
+Tests assert the [typed-arena invariants](docs/references/compiler/src/elaboration-and-validation.md#typed-arena-invariants) of the published artifact.
 The [pattern proposal](docs/proposals/exhaustiveness.md)
 and the [retention](docs/ideas/README.md#compiler-memory-retention)
 and [arena verification](docs/ideas/README.md#stronger-typed-arena-verification) ideas retain the
@@ -621,8 +621,8 @@ and orders candidates by exact spelling match, classifier compatibility, lexical
 Compatibility checks use a disposable recovered analysis; they do not solve holes in a strict analysis.
 Cajun renders optional kind or type details and inserts only the selected name.
 Missing type information does not itself hide a candidate.
-The compiler reference owns [recovery](docs/references/compiler.md#recovering-parsing),
-[completion filtering, and edit ranges](docs/references/compiler.md#completion).
+The compiler reference owns [recovery](docs/references/compiler/src/parsing-and-resolution.md#recovering-parsing),
+[completion filtering, and edit ranges](docs/references/compiler/src/tooling/interactive-and-docs.md#completion).
 
 Compiler annotations have one typed catalog in `lang/surface/src/metadata.rs`.
 Metadata decoding and editor suggestions share argument shapes and enum spellings, including nested options.
@@ -631,7 +631,7 @@ Import-path completion uses the importer's canonical parent, merges filesystem e
 and offers directories and supported source files while excluding the importing file and its symlink aliases.
 
 Source documentation currently consists of `@[doc]` annotations and adjacent `--|` text blocks.
-The [language reference](docs/references/language.md#source-documentation) defines their attachment rules.
+The [language reference](docs/references/language/src/meta-annotations.md#source-documentation) defines their attachment rules.
 Lookup, semantic links, example verification, and publication are not implemented.
 
 Each parsed entity, including nested metadata, has its own source span.
@@ -664,7 +664,7 @@ Root metadata supplies frontend commands: `@[type]` requests static inspection,
 Default evaluation supports values and directly returning computations;
 explicit execution may supply a Builtin host contract.
 The frontend captures output and uses empty stdin and arguments.
-The [interactive engine](docs/references/compiler.md#interactive-engine) explains its lifecycle,
+The [interactive engine](docs/references/compiler/src/tooling/interactive-and-docs.md#interactive-engine) explains its lifecycle,
 and the [CLI guide](cli/README.md#interactive-repl) lists the commands and editing keys.
 
 ### Arena and ID invariants
@@ -723,7 +723,7 @@ Storage and access have separate contracts:
 
 Zydeco has tagged machine integers `Int` and `UInt`, exact-width integers through 32 bits,
 and IEEE 754 `Float32` and `Float64`.
-The [primitive-value reference](docs/references/language.md#13-primitive-values-and-capabilities) specifies
+The [primitive-value reference](docs/references/language/src/primitives-and-capabilities.md) specifies
 numeric domains, default literal types, arithmetic, and parsing.
 
 An expected numeric type selects a literal's representation.
@@ -738,10 +738,10 @@ When no expected type selects a representation, integer literals synthesize `Int
 and decimal literals synthesize `Float64`.
 There are no implicit conversions between numeric types for existing values.
 
-The [runtime-word reference](docs/references/compiler.md#c12-shared-native-model-allocation-and-collection)
+The [runtime-word reference](docs/references/compiler/src/native-runtime.md)
 owns tagged encodings and tracing.
 `Int`/`UInt` and narrower integers fit immediate words; `Int64`, `UInt64`, and `Float64` use opaque boxes. Storage
-and C transport follow their [separate carrier contract](docs/references/language.md#storage-and-foreign-transport).
+and C transport follow their [separate carrier contract](docs/references/language/src/foreign-interfaces.md#storage-and-foreign-transport).
 
 ### Shared Rust Runtime Model
 
@@ -781,8 +781,8 @@ See [native build packaging](cli/README.md#native-executables) for the build-dir
 The frame model implements entry, suspension, resumption, and sparse root discovery.
 Native preparation checks activation ownership, initialized bindings, and continuation slot aliases before emission;
 the emitter supplies static action descriptors consumed by the same model in the stub.
-The [native preparation](docs/references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission)
-and [environment actions](docs/references/compiler.md#environment-actions-and-roots) own those phase
+The [native preparation](docs/references/compiler/src/native-emission.md)
+and [environment actions](docs/references/compiler/src/native-runtime.md#environment-actions-and-roots) own those phase
 and transition contracts.
 Register assignment, stack alignment, control-stack instruction selection,
 and individual builtin signatures remain outside the model.
@@ -809,7 +809,7 @@ Native preparation uses checked continuation provenance to replace a return cont
 with a suspension ID for the retained frame.
 Resumption reads the retained slots directly and binds the returned value.
 Ordinary closures continue to own explicit capture environments, which can outlive their creating activation.
-The compiler reference owns [activation lifetime](docs/references/compiler.md#activation-lifetime),
+The compiler reference owns [activation lifetime](docs/references/compiler/src/native-emission.md#activation-lifetime),
 entry, reclamation, roots, and bounded tail-space invariants.
 The [native environment proposal](docs/proposals/native-frames.md) retains remaining storage and optimization questions.
 
@@ -854,7 +854,7 @@ String indices and lengths count Unicode scalar values; `byte_length` measures i
 These are distinct from grapheme clusters and from compiler source spans, which use byte offsets.
 `Char` is one Unicode scalar value.
 Source-defined `Bytes` is an immutable octet sequence with no implicit encoding; its indices and lengths count bytes.
-Its [ownership and composition rules](docs/references/language.md#immutable-owners-and-source-bytes) use
+Its [ownership and composition rules](docs/references/language/src/primitives-and-capabilities/views-and-buffers.md#immutable-owners-and-source-bytes) use
 explicitly retained immutable allocations, with source slicing, comparison, copying, and scalar codecs.
 
 String and character literals share the escapes `\\`, `\"`, `\'`, `\n`, `\r`, `\t`, and `\0`.
@@ -864,14 +864,14 @@ Unknown or incomplete escapes are source errors.
 
 Builtin operations report invalid observations through computation-polymorphic branches.
 The library reifies those branches as `Option` for operations such as indexing, splitting, parsing,
-and codepoint conversion, or as [`Either`](docs/references/language.md#either-values) for fallible I/O.
+and codepoint conversion, or as [`Either`](docs/references/language/src/sources/standard-library.md#either-values) for fallible I/O.
 Filesystem contents are bytes; text conveniences explicitly validate or produce UTF-8.
 EOF, an empty line, and an I/O error have distinct results.
 The [text and library contracts](lib/std/README.md#text-model) describe these boundaries independently
 of runtime storage.
 
 Explicit storage is available through the ordinary [memory library](lib/std/memory/package.zy).
-Its [owning design](docs/references/language.md#manual-memory) specifies manual allocation,
+Its [owning design](docs/references/language/src/primitives-and-capabilities/manual-memory.md#manual-memory) specifies manual allocation,
 erased pointer and partial-record state, fixed versus dynamic layouts, and direct CPS destination writes.
 Typed field paths and array builders compose storage layouts; general views interpret thin,
 fat, header, and indirect handles with explicit runtime metadata.
@@ -888,11 +888,11 @@ The C call admits at most six arguments.
 The checker records one typed call plan used by the Unix interpreter's libffi path and the AMD64 emitter.
 Checking a declaration does not load its library or validate the real C symbol's signature.
 The WebAssembly backend rejects native foreign imports.
-The [foreign-interface reference](docs/references/language.md#14-foreign-interfaces) owns the supported ABI
+The [foreign-interface reference](docs/references/language/src/foreign-interfaces.md) owns the supported ABI
 and borrowing obligations.
 The [FFI design](docs/proposals/c-ffi.md#examples-and-observed-gaps) uses concrete record,
 output-buffer, callback, and component examples to motivate the next extensions.
-The [raw pointer adapter](docs/references/language.md#storage-and-foreign-transport) supports immutable inputs
+The [raw pointer adapter](docs/references/language/src/foreign-interfaces.md#storage-and-foreign-transport) supports immutable inputs
 and manually managed mutable destinations.
 Aggregate and code-pointer transport remain proposed extensions.
 
@@ -952,7 +952,7 @@ and `memory`, but the embedding must supply the imports before invoking either f
 | `cli/` | Source checking, shared backend execution, the bundled Node host, formatting, and compilation commands. |
 | `runtime/` | Runtime instances and process launcher, packaged with native executables and libraries. |
 | `tui/` | Ratatui REPL using the shared compiler session. |
-| `xtask/` | Repository tasks, including the resumable `cargo test-resume` runner. |
+| `xtask/` | Repository tasks, including `cargo test-resume` and `cargo xtask docs` (`docs/scripts/build-books.py`). |
 | `editor/cajun/` | Language server, included in the Rust workspace. |
 | `editor/tree-sitter-zydeco/` | Editor grammar and its conformance checks. |
 | `editor/vscode/`, `editor/zed/` | Client integrations with their own build workflows. |
@@ -964,10 +964,10 @@ and `memory`, but the embedding must supply the imports before invoking either f
   with the unfolded program, dominated by multiply-instantiated library functors.
   The workspace raises its test-stack minimum accordingly; factoring repeated residual code remains future work recorded
   in [deferred residual-code sharing](docs/ideas/README.md#residual-code-sharing).
-- Static reduction has the documented [resource bounds](docs/references/language.md#10-static-elimination)
+- Static reduction has the documented [resource bounds](docs/references/language/src/static-elimination.md)
   and does not enter computations to discover static functions or witnesses.
   Demand does not yet flow through runtime witness-dependent computation applications, so their arguments
-  materialize whole ([Module composition](docs/references/language.md#module-interfaces-and-shared-openings)).
+  materialize whole ([Module composition](docs/references/language/src/polymorphism-and-packed-values.md#module-interfaces-and-shared-openings)).
 - Native execution is AMD64 on Linux or macOS.
   `build` defaults to the host architecture, so an ARM host needs explicit AMD64 target selection.
   `run -t exe` and `test -t exe` select AMD64 directly; execution still requires appropriate tools and host support.
@@ -975,12 +975,12 @@ and `memory`, but the embedding must supply the imports before invoking either f
   The heap grows without collection, and the backend allocates persistent stack frames
   and boxes products without ZASM's local-unboxing analysis.
   CLI Wasm execution uses the bundled Node.js host; standalone WASI execution is not implemented.
-- Native interoperability includes the explicit [C boundary](docs/references/language.md#14-foreign-interfaces)
-  and [Zydeco unit initializers](docs/references/language.md#native-zydeco-units);
+- Native interoperability includes the explicit [C boundary](docs/references/language/src/foreign-interfaces.md)
+  and [Zydeco unit initializers](docs/references/language/src/foreign-interfaces.md#native-zydeco-units);
   callbacks and retained foreign handles remain deferred.
   Checking a source is not evidence that a foreign library can be loaded or linked.
 - Source imports address catalog names, filesystem paths, or numbered interactive inputs.
-  [Separate compilation](docs/references/compiler.md#compilation-unit-preparation-and-artifacts) uses explicit C library
+  [Separate compilation](docs/references/compiler/src/native-emission.md#compilation-unit-preparation-and-artifacts) uses explicit C library
   or native Zydeco interfaces and artifact manifests.
   Native units currently publish closed structural value types and use explicit initialization;
   nominal/dependent interfaces and automatic initialization remain deferred.
@@ -990,6 +990,6 @@ and `memory`, but the embedding must supply the imports before invoking either f
 - `pack` cannot introduce kind witnesses.
   Field-projection payload patterns and general same-bindee aliases are restricted to irrefutable forms,
   apart from the supported selective opening of a packed value.
-- Monadic translation follows the [closed-term boundary](docs/references/language.md#closed-translation-boundary).
-  Its [coverage limits and deferred roots](docs/references/language.md#translation-coverage) have separate
+- Monadic translation follows the [closed-term boundary](docs/references/language/src/translations/algebra-translation.md#closed-translation-boundary).
+  Its [coverage limits and deferred roots](docs/references/language/src/translations/algebra-translation.md#translation-coverage) have separate
   design records; automatic removal of monad dispatch remains outside the implementation.

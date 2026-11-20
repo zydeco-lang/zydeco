@@ -1,7 +1,7 @@
 # WebAssembly backend strategy
 
 The `wasm-sps` target keeps its qualified name while the unqualified `wasm` target is undecided.
-[C13](../references/compiler.md#c13-webassembly-backend-and-embedding) owns the current emitter,
+[C13](../references/compiler/src/webassembly.md) owns the current emitter,
 module ABI, representations, and embedding limits.
 This proposal retains the criteria for naming the default target, optional target features,
 reclamation choices, and the open runtime questions.
@@ -12,7 +12,7 @@ the later bounded memory evidence for both prototypes.
 
 ## Validation Evidence
 
-The [source harness](../references/compiler.md#source-fixtures-and-runtime-oracles) supports declared stdin,
+The [source harness](../references/compiler/src/validation-and-extending.md#source-fixtures-and-runtime-oracles) supports declared stdin,
 captured output, and expected exits on the backend, and the committed Node.js host executes the compile tests,
 examples, the `exec` suite, OOPSLA artifacts, effects, packs, stack/control cases, tutorial programs,
 and standard-library collection, text, numeric, argument-list, and filesystem tests.
@@ -45,7 +45,7 @@ and retire `wasm-sps` without retaining an ambiguous legacy alias.
 
 First establish semantic parity with declared input, output, successful and failing exits,
 numeric boxing boundaries, products, closures, continuations, and the shared host calling modes.
-Use [C16's runtime oracles](../references/compiler.md#source-fixtures-and-runtime-oracles)
+Use [C16's runtime oracles](../references/compiler/src/validation-and-extending.md#source-fixtures-and-runtime-oracles)
 and identify the cases actually exercised; harness support alone is insufficient evidence.
 Continued conformance work should include reuse and abandonment of ordinary source continuations.
 

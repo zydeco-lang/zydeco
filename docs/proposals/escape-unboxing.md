@@ -3,7 +3,7 @@
 ## Motivation and boundary
 
 Local product and closure construction can often be eliminated when the value is immediately projected or forced.
-[C10](../references/compiler.md#c10-zasm-stack-analysis-and-local-representation-choices)
+[C10](../references/compiler/src/zasm.md)
 owns the implemented pack/unpack fusion and variable-level projection analysis.
 This proposal extends that boundary to constraint-based representation choices over SPSLow:
 unboxed fields, a frame-resident cell, or a managed heap cell.
@@ -15,9 +15,9 @@ primitive lowering, and measurable acceptance targets.
 
 SPSLow has explicit closure captures and a single lexical occurrence per value node; sharing uses named variables.
 That makes producer/consumer structure available before ZASM decomposes it into stack operations. The runtime's
-[tagged-word and collection contract](../references/compiler.md#c12-shared-native-model-allocation-and-collection)
+[tagged-word and collection contract](../references/compiler/src/native-runtime.md)
 constrains boxed fields.
-Native [activation lifetime](../references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission)
+Native [activation lifetime](../references/compiler/src/native-emission.md)
 constrains frame pointers.
 Neither contract by itself proves that a proposed stack cell cannot escape.
 
@@ -30,11 +30,11 @@ The historical fixture comparison below motivates further measurement at that lo
 
 ## Existing evidence and representation experiments
 
-The [local policy contract](../references/compiler.md#policy-selection) separates validity evidence
+The [local policy contract](../references/compiler/src/zasm.md#policy-selection) separates validity evidence
 from a Rust policy's preferences, including optional local closure splitting.
-[Stored-call interfaces](../references/language.md#stored-call-interfaces) share source carriers
-over the existing word convention; [word entries](../references/compiler.md#word-entry-contracts)
-and [partial source protocols](../references/compiler.md#partial-source-protocols) validate complementary call evidence.
+[Stored-call interfaces](../references/language/src/primitives-and-capabilities/views-and-buffers.md#stored-call-interfaces) share source carriers
+over the existing word convention; [word entries](../references/compiler/src/closure-conversion/word-contracts-and-protocols.md#word-entry-contracts)
+and [partial source protocols](../references/compiler/src/closure-conversion/word-contracts-and-protocols.md#partial-source-protocols) validate complementary call evidence.
 Their implemented rules are owned by those references.
 The open question is which further representations justify their lifetime, entry, and tracing costs.
 
@@ -72,8 +72,8 @@ The [workflow](../../cli/README.md#representation-experiments) gives reproductio
 ## Further scalar unboxing
 
 Verified scalar regions, straight-line box elimination, and bounded load–arithmetic–store kernels are implemented;
-[scalar value boundaries](../references/compiler.md#scalar-value-boundaries)
-and [raw memory kernels](../references/compiler.md#raw-memory-kernels) own their rules and validation.
+[scalar value boundaries](../references/compiler/src/native-runtime.md#scalar-value-boundaries)
+and [raw memory kernels](../references/compiler/src/native-runtime.md#raw-memory-kernels) own their rules and validation.
 Local storage currently gives each definition a distinct home.
 Reusing homes or selecting registers needs liveness checks and measurements of spills and runtime cost.
 Extensions beyond a local arithmetic region require additional evidence:
@@ -89,13 +89,13 @@ A source meta annotation can express a preference; it cannot establish represent
 
 ## Local CPS continuations (proposed)
 
-The [destination codecs](../references/language.md#immutable-owners-and-source-bytes) expose completion
+The [destination codecs](../references/language/src/primitives-and-capabilities/views-and-buffers.md#immutable-owners-and-source-bytes) expose completion
 as a source thunk.
-Under [closure conversion](../references/compiler.md#c9-closure-conversion-and-first-order-spslow),
+Under [closure conversion](../references/compiler/src/closure-conversion.md),
 remaining thunks use ordinary closure environments;
-installed return continuations have separate [native lifetime evidence](../references/compiler.md#activation-lifetime).
+installed return continuations have separate [native lifetime evidence](../references/compiler/src/native-emission.md#activation-lifetime).
 Explicit CPS can therefore introduce callback allocations even when it avoids an intermediate result buffer.
-The existing [local reductions](../references/compiler.md#local-reductions) remove some immediate cases.
+The existing [local reductions](../references/compiler/src/sps/normalization-and-demand.md#local-reductions) remove some immediate cases.
 
 Contification turns eligible functions into local continuations, represented as control-flow blocks.
 The proposed extension would analyze uses in SPS before closure conversion, requiring known,
@@ -118,7 +118,7 @@ and valid calls whose different residual stacks prevent contification.
 Retain the general path when the proof is unavailable.
 Preserve effect order and invocation multiplicity in every case.
 This experiment should establish whether existing simplification suffices or contification is needed;
-the [Ret/CPS API convention](../references/language.md#ret-and-explicit-cps) supplies no optimization proof.
+the [Ret/CPS API convention](../references/language/src/computations-and-control.md#ret-and-explicit-cps) supplies no optimization proof.
 
 ## Remaining machine-call boundary
 
@@ -131,7 +131,7 @@ Automatic layout-directed calls are deferred.
 A modular extension needs the following boundaries in order:
 
 1. **Representation identity from source composition.** The implemented
-   [static layout plans](../references/language.md#static-layout-plans) calculate
+   [static layout plans](../references/language/src/primitives-and-capabilities/layouts-and-aggregates.md#static-layout-plans) calculate
    and validate scalar/product byte placement with ordinary value functions,
    expose its shape, and use the same codecs as runtime layout construction.
    They establish the source-calculation part of this prerequisite.
@@ -277,8 +277,8 @@ For a field of a region value, the `fields(R)` rule already forces `R`.
 ### Interprocedural blocks
 
 SPSLow blocks are entered by `Jump` with an explicit stack.
-Use the [word entry contract](../references/compiler.md#word-entry-contracts) for administrative parameters
-and [partial source protocols](../references/compiler.md#partial-source-protocols) for known argument components.
+Use the [word entry contract](../references/compiler/src/closure-conversion/word-contracts-and-protocols.md#word-entry-contracts) for administrative parameters
+and [partial source protocols](../references/compiler/src/closure-conversion/word-contracts-and-protocols.md#partial-source-protocols) for known argument components.
 Argument consumers in the body contribute local constraints; counting them cannot reconstruct an unknown interface.
 The analysis needs a worklist over blocks:
 
@@ -301,7 +301,7 @@ Uses of the variable push those slots back in the same order as an unboxed `VCon
 The proposed `rep(v) = S` representation keeps a single pointer but allocates the cell
 in the current stack frame instead of calling `zydeco_alloc_scanned`.
 This representation requires the explicit lifetime and reclamation discipline described
-in [native activation frames](../references/compiler.md#activation-lifetime),
+in [native activation frames](../references/compiler/src/native-emission.md#activation-lifetime),
 including proof that references cannot survive the owning frame.
 Native caller environments already survive return continuations; choosing storage
 for an individual product remains a decision here.
@@ -443,7 +443,7 @@ jump code
 
 ## Validation boundary
 
-Use [C10's implementation map](../references/compiler.md#c10-zasm-stack-analysis-and-local-representation-choices)
+Use [C10's implementation map](../references/compiler/src/zasm.md)
 for current local unboxing.
 A stack-cell implementation additionally needs paired checks for operand order, frame cleanup, call alignment,
 escaping references, and collection while a retained frame holds managed pointers.
@@ -471,7 +471,7 @@ The proposed conservative choice boxes from the start on such paths, avoiding du
   The proposed conservative constraint forces external arguments to `R`.
 - How much of the analysis must cross recursive `Fix` blocks before the results are useful?
 - How much fixed environment space should one function activation be allowed to use?
-  The current [retained-frame model](../references/compiler.md#activation-lifetime) must account
+  The current [retained-frame model](../references/compiler/src/native-emission.md#activation-lifetime) must account
   for active and suspended activations, packed capacity, and their live data.
   Retention does not authorize a raw frame pointer to escape its activation.
 
@@ -513,8 +513,8 @@ for Zydeco's current representation policies or arbitrary computation protocols.
 ## Related Documents
 
 - The Stack IR phase boundaries in [`DESIGN.md`](../../DESIGN.md) record the SPSLow invariants this analysis builds on.
-- [C11](../references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission)
-  and [C12](../references/compiler.md#environment-actions-and-roots) own current native lifetime and root contracts;
+- [C11](../references/compiler/src/native-emission.md)
+  and [C12](../references/compiler/src/native-runtime.md#environment-actions-and-roots) own current native lifetime and root contracts;
   [native frame design](native-frames.md) keeps the alternative storage requirements.
-- [C10](../references/compiler.md#c10-zasm-stack-analysis-and-local-representation-choices) owns current
+- [C10](../references/compiler/src/zasm.md) owns current
   product layouts; the older product exploration remains historical.
