@@ -4,15 +4,13 @@ version = "0.0.0"
 edition = "2024"
 build = "build.rs"
 
-[workspace]
+[workspace.dependencies]
+zydeco-machine = { path = "../lang/machine", features = ["runtime"] }
+rand = "0.10"
 
 [features]
 default = ["process-entry"]
 process-entry = []
-
-[workspace.dependencies]
-zydeco-machine = { path = "../lang/machine", features = ["runtime"] }
-rand = "0.10"
 
 [[bin]]
 name = "main"
