@@ -16,4 +16,4 @@ renderers = ["html"]
 no-section-label = true
 git-repository-url = "https://github.com/zydeco-lang/zydeco"
 edit-url-template = "https://github.com/zydeco-lang/zydeco/edit/main/docs/references/compiler/{path}"
-additional-js = ["theme/zydeco-hljs.js", "theme/mermaid-init.js"]
+additional-js = ["theme/home-link.js", "theme/zydeco-hljs.js", "theme/mermaid-init.js"]

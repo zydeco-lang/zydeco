@@ -40,7 +40,7 @@ def _load_preprocessor_module():
 PREPROCESSOR = _load_preprocessor_module()
 
 BOOKS = ("language", "compiler")
-SHARED_THEME_FILES = ("theme/zydeco-hljs.js", "theme/mermaid-init.js")
+SHARED_THEME_FILES = ("theme/home-link.js", "theme/zydeco-hljs.js", "theme/mermaid-init.js")
 SUMMARY_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 HTML_HREF_RE = re.compile(r'href="([^"]+)"')
 
