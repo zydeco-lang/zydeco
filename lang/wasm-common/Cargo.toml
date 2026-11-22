@@ -9,6 +9,7 @@ readme = { workspace = true }
 description = "Shared WebAssembly backend support for Zydeco"
 
 [dependencies]
+zydeco-abi = { workspace = true }
 zydeco-syntax = { workspace = true }
 thiserror = { workspace = true }
 wasm-encoder = { workspace = true }

@@ -4,6 +4,7 @@ mod memory;
 use super::syntax::*;
 use derive_more::{AsMut, AsRef};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use zydeco_abi::HostCallMode;
 use zydeco_assembly::frames::{Entry, FramePlan, NativeProgram};
 use zydeco_assembly::{
     arena::{AssemblyArena, AssemblyArenaRefLike},
@@ -658,7 +659,7 @@ impl Emitter<'_> {
             Instr::Extern("zydeco_string_literal".to_string()),
             // source-to-C marshalling helpers
         ]);
-        for integer in <IntegerType as strum::VariantArray>::VARIANTS {
+        for integer in IntegerType::VARIANTS {
             for operation in ["decode", "encode"] {
                 self.asm.text.push(Instr::Extern(format!(
                     "zydeco_ffi_{operation}_{}",
@@ -947,7 +948,7 @@ impl<'a> Emit<'a> for Terminator {
                 // alignment padding from the stack.
                 em.emit_aligned_call(JmpArgs::Label(zydeco_extern_name));
                 match mode {
-                    | sa::ExternMode::Returning => {
+                    | HostCallMode::Returning => {
                         em.asm.text.extend([
                             Instr::Comment(
                                 "return the host result through the current Zydeco continuation"
@@ -961,7 +962,7 @@ impl<'a> Emit<'a> for Terminator {
                         em.shift_stack_parity(-1);
                         em.shift_stack_parity(1);
                     }
-                    | sa::ExternMode::Control => {
+                    | HostCallMode::Control => {
                         em.asm.text.extend([
                             Instr::Comment(
                                 "resume the host-selected Zydeco computation".to_string(),

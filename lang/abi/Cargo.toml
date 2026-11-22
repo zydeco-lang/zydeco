@@ -1,0 +1,24 @@
+[package]
+name = "zydeco-abi"
+version = { workspace = true }
+rust-version = { workspace = true }
+edition = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+readme = { workspace = true }
+description = "Shared builtin, FFI, and host contracts across Zydeco frontend, backends, and runtime"
+
+[features]
+default = []
+std = []
+serde = ["dep:serde"]
+
+[dependencies]
+zydeco-machine = { workspace = true }
+serde = { workspace = true, optional = true }
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true

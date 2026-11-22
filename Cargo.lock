@@ -2578,11 +2578,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
 
 [[package]]
+name = "zydeco-abi"
+version = "0.3.0"
+dependencies = [
+ "serde",
+ "zydeco-machine",
+]
+
+[[package]]
 name = "zydeco-amd64"
 version = "0.3.0"
 dependencies = [
  "derive_more",
- "strum",
+ "zydeco-abi",
  "zydeco-assembly",
  "zydeco-foundation",
  "zydeco-machine",
@@ -2598,6 +2606,7 @@ dependencies = [
  "pretty",
  "rustc-hash",
  "thiserror",
+ "zydeco-abi",
  "zydeco-derive",
  "zydeco-foundation",
  "zydeco-machine",
@@ -2656,6 +2665,7 @@ dependencies = [
  "rand",
  "tempfile",
  "thiserror",
+ "zydeco-abi",
  "zydeco-derive",
  "zydeco-foundation",
  "zydeco-ir",
@@ -2739,6 +2749,7 @@ dependencies = [
  "rustc-hash",
  "serde",
  "thiserror",
+ "zydeco-abi",
  "zydeco-derive",
  "zydeco-foundation",
  "zydeco-ir",
@@ -2759,6 +2770,7 @@ dependencies = [
  "sha3",
  "strum",
  "thiserror",
+ "zydeco-abi",
  "zydeco-derive",
  "zydeco-foundation",
  "zydeco-ir",
@@ -2798,6 +2810,7 @@ dependencies = [
  "serde",
  "strum",
  "thiserror",
+ "zydeco-abi",
  "zydeco-derive",
  "zydeco-foundation",
  "zydeco-machine",
@@ -2845,6 +2858,7 @@ version = "0.3.0"
 dependencies = [
  "thiserror",
  "wasm-encoder",
+ "zydeco-abi",
  "zydeco-syntax",
 ]
 
@@ -2855,6 +2869,7 @@ dependencies = [
  "thiserror",
  "wasm-encoder",
  "wasmparser",
+ "zydeco-abi",
  "zydeco-foundation",
  "zydeco-stackir",
  "zydeco-syntax",

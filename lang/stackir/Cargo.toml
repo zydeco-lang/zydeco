@@ -12,6 +12,7 @@ description = "zydeco in stack-passing style"
 [dependencies]
 rustc-hash = { workspace = true }
 zydeco-foundation = { workspace = true }
+zydeco-abi = { workspace = true }
 zydeco-syntax = { workspace = true }
 zydeco-ir = { workspace = true }
 zydeco-derive = { workspace = true }

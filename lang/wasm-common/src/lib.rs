@@ -10,7 +10,10 @@ pub mod host;
 pub mod module;
 pub mod word;
 
-pub use host::{HostCallKind, HostImport, HostSections, RuntimeFailure, StaticString, StringTable};
+pub use host::{
+    HostCallKind, HostImport, HostSections, RuntimeFailure, StaticString, StringTable,
+    WasmRuntimeFailure,
+};
 pub use module::{AllocFunction, WasmModule, WasmSections};
 pub use word::{EncodedScalar, PointerLocal, ProductFields, RuntimeWord, WordEmitter, WordError};
 

@@ -3,7 +3,7 @@
 //! The phase modules own their identifiers and control-flow variants. Patterns,
 //! products, primitive calls, bindings, and data eliminations use these common forms.
 
-pub use super::{arena::*, builtin::*};
+pub use super::arena::*;
 pub use zydeco_foundation::{
     arena::*,
     context::{CoContext, Context},

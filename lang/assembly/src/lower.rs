@@ -356,7 +356,7 @@ impl Lowering<'_, '_> {
                         role,
                         name: role.host_name(),
                         arity: role.arity(),
-                        mode: sk::HostCallMode::for_role(role).into(),
+                        mode: role.call_mode(),
                     },
                     | sk::ExternalFunction::Foreign(import) => Extern::Foreign(import),
                     | sk::ExternalFunction::Unit(import) => Extern::Unit(import),
@@ -427,15 +427,6 @@ impl Lowering<'_, '_> {
                 let next = self.then(Action::Pattern(code), next);
                 Step::TailCall(Work::Stack(package, context, next))
             }
-        }
-    }
-}
-
-impl From<sk::HostCallMode> for ExternMode {
-    fn from(mode: sk::HostCallMode) -> Self {
-        match mode {
-            | sk::HostCallMode::Returning => Self::Returning,
-            | sk::HostCallMode::Control => Self::Control,
         }
     }
 }

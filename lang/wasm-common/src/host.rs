@@ -8,26 +8,20 @@ use wasm_encoder::{
 use zydeco_syntax::memory::{AccessKind, MemoryAccess};
 use zydeco_syntax::{SpareBox, Utf8String};
 
+pub use zydeco_abi::RuntimeFailure;
+
 use crate::{HOST_MODULE, Limits, WORD_BYTES, WasmEmitError};
 
-/// Fatal language errors reported through `zydeco.runtime_error(i32)`.
-/// Hosts must stop execution and report the corresponding error to the user.
-#[derive(Clone, Copy)]
-#[repr(i32)]
-pub enum RuntimeFailure {
-    PatternMatch = 1,
-    IntegerDivisionByZero = 2,
-    IntegerRemainderByZero = 3,
-    IntegerRange = 4,
-}
+/// WebAssembly lowering helpers for the shared [`RuntimeFailure`] trap contract.
+pub struct WasmRuntimeFailure;
 
-impl RuntimeFailure {
+impl WasmRuntimeFailure {
     /// The mandatory runtime-error import precedes optional imports in every module.
     pub const FUNCTION: u32 = 0;
     pub const IMPORT_COUNT: u32 = 1;
 
-    pub fn emit(self, function: &mut Function) {
-        function.instruction(&Instruction::I32Const(self as i32));
+    pub fn emit(failure: RuntimeFailure, function: &mut Function) {
+        function.instruction(&Instruction::I32Const(failure.code()));
         function.instruction(&Instruction::Call(Self::FUNCTION));
         // Preserve the no-return contract even if an embedding returns from the import.
         function.instruction(&Instruction::Unreachable);
@@ -165,7 +159,7 @@ impl HostSections {
     pub fn append_names(
         functions: &mut NameMap, string_literal: Option<u32>, host_imports: &[HostImport],
     ) {
-        functions.append(RuntimeFailure::FUNCTION, "zydeco.runtime_error");
+        functions.append(WasmRuntimeFailure::FUNCTION, "zydeco.runtime_error");
         if let Some(function) = string_literal {
             functions.append(function, "zydeco.string_literal");
         }

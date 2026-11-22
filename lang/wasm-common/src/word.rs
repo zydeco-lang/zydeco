@@ -148,7 +148,7 @@ impl<'f> WordEmitter<'f> {
                 });
                 self.function.instruction(&WasmInstruction::I64Ne);
                 self.function.instruction(&WasmInstruction::If(wasm_encoder::BlockType::Empty));
-                crate::RuntimeFailure::IntegerRange.emit(self.function);
+                crate::WasmRuntimeFailure::emit(crate::RuntimeFailure::IntegerRange, self.function);
                 self.function.instruction(&WasmInstruction::End);
             }
             if ty.is_signed() && ty.storage_bits() < 64 {
@@ -190,9 +190,15 @@ impl<'f> WordEmitter<'f> {
         self.function.instruction(&WasmInstruction::I64Eqz);
         self.function.instruction(&WasmInstruction::If(wasm_encoder::BlockType::Empty));
         if remainder {
-            crate::RuntimeFailure::IntegerRemainderByZero.emit(self.function);
+            crate::WasmRuntimeFailure::emit(
+                crate::RuntimeFailure::IntegerRemainderByZero,
+                self.function,
+            );
         } else {
-            crate::RuntimeFailure::IntegerDivisionByZero.emit(self.function);
+            crate::WasmRuntimeFailure::emit(
+                crate::RuntimeFailure::IntegerDivisionByZero,
+                self.function,
+            );
         }
         self.function.instruction(&WasmInstruction::End);
         if ty == IntegerType::Int64 {
@@ -338,11 +344,15 @@ impl<'f> WordEmitter<'f> {
                                     wasm_encoder::BlockType::Empty,
                                 ));
                                 if operation == IntegerArithmetic::Mod {
-                                    crate::RuntimeFailure::IntegerRemainderByZero
-                                        .emit(self.function);
+                                    crate::WasmRuntimeFailure::emit(
+                                        crate::RuntimeFailure::IntegerRemainderByZero,
+                                        self.function,
+                                    );
                                 } else {
-                                    crate::RuntimeFailure::IntegerDivisionByZero
-                                        .emit(self.function);
+                                    crate::WasmRuntimeFailure::emit(
+                                        crate::RuntimeFailure::IntegerDivisionByZero,
+                                        self.function,
+                                    );
                                 }
                                 self.function.instruction(&WasmInstruction::End);
                                 if operation == IntegerArithmetic::Mod {

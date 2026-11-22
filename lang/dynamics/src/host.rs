@@ -129,34 +129,7 @@ impl HostRuntime {
     }
 }
 
-/// Stable error categories shared by the interpreter and native runtime ABI.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(i64)]
-pub(crate) enum HostIoErrorKind {
-    NotFound = 0,
-    PermissionDenied = 1,
-    AlreadyExists = 2,
-    InvalidInput = 3,
-    InvalidData = 4,
-    BrokenPipe = 5,
-    Closed = 6,
-    Other = 7,
-}
-
-impl HostIoErrorKind {
-    pub(crate) fn from_error(error: &io::Error) -> Self {
-        match error.kind() {
-            | io::ErrorKind::NotFound => Self::NotFound,
-            | io::ErrorKind::PermissionDenied => Self::PermissionDenied,
-            | io::ErrorKind::AlreadyExists => Self::AlreadyExists,
-            | io::ErrorKind::InvalidInput => Self::InvalidInput,
-            | io::ErrorKind::InvalidData => Self::InvalidData,
-            | io::ErrorKind::BrokenPipe => Self::BrokenPipe,
-            | io::ErrorKind::NotConnected => Self::Closed,
-            | _ => Self::Other,
-        }
-    }
-}
+pub(crate) use zydeco_abi::HostIoErrorKind;
 
 struct HostIoError;
 

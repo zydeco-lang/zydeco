@@ -10,8 +10,8 @@ readme = { workspace = true }
 description = "amd64 support for zydeco"
 
 [dependencies]
-strum = { workspace = true }
 zydeco-machine = { workspace = true }
+zydeco-abi = { workspace = true }
 zydeco-foundation = { workspace = true }
 zydeco-syntax = { workspace = true }
 zydeco-stackir = { workspace = true }

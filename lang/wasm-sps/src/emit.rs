@@ -5,12 +5,13 @@ use wasm_encoder::{
     BlockType, CodeSection, ConstExpr, Function, FunctionSection, GlobalType, ImportSection,
     Instruction as WasmInstruction, Module, NameMap, NameSection, TypeSection, ValType,
 };
+use zydeco_abi::HostCallMode;
 use zydeco_stackir::low::scalar::ScalarPlans;
 use zydeco_stackir::{
     SpsLowProgram,
     low::syntax::{
-        self as sps, Block, CompuId, Computation, DefId, HostCallMode, ProductLayout, StackId,
-        VPatId, ValueId, ValuePattern,
+        self as sps, Block, CompuId, Computation, DefId, ProductLayout, StackId, VPatId, ValueId,
+        ValuePattern,
     },
 };
 use zydeco_syntax::memory::{AccessKind, MemoryAccess};
@@ -19,7 +20,8 @@ use zydeco_syntax::{BuiltinValueRole, Literal};
 use zydeco_wasm_common::{
     AllocFunction, EncodedScalar, HostCallKind, HostImport, HostSections, Limits, PointerLocal,
     ProductFields, RuntimeFailure, RuntimeWord, StaticString, StringTable, WASM_PAGE_BYTES,
-    WORD_BYTES, WORD_MEMORY, WasmEmitError, WasmSections, WordEmitter, WordError,
+    WORD_BYTES, WORD_MEMORY, WasmEmitError, WasmRuntimeFailure, WasmSections, WordEmitter,
+    WordError,
 };
 
 pub use zydeco_wasm_common::{HOST_MODULE, WasmModule};
@@ -548,9 +550,10 @@ impl ModulePlan {
         let (static_data, strings) = StringTable::build(string_entries)?;
 
         let layout = MemoryLayout::new(static_data.len())?;
-        let string_literal_function = (!strings.is_empty()).then_some(RuntimeFailure::IMPORT_COUNT);
+        let string_literal_function =
+            (!strings.is_empty()).then_some(WasmRuntimeFailure::IMPORT_COUNT);
         let first_host_function =
-            RuntimeFailure::IMPORT_COUNT + u32::from(string_literal_function.is_some());
+            WasmRuntimeFailure::IMPORT_COUNT + u32::from(string_literal_function.is_some());
 
         let builtins = arena
             .inner
@@ -574,7 +577,7 @@ impl ModulePlan {
                     function: first_host_function + offset,
                     name: role.host_name(),
                     arity: role.arity(),
-                    mode: match HostCallMode::for_role(role) {
+                    mode: match role.call_mode() {
                         | HostCallMode::Returning => HostCallKind::Returning,
                         | HostCallMode::Control => HostCallKind::Control,
                     },
@@ -1106,7 +1109,7 @@ impl<'a> CaseEncoder<'a> {
                 self.emit_nested(tail)?;
                 self.function.instruction(&WasmInstruction::End);
             }
-            RuntimeFailure::PatternMatch.emit(&mut self.function);
+            WasmRuntimeFailure::emit(RuntimeFailure::PatternMatch, &mut self.function);
         } else {
             let [sps::Matcher { binder, tail }] = arms.as_slice() else {
                 return Err(EmitError::InvalidCoprodMatch);

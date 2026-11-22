@@ -11,6 +11,7 @@ description = "dynamics for zydeco"
 
 [dependencies]
 zydeco-machine = { workspace = true }
+zydeco-abi = { workspace = true, features = ["std"] }
 zydeco-foundation = { workspace = true }
 zydeco-derive = { workspace = true }
 zydeco-syntax = { workspace = true }

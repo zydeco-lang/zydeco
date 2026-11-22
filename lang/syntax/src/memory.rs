@@ -208,7 +208,6 @@ mod tests {
 
     #[test]
     fn scalar_memory_roles_have_fixed_access_contracts() {
-        use strum::VariantArray;
         let scalars = IntegerType::VARIANTS
             .iter()
             .copied()

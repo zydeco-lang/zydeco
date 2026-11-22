@@ -9,6 +9,7 @@ readme = { workspace = true }
 description = "Structured SPSLow-to-WebAssembly backend for Zydeco"
 
 [dependencies]
+zydeco-abi = { workspace = true }
 zydeco-foundation = { workspace = true }
 zydeco-syntax = { workspace = true }
 zydeco-wasm-common = { workspace = true }

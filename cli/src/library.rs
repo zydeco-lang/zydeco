@@ -541,8 +541,8 @@ impl LibraryBuilder<'_> {
 struct LibraryInterface;
 
 impl LibraryInterface {
-    fn c_type(integer: IntegerType) -> String {
-        format!("{}int{}_t", if integer.is_signed() { "" } else { "u" }, integer.storage_bits())
+    fn c_type(integer: IntegerType) -> &'static str {
+        integer.c_type_name()
     }
 
     fn header(exports: &[PublishedExport]) -> String {
@@ -555,7 +555,7 @@ impl LibraryInterface {
         ));
         for export in exports {
             let result = match export.signature.result() {
-                | ForeignResult::Unit => "void".into(),
+                | ForeignResult::Unit => "void",
                 | ForeignResult::Integer(integer) => Self::c_type(integer),
             };
             let args = export

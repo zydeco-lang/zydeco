@@ -4,6 +4,7 @@ members = [
     "lang/foundation",
     "lang/derive",
     "lang/machine",
+    "lang/abi",
     "lang/syntax",
     "lang/surface",
     "lang/fmt",
@@ -44,6 +45,7 @@ too_many_lines = "warn"
 zydeco-foundation = { path = "lang/foundation" }
 zydeco-derive = { path = "lang/derive" }
 zydeco-machine = { path = "lang/machine" }
+zydeco-abi = { path = "lang/abi" }
 zydeco-syntax = { path = "lang/syntax" }
 zydeco-surface = { path = "lang/surface" }
 zydeco-fmt = { path = "lang/fmt" }

@@ -8,6 +8,7 @@ pub use super::{
     analyze::{Layout, Slot, SlotId},
     arena::*,
 };
+pub use zydeco_abi::HostCallMode;
 pub use zydeco_foundation::arena::*;
 pub use zydeco_syntax::*;
 
@@ -185,15 +186,9 @@ pub enum Imm {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Extern {
-    Host { role: BuiltinValueRole, name: String, arity: usize, mode: ExternMode },
+    Host { role: BuiltinValueRole, name: String, arity: usize, mode: HostCallMode },
     Foreign(ForeignImport),
     Unit(UnitImport),
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ExternMode {
-    Returning,
-    Control,
 }
 
 /// Contexts are ordered sets of variables.

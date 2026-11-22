@@ -305,7 +305,7 @@ impl HostContinuation {
     }
 
     fn io_error(continuation: &ZValue, error: io::Error) -> Result<HostAction, i32> {
-        let kind = Literal::Integer((HostIoErrorKind::from_error(&error) as i64).into()).into();
+        let kind = Literal::Integer((HostIoErrorKind::from_io_error(&error) as i64).into()).into();
         let message = Literal::String(error.to_string().into()).into();
         Ok(Self::two(continuation, kind, message))
     }

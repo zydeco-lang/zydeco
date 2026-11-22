@@ -1,12 +1,17 @@
 //! Closed structural interfaces for the native unit initializer ABI.
 
-use crate::{FloatType, ForeignImport, ForeignTarget, IntegerType, PrimitiveType};
-use serde::{Deserialize, Serialize};
+use crate::{
+    builtin::{FloatType, IntegerType, PrimitiveType},
+    ffi::{ForeignImport, ForeignTarget},
+};
+use alloc::{boxed::Box, format, string::String, vec::Vec};
+use core::fmt;
 
 /// An exported value's complete classifier in the initial, binder-free unit profile.
 /// The public transport is always one runtime word; these are source types, not Rust layouts.
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case", deny_unknown_fields))]
 pub enum UnitValueType {
     Unit,
     Integer(IntegerType),
@@ -19,16 +24,24 @@ pub enum UnitValueType {
 }
 
 /// Computation protocols admitted inside exported thunks.
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case", deny_unknown_fields))]
 pub enum UnitStackType {
     Arrow(Box<UnitValueType>, Box<Self>),
     Return(Box<UnitValueType>),
 }
 
-#[derive(Clone, Debug, thiserror::Error)]
-#[error("invalid or excessively deep native unit interface")]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UnitInterfaceError;
+
+impl fmt::Display for UnitInterfaceError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("invalid or excessively deep native unit interface")
+    }
+}
+
+impl core::error::Error for UnitInterfaceError {}
 
 impl UnitValueType {
     pub const MAX_DEPTH: usize = 48;
@@ -59,7 +72,7 @@ impl UnitValueType {
                 fields.iter().try_for_each(|field| field.validate_at(depth + 1, remaining))
             }
             | Self::Thunk(stack) => stack.validate_at(depth + 1, remaining),
-            | _ => Ok(()),
+            | Self::Unit | Self::Integer(_) | Self::Float(_) | Self::Char | Self::String => Ok(()),
         }
     }
 
@@ -118,8 +131,9 @@ impl UnitStackType {
 }
 
 /// A native initializer returns one value into the caller's existing continuation and instance.
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct UnitImport {
     pub target: ForeignTarget,
     pub exports: UnitValueType,
