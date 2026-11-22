@@ -6,7 +6,7 @@ It owns lexing, parsing, and span collection, and stores parsed nodes in arenas 
 ## Role in the pipeline
 
 ```markdown
-textual -> bitter -> scoped -> statics
+textual -> scoped -> statics
 ```
 
 This phase is responsible for turning source text into structured syntax with accurate span information,
@@ -23,7 +23,8 @@ but it does not perform desugaring or name resolution.
 - Parsed metadata is an arena-backed tree of `MetaNode` values.
   Every nested value has a `MetaId`, so it participates in span lookup, source-layout retention,
   and comment attachment like other textual syntax.
-  The textual-to-bitter boundary lowers the tree to the span-free `Meta` representation used by later phases.
+  The textual-to-scoped boundary lowers and resolves metadata into the span-free `ResolvedMeta`
+  and `Meta` representations used by later phases.
   Concrete interpretations live in `zydeco_surface::metadata`, implement `SpecializeMeta`,
   and are requested explicitly by the phases that consume them.
 - `SpanArena` stores `Span` values for every textual entity so later phases can report precise locations;

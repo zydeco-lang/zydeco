@@ -8,7 +8,7 @@ use std::{collections::HashMap, ops::ControlFlow};
 pub enum Node<'arena> {
     Definition(DefId),
     Pattern(PatId, &'arena Pattern),
-    Term(TermId, &'arena Term<DefId>),
+    Term(TermId, &'arena Term),
 }
 
 impl Node<'_> {
@@ -46,7 +46,7 @@ impl Node<'_> {
                 }
             },
             | Self::Term(_, term) => match term {
-                | Term::Meta(meta) => child(meta.1.into()),
+                | Term::Meta(meta) => child(meta.body.into()),
                 | Term::TypeOf(TypeOf(inner))
                 | Term::SourceBoundary(SourceBoundary(inner))
                 | Term::SignatureBoundary(SignatureBoundary(inner))
@@ -106,9 +106,6 @@ impl Node<'_> {
                     child((*bindee).into());
                     child((*binder).into());
                     child((*tail).into());
-                }
-                | Term::MobileParam(_) | Term::MobileBind(_) => {
-                    unreachable!("mobile syntax must be eliminated during name resolution")
                 }
                 | Term::RecGroup(RecGroup { definitions, tail }) => {
                     definitions.iter().for_each(|RecursiveDefinition { binder, bindee }| {

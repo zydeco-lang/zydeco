@@ -308,7 +308,7 @@ mod tests {
 
     #[test]
     fn def_gen_allocator_exhaustion_preserves_counter() {
-        let mut source_ids = IdAllocator::<zydeco_surface::bitter::arena::BitterScope>::new();
+        let mut source_ids = IdAllocator::<zydeco_surface::scoped::arena::ScopedScope>::new();
         let root: su::TermId = source_ids.alloc();
         let spaces = KeySpaceRegistry::<su::TermId>::default();
         let mut allocator = DefGenAllocator::new(&spaces, root);

@@ -2,7 +2,7 @@ use super::{
     AnalysisError, CompilerSession, QuerySourceProvider, SourceInput, SourceQueryDb, source_text,
 };
 use crate::source::{
-    BitterProgram, SourceLoadError, SourceTemplate,
+    SourceLoadError, SourceTemplate,
     loader::{SourceGraphLoader, SourceProvider},
 };
 use std::{ops::Range, path::Path, sync::Arc};
@@ -152,11 +152,9 @@ fn complete_source(
     let Some(target) = target else {
         return Ok(None);
     };
-    let BitterProgram { spans, arena, root } = program.desugar().map_err(|failure| {
-        AnalysisError::Desugar { error: failure.error, spans: Arc::new(failure.spans.into_inner()) }
-    })?;
+    let spans = program.spans;
     let CompletionResolution { site: resolved, program, .. } =
-        ResolveFolder::new(&spans, arena).run_completion(root, target);
+        ResolveFolder::new(&spans, &program.arena).run_completion(program.unit.root, target);
     let Some(resolved) = resolved else {
         return Ok(None);
     };

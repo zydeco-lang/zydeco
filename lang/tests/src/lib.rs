@@ -14,7 +14,7 @@ pub mod utils {
         CommandCompiler, CompileError, DiagnosticRenderer, ExecutionError, ExecutionRunner,
         RepresentationStrategy, SpsPlan, SpsScheme, SpsSelection, TestInteraction,
     };
-    use zydeco_session::{AnalysisError, DesugarError};
+    use zydeco_session::{AnalysisError, ResolveError};
     use zydeco_statics::{TyckDiagnosticCode, TyckObservation, syntax::TermAnnId};
     use zydeco_syntax::Ugly;
 
@@ -594,22 +594,22 @@ pub mod utils {
             );
         }
 
-        /// Assert a case rejected during desugaring, before checking runs.
+        /// Assert a case rejected during surface lowering/resolution, before checking runs.
         ///
-        /// The predicate identifies the expected desugaring error variant;
+        /// The predicate identifies the expected resolve error variant;
         /// structural rejections from the surface phase have no diagnostic
         /// codes to match on.
-        pub fn assert_desugar_error(
-            result: Result<(), CaseError>, expected: impl FnMut(&DesugarError) -> bool,
+        pub fn assert_resolve_error_matching(
+            result: Result<(), CaseError>, expected: impl FnMut(&ResolveError) -> bool,
         ) {
-            let Err(CaseError::Compile(CompileError::Analysis(AnalysisError::Desugar {
+            let Err(CaseError::Compile(CompileError::Analysis(AnalysisError::Resolve {
                 error,
                 ..
             }))) = &result
             else {
-                panic!("expected a desugaring rejection, found: {result:?}")
+                panic!("expected a resolution rejection, found: {result:?}")
             };
-            assert!(error.iter().any(expected), "unexpected desugaring rejection: {error:?}");
+            assert!(error.iter().any(expected), "unexpected resolution rejection: {error:?}");
         }
 
         /// Assert a case that fails during resolution rather than checking.

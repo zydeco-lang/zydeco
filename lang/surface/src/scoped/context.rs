@@ -223,7 +223,7 @@ impl ContextCollector {
     /// Updates [`Self::coctxs_term_local`].
     // Remaining worklist: split local co-context collection by term form.
     #[allow(clippy::too_many_lines)]
-    fn term(&mut self, term: TermId, item: &Term<DefId>) {
+    fn term(&mut self, term: TermId, item: &Term) {
         if self.coctxs_term_local.get(&term).is_some() {
             return;
         }
@@ -232,7 +232,7 @@ impl ContextCollector {
             | Term::Internal(_) | Term::Hole(_) | Term::Var(_) | Term::Triv(_) | Term::Lit(_) => {
                 false
             }
-            | Term::Meta(inner) => self.boundary_terms.contains(&inner.1),
+            | Term::Meta(inner) => self.boundary_terms.contains(&inner.body),
             | Term::TypeOf(TypeOf(operand)) => self.boundary_terms.contains(operand),
             | Term::SignatureBoundary(SignatureBoundary(inner))
             | Term::Sealed(Sealed(inner))
@@ -285,7 +285,6 @@ impl ContextCollector {
                     || self.boundary_terms.contains(&inner.bindee)
                     || self.boundary_terms.contains(&inner.tail)
             }
-            | Term::MobileParam(_) | Term::MobileBind(_) => false,
             | Term::RecGroup(RecGroup { definitions, tail }) => {
                 definitions.iter().any(|definition| {
                     self.boundary_pats.contains(&definition.binder)
@@ -326,8 +325,8 @@ impl ContextCollector {
         }
         match item {
             | Term::Meta(inner) => {
-                let MetaT(_meta, inner) = &**inner;
-                let co_term = self.coctxs_term_local[inner].to_owned();
+                let MetaTerm { body, .. } = &**inner;
+                let co_term = self.coctxs_term_local[body].to_owned();
                 self.coctxs_term_local.insert_new(term, co_term);
             }
             | Term::TypeOf(TypeOf(operand)) => {
@@ -475,9 +474,6 @@ impl ContextCollector {
                 let co_bindee = self.coctxs_term_local[bindee].to_owned();
                 self.coctxs_term_local
                     .insert_new(term, co_tail - cx_binder + co_binder + co_bindee);
-            }
-            | Term::MobileParam(_) | Term::MobileBind(_) => {
-                unreachable!("mobile syntax must be eliminated during name resolution")
             }
             | Term::Residual(inner) => {
                 let Residual(body) = inner;

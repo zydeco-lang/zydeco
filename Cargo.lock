@@ -2775,7 +2775,6 @@ dependencies = [
  "logos",
  "pretty",
  "regex",
- "rpds",
  "rustc-hash",
  "serde",
  "strum",

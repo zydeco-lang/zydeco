@@ -7,7 +7,7 @@ pub struct ResolvedReference<'a> {
     pub occurrence: TermId,
     pub definition: DefId,
     pub dependency: Option<BindingSite>,
-    pub active_bindings: &'a rpds::VectorSync<BindingSite>,
+    pub active_bindings: &'a [BindingSite],
 }
 
 pub struct ScopeEvent<'a> {

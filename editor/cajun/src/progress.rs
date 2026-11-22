@@ -30,7 +30,6 @@ pub(crate) struct SourceDiscovery {
 pub(crate) enum AnalysisProgress {
     Loading(SourceDiscovery),
     Parsing { source_count: usize },
-    Desugaring { source_count: usize },
     Resolving { source_count: usize },
     Tycking { source_count: usize },
     Highlighting { path: PathBuf },
@@ -204,9 +203,6 @@ impl ProgressMessageFormatter {
             ),
             | AnalysisProgress::Parsing { source_count } => {
                 format!("Parsing {}", Self::files(*source_count))
-            }
-            | AnalysisProgress::Desugaring { source_count } => {
-                format!("Desugaring {}", Self::files(*source_count))
             }
             | AnalysisProgress::Resolving { source_count } => {
                 format!("Resolving names in {}", Self::files(*source_count))

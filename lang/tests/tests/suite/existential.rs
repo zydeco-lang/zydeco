@@ -1,11 +1,11 @@
-//! Rust tests retain desugared error variants; source cases live in `cases/existential/`.
+//! Rust tests retain resolved surface error variants; source cases live in `cases/existential/`.
 
-use zydeco_session::DesugarError;
+use zydeco_session::ResolveError;
 use zydeco_tests::utils::SourceCase;
 
 #[test]
 fn rejects_a_pack_parameter_without_evidence() {
-    SourceCase::assert_desugar_error(
+    SourceCase::assert_resolve_error_matching(
         SourceCase::check_value(
             r#"
 begin
@@ -14,13 +14,13 @@ begin
 end
 "#,
         ),
-        |error| matches!(error, DesugarError::PackParameterNeedsEvidence(_)),
+        |error| matches!(error, ResolveError::PackParameterNeedsEvidence(_)),
     );
 }
 
 #[test]
 fn rejects_redundant_evidence_on_a_manifest_parameter() {
-    SourceCase::assert_desugar_error(
+    SourceCase::assert_resolve_error_matching(
         SourceCase::check_value(
             r#"
 begin
@@ -29,6 +29,6 @@ begin
 end
 "#,
         ),
-        |error| matches!(error, DesugarError::PackParameterRedundantEvidence(_)),
+        |error| matches!(error, ResolveError::PackParameterRedundantEvidence(_)),
     );
 }

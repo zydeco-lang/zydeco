@@ -1020,15 +1020,14 @@ mod tests {
     use super::*;
     use crate::{Alloc, DefGenAllocator, StaticsAlloc};
     use zydeco_foundation::prelude::IdAllocator;
-    use zydeco_surface::bitter::arena::BitterScope;
-    use zydeco_surface::scoped::arena::ScopedArena;
+    use zydeco_surface::scoped::arena::{ScopedArena, ScopedScope};
     use zydeco_syntax::{IntegerType, PrimitiveType, VarName};
 
     /// A minimal arena that allocates the types the printer renders.
     struct FormatterFixture {
         allocator: DefGenAllocator,
         statics: StaticsArena,
-        defs: IdAllocator<BitterScope>,
+        defs: IdAllocator<ScopedScope>,
         scoped: ScopedArena,
     }
 
@@ -1037,7 +1036,7 @@ mod tests {
             Self {
                 allocator: DefGenAllocator::new(
                     &Default::default(),
-                    IdAllocator::<BitterScope>::new().alloc(),
+                    IdAllocator::<ScopedScope>::new().alloc(),
                 ),
                 statics: StaticsArena::default(),
                 defs: IdAllocator::new(),

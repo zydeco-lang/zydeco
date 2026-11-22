@@ -1,15 +1,9 @@
 //! Lexical lookup shared by resolution and scope observers.
-use super::syntax::*;
-use std::collections::BTreeSet;
 
-/// Global name environment collected from top-level binders.
-#[derive(Clone, Debug, Default)]
-pub struct Global {
-    /// map from variable names to their definitions
-    pub(super) var_to_def: rpds::HashTrieMapSync<VarName, DefId>,
-    /// map from definitions to their context bindings
-    pub(super) under_map: rpds::HashTrieMapSync<DefId, BindingSite>,
-}
+use super::syntax::*;
+use rustc_hash::FxHashMap;
+use std::collections::BTreeSet;
+use zydeco_foundation::scoped_map::ScopedMap;
 
 #[derive(Copy, Clone, Debug)]
 pub struct BindingSite {
@@ -23,54 +17,90 @@ pub(super) struct LocalDefinition {
     pub(super) depth: usize,
 }
 
-/// Local name environment built from pattern binders.
-#[derive(Clone, Debug)]
-pub struct Local {
-    /// Context bindings whose dependencies are currently being collected,
-    /// from outermost to innermost.
-    pub(super) under: rpds::VectorSync<BindingSite>,
-    /// map from variable names to their definitions
-    pub(super) var_to_def: rpds::HashTrieMapSync<VarName, LocalDefinition>,
-    pub(super) depth: usize,
-    /// Context candidates associated with block-wide definitions.
-    pub(super) under_map: rpds::HashTrieMapSync<DefId, BindingSite>,
-    /// The nearest block currently resolving its residual syntax.
-    pub(super) boundary: Option<TermId>,
-    pub(super) prelude: PreludeScope,
+#[derive(Copy, Clone, Debug)]
+pub(super) struct ScopeMark {
+    var_to_def: usize,
+    under_map: usize,
+    depth: usize,
+    boundary: Option<TermId>,
+    prelude_enabled: bool,
 }
 
-#[derive(Clone, Debug)]
-pub(super) struct PreludeScope {
-    pub(super) enabled: bool,
-    pub(super) definitions: rpds::HashTrieMapSync<VarName, DefId>,
-}
-
-impl Default for PreludeScope {
-    fn default() -> Self {
-        Self { enabled: true, definitions: rpds::HashTrieMapSync::new_sync() }
+impl ScopeMark {
+    pub(super) fn depth(&self) -> usize {
+        self.depth
     }
 }
 
-impl Local {
-    pub(super) fn for_body() -> Self {
+/// Mutable undo-trail lexical environment shared across lowered syntax resolution.
+#[derive(Clone, Debug)]
+pub struct ScopeState {
+    /// Context bindings whose dependencies are currently being collected,
+    /// from outermost to innermost.
+    pub(super) under: Vec<BindingSite>,
+    /// Map from variable names to their active definitions.
+    pub(super) var_to_def: ScopedMap<VarName, LocalDefinition>,
+    pub(super) depth: usize,
+    /// Context candidates associated with block-wide definitions.
+    pub(super) under_map: ScopedMap<DefId, BindingSite>,
+    /// The nearest block currently resolving its residual syntax.
+    pub(super) boundary: Option<TermId>,
+    pub(super) prelude_enabled: bool,
+    pub(super) prelude_definitions: FxHashMap<VarName, DefId>,
+}
+
+impl Default for ScopeState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ScopeState {
+    pub(super) fn new() -> Self {
         Self {
-            under: rpds::VectorSync::new_sync(),
-            var_to_def: rpds::HashTrieMapSync::new_sync(),
+            under: Vec::new(),
+            var_to_def: ScopedMap::new(),
             depth: 0,
-            under_map: rpds::HashTrieMapSync::new_sync(),
+            under_map: ScopedMap::new(),
             boundary: None,
-            prelude: PreludeScope::default(),
+            prelude_enabled: true,
+            prelude_definitions: FxHashMap::default(),
         }
     }
 
-    pub(super) fn bind_group(
-        mut self, binders: impl IntoIterator<Item = (VarName, DefId)>,
-    ) -> Self {
+    pub(super) fn mark(&self) -> ScopeMark {
+        ScopeMark {
+            var_to_def: self.var_to_def.watermark(),
+            under_map: self.under_map.watermark(),
+            depth: self.depth,
+            boundary: self.boundary,
+            prelude_enabled: self.prelude_enabled,
+        }
+    }
+
+    pub(super) fn rollback(&mut self, mark: ScopeMark) {
+        self.var_to_def.rollback(mark.var_to_def);
+        self.under_map.rollback(mark.under_map);
+        self.depth = mark.depth;
+        self.boundary = mark.boundary;
+        self.prelude_enabled = mark.prelude_enabled;
+    }
+
+    pub(super) fn bind_group(&mut self, binders: impl IntoIterator<Item = (VarName, DefId)>) {
         self.depth += 1;
-        self.var_to_def = binders.into_iter().fold(self.var_to_def, |scope, (name, definition)| {
-            scope.insert(name, LocalDefinition { definition, depth: self.depth })
-        });
-        self
+        let depth = self.depth;
+        for (name, definition) in binders {
+            self.var_to_def.insert(name, LocalDefinition { definition, depth });
+        }
+    }
+
+    pub(super) fn bind_single(&mut self, name: VarName, definition: DefId) {
+        self.depth += 1;
+        self.var_to_def.insert(name, LocalDefinition { definition, depth: self.depth });
+    }
+
+    pub(super) fn view(&self) -> NameScope<'_> {
+        NameScope { state: self }
     }
 }
 
@@ -92,8 +122,7 @@ pub struct ScopeSnapshot {
 
 /// Shared lookup and enumeration over the resolver's environment layers.
 pub struct NameScope<'scope> {
-    pub(super) local: &'scope Local,
-    pub(super) global: &'scope Global,
+    pub(super) state: &'scope ScopeState,
 }
 
 pub struct NameLookup {
@@ -104,30 +133,22 @@ pub struct NameLookup {
 
 impl NameScope<'_> {
     pub fn lookup(&self, name: &VarName) -> Option<NameLookup> {
-        self.local
+        self.state
             .var_to_def
             .get(name)
             .map(|binding| NameLookup {
                 definition: binding.definition,
-                dependency: self.local.under_map.get(&binding.definition).copied(),
-                distance: self.local.depth - binding.depth,
+                dependency: self.state.under_map.get(&binding.definition).copied(),
+                distance: self.state.depth - binding.depth,
             })
             .or_else(|| {
-                self.global.var_to_def.get(name).map(|definition| NameLookup {
-                    definition: *definition,
-                    dependency: Some(self.global.under_map[definition]),
-                    distance: self.local.depth + 1,
-                })
-            })
-            .or_else(|| {
-                self.local
-                    .prelude
-                    .enabled
+                self.state
+                    .prelude_enabled
                     .then(|| {
-                        self.local.prelude.definitions.get(name).map(|definition| NameLookup {
+                        self.state.prelude_definitions.get(name).map(|definition| NameLookup {
                             definition: *definition,
                             dependency: None,
-                            distance: self.local.depth + 2,
+                            distance: self.state.depth + 2,
                         })
                     })
                     .flatten()
@@ -137,11 +158,10 @@ impl NameScope<'_> {
     pub fn snapshot(&self) -> ScopeSnapshot {
         // Lookup, rather than iteration order, chooses the winning definition.
         let names = self
-            .local
+            .state
             .var_to_def
             .keys()
-            .chain(self.global.var_to_def.keys())
-            .chain(self.local.prelude.definitions.keys().filter(|_| self.local.prelude.enabled))
+            .chain(self.state.prelude_definitions.keys().filter(|_| self.state.prelude_enabled))
             .collect::<BTreeSet<_>>();
         let definitions = names
             .into_iter()
@@ -156,20 +176,7 @@ impl NameScope<'_> {
             .collect();
         ScopeSnapshot {
             definitions,
-            implicit_os: self.local.prelude.enabled && self.lookup(&VarName::new("OS")).is_none(),
+            implicit_os: self.state.prelude_enabled && self.lookup(&VarName::new("OS")).is_none(),
         }
-    }
-}
-
-/// Inherited lexical information; independent children receive independent local values.
-#[derive(Clone)]
-pub(super) struct ResolveEnv<'a> {
-    pub local: Local,
-    pub global: &'a Global,
-}
-
-impl ResolveEnv<'_> {
-    pub fn scope(&self) -> NameScope<'_> {
-        NameScope { local: &self.local, global: self.global }
     }
 }

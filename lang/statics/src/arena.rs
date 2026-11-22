@@ -918,7 +918,7 @@ mod tests {
         assert_eq!(std::mem::size_of::<PatId>(), 8);
         assert_eq!(std::mem::size_of::<TermId>(), 8);
 
-        let mut source = IdAllocator::<su::BitterScope>::new();
+        let mut source = IdAllocator::<su::ScopedScope>::new();
         let first_source: su::PatId = source.alloc();
         let second_source: su::PatId = source.alloc();
         let first_typed = PatId::Kind(KPatId::from_index(0));

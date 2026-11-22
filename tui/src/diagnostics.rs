@@ -5,14 +5,6 @@ pub(crate) struct DiagnosticText;
 impl DiagnosticText {
     pub(crate) fn analysis_error(error: &AnalysisError) -> String {
         match error {
-            | AnalysisError::Desugar { error, spans } => {
-                let mut output = Vec::new();
-                let mut cache = SourceCaches::span_arena(spans);
-                for error in error.iter() {
-                    let _ = error.to_report(spans).write(&mut cache, &mut output);
-                }
-                Self::plain(output)
-            }
             | AnalysisError::Resolve { error, graph, spans } => {
                 let mut output = Vec::new();
                 let mut cache = SourceCaches::graph(graph);

@@ -1,12 +1,9 @@
 use super::*;
-use crate::{
-    bitter::arena::BitterScope,
-    scoped::context::{ContextCollector, TermContexts},
-};
+use crate::scoped::context::{ContextCollector, TermContexts};
 use std::{cell::RefCell, convert::Infallible};
 
 struct Fixture {
-    allocator: IdAllocator<BitterScope>,
+    allocator: IdAllocator<ScopedScope>,
     arena: ScopedArena,
 }
 
@@ -15,7 +12,7 @@ impl Fixture {
         Self { allocator: IdAllocator::new(), arena: ScopedArena::default() }
     }
 
-    fn term(&mut self, term: impl Into<Term<DefId>>) -> TermId {
+    fn term(&mut self, term: impl Into<Term>) -> TermId {
         let id = self.allocator.alloc();
         self.arena.terms.insert_new(id, term.into());
         id

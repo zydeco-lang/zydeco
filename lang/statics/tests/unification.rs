@@ -5,7 +5,7 @@ use zydeco_foundation::prelude::IdAllocator;
 use zydeco_statics::{Alloc, Lub, syntax::*};
 
 fn source_site() -> zydeco_statics::surface_syntax::TermId {
-    let mut source_ids = IdAllocator::<zydeco_surface::bitter::arena::BitterScope>::new();
+    let mut source_ids = IdAllocator::<zydeco_surface::scoped::arena::ScopedScope>::new();
     source_ids.alloc()
 }
 

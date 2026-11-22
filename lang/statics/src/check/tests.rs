@@ -39,12 +39,12 @@ use crate::environment::TyEnv;
 
 pub(super) fn with_tycker<T>(
     build: impl FnOnce(
-        &mut IdAllocator<zydeco_surface::bitter::arena::BitterScope>,
+        &mut IdAllocator<zydeco_surface::scoped::arena::ScopedScope>,
         &mut su::ScopedArena,
     ) -> (su::TermId, T),
     test: impl FnOnce(&mut Tycker<'_>, T),
 ) {
-    let mut allocator = IdAllocator::<zydeco_surface::bitter::arena::BitterScope>::new();
+    let mut allocator = IdAllocator::<zydeco_surface::scoped::arena::ScopedScope>::new();
     let mut scoped = su::ScopedArena::default();
     let (root, context) = build(&mut allocator, &mut scoped);
 
@@ -102,7 +102,7 @@ pub(super) fn anonymous_type_binder(
 
 #[test]
 fn def_gen_allocator_replays_per_root_and_distinguishes_roots() {
-    let mut source_ids = IdAllocator::<zydeco_surface::bitter::arena::BitterScope>::new();
+    let mut source_ids = IdAllocator::<zydeco_surface::scoped::arena::ScopedScope>::new();
     let root_a: su::TermId = source_ids.alloc();
     let root_b: su::TermId = source_ids.alloc();
     let spaces = zydeco_foundation::arena::KeySpaceRegistry::<su::TermId>::default();

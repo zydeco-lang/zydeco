@@ -1,13 +1,95 @@
-use crate::bitter::syntax::*;
-use crate::textual::syntax::SpanArena;
+use crate::metadata::{
+    BuiltinMetaError, CbvMetaError, FfiMetaError, IntrinsicMetaError, MetadataValidationError,
+    MonadicMetaError,
+};
+use crate::textual::syntax as t;
 use ariadne::{Label, Report, ReportKind};
 use std::ops::Range;
 use thiserror::Error;
-use zydeco_foundation::span::{PathDisplay, Span, internal_ariadne_span};
+use zydeco_foundation::span::{PathDisplay, Sp, Span, internal_ariadne_span};
+use zydeco_syntax::{BuiltinTypeRole, BuiltinValueRole, VarName};
 
-/// Errors reported during name resolution.
+/// Errors reported during surface lowering and name resolution.
 #[derive(Error, Debug, Clone)]
 pub enum ResolveError {
+    #[error("Invalid builtin annotation: {source}")]
+    InvalidBuiltinMeta {
+        term: Sp<t::TermId>,
+        #[source]
+        source: BuiltinMetaError,
+    },
+    #[error("Invalid builtin annotation on an existential pattern: {source}")]
+    InvalidBuiltinPatternMeta {
+        pattern: Sp<t::PatId>,
+        #[source]
+        source: BuiltinMetaError,
+    },
+    #[error("Builtin type role `{role}` must annotate an existential pattern")]
+    BuiltinTypeRoleOnTerm { term: Sp<t::TermId>, role: BuiltinTypeRole },
+    #[error("Builtin operation role `{role}` must annotate a term")]
+    BuiltinValueRoleOnExistentialPattern { pattern: Sp<t::PatId>, role: BuiltinValueRole },
+    #[error("Only `builtin(...)` metadata may annotate an existential pattern")]
+    UnsupportedExistentialPatternMeta(Sp<t::PatId>),
+    #[error("Invalid intrinsic annotation: {source}")]
+    InvalidIntrinsicMeta {
+        term: Sp<t::TermId>,
+        #[source]
+        source: IntrinsicMetaError,
+    },
+    #[error("Invalid prelude annotation: {source}")]
+    InvalidPreludeMeta {
+        term: Sp<t::TermId>,
+        #[source]
+        source: MetadataValidationError,
+    },
+    #[error("Invalid monadic annotation: {source}")]
+    InvalidMonadicMeta {
+        term: Sp<t::TermId>,
+        #[source]
+        source: MonadicMetaError,
+    },
+    #[error("Invalid cbv annotation: {source}")]
+    InvalidCbvMeta {
+        term: Sp<t::TermId>,
+        #[source]
+        source: CbvMetaError,
+    },
+    #[error("`@[cbn]` is reserved for call-by-name blocks, which are not implemented yet")]
+    CbnNotImplemented(Sp<t::TermId>),
+    #[error("Invalid typeof annotation: {source}")]
+    InvalidTypeOfMeta {
+        term: Sp<t::TermId>,
+        #[source]
+        source: MetadataValidationError,
+    },
+    #[error("Invalid partial annotation: {source}")]
+    InvalidPartialMeta {
+        term: Sp<t::TermId>,
+        #[source]
+        source: MetadataValidationError,
+    },
+    #[error("A partial annotation must annotate a binding, parameter, or function")]
+    PartialPayloadNotBinding(Sp<t::TermId>),
+    #[error("Intrinsic annotation must annotate a hole expression")]
+    IntrinsicPayloadNotHole(Sp<t::TermId>),
+    #[error("Invalid ffi annotation: {source}")]
+    InvalidFfiMeta {
+        term: Sp<t::TermId>,
+        #[source]
+        source: FfiMetaError,
+    },
+    #[error("An ffi annotation must provide the implementation of a hole expression")]
+    FfiPayloadNotHole(Sp<t::TermId>),
+    #[error("A quantified type parameter must be a pattern")]
+    QuantifierParameterNotPattern(Sp<t::CoPatId>),
+    #[error("A value-function parameter must be a pattern")]
+    ValueParameterNotPattern(Sp<t::CoPatId>),
+    #[error("A manifest `as` pattern is only valid as an existential parameter")]
+    ManifestPatternOutsideExistential(Sp<t::PatId>),
+    #[error("A `pack` parameter needs evidence: `(X : K) is W` or `(X as W : K)`")]
+    PackParameterNeedsEvidence(Sp<t::PatId>),
+    #[error("A manifest `pack` parameter carries its evidence in `as`")]
+    PackParameterRedundantEvidence(Sp<t::PatId>),
     #[error("Unbound variable: {0}")]
     UnboundVar(Sp<VarName>),
     #[error("Duplicate definition: {0} and {1}")]
@@ -19,9 +101,30 @@ pub enum ResolveError {
 }
 
 impl ResolveError {
-    /// Primary source span of this resolution failure.
+    /// Primary source span of this lowering or resolution failure.
     pub fn primary_span(&self) -> Span {
         match self {
+            | Self::InvalidBuiltinMeta { term, .. }
+            | Self::BuiltinTypeRoleOnTerm { term, .. }
+            | Self::InvalidIntrinsicMeta { term, .. }
+            | Self::InvalidPreludeMeta { term, .. }
+            | Self::InvalidMonadicMeta { term, .. }
+            | Self::InvalidCbvMeta { term, .. }
+            | Self::CbnNotImplemented(term)
+            | Self::InvalidTypeOfMeta { term, .. }
+            | Self::InvalidPartialMeta { term, .. }
+            | Self::PartialPayloadNotBinding(term)
+            | Self::InvalidFfiMeta { term, .. }
+            | Self::IntrinsicPayloadNotHole(term)
+            | Self::FfiPayloadNotHole(term) => term.info,
+            | Self::InvalidBuiltinPatternMeta { pattern, .. }
+            | Self::BuiltinValueRoleOnExistentialPattern { pattern, .. }
+            | Self::UnsupportedExistentialPatternMeta(pattern)
+            | Self::ManifestPatternOutsideExistential(pattern)
+            | Self::PackParameterNeedsEvidence(pattern)
+            | Self::PackParameterRedundantEvidence(pattern) => pattern.info,
+            | Self::QuantifierParameterNotPattern(copattern)
+            | Self::ValueParameterNotPattern(copattern) => copattern.info,
             | Self::UnboundVar(variable) => variable.info,
             | Self::DuplicateDefinition(_, duplicate) => duplicate.info,
             | Self::UnenclosedThat(span) | Self::RecursiveParameter(span) => *span,
@@ -32,7 +135,7 @@ impl ResolveError {
     ///
     /// `spans` is the merged program's span arena; its attached source map
     /// resolves each span into a file and byte range.
-    pub fn to_report(&self, spans: &SpanArena) -> Report<'static, (PathDisplay, Range<usize>)> {
+    pub fn to_report(&self, spans: &t::SpanArena) -> Report<'static, (PathDisplay, Range<usize>)> {
         let resolve = |span: &Span| {
             spans
                 .source_map()
@@ -40,7 +143,7 @@ impl ResolveError {
                 .unwrap_or_else(internal_ariadne_span)
         };
         match self {
-            | ResolveError::UnboundVar(var) => {
+            | Self::UnboundVar(var) => {
                 let (file_path, range) = resolve(&var.info);
                 Report::build(ReportKind::Error, (file_path.clone(), range.clone()))
                     .with_message("Unbound variable")
@@ -50,7 +153,7 @@ impl ResolveError {
                     )
                     .finish()
             }
-            | ResolveError::DuplicateDefinition(var1, var2) => {
+            | Self::DuplicateDefinition(var1, var2) => {
                 let (file_path1, range1) = resolve(&var1.info);
                 let (file_path2, range2) = resolve(&var2.info);
                 let primary_span = (file_path1.clone(), range1.clone());
@@ -68,7 +171,7 @@ impl ResolveError {
                 report = report.with_label(Label::new((file_path2, range2)).with_message(message));
                 report.finish()
             }
-            | ResolveError::UnenclosedThat(span) => {
+            | Self::UnenclosedThat(span) => {
                 let (file_path, range) = resolve(span);
                 Report::build(ReportKind::Error, (file_path.clone(), range.clone()))
                     .with_message("Mobile binding without a block")
@@ -78,7 +181,7 @@ impl ResolveError {
                     )
                     .finish()
             }
-            | ResolveError::RecursiveParameter(span) => {
+            | Self::RecursiveParameter(span) => {
                 let (file_path, range) = resolve(span);
                 Report::build(ReportKind::Error, (file_path.clone(), range.clone()))
                     .with_message("Recursive parameter component")
@@ -86,6 +189,13 @@ impl ResolveError {
                         Label::new((file_path, range))
                             .with_message("parameters must remain acyclic"),
                     )
+                    .finish()
+            }
+            | other => {
+                let site = resolve(&other.primary_span());
+                Report::build(ReportKind::Error, site.clone())
+                    .with_message(other.to_string())
+                    .with_label(Label::new(site).with_message(other.to_string()))
                     .finish()
             }
         }

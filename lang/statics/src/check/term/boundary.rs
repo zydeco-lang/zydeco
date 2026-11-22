@@ -21,27 +21,25 @@ impl TermChecker<'_> {
     }
 
     pub(super) fn check_meta<'db>(
-        &self, tycker: &mut Tycker<'db>, term: su::MetaT<su::TermId>, switch: Switch<AnnId>,
+        &self, tycker: &mut Tycker<'db>, term: su::MetaTerm, switch: Switch<AnnId>,
         prepared_environment: Option<ss::TyEnv>,
     ) -> Result<TermAnnId> {
         Ok({
-            let su::MetaT(meta, term) = term;
+            let su::MetaTerm { meta, body: term } = term;
             let res = self
                 .mk(term)
                 .tyck(tycker, Action::forward(switch, prepared_environment.as_ref()))?;
-            if let Some(meta) = meta
-                .specialize::<BuiltinMeta>()
-                .expect("builtin metadata is validated during desugaring")
-            {
-                BuiltinAttachment::new(meta.role, res).register(tycker, &self.info)?;
-            }
-            if let Some(meta) =
-                meta.specialize::<FfiMeta>().expect("ffi metadata is validated during desugaring")
-            {
-                ForeignAttachment::new(meta.target, res, term).register(tycker)?;
-            }
-            if meta.is(MetadataKind::Debug.name()) {
-                tycker.observations.push(TyckObservation::Debug { metadata: meta, result: res });
+            match meta {
+                | su::ResolvedMeta::Builtin(role) => {
+                    BuiltinAttachment::new(role, res).register(tycker, &self.info)?;
+                }
+                | su::ResolvedMeta::Ffi(target) => {
+                    ForeignAttachment::new(target, res, term).register(tycker)?;
+                }
+                | su::ResolvedMeta::Debug(metadata) => {
+                    tycker.observations.push(TyckObservation::Debug { metadata, result: res });
+                }
+                | su::ResolvedMeta::Opaque(_) => {}
             }
             res
         })

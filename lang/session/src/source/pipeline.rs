@@ -1,60 +1,26 @@
-use crate::source::TextualProgram;
-use zydeco_foundation::arena::FrozenArena;
-use zydeco_foundation::pass::CompilerPass;
+use super::TextualProgram;
+use zydeco_foundation::prelude::FrozenArena;
 use zydeco_surface::{
-    bitter::{
-        DesugarErrors, SourceDesugarOut, SourceUnitDesugarer, arena::BitterArena,
-        syntax::TermId as BitterTermId,
-    },
-    scoped::{
-        ResolveErrors, ResolveFolder, ResolveSourceOut, arena::ScopedArena,
-        syntax::TermId as ScopedTermId,
-    },
-    textual::syntax as t,
+    scoped::{ResolveErrors, ResolveFolder, ResolveSourceOut, arena::ScopedArena, syntax::TermId},
+    textual::syntax::SpanArena,
 };
 
-pub(crate) struct BitterProgram {
-    pub spans: FrozenArena<t::SpanArena>,
-    pub arena: FrozenArena<BitterArena>,
-    pub root: BitterTermId,
-}
-
-/// A desugaring failure together with the merged span arena needed to locate it.
-#[derive(Debug)]
-pub(crate) struct DesugarFailure {
-    pub error: Box<DesugarErrors>,
-    pub spans: FrozenArena<t::SpanArena>,
-}
-
 pub(crate) struct ScopedProgram {
-    pub spans: FrozenArena<t::SpanArena>,
-    pub arena: FrozenArena<ScopedArena>,
-    pub root: ScopedTermId,
+    pub(crate) spans: FrozenArena<SpanArena>,
+    pub(crate) arena: FrozenArena<ScopedArena>,
+    pub(crate) root: TermId,
 }
 
-impl TextualProgram {
-    pub(crate) fn desugar(self) -> Result<BitterProgram, DesugarFailure> {
-        let TextualProgram { spans, arena: textual, unit } = self;
-        match (SourceUnitDesugarer { spans: &spans, textual: &textual }).run(unit) {
-            | Ok(SourceDesugarOut { arena, root }) => Ok(BitterProgram { spans, arena, root }),
-            | Err(error) => Err(DesugarFailure { error: Box::new(error), spans }),
-        }
-    }
-}
-
-/// A resolution failure together with the merged program's span arena, so
-/// diagnostics can still resolve the error's spans after the failure.
 #[derive(Debug)]
 pub(crate) struct ResolveFailure {
     pub error: Box<ResolveErrors>,
-    pub spans: FrozenArena<t::SpanArena>,
+    pub spans: FrozenArena<SpanArena>,
 }
 
-impl BitterProgram {
+impl TextualProgram {
     pub(crate) fn resolve(self) -> Result<ScopedProgram, ResolveFailure> {
-        let Self { spans, arena, root } = self;
-        let resolved = ResolveFolder::new(&spans, arena).run_source(root);
-        match resolved {
+        let Self { spans, arena, unit } = self;
+        match ResolveFolder::new(&spans, &arena).run_source(unit.root) {
             | Ok(ResolveSourceOut { arena, root }) => Ok(ScopedProgram { spans, arena, root }),
             | Err(error) => Err(ResolveFailure { error, spans }),
         }

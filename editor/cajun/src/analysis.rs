@@ -195,7 +195,6 @@ impl ProjectState {
             }))
         });
         progress(AnalysisProgress::Parsing { source_count });
-        progress(AnalysisProgress::Desugaring { source_count });
         progress(AnalysisProgress::Resolving { source_count });
         progress(AnalysisProgress::Tycking { source_count });
         let analysis = session
@@ -976,7 +975,6 @@ mod tests {
             phases,
             vec![
                 AnalysisProgress::Parsing { source_count: count },
-                AnalysisProgress::Desugaring { source_count: count },
                 AnalysisProgress::Resolving { source_count: count },
                 AnalysisProgress::Tycking { source_count: count },
                 AnalysisProgress::Highlighting { path: root },

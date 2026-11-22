@@ -4,7 +4,7 @@
 //! accepts an unrecognized annotation and ignores it, so a body written for
 //! call-by-name would run as plain call-by-push-value without a word.
 
-use zydeco_session::DesugarError;
+use zydeco_session::ResolveError;
 use zydeco_tests::utils::SourceCase;
 
 /// This file's case helpers, a namespace as `SourceCase` is.
@@ -22,9 +22,10 @@ impl BlockCase {
 #[test]
 fn a_call_by_name_block_is_refused_until_implemented() {
     SourceCase::assert_accepted(SourceCase::check_invariants(&BlockCase::block("@[cbv] 5")));
-    SourceCase::assert_desugar_error(SourceCase::check(&BlockCase::block("@[cbn] 5")), |error| {
-        matches!(error, DesugarError::CbnNotImplemented(_))
-    });
+    SourceCase::assert_resolve_error_matching(
+        SourceCase::check(&BlockCase::block("@[cbn] 5")),
+        |error| matches!(error, ResolveError::CbnNotImplemented(_)),
+    );
 }
 
 /// Before registration `@[cbn] (ret 5)` ran as `ret 5`. An unrecognized name
@@ -34,8 +35,8 @@ fn an_unrecognized_annotation_is_still_ignored() {
     SourceCase::assert_accepted(SourceCase::check_invariants(&BlockCase::block(
         "@[cbn_unregistered] (ret 5)",
     )));
-    SourceCase::assert_desugar_error(
+    SourceCase::assert_resolve_error_matching(
         SourceCase::check(&BlockCase::block("@[cbn] (ret 5)")),
-        |error| matches!(error, DesugarError::CbnNotImplemented(_)),
+        |error| matches!(error, ResolveError::CbnNotImplemented(_)),
     );
 }

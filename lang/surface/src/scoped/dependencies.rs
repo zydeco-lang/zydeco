@@ -29,7 +29,7 @@ impl DependencyAnalyzer {
     }
     /// An implicit capability lookup needs the independent portion of its context
     /// checked first. Record this separately until ordinary dependencies are complete.
-    pub fn implicit_provider(&mut self, active: &rpds::VectorSync<BindingSite>) {
+    pub fn implicit_provider(&mut self, active: &[BindingSite]) {
         for binding in active {
             self.implicit_providers[&binding.owner].insert(binding.id);
         }
@@ -76,7 +76,7 @@ mod tests {
 
     #[test]
     fn events_update_every_enclosing_binding_with_the_matching_owner() {
-        let mut ids = IdAllocator::<BitterScope>::new();
+        let mut ids = IdAllocator::<ScopedScope>::new();
         let outer: TermId = ids.alloc();
         let inner: TermId = ids.alloc();
         let first: TermId = ids.alloc();
@@ -91,9 +91,7 @@ mod tests {
             BindingSite { owner: outer, id: first },
             BindingSite { owner: inner, id: nested },
             BindingSite { owner: outer, id: second },
-        ]
-        .into_iter()
-        .collect();
+        ];
         analyzer.reference(&ResolvedReference {
             occurrence: first,
             definition,
@@ -115,7 +113,7 @@ mod tests {
 
     #[test]
     fn implicit_provider_ordering_excludes_transitive_dependents_and_preserves_cycles() {
-        let mut ids = IdAllocator::<BitterScope>::new();
+        let mut ids = IdAllocator::<ScopedScope>::new();
         let block: TermId = ids.alloc();
         let user: TermId = ids.alloc();
         let provider: TermId = ids.alloc();
@@ -129,10 +127,10 @@ mod tests {
                 occurrence: binding,
                 definition,
                 dependency: Some(BindingSite { owner: block, id: dependency }),
-                active_bindings: &[BindingSite { owner: block, id: binding }].into_iter().collect(),
+                active_bindings: &[BindingSite { owner: block, id: binding }],
             });
         }
-        analyzer.implicit_provider(&[BindingSite { owner: block, id: user }].into_iter().collect());
+        analyzer.implicit_provider(&[BindingSite { owner: block, id: user }]);
         let graph = analyzer.finish_block(block);
         assert_eq!(graph.query(&user), [provider]);
         assert_eq!(graph.query(&direct), [user]);
@@ -145,10 +143,10 @@ mod tests {
                 occurrence: binding,
                 definition,
                 dependency: Some(BindingSite { owner: block, id: dependency }),
-                active_bindings: &[BindingSite { owner: block, id: binding }].into_iter().collect(),
+                active_bindings: &[BindingSite { owner: block, id: binding }],
             });
         }
-        analyzer.implicit_provider(&[BindingSite { owner: block, id: user }].into_iter().collect());
+        analyzer.implicit_provider(&[BindingSite { owner: block, id: user }]);
         let cyclic = analyzer.finish_block(block);
         assert_eq!(cyclic.query(&user), [provider]);
         assert_eq!(cyclic.query(&provider), [user], "authored cycles remain visible to validation");

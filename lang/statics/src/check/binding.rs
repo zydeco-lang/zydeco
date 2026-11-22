@@ -21,7 +21,7 @@ impl BindingCycle {
                 | su::Term::Residual(su::Residual(tm))
                 | su::Term::SourceBoundary(su::SourceBoundary(tm))
                 | su::Term::SignatureBoundary(su::SignatureBoundary(tm)) => *tm,
-                | su::Term::Meta(meta) => meta.1,
+                | su::Term::Meta(meta) => meta.body,
                 | su::Term::Thunk(_)
                 | su::Term::ValAbs(_)
                 | su::Term::Ctor(_)

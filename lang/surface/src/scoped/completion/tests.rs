@@ -1,15 +1,14 @@
 use super::*;
 use crate::scoped::scope::*;
 use crate::{
-    bitter::{SourceDesugarOut, SourceUnitDesugarer},
     scoped::{ResolveError, ResolveFolder},
     textual::{ParsedHole, RecoveringParser, syntax as t},
 };
-use zydeco_foundation::pass::CompilerPass;
 
 struct Fixture {
     spans: t::SpanArena,
-    bitter: SourceDesugarOut,
+    textual: t::TextArena,
+    root: t::TermId,
     target: t::TermId,
 }
 
@@ -22,16 +21,12 @@ impl Fixture {
         let ParsedHole::Term(target) = parsed.completion.unwrap().hole.unwrap().entity else {
             panic!("a term cursor")
         };
-        let (spans, arena) = parser.finish();
-        let bitter = SourceUnitDesugarer { spans: &spans, textual: &arena }
-            .run(parsed.syntax.unwrap())
-            .unwrap();
-        Self { spans, bitter, target }
+        let (spans, textual) = parser.finish();
+        Self { spans, textual, root: parsed.syntax.unwrap().root, target }
     }
 
     fn complete(self) -> CompletionResolution {
-        ResolveFolder::new(&self.spans, self.bitter.arena)
-            .run_completion(self.bitter.root, self.target)
+        ResolveFolder::new(&self.spans, &self.textual).run_completion(self.root, self.target)
     }
 }
 
@@ -54,37 +49,40 @@ fn enumeration_selects_the_same_definition_as_reference_resolution() {
 }
 
 #[test]
-fn shared_lookup_shadows_global_names_and_preserves_global_dependencies() {
-    let mut allocator = IdAllocator::<BitterScope>::new();
+fn shared_lookup_shadows_outer_and_prelude_names_while_preserving_dependencies() {
+    let mut allocator = IdAllocator::<ScopedScope>::new();
     let shadowed: DefId = allocator.alloc();
-    let visible_global: DefId = allocator.alloc();
+    let visible_outer: DefId = allocator.alloc();
     let visible_local: DefId = allocator.alloc();
+    let prelude_def: DefId = allocator.alloc();
     let owner: TermId = allocator.alloc();
     let dependency = BindingSite { owner, id: owner };
     let same = VarName::new("same");
     let other = VarName::new("other");
-    let global = Global {
-        var_to_def: [(same, shadowed), (other, visible_global)].into_iter().collect(),
-        under_map: [(shadowed, dependency), (visible_global, dependency)].into_iter().collect(),
-    };
-    let local = Local {
-        under: rpds::VectorSync::new_sync(),
-        var_to_def: rpds::HashTrieMapSync::new_sync(),
-        depth: 0,
-        under_map: rpds::HashTrieMapSync::new_sync(),
-        boundary: None,
-        prelude: Default::default(),
-    }
-    .bind_group([(same, visible_local)]);
-    let scope = NameScope { local: &local, global: &global };
+    let prelude_only = VarName::new("prelude_only");
+
+    let mut state = ScopeState::new();
+    state.prelude_definitions.insert(same, prelude_def);
+    state.prelude_definitions.insert(prelude_only, prelude_def);
+    state.under_map.insert(shadowed, dependency);
+    state.under_map.insert(visible_outer, dependency);
+    state.bind_group([(same, shadowed), (other, visible_outer)]);
+    state.bind_group([(same, visible_local)]);
+
+    let scope = state.view();
     assert_eq!(scope.lookup(&same).unwrap().definition, visible_local);
     assert!(scope.lookup(&same).unwrap().dependency.is_none());
     assert_eq!(scope.lookup(&other).unwrap().dependency.unwrap().owner, owner);
+    assert_eq!(scope.lookup(&prelude_only).unwrap().definition, prelude_def);
+    assert!(scope.lookup(&prelude_only).unwrap().distance > scope.lookup(&other).unwrap().distance);
+
     let snapshot = scope.snapshot();
-    assert_eq!(
-        snapshot.definitions.iter().map(|definition| definition.definition).collect::<Vec<_>>(),
-        [visible_global, visible_local]
-    );
+    let defs =
+        snapshot.definitions.iter().map(|definition| definition.definition).collect::<Vec<_>>();
+    assert!(defs.contains(&visible_local));
+    assert!(defs.contains(&visible_outer));
+    assert!(defs.contains(&prelude_def));
+    assert!(!defs.contains(&shadowed));
     assert!(scope.lookup(&VarName::new("absent")).is_none());
 }
 
@@ -108,8 +106,8 @@ fn unbound_references_are_diagnosed_and_replaced_only_for_completion() {
     );
 
     let strict = Fixture::new(source);
-    let error = ResolveFolder::new(&strict.spans, strict.bitter.arena)
-        .run_source(strict.bitter.root)
+    let error = ResolveFolder::new(&strict.spans, &strict.textual)
+        .run_source(strict.root)
         .err()
         .expect("strict resolution must reject every unbound reference");
     assert_eq!(error.len(), 2);
@@ -126,8 +124,8 @@ fn a_cursor_identity_from_another_parse_cannot_match_an_equal_span() {
     let old = Fixture::new("fn value => ¦").target;
     let current = Fixture::new("fn value => ¦");
     assert_ne!(old, current.target);
-    let completion = ResolveFolder::new(&current.spans, current.bitter.arena)
-        .run_completion(current.bitter.root, old);
+    let completion =
+        ResolveFolder::new(&current.spans, &current.textual).run_completion(current.root, old);
     assert!(completion.site.is_none());
     assert!(completion.program.is_ok());
     let completion = Fixture::new("fn value => ¦").complete();
@@ -138,7 +136,8 @@ fn a_cursor_identity_from_another_parse_cannot_match_an_equal_span() {
 fn fatal_resolution_errors_allow_independent_sibling_scope_capture() {
     let completion = Fixture::new("(param invalid that invalid, fn value => ¦)").complete();
     assert_eq!(completion.site.unwrap().scope.definitions[0].name, "value");
-    assert!(
-        matches!(completion.program, Err(error) if error.len() == 1 && error.iter().any(|error| matches!(error, ResolveError::UnenclosedThat(_))))
-    );
+    assert!(matches!(
+        completion.program,
+        Err(error) if error.len() == 1 && error.iter().any(|error| matches!(error, ResolveError::UnenclosedThat(_)))
+    ));
 }

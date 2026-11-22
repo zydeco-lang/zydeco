@@ -361,7 +361,7 @@ impl SourceFixture {
 fn resolve_program(
     program: TextualProgram,
 ) -> Result<ScopedProgram, crate::source::ResolveFailure> {
-    program.desugar().unwrap().resolve()
+    program.resolve()
 }
 
 /// The file a merged-program span belongs to, via the arena's source map.
@@ -838,14 +838,16 @@ fn builtin_operation_roles_remain_specializable_through_name_resolution() {
     else {
         panic!("expected a Builtin metadata term")
     };
-    let zydeco_syntax::MetaT(meta, payload) = &**term;
+    let zydeco_surface::scoped::syntax::MetaTerm { meta, body: payload } = &**term;
 
     assert_eq!(
-        meta.specialize::<zydeco_surface::metadata::BuiltinMeta>().unwrap().map(|meta| meta.role),
-        Some(zydeco_syntax::BuiltinRole::Value(zydeco_syntax::BuiltinValueRole::Integer(
-            zydeco_syntax::IntegerType::Int,
-            zydeco_syntax::IntegerOperation::Add,
-        ),))
+        *meta,
+        zydeco_surface::scoped::syntax::ResolvedMeta::Builtin(zydeco_syntax::BuiltinRole::Value(
+            zydeco_syntax::BuiltinValueRole::Integer(
+                zydeco_syntax::IntegerType::Int,
+                zydeco_syntax::IntegerOperation::Add,
+            ),
+        ))
     );
     assert!(matches!(resolved.arena.terms[payload], zydeco_surface::scoped::syntax::Term::Hole(_)));
 }
@@ -1104,8 +1106,7 @@ fn importing_once_and_binding_once_shares_one_lexical_identity() {
 fn the_source_pipeline_reaches_statics_without_a_declaration_entry() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "_");
-    let scoped =
-        SourceGraph::load(root).unwrap().parse().unwrap().desugar().unwrap().resolve().unwrap();
+    let scoped = SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap();
 
     let _root_term = &scoped.arena.terms[&scoped.root];
     let Err(diagnostics) = scoped.check() else {
@@ -1307,16 +1308,8 @@ fn explicit_intrinsic_splices_produce_canonical_cbpv_terms() {
     .for_each(|(source, expected)| {
         let fixture = SourceFixture::new();
         let root = fixture.write("main.zy", source);
-        let checked = SourceGraph::load(root)
-            .unwrap()
-            .parse()
-            .unwrap()
-            .desugar()
-            .unwrap()
-            .resolve()
-            .unwrap()
-            .check()
-            .unwrap();
+        let checked =
+            SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap().check().unwrap();
 
         match (checked.root, expected) {
             | (TermAnnId::Kind(kind), "vtype") => {
@@ -1343,16 +1336,8 @@ fn explicit_intrinsic_splices_produce_canonical_cbpv_terms() {
 fn intrinsic_spellings_are_ordinary_bindable_names_in_root_sources() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "begin def VType = @(intrinsic(unit)) that VType end");
-    let checked = SourceGraph::load(root)
-        .unwrap()
-        .parse()
-        .unwrap()
-        .desugar()
-        .unwrap()
-        .resolve()
-        .unwrap()
-        .check()
-        .unwrap();
+    let checked =
+        SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap().check().unwrap();
 
     use zydeco_statics::syntax::{Fillable, Kind, TermAnnId, Type};
     let TermAnnId::Type(unit, kind) = checked.root else {
@@ -1377,16 +1362,8 @@ fn intrinsic_kind_spellings_bind_as_ordinary_kind_aliases() {
     Unit
 end"#,
     );
-    let checked = SourceGraph::load(root)
-        .unwrap()
-        .parse()
-        .unwrap()
-        .desugar()
-        .unwrap()
-        .resolve()
-        .unwrap()
-        .check()
-        .unwrap();
+    let checked =
+        SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap().check().unwrap();
 
     use zydeco_statics::syntax::{Fillable, TermAnnId, Type};
     let TermAnnId::Type(exists, _) = checked.root else {
@@ -1399,16 +1376,8 @@ end"#,
 fn a_zero_dependency_source_program_checks_and_runs_as_one_term() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "ret ()");
-    let checked = SourceGraph::load(root)
-        .unwrap()
-        .parse()
-        .unwrap()
-        .desugar()
-        .unwrap()
-        .resolve()
-        .unwrap()
-        .check()
-        .unwrap();
+    let checked =
+        SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap().check().unwrap();
 
     assert!(matches!(checked.root, zydeco_statics::syntax::TermAnnId::Compu(_, _)));
 
@@ -1432,16 +1401,8 @@ fn a_zero_dependency_source_program_checks_and_runs_as_one_term() {
 fn a_zero_dependency_source_program_lowers_directly_to_stack_ir() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "ret ()");
-    let checked = SourceGraph::load(root)
-        .unwrap()
-        .parse()
-        .unwrap()
-        .desugar()
-        .unwrap()
-        .resolve()
-        .unwrap()
-        .check()
-        .unwrap();
+    let checked =
+        SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap().check().unwrap();
 
     let SourceStack { stackir } = checked.stackir().unwrap();
     let stackir = stackir.as_program();
@@ -1456,16 +1417,8 @@ fn a_fixed_primitive_intrinsic_classifies_literals_without_a_package_scope() {
         "main.zy",
         "begin let Int = @(intrinsic(int)) that def value : Int = 1 that ret value end",
     );
-    let checked = SourceGraph::load(root)
-        .unwrap()
-        .parse()
-        .unwrap()
-        .desugar()
-        .unwrap()
-        .resolve()
-        .unwrap()
-        .check()
-        .unwrap();
+    let checked =
+        SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap().check().unwrap();
 
     assert!(matches!(checked.root, zydeco_statics::syntax::TermAnnId::Compu(_, _)));
 }
@@ -1474,16 +1427,8 @@ fn a_fixed_primitive_intrinsic_classifies_literals_without_a_package_scope() {
 fn an_integer_literal_defaults_to_int_without_a_package_scope() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "ret 1");
-    let checked = SourceGraph::load(root)
-        .unwrap()
-        .parse()
-        .unwrap()
-        .desugar()
-        .unwrap()
-        .resolve()
-        .unwrap()
-        .check()
-        .unwrap();
+    let checked =
+        SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap().check().unwrap();
 
     use zydeco_statics::syntax::{Fillable, PrimitiveTy, TermAnnId, Type};
     use zydeco_syntax::{App, IntegerType, PrimitiveType};
@@ -1515,16 +1460,8 @@ fn repeated_primitive_intrinsics_have_one_applicative_identity() {
             "def a : IntA = 1 that def b : IntB = a that ret b end",
         ),
     );
-    let checked = SourceGraph::load(root)
-        .unwrap()
-        .parse()
-        .unwrap()
-        .desugar()
-        .unwrap()
-        .resolve()
-        .unwrap()
-        .check()
-        .unwrap();
+    let checked =
+        SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap().check().unwrap();
 
     // Both aliases must denote one primitive identity: the result of `ret b`
     // is the Int primitive itself, not a choice between the two bindings.
@@ -1563,8 +1500,7 @@ param (
   ret value
 "#,
     );
-    let scoped =
-        SourceGraph::load(root).unwrap().parse().unwrap().desugar().unwrap().resolve().unwrap();
+    let scoped = SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap();
 
     assert!(scoped.check().is_err());
 }
@@ -1586,8 +1522,7 @@ param (
   ret ()
 "#,
     );
-    let scoped =
-        SourceGraph::load(root).unwrap().parse().unwrap().desugar().unwrap().resolve().unwrap();
+    let scoped = SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap();
 
     assert!(scoped.check().is_err());
 }
@@ -1609,8 +1544,7 @@ fn builtin_host_type_roles_require_abstract_entries_of_the_right_kind() {
     cases.into_iter().for_each(|source| {
         let fixture = SourceFixture::new();
         let root = fixture.write("main.zy", source);
-        let scoped =
-            SourceGraph::load(root).unwrap().parse().unwrap().desugar().unwrap().resolve().unwrap();
+        let scoped = SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap();
 
         assert!(scoped.check().is_err(), "`{source}` unexpectedly checked");
     });
@@ -1620,16 +1554,8 @@ fn builtin_host_type_roles_require_abstract_entries_of_the_right_kind() {
 fn a_builtin_operation_role_attaches_to_its_named_classifier() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "@[builtin(int_add)] (#add :: @(intrinsic(unit)))");
-    let checked = SourceGraph::load(root)
-        .unwrap()
-        .parse()
-        .unwrap()
-        .desugar()
-        .unwrap()
-        .resolve()
-        .unwrap()
-        .check()
-        .unwrap();
+    let checked =
+        SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap().check().unwrap();
     let zydeco_statics::syntax::TermAnnId::Type(entry, _) = checked.root else {
         panic!("a named classifier must check as a type")
     };
@@ -1647,8 +1573,7 @@ fn a_builtin_operation_role_attaches_to_its_named_classifier() {
 fn a_builtin_operation_role_rejects_an_unnamed_classifier() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "@[builtin(int_add)] @(intrinsic(unit))");
-    let scoped =
-        SourceGraph::load(root).unwrap().parse().unwrap().desugar().unwrap().resolve().unwrap();
+    let scoped = SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap();
 
     assert!(scoped.check().is_err());
 }
@@ -1657,16 +1582,8 @@ fn a_builtin_operation_role_rejects_an_unnamed_classifier() {
 fn the_interpreter_constructs_and_applies_a_typed_builtin_package() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", builtin_add_exit_source());
-    let checked = SourceGraph::load(root)
-        .unwrap()
-        .parse()
-        .unwrap()
-        .desugar()
-        .unwrap()
-        .resolve()
-        .unwrap()
-        .check()
-        .unwrap();
+    let checked =
+        SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap().check().unwrap();
 
     let SourceDynamics { program, packages } = checked.dynamics_with_builtin().unwrap();
     let mut input = std::io::empty();
@@ -1752,16 +1669,8 @@ end
 fn stack_ir_constructs_and_applies_the_same_typed_builtin_package() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", builtin_add_exit_source());
-    let checked = SourceGraph::load(root)
-        .unwrap()
-        .parse()
-        .unwrap()
-        .desugar()
-        .unwrap()
-        .resolve()
-        .unwrap()
-        .check()
-        .unwrap();
+    let checked =
+        SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap().check().unwrap();
 
     let SourceStack { stackir } = checked.sps_with_builtin().unwrap();
 

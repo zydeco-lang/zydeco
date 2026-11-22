@@ -1,54 +1,32 @@
-use crate::scoped::syntax::*;
+//! Binder collection directly over parsed textual patterns.
 
-/// Extract binder definitions introduced by a pattern.
-pub trait Binders {
-    type Arena;
-    fn binders(&self, arena: &Self::Arena) -> rpds::HashTrieMapSync<VarName, DefId>;
-}
+use crate::textual::syntax as t;
+use zydeco_syntax::VarName;
 
-impl Binders for PatId {
-    type Arena = BitterArena;
-    fn binders(&self, arena: &Self::Arena) -> rpds::HashTrieMapSync<VarName, DefId> {
-        let pat = &arena.pats[self];
-        match pat {
-            | Pattern::Ann(pat) => {
-                let Ann { tm, ty: _ } = pat;
-                tm.binders(arena)
-            }
-            | Pattern::Hole(pat) => {
-                let Hole = pat;
-                rpds::HashTrieMapSync::new_sync()
-            }
-            | Pattern::Lit(_) => rpds::HashTrieMapSync::new_sync(),
-            | Pattern::Triv(Triv) => rpds::HashTrieMapSync::new_sync(),
-            | Pattern::Var(pat) => {
-                let def = pat;
-                rpds::HashTrieMapSync::new_sync().insert(arena.defs[def], *def)
-            }
-            | Pattern::Named(pat) => {
-                let Named(_name, inner) = pat;
-                inner.binders(arena)
-            }
-            | Pattern::Ctor(pat) => {
-                let Ctor(_ctor, args) = pat;
-                args.binders(arena)
-            }
-            | Pattern::Project(ProjectionPattern(_, pattern)) => pattern.binders(arena),
-            | Pattern::View(ViewPattern { function: _, pattern }) => pattern.binders(arena),
-            | Pattern::Alias(Alias(pat)) => {
-                pat.iter().fold(rpds::HashTrieMapSync::new_sync(), |binders, item| {
-                    item.binders(arena).iter().fold(binders, |binders, (name, definition)| {
-                        binders.insert(*name, *definition)
-                    })
-                })
-            }
-            | Pattern::Cons(pat) => {
-                pat.iter().fold(rpds::HashTrieMapSync::new_sync(), |binders, item| {
-                    item.binders(arena).iter().fold(binders, |binders, (name, definition)| {
-                        binders.insert(*name, *definition)
-                    })
-                })
+/// Collect textual binder `(name, def)` pairs from `pattern` in source order.
+pub(crate) fn collect_textual_binders(
+    textual: &t::TextArena, pattern: t::PatId, out: &mut Vec<(VarName, t::DefId)>,
+) {
+    zydeco_foundation::stack::maybe_grow(|| match &textual.pats[&pattern] {
+        | t::Pattern::Ann(t::Ann { tm, ty: _ })
+        | t::Pattern::Named(t::Named(_, tm))
+        | t::Pattern::Ctor(t::Ctor(_, tm))
+        | t::Pattern::Project(t::ProjectionPattern(_, tm))
+        | t::Pattern::Manifest(t::ManifestPattern { binder: tm, definition: _ })
+        | t::Pattern::View(t::ViewPattern { function: _, pattern: tm }) => {
+            collect_textual_binders(textual, *tm, out);
+        }
+        | t::Pattern::Var(def) => out.push((textual.defs[def], *def)),
+        | t::Pattern::Alias(t::Alias(patterns)) => {
+            for item in patterns.iter() {
+                collect_textual_binders(textual, *item, out);
             }
         }
-    }
+        | t::Pattern::Paren(t::Paren(patterns)) => {
+            for item in patterns {
+                collect_textual_binders(textual, *item, out);
+            }
+        }
+        | t::Pattern::Hole(_) | t::Pattern::Lit(_) => {}
+    });
 }

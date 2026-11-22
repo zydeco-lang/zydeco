@@ -47,6 +47,16 @@ impl<K: Eq + Hash + Clone, V> ScopedMap<K, V> {
     }
 
     #[inline]
+    pub fn iter(&self) -> impl Iterator<Item = (&K, &V)> {
+        self.map.iter()
+    }
+
+    #[inline]
+    pub fn keys(&self) -> impl Iterator<Item = &K> {
+        self.map.keys()
+    }
+
+    #[inline]
     pub fn insert(&mut self, key: K, value: V) {
         let previous = self.map.insert(key.clone(), value);
         self.trail.push((key, previous));

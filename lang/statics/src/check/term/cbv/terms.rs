@@ -77,20 +77,13 @@ impl TermChecker<'_> {
             // records the host's observation of the *translation*, so what it
             // prints is the core term this part of the block became. Every other
             // annotation stays refused, by the catch-all below.
-            | Tm::Meta(annotated)
-                if matches!(
-                    MetadataKind::of(&annotated.0),
-                    Some(MetadataKind::Doc | MetadataKind::Debug | MetadataKind::Format)
-                ) =>
-            {
-                let su::MetaT(meta, body) = *annotated;
+            | Tm::Meta(annotated) if matches!(annotated.meta, su::ResolvedMeta::Debug(_)) => {
+                let su::MetaTerm { meta, body } = *annotated;
+                let su::ResolvedMeta::Debug(metadata) = meta else { unreachable!() };
                 let (compu, ty) = self.cbv_term(tycker, scope, body, expected)?;
-                if meta.is(MetadataKind::Debug.name()) {
-                    tycker.observations.push(TyckObservation::Debug {
-                        metadata: meta,
-                        result: TermAnnId::Compu(compu, ty),
-                    });
-                }
+                tycker
+                    .observations
+                    .push(TyckObservation::Debug { metadata, result: TermAnnId::Compu(compu, ty) });
                 Ok((compu, ty))
             }
             // [[(M1, …, Mn)]]v_term = do a1 <- [[M1]]v; … ; ret (a1, …, an)

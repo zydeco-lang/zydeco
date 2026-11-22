@@ -1,24 +1,47 @@
-//! Scope-sensitive rebuilding with independent event consumers.
+//! Fused surface lowering and lexical name resolution with passive observers.
+
 use super::{
-    alloc::ScopedBuilder, dependencies::DependencyAnalyzer, scope::ResolveEnv, syntax::*, *,
+    alloc::ScopedBuilder, blocks::TextualBlockCollector, dependencies::DependencyAnalyzer,
+    scope::ScopeState, syntax::*, *,
 };
-use crate::{diagnostic::Diagnostics, fold::Folder};
-use std::collections::HashSet;
+use crate::{diagnostic::Diagnostics, textual::syntax as t};
+use rustc_hash::FxHashMap;
 use zydeco_foundation::{
     err::{CollectReported, Report, ReportedError},
     prelude::FrozenArena,
 };
+use zydeco_syntax::SpanView;
 
-type FoldResult<T> = std::result::Result<T, ReportedError>;
+mod bindings;
+mod meta;
+mod telescopes;
+#[cfg(test)]
+mod tests;
+
+pub(super) use bindings::LoweredBinding;
+
+pub(super) type FoldResult<T> = std::result::Result<T, ReportedError>;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum UnboundPolicy {
+    Reject,
+    RecoverForCompletion,
+    BindFree,
+}
 
 pub struct ResolveFolder<'a, O = ()> {
-    pub spans: &'a SpanArena,
-    pub bitter: FrozenArena<BitterArena>,
+    pub spans: &'a t::SpanArena,
+    pub textual: &'a t::TextArena,
     pub(super) builder: ScopedBuilder,
+    pub(super) scope: ScopeState,
     pub(super) dependencies: DependencyAnalyzer,
+    pub(super) active_block_candidates: FxHashMap<t::TermId, Option<TermId>>,
+    providers: FxHashMap<t::TermId, FoldResult<TermId>>,
+    free_vars: FxHashMap<VarName, DefId>,
+    unbound_policy: UnboundPolicy,
+    pub(super) secondary_copy: bool,
     observers: (ReferenceIndex, O),
     diagnostics: Vec<ResolveError>,
-    failed_providers: HashSet<TermId>,
 }
 
 pub struct ResolveSourceOut {
@@ -33,50 +56,64 @@ pub struct ResolutionOutput<T> {
     pub diagnostics: Vec<ResolveError>,
 }
 
-#[derive(Clone, Copy)]
-enum Publication {
-    Strict,
-    Completion,
-}
-
 impl<'a> ResolveFolder<'a> {
-    pub fn new(spans: &'a SpanArena, bitter: FrozenArena<BitterArena>) -> Self {
-        let mut bitter = bitter.into_inner();
-        let origins = std::mem::take(&mut bitter.origins);
-        let builder = ScopedBuilder::new(&bitter, origins);
+    pub fn new(spans: &'a t::SpanArena, textual: &'a t::TextArena) -> Self {
         Self {
             spans,
-            bitter: FrozenArena::new(bitter),
-            builder,
+            textual,
+            builder: ScopedBuilder::new(textual.default_prelude_binders.clone()),
+            scope: ScopeState::new(),
             dependencies: DependencyAnalyzer::default(),
+            active_block_candidates: FxHashMap::default(),
+            providers: FxHashMap::default(),
+            free_vars: FxHashMap::default(),
+            unbound_policy: UnboundPolicy::Reject,
+            secondary_copy: false,
             observers: (ReferenceIndex::default(), ()),
             diagnostics: Vec::new(),
-            failed_providers: HashSet::new(),
         }
     }
 
     pub fn with_observer<O: ResolutionObserver>(self, observer: O) -> ResolveFolder<'a, O> {
         ResolveFolder {
             spans: self.spans,
-            bitter: self.bitter,
+            textual: self.textual,
             builder: self.builder,
+            scope: self.scope,
             dependencies: self.dependencies,
+            active_block_candidates: self.active_block_candidates,
+            providers: self.providers,
+            free_vars: self.free_vars,
+            unbound_policy: self.unbound_policy,
+            secondary_copy: self.secondary_copy,
             observers: (self.observers.0, observer),
             diagnostics: self.diagnostics,
-            failed_providers: self.failed_providers,
         }
     }
 
-    pub fn run_completion(
-        self, root: TermId, target: crate::textual::syntax::TermId,
-    ) -> CompletionResolution {
-        let output =
-            self.with_observer(CompletionObserver::new(target)).run(root, Publication::Completion);
+    pub fn run_completion(mut self, root: t::TermId, target: t::TermId) -> CompletionResolution {
+        self.unbound_policy = UnboundPolicy::RecoverForCompletion;
+        let output = self.with_observer(CompletionObserver::new(target)).run_inner(root);
         CompletionResolution {
             site: output.observations,
             diagnostics: output.diagnostics,
             program: output.program,
         }
+    }
+
+    /// Lower and resolve an arbitrary snippet with free variables left abstract.
+    ///
+    /// Used by the formatter equivalence checks and fragment debug tests where
+    /// open terms and bare top-level `that` declarations appear without a driver.
+    pub fn run_open_fragment(mut self, root: t::TermId) -> Result<ResolveSourceOut> {
+        self.unbound_policy = UnboundPolicy::BindFree;
+        let candidates = TextualBlockCollector::new(self.textual).collect(root);
+        let resolved = if candidates.is_empty() {
+            self.lower_term(root)
+        } else {
+            self.resolve_block_with_candidates(root, root, candidates)
+        };
+        self.finish_strict(resolved)
     }
 }
 
@@ -88,21 +125,21 @@ impl<O: ResolutionObserver> Report<ResolveError> for ResolveFolder<'_, O> {
 }
 
 impl<O: ResolutionObserver> ResolveFolder<'_, O> {
-    pub fn run_source(self, root: TermId) -> Result<ResolveSourceOut> {
+    pub fn run_source(self, root: t::TermId) -> Result<ResolveSourceOut> {
         self.run_observed(root).program
     }
 
-    pub fn run_observed(self, root: TermId) -> ResolutionOutput<O::Output> {
-        self.run(root, Publication::Strict)
+    pub fn run_observed(self, root: t::TermId) -> ResolutionOutput<O::Output> {
+        self.run_inner(root)
     }
 
-    fn run(mut self, root: TermId, policy: Publication) -> ResolutionOutput<O::Output> {
-        let resolved =
-            self.term(root, ResolveEnv { local: Local::for_body(), global: &Global::default() });
+    fn run_inner(mut self, root: t::TermId) -> ResolutionOutput<O::Output> {
+        let resolved = self.lower_term(root);
         self.dependencies.assert_closed();
         let (users, observations) = self.observers.finish();
         let rejected = resolved.is_err()
-            || matches!(policy, Publication::Strict) && !self.diagnostics.is_empty();
+            || (matches!(self.unbound_policy, UnboundPolicy::Reject)
+                && !self.diagnostics.is_empty());
         let program = if rejected {
             Err(Box::new(
                 Diagnostics::with_errors(self.diagnostics.clone())
@@ -110,346 +147,337 @@ impl<O: ResolutionObserver> ResolveFolder<'_, O> {
             ))
         } else {
             Ok(ResolveSourceOut {
-                arena: FrozenArena::new(self.builder.finish(self.bitter.into_inner(), users)),
-                root,
+                arena: FrozenArena::new(self.builder.finish(users)),
+                root: resolved.expect("accepted source lowers to a root term"),
             })
         };
         ResolutionOutput { program, observations, diagnostics: self.diagnostics }
     }
 
-    fn scope_event(&mut self, id: TermId, env: &ResolveEnv<'_>) {
+    fn finish_strict(self, resolved: FoldResult<TermId>) -> Result<ResolveSourceOut> {
+        self.dependencies.assert_closed();
+        let (users, _) = self.observers.finish();
+        match resolved {
+            | Ok(root) if self.diagnostics.is_empty() => {
+                Ok(ResolveSourceOut { arena: FrozenArena::new(self.builder.finish(users)), root })
+            }
+            | _ => Err(Box::new(
+                Diagnostics::with_errors(self.diagnostics)
+                    .expect("rejection has a recorded diagnostic"),
+            )),
+        }
+    }
+
+    pub(super) fn report_primary(&mut self, error: ResolveError) -> ReportedError {
+        if !self.secondary_copy {
+            self.diagnostics.push(error);
+        }
+        ReportedError
+    }
+
+    pub(super) fn alloc_def(&mut self, id: t::DefId) -> DefId {
+        let name = self.textual.defs[&id];
+        let origin = self
+            .textual
+            .default_prelude_definitions
+            .get(&id)
+            .map(|pattern| (*pattern).into())
+            .unwrap_or_else(|| id.into());
+        self.builder.alloc_def(name, origin)
+    }
+
+    pub(super) fn scope_event(&mut self, id: TermId) {
+        if self.secondary_copy {
+            return;
+        }
         self.observers.scope(&ScopeEvent {
             occurrence: id,
             origin: self.builder.origins.source(&id.into()),
-            scope: env.scope(),
+            scope: self.scope.view(),
         });
     }
 
-    fn reference(&mut self, id: TermId, name: VarName, env: &ResolveEnv<'_>) -> Term<DefId> {
-        let Some(binding) = env.scope().lookup(&name) else {
-            if env.local.prelude.enabled && name == "OS" {
+    pub(super) fn reference(
+        &mut self, occurrence: TermId, name: VarName, origin: t::EntityId,
+    ) -> Term {
+        let Some(binding) = self.scope.view().lookup(&name) else {
+            if self.scope.prelude_enabled && name == "OS" {
                 // The checker resolves this against witnesses from explicit package
                 // openings. It neither opens another package nor chooses between providers.
-                self.dependencies.implicit_provider(&env.local.under);
+                self.dependencies.implicit_provider(&self.scope.under);
                 return Term::Internal(Internal::OS);
             }
-            self.report(ResolveError::UnboundVar(id.span(self).make(name)));
+            if matches!(self.unbound_policy, UnboundPolicy::BindFree) {
+                let definition = *self
+                    .free_vars
+                    .entry(name)
+                    .or_insert_with(|| self.builder.alloc_def(name, origin));
+                let event = ResolvedReference {
+                    occurrence,
+                    definition,
+                    dependency: None,
+                    active_bindings: &self.scope.under,
+                };
+                self.observers.reference(&event);
+                return Term::Var(definition);
+            }
+            if !self.secondary_copy {
+                self.report(ResolveError::UnboundVar(occurrence.span(self).make(name)));
+            }
             return Term::Hole(Hole);
         };
         let event = ResolvedReference {
-            occurrence: id,
+            occurrence,
             definition: binding.definition,
             dependency: binding.dependency,
-            active_bindings: &env.local.under,
+            active_bindings: &self.scope.under,
         };
         self.dependencies.reference(&event);
         self.observers.reference(&event);
         Term::Var(binding.definition)
     }
 
-    /// Resolve binders in source order, each one in scope for those after it.
-    fn telescope<'e>(
-        &mut self, binders: Vec<PatId>, env: ResolveEnv<'e>,
-    ) -> FoldResult<(Vec<PatId>, ResolveEnv<'e>)> {
-        binders.into_iter().try_fold((Vec::new(), env), |(mut resolved, env), binder| {
-            let binder = self.pattern(binder, env)?;
-            resolved.push(binder.pattern);
-            Ok((resolved, binder.env))
+    fn provider(&mut self, inner: t::TermId) -> FoldResult<TermId> {
+        if let Some(result) = self.providers.get(&inner) {
+            return *result;
+        }
+        let saved_scope = std::mem::take(&mut self.scope);
+        let saved_candidates = std::mem::take(&mut self.active_block_candidates);
+        let result = self.lower_term(inner);
+        self.scope = saved_scope;
+        self.active_block_candidates = saved_candidates;
+        self.providers.insert(inner, result);
+        result
+    }
+
+    pub(super) fn lower_pattern(
+        &mut self, id: t::PatId, preallocated: Option<&FxHashMap<t::DefId, DefId>>,
+    ) -> FoldResult<PatId> {
+        zydeco_foundation::stack::maybe_grow(|| {
+            let pat = match self.textual.pats[&id].clone() {
+                | t::Pattern::Ann(t::Ann { tm, ty }) => {
+                    let ty = self.lower_term(ty);
+                    let tm = self.lower_pattern(tm, preallocated);
+                    Pattern::Ann(Ann { tm: tm?, ty: ty? })
+                }
+                | t::Pattern::Manifest(_) => {
+                    let pattern = id.span(self.spans).clone().make(id);
+                    return Err(self
+                        .report_primary(ResolveError::ManifestPatternOutsideExistential(pattern)));
+                }
+                | t::Pattern::Hole(hole) => Pattern::Hole(hole),
+                | t::Pattern::Var(t_def) => {
+                    let def = if let Some(map) = preallocated {
+                        map[&t_def]
+                    } else {
+                        let def = self.alloc_def(t_def);
+                        self.scope.bind_single(self.textual.defs[&t_def], def);
+                        def
+                    };
+                    Pattern::Var(def)
+                }
+                | t::Pattern::Named(t::Named(name, inner)) => {
+                    Pattern::Named(Named(name, self.lower_pattern(inner, preallocated)?))
+                }
+                | t::Pattern::Ctor(t::Ctor(name, inner)) => {
+                    Pattern::Ctor(Ctor(name, self.lower_pattern(inner, preallocated)?))
+                }
+                | t::Pattern::Lit(literal) => Pattern::Lit(literal),
+                | t::Pattern::Project(t::ProjectionPattern(field, inner)) => Pattern::Project(
+                    ProjectionPattern(field, self.lower_pattern(inner, preallocated)?),
+                ),
+                | t::Pattern::View(t::ViewPattern { function, pattern }) => {
+                    let function = self.lower_term(function);
+                    let pattern = self.lower_pattern(pattern, preallocated);
+                    Pattern::View(ViewPattern { function: function?, pattern: pattern? })
+                }
+                | t::Pattern::Alias(t::Alias(patterns)) => {
+                    let patterns = patterns
+                        .into_iter()
+                        .map(|pat| self.lower_pattern(pat, preallocated))
+                        .collect_reported::<Vec<_>>()?;
+                    Pattern::Alias(Alias(ConsN::from_vec(patterns).expect("alias is nonempty")))
+                }
+                | t::Pattern::Paren(t::Paren(patterns)) => {
+                    let pats = patterns
+                        .into_iter()
+                        .map(|pat| self.lower_pattern(pat, preallocated))
+                        .collect_reported::<Vec<_>>()?;
+                    match pats.len() {
+                        | 0 => Pattern::Triv(Triv),
+                        | 1 => return Ok(pats.into_iter().next().unwrap()),
+                        | _ => Pattern::Cons(pats),
+                    }
+                }
+            };
+            Ok(self.builder.alloc_pat(pat, id.into()))
         })
     }
 
-    pub(super) fn pattern<'e>(
-        &mut self, id: PatId, mut env: ResolveEnv<'e>,
-    ) -> FoldResult<ResolvedPattern<'e>> {
+    pub(super) fn lower_term(&mut self, id: t::TermId) -> FoldResult<TermId> {
         zydeco_foundation::stack::maybe_grow(|| {
-            let pat = self.bitter.pats[&id].clone();
-            match &pat {
-                | Pattern::Ann(Ann { tm, ty }) => {
-                    self.term(*ty, env.clone())?;
-                    env = self.pattern(*tm, env)?.env;
+            let term: Term = match self.textual.terms[&id].clone() {
+                | t::Term::Meta(meta) => return self.lower_meta(id, meta),
+                | t::Term::SourceBoundary(t::SourceBoundary(inner)) => {
+                    SourceBoundary(self.provider(inner)?).into()
                 }
-                | Pattern::Var(def) => {
-                    let name = self.bitter.defs[def];
-                    self.builder.defs.insert_new(*def, name);
-                    env.local = env.local.bind_group([(name, *def)]);
+                | t::Term::SignatureBoundary(t::SignatureBoundary(inner)) => {
+                    SignatureBoundary(self.provider(inner)?).into()
                 }
-                | Pattern::Named(Named(_, inner))
-                | Pattern::Ctor(Ctor(_, inner))
-                | Pattern::Project(ProjectionPattern(_, inner)) => {
-                    env = self.pattern(*inner, env)?.env;
+                | t::Term::Hole(hole) => {
+                    let occurrence = self.builder.alloc_term(hole, id.into());
+                    self.scope_event(occurrence);
+                    return Ok(occurrence);
                 }
-                | Pattern::View(ViewPattern { function, pattern }) => {
-                    self.term(*function, env.clone())?;
-                    env = self.pattern(*pattern, env)?.env;
+                | t::Term::Var(name) => {
+                    let occurrence = self.builder.reserve_term(id.into());
+                    let resolved = self.reference(occurrence, name, id.into());
+                    self.builder.fill_term(occurrence, resolved);
+                    return Ok(occurrence);
                 }
-                | Pattern::Alias(Alias(patterns)) => {
-                    for pat in patterns {
-                        env = self.pattern(*pat, env)?.env;
-                    }
-                }
-                | Pattern::Cons(patterns) => {
-                    for pat in patterns {
-                        env = self.pattern(*pat, env)?.env;
-                    }
-                }
-                | Pattern::Hole(_) | Pattern::Lit(_) | Pattern::Triv(_) => {}
-            }
-            self.builder.pats.insert_new(id, pat);
-            Ok(ResolvedPattern { pattern: id, env })
-        })
-    }
-
-    fn provider(&mut self, id: TermId) -> FoldResult<()> {
-        if self.failed_providers.contains(&id) {
-            return Err(ReportedError);
-        }
-        if self.builder.terms.get(&id).is_none() {
-            let result =
-                self.term(id, ResolveEnv { local: Local::for_body(), global: &Global::default() });
-            if result.is_err() {
-                self.failed_providers.insert(id);
-            }
-            result?;
-        }
-        Ok(())
-    }
-
-    // Remaining worklist: split term resolution by scope behavior.
-    #[allow(clippy::too_many_lines)]
-    pub(super) fn term(&mut self, id: TermId, env: ResolveEnv<'_>) -> FoldResult<TermId> {
-        zydeco_foundation::stack::maybe_grow(|| {
-            let term = self.bitter.terms[&id].clone();
-            // This classification is exhaustive: new constructors require a scope review.
-            let term = match term {
-                | Term::Meta(term) => {
-                    let mut env = env;
-                    if matches!(
-                        term.0.specialize::<crate::metadata::PreludeMeta>(),
-                        Ok(Some(crate::metadata::PreludeMeta::None))
-                    ) {
-                        env.local.prelude.enabled = false;
-                    }
-                    self.term(term.1, env)?;
-                    term.into()
-                }
-                | Term::Hole(hole) => {
-                    self.scope_event(id, &env);
-                    hole.into()
-                }
-                | Term::SourceBoundary(SourceBoundary(inner)) => {
-                    self.provider(inner)?;
-                    SourceBoundary(inner).into()
-                }
-                | Term::SignatureBoundary(SignatureBoundary(inner)) => {
-                    self.provider(inner)?;
-                    SignatureBoundary(inner).into()
-                }
-                | Term::Ann(Ann { tm, ty }) => {
-                    let ty = self.term(ty, env.clone());
-                    let tm = self.term(tm, env);
+                | t::Term::Ann(t::Ann { tm, ty }) => {
+                    let ty = self.lower_term(ty);
+                    let tm = self.lower_term(tm);
                     Ann { tm: tm?, ty: ty? }.into()
                 }
-                | Term::Abs(Abs(binders, body)) => {
-                    let (binders, env) = self.telescope(binders, env)?;
-                    self.term(body, env)?;
-                    Abs(binders, body).into()
+                | t::Term::Named(t::Named(name, inner)) => {
+                    Named(name, self.lower_term(inner)?).into()
                 }
-                | Term::ValAbs(Abs(binder, body)) => {
-                    let binder = self.pattern(binder, env)?;
-                    self.term(body, binder.env)?;
-                    Term::ValAbs(Abs(binder.pattern, body))
+                | t::Term::Label(t::Label(name, inner)) => {
+                    Label(name, self.lower_term(inner)?).into()
                 }
-                | Term::Fix(Fix(binder, body)) => {
-                    let binder = self.pattern(binder, env)?;
-                    self.term(body, binder.env)?;
-                    Fix(binder.pattern, body).into()
-                }
-                | Term::Pi(Pi(binders, body)) => {
-                    let (binders, env) = self.telescope(binders, env)?;
-                    self.term(body, env)?;
-                    Pi(binders, body).into()
-                }
-                | Term::ValPi(ValPi(binder, body)) => {
-                    let binder = self.pattern(binder, env)?;
-                    self.term(body, binder.env)?;
-                    ValPi(binder.pattern, body).into()
-                }
-                | Term::Sigma(Sigma(binder, body)) => {
-                    let binder = self.pattern(binder, env)?;
-                    self.term(body, binder.env)?;
-                    Sigma(binder.pattern, body).into()
-                }
-                | Term::ManifestExists(term) => {
-                    let definition = self.term(term.definition, env.clone());
-                    let binder = self.pattern(term.binder, env);
-                    definition?;
-                    let binder = binder?;
-                    self.term(term.body, binder.env)?;
-                    term.into()
-                }
-                | Term::Pack(term) => {
-                    let definition = self.term(term.definition, env.clone());
-                    let binder = self.pattern(term.binder, env);
-                    definition?;
-                    let binder = binder?;
-                    self.term(term.body, binder.env)?;
-                    term.into()
-                }
-                | Term::Do(term) => {
-                    let bindee = self.term(term.bindee, env.clone());
-                    let binder = self.pattern(term.binder, env);
-                    bindee?;
-                    let binder = binder?;
-                    self.term(term.tail, binder.env)?;
-                    term.into()
-                }
-                | Term::Let(term) => {
-                    let bindee = self.term(term.bindee, env.clone());
-                    let binder = self.pattern(term.binder, env.clone());
-                    bindee?;
-                    let mut binder = binder?;
-                    if self.builder.origins.source(&term.binder.into()).is_some_and(|origin| {
-                        matches!(origin, crate::textual::syntax::EntityId::Pat(pattern)
-                        if self.bitter.default_prelude_binders.contains(&pattern))
-                    }) {
-                        let definitions = binder
-                            .env
-                            .local
-                            .var_to_def
-                            .iter()
-                            .filter(|(_, binding)| binding.depth > env.local.depth)
-                            .map(|(name, binding)| (*name, binding.definition))
-                            .collect();
-                        binder.env.local = env.local;
-                        binder.env.local.prelude.definitions = definitions;
-                    }
-                    self.term(term.tail, binder.env)?;
-                    term.into()
-                }
-                | Term::MobileParam(MobileParam { tail, .. }) => {
-                    if env.local.boundary.is_none() {
-                        return self.err(ResolveError::UnenclosedThat(*id.span(self)));
-                    }
-                    self.term(tail, env)?;
-                    Residual(tail).into()
-                }
-                | Term::MobileBind(term) => {
-                    if env.local.boundary.is_none() {
-                        return self.err(ResolveError::UnenclosedThat(*id.span(self)));
-                    }
-                    self.term(term.tail, env)?;
-                    Residual(term.tail).into()
-                }
-                | Term::Block(Block(body)) => self.resolve_block(id, body, env)?,
-                | Term::CbvBlock(term) => {
-                    let body = self.term(term.body, env);
-                    body?;
-                    term.into()
-                }
-                | Term::MoBlock(term) => {
-                    let monad = self.term(term.basis.monad, env.clone());
-                    let algebra = self.term(term.basis.algebra, env.clone());
-                    let body = self.term(term.body, env);
-                    monad?;
-                    algebra?;
-                    body?;
-                    term.into()
-                }
-                | Term::Match(term) => {
-                    let scrut = self.term(term.scrut, env.clone());
-                    let arms = term
-                        .arms
-                        .iter()
-                        .map(|arm| {
-                            let binder = self.pattern(arm.binder, env.clone())?;
-                            self.term(arm.tail, binder.env)
-                        })
-                        .collect_reported::<Vec<_>>();
-                    scrut?;
-                    arms?;
-                    term.into()
-                }
-                | Term::CoMatchClauses(term) => {
-                    term.clauses
-                        .iter()
-                        .map(|clause| {
-                            let mut clause_env = env.clone();
-                            for item in clause.spine.iter() {
-                                if let CoPatternItem::Pat(pattern) = item {
-                                    clause_env = self.pattern(*pattern, clause_env)?.env;
-                                }
-                            }
-                            self.term(clause.tail, clause_env)
-                        })
+                | t::Term::Paren(t::Paren(terms)) => {
+                    let terms = terms
+                        .into_iter()
+                        .map(|t| self.lower_term(t))
                         .collect_reported::<Vec<_>>()?;
-                    term.into()
+                    match terms.len() {
+                        | 0 => Triv.into(),
+                        | 1 => return Ok(terms.into_iter().next().unwrap()),
+                        | _ => Term::Cons(terms),
+                    }
                 }
-                | Term::Residual(_) | Term::RecGroup(_) => {
-                    unreachable!("generated context syntax is not a resolver input")
+                | t::Term::Prod(t::Prod(components)) => {
+                    let components = components
+                        .into_iter()
+                        .map(|t| self.lower_term(t))
+                        .collect_reported::<Vec<_>>()?;
+                    Term::Cons(components)
                 }
-                | ordinary @ (Term::Var(_)
-                | Term::TypeOf(_)
-                | Term::Internal(_)
-                | Term::Sealed(_)
-                | Term::Named(_)
-                | Term::Label(_)
-                | Term::Triv(_)
-                | Term::Cons(_)
-                | Term::App(_)
-                | Term::Thunk(_)
-                | Term::Force(_)
-                | Term::Ret(_)
-                | Term::Data(_)
-                | Term::CoData(_)
-                | Term::Ctor(_)
-                | Term::CoMatch(_)
-                | Term::Dtor(_)
-                | Term::Proj(_)
-                | Term::Lit(_)) => ordinary.fold_with(&mut OrdinaryFolder {
-                    resolver: self,
-                    occurrence: id,
-                    env: &env,
-                })?,
+                | t::Term::App(app) => return self.lower_app(id, app),
+                | t::Term::Pipeline(t::Pipeline { subject, function, .. }) => {
+                    let subject = self.lower_term(subject);
+                    let function = self.lower_term(function);
+                    App(function?, vec![subject?]).into()
+                }
+                | t::Term::Abs(abs) => return self.lower_abstraction(abs, id),
+                | t::Term::ValAbs(abs) => return self.lower_value_abstraction(abs, id),
+                | t::Term::Fix(fix) => return self.lower_fix(fix, id),
+                | t::Term::Pi(t::Pi(params, body)) => {
+                    return self.lower_quantifier(params, body, telescopes::Quantifier::Pi, id);
+                }
+                | t::Term::ValPi(t::ValPi(params, body)) => {
+                    return self.lower_quantifier(params, body, telescopes::Quantifier::ValPi, id);
+                }
+                | t::Term::Forall(t::Forall(params, body)) => {
+                    return self.lower_quantifier(params, body, telescopes::Quantifier::Pi, id);
+                }
+                | t::Term::Sigma(t::Sigma(params, body)) => {
+                    return self.lower_quantifier(params, body, telescopes::Quantifier::Sigma, id);
+                }
+                | t::Term::Arrow(t::Arrow(ty_in, ty_out)) => {
+                    let ty_in = self.lower_term(ty_in)?;
+                    let hole = self.builder.alloc_pat(Pattern::Hole(Hole), id.into());
+                    let ann = self
+                        .builder
+                        .alloc_pat(Pattern::Ann(Ann { tm: hole, ty: ty_in }), id.into());
+                    let ty_out = self.lower_term(ty_out)?;
+                    Pi(vec![ann], ty_out).into()
+                }
+                | t::Term::Exists(exists) => return self.lower_exists(exists, id),
+                | t::Term::Pack(pack) => return self.lower_pack(pack, id),
+                | t::Term::Thunk(t::Thunk(body)) => {
+                    let body = self.lower_term(body)?;
+                    return Ok(self.builder.introduce(alloc::Introduction::Thunk, body, id.into()));
+                }
+                | t::Term::Force(t::Force(inner)) => Force(self.lower_term(inner)?).into(),
+                | t::Term::Ret(t::Return(body)) => {
+                    let body = self.lower_term(body)?;
+                    return Ok(self.builder.introduce(
+                        alloc::Introduction::Return,
+                        body,
+                        id.into(),
+                    ));
+                }
+                | t::Term::Do(do_bind) => return self.lower_do(do_bind, id),
+                | t::Term::Let(t::GenLet { binding, tail }) => {
+                    return self.lower_let_in(binding, t::DefinitionMode::Transparent, tail, id);
+                }
+                | t::Term::ContextBind(bind) => return self.lower_context_bind(bind, id),
+                | t::Term::Param(param) => return self.lower_param(param, id),
+                | t::Term::Block(t::Block(body)) => return self.resolve_block(id, body),
+                | t::Term::Data(data) => return self.lower_data(data, id.into()),
+                | t::Term::CoData(codata) => return self.lower_codata(codata, id.into()),
+                | t::Term::Ctor(t::Ctor(name, inner)) => Ctor(name, self.lower_term(inner)?).into(),
+                | t::Term::Match(m) => return self.lower_match(m, id),
+                | t::Term::CoMatch(cm) => return self.lower_comatch(cm, id),
+                | t::Term::Dtor(t::Dtor(inner, name)) => Dtor(self.lower_term(inner)?, name).into(),
+                | t::Term::Proj(t::Proj(head, name)) => Proj(self.lower_term(head)?, name).into(),
+                | t::Term::Lit(lit) => lit.into(),
             };
-            self.builder.terms.insert_new(id, term);
-            Ok(id)
+            Ok(self.builder.alloc_term(term, id.into()))
         })
     }
-}
 
-pub(super) struct ResolvedPattern<'a> {
-    pub pattern: PatId,
-    pub env: ResolveEnv<'a>,
-}
+    fn lower_app(
+        &mut self, id: t::TermId, t::Appli(mut current): t::Appli<t::TermId>,
+    ) -> FoldResult<TermId> {
+        let mut reversed_tail = Vec::new();
+        loop {
+            while current.len() > 1 {
+                reversed_tail.push(current.pop().unwrap());
+            }
+            let Some(first) = current.pop() else {
+                unreachable!("application spine is nonempty");
+            };
+            match &self.textual.terms[&first] {
+                | t::Term::App(t::Appli(inner)) => current = inner.clone(),
+                | _ => {
+                    let mut inputs = Vec::with_capacity(1 + reversed_tail.len());
+                    inputs.push(first);
+                    inputs.extend(reversed_tail.into_iter().rev());
+                    let terms = inputs
+                        .into_iter()
+                        .map(|t| self.lower_term(t))
+                        .collect_reported::<Vec<_>>()?;
+                    let mut iter = terms.into_iter();
+                    let head = iter.next().unwrap();
+                    return if iter.len() == 0 {
+                        Ok(head)
+                    } else {
+                        Ok(self.builder.alloc_term(App(head, iter.collect()), id.into()))
+                    };
+                }
+            }
+        }
+    }
 
-struct OrdinaryFolder<'a, 'r, 'e, O> {
-    resolver: &'r mut ResolveFolder<'a, O>,
-    occurrence: TermId,
-    env: &'r ResolveEnv<'e>,
-}
-impl<O: ResolutionObserver> Folder for OrdinaryFolder<'_, '_, '_, O> {
-    type InputRef = VarName;
-    type OutputRef = DefId;
-    type Error = ReportedError;
-    fn fold_def(&mut self, _id: DefId) -> FoldResult<DefId> {
-        unreachable!("ordinary terms have no binders")
-    }
-    fn fold_pat(&mut self, _id: PatId) -> FoldResult<PatId> {
-        unreachable!("ordinary terms have no binding patterns")
-    }
-    fn fold_term(&mut self, id: TermId) -> FoldResult<TermId> {
-        self.resolver.term(id, self.env.clone())
-    }
-    fn fold_var(&mut self, name: VarName) -> FoldResult<Term<DefId>> {
-        Ok(self.resolver.reference(self.occurrence, name, self.env))
-    }
-    fn fold_items<T, U>(
-        &mut self, items: impl IntoIterator<Item = T>,
-        mut fold: impl FnMut(&mut Self, T) -> FoldResult<U>,
-    ) -> FoldResult<Vec<U>> {
-        items.into_iter().map(|item| fold(self, item)).collect_reported()
+    fn lower_match(
+        &mut self, t::Match { scrut, arms }: t::Match<t::TermId, t::PatId, t::TermId>,
+        id: t::TermId,
+    ) -> FoldResult<TermId> {
+        let scrut = self.lower_term(scrut);
+        let arms = arms
+            .into_iter()
+            .map(|t::Matcher { binder, tail }| {
+                let mark = self.scope.mark();
+                let binder = self.lower_pattern(binder, None);
+                let tail = binder.and_then(|binder| Ok((binder, self.lower_term(tail)?)));
+                self.scope.rollback(mark);
+                let (binder, tail) = tail?;
+                Ok(Matcher { binder, tail })
+            })
+            .collect_reported::<Vec<_>>()?;
+        Ok(self.builder.alloc_term(Match { scrut: scrut?, arms }, id.into()))
     }
 }
-
-#[cfg(test)]
-mod tests;

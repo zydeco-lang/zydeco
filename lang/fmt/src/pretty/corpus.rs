@@ -8,9 +8,8 @@ use std::{
     path::{Path, PathBuf},
 };
 use walkdir::WalkDir;
-use zydeco_foundation::pass::CompilerPass;
 use zydeco_surface::{
-    bitter::{SourceUnitDesugarer, fmt::Formatter as BitterFormatter},
+    scoped::{ResolveFolder, fmt::Formatter as ScopedFormatter},
     textual::{LexicalRole, LexicalTokens},
 };
 use zydeco_syntax::Ugly;
@@ -58,12 +57,11 @@ impl ParsedSource {
         self.formatted.render(&self.source, PrettyOptions::default())
     }
 
-    fn desugared_shape(&self) -> String {
-        let output =
-            SourceUnitDesugarer { spans: &self.formatted.spans, textual: &self.formatted.arena }
-                .run(self.formatted.unit)
-                .expect("repository sources should desugar");
-        output.root.ugly(&BitterFormatter::new(&output.arena))
+    fn desugared_shape(&self) -> Result<String, Vec<String>> {
+        ResolveFolder::new(&self.formatted.spans, &self.formatted.arena)
+            .run_open_fragment(self.formatted.unit.root)
+            .map(|output| output.root.ugly(&ScopedFormatter::alpha_normalized(&output.arena)))
+            .map_err(|errors| errors.iter().map(ToString::to_string).collect())
     }
 }
 
@@ -100,7 +98,15 @@ fn repository_programs_preserve_formatter_laws() {
             return;
         };
 
-        if original.desugared_shape() != reparsed.desugared_shape() {
+        let allows_resolve_error =
+            source.lines().any(|line| line.trim() == "-- expect: resolve-error");
+        let original_shape = original.desugared_shape();
+        let reparsed_shape = reparsed.desugared_shape();
+        if let Err(errors) = &original_shape
+            && !allows_resolve_error
+        {
+            violations.push(format!("{name}: unexpected lowering failure: {errors:?}"));
+        } else if original_shape != reparsed_shape {
             violations.push(format!("formatter changed the desugared structure of {name}"));
         }
         if formatted != reparsed.format() {
@@ -122,6 +128,6 @@ fn prelude_formatting_retains_sugar_and_equivalent_expansion() {
     assert!(formatted.contains("@[prelude(from(view))]"));
     assert!(!formatted.contains("/VType"));
     let reparsed = ParsedSource::try_new(&formatted).unwrap();
-    assert_eq!(original.desugared_shape(), reparsed.desugared_shape());
+    assert_eq!(original.desugared_shape().unwrap(), reparsed.desugared_shape().unwrap());
     assert_eq!(formatted, reparsed.format());
 }

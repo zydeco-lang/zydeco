@@ -17,7 +17,6 @@ use zydeco_statics::{
     syntax::{Fillable, TermAnnId, Type},
 };
 use zydeco_surface::{
-    bitter::DesugarErrors,
     scoped::{ResolveErrors, arena::ScopedArena},
     textual::syntax::SpanArena,
 };
@@ -178,13 +177,6 @@ pub enum AnalysisError {
         #[source]
         error: TextualProgramError,
     },
-    #[error("Desugaring error: {error}")]
-    Desugar {
-        #[source]
-        error: Box<DesugarErrors>,
-        /// The merged program's span arena, whose source map resolves the rejected construct.
-        spans: Arc<SpanArena>,
-    },
     #[error("Resolution error: {error}")]
     Resolve {
         #[source]
@@ -207,13 +199,6 @@ impl AnalysisError {
                     site: SourceDiagnosticSite::from_span(spans, error.primary_span()),
                 })
                 .collect(),
-            | Self::Desugar { error, spans } => error
-                .iter()
-                .map(|error| super::SourceDiagnostic {
-                    message: error.to_string(),
-                    site: SourceDiagnosticSite::from_span(spans, error.span()),
-                })
-                .collect(),
             | _ => vec![super::SourceDiagnostic {
                 message: self.to_string(),
                 site: self.diagnostic_site(),
@@ -226,9 +211,6 @@ impl AnalysisError {
         match self {
             | Self::Source { error } => error.diagnostic_site(),
             | Self::TextualProgram { error } => Some(error.diagnostic_site()),
-            | Self::Desugar { error, spans } => {
-                error.iter().find_map(|error| SourceDiagnosticSite::from_span(spans, error.span()))
-            }
             | Self::Resolve { error, spans, .. } => error
                 .iter()
                 .find_map(|error| SourceDiagnosticSite::from_span(spans, error.primary_span())),
@@ -776,15 +758,11 @@ fn resolved_data<'db>(
     let graph = source_graph(db, root, package, project)
         .map_err(|error| AnalysisError::Source { error })?;
     let program = graph.parse().map_err(|error| AnalysisError::TextualProgram { error })?;
-    let bitter = program.desugar().map_err(|failure| AnalysisError::Desugar {
-        error: failure.error,
-        spans: Arc::new(failure.spans.into_inner()),
-    })?;
     let ScopedProgram { spans, arena, root } =
-        bitter.resolve().map_err(|failure| AnalysisError::Resolve {
+        program.resolve().map_err(|failure| AnalysisError::Resolve {
             error: failure.error,
             graph,
-            spans: std::sync::Arc::new(failure.spans.into_inner()),
+            spans: Arc::new(failure.spans.into_inner()),
         })?;
     Ok(zydeco_statics::query::ScopedData::new(
         db,

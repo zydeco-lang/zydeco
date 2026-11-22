@@ -1,10 +1,10 @@
 # Scoped (Name Resolution)
 
-`scoped` resolves names in desugared surface syntax and supplies the term graph consumed by static checking.
-It covers resolution, block scheduling, and source boundaries.
+`scoped` lowers and resolves names in parsed surface syntax and supplies the term graph consumed by static checking.
+It covers metadata lowering, resolution, block scheduling, and source boundaries.
 
 ```text
-textual -> bitter -> scoped -> statics
+textual -> scoped -> statics
 ```
 
 ## Implementation map

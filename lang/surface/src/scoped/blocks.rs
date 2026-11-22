@@ -1,307 +1,255 @@
-use super::scope::ResolveEnv;
-use crate::{
-    bitter::syntax::{self as b, Term},
-    scoped::{syntax::*, *},
-};
+//! Block candidate collection, block-wide resolution, and context elaboration.
+
+use super::alloc::ScopedBuilder;
+use super::binders::collect_textual_binders;
+use super::err::ResolveError;
+use super::observers::ResolutionObserver;
+use super::resolver::{FoldResult, LoweredBinding, ResolveFolder};
+use super::scope::BindingSite;
+use super::syntax::*;
+use crate::metadata::PreludeMeta;
+use crate::textual::syntax as t;
+use rustc_hash::FxHashMap;
 use zydeco_foundation::err::{CollectReported, Report, ReportedError};
 use zydeco_foundation::prelude::IdAllocator;
-type FoldResult<T> = std::result::Result<T, ReportedError>;
+use zydeco_syntax::SpanView;
 
-/// One syntactic contribution discovered within a `begin` boundary.
 #[derive(Clone, Debug)]
-pub(super) enum MobileCandidate {
-    Parameter { source: TermId, flavor: ParameterFlavor, binder: PatId, prelude: bool },
-    Definition { source: TermId, binder: PatId, bindee: TermId, prelude: bool },
+pub(super) enum TextualCandidateKind {
+    Param { flavor: ParameterFlavor, binder: t::PatId },
+    ContextBind { mode: t::DefinitionMode, binding: t::GenBind<t::TermId> },
 }
 
-impl MobileCandidate {
-    fn source(&self) -> TermId {
-        match self {
-            | Self::Parameter { source, .. } | Self::Definition { source, .. } => *source,
+#[derive(Clone, Debug)]
+pub(super) struct TextualCandidate {
+    pub source: t::TermId,
+    pub kind: TextualCandidateKind,
+    pub prelude: bool,
+}
+
+impl TextualCandidate {
+    fn outer_pattern(&self) -> t::PatId {
+        match &self.kind {
+            | TextualCandidateKind::Param { binder, .. } => *binder,
+            | TextualCandidateKind::ContextBind { binding, .. } => binding.binder,
         }
-    }
-
-    fn prelude(&self) -> bool {
-        match self {
-            | Self::Parameter { prelude, .. } | Self::Definition { prelude, .. } => *prelude,
-        }
-    }
-
-    fn without_prelude(mut self) -> Self {
-        match &mut self {
-            | Self::Parameter { prelude, .. } | Self::Definition { prelude, .. } => {
-                *prelude = false
-            }
-        }
-        self
-    }
-
-    fn binding_id(&self) -> BindingId {
-        self.source()
-    }
-
-    fn resolve<O: ResolutionObserver>(
-        &self, resolver: &mut ResolveFolder<'_, O>, block: TermId, mut env: ResolveEnv<'_>,
-        source_order: usize,
-    ) -> FoldResult<Binding> {
-        let id = self.binding_id();
-        env.local.prelude.enabled &= self.prelude();
-        env.local.under.push_back_mut(BindingSite { owner: block, id });
-        let inner = match self {
-            | Self::Parameter { flavor, binder, .. } => {
-                resolver.pattern(*binder, env)?;
-                BindingForm::Parameter(Parameter { flavor: *flavor, binder: *binder })
-            }
-            | Self::Definition { binder, bindee, .. } => {
-                let bindee_result = resolver.term(*bindee, env.clone());
-                let binder_result = resolver.pattern(*binder, env);
-                bindee_result?;
-                binder_result?;
-                BindingForm::Definition(Definition { binder: *binder, bindee: *bindee })
-            }
-        };
-        Ok(Binding { id, inner, metas: rpds::VectorSync::new_sync(), source_order })
     }
 }
 
-/// A syntax-directed collector which treats nested `begin` terms as new
-/// closure boundaries.
-pub(super) struct BlockCandidateCollector<'a> {
-    arena: &'a BitterArena,
+/// Scans parsed textual syntax directly for `that` candidates belonging to one block boundary.
+pub(super) struct TextualBlockCollector<'a> {
+    textual: &'a t::TextArena,
 }
 
-impl<'a> BlockCandidateCollector<'a> {
-    pub(super) fn new(arena: &'a BitterArena) -> Self {
-        Self { arena }
+impl<'a> TextualBlockCollector<'a> {
+    pub(super) fn new(textual: &'a t::TextArena) -> Self {
+        Self { textual }
     }
 
-    pub(super) fn collect(&self, body: TermId) -> Vec<MobileCandidate> {
-        self.term(body)
+    pub(super) fn collect(&self, body: t::TermId) -> Vec<TextualCandidate> {
+        let mut out = Vec::new();
+        self.scan_term(body, true, &mut out);
+        out
     }
 
-    fn pattern(&self, pattern: PatId) -> Vec<MobileCandidate> {
-        match &self.arena.pats[&pattern] {
-            | b::Pattern::Ann(b::Ann { tm, ty }) => {
-                [self.pattern(*tm), self.term(*ty)].into_iter().flatten().collect()
+    fn scan_pat(&self, pat: t::PatId, prelude: bool, out: &mut Vec<TextualCandidate>) {
+        zydeco_foundation::stack::maybe_grow(|| match &self.textual.pats[&pat] {
+            | t::Pattern::Ann(t::Ann { tm, ty }) => {
+                self.scan_pat(*tm, prelude, out);
+                self.scan_term(*ty, prelude, out);
             }
-            | b::Pattern::Named(b::Named(_, inner)) | b::Pattern::Ctor(b::Ctor(_, inner)) => {
-                self.pattern(*inner)
+            | t::Pattern::Manifest(t::ManifestPattern { binder, definition }) => {
+                self.scan_pat(*binder, prelude, out);
+                self.scan_term(*definition, prelude, out);
             }
-            | b::Pattern::Project(b::ProjectionPattern(_, inner)) => self.pattern(*inner),
-            | b::Pattern::View(b::ViewPattern { function, pattern }) => {
-                [self.term(*function), self.pattern(*pattern)].into_iter().flatten().collect()
+            | t::Pattern::Named(t::Named(_, inner))
+            | t::Pattern::Ctor(t::Ctor(_, inner))
+            | t::Pattern::Project(t::ProjectionPattern(_, inner)) => {
+                self.scan_pat(*inner, prelude, out);
             }
-            | b::Pattern::Alias(b::Alias(patterns)) => {
-                patterns.iter().flat_map(|pattern| self.pattern(*pattern)).collect()
+            | t::Pattern::View(t::ViewPattern { function, pattern }) => {
+                self.scan_term(*function, prelude, out);
+                self.scan_pat(*pattern, prelude, out);
             }
-            | b::Pattern::Cons(patterns) => {
-                patterns.iter().flat_map(|pattern| self.pattern(*pattern)).collect()
-            }
-            | b::Pattern::Hole(_)
-            | b::Pattern::Var(_)
-            | b::Pattern::Lit(_)
-            | b::Pattern::Triv(_) => Vec::new(),
-        }
-    }
-
-    fn term(&self, term: TermId) -> Vec<MobileCandidate> {
-        match &self.arena.terms[&term] {
-            | Term::MobileParam(b::MobileParam { flavor, binder, tail }) => {
-                std::iter::once(MobileCandidate::Parameter {
-                    source: term,
-                    prelude: true,
-                    flavor: *flavor,
-                    binder: *binder,
-                })
-                .chain(self.pattern(*binder))
-                .chain(self.term(*tail))
-                .collect()
-            }
-            | Term::MobileBind(binding) => {
-                let b::MobileBind { binder, bindee, tail } = &**binding;
-                std::iter::once(MobileCandidate::Definition {
-                    source: term,
-                    prelude: true,
-                    binder: *binder,
-                    bindee: *bindee,
-                })
-                .chain(self.pattern(*binder))
-                .chain(self.term(*bindee))
-                .chain(self.term(*tail))
-                .collect()
-            }
-            | Term::Block(_) | Term::SourceBoundary(_) | Term::SignatureBoundary(_) => Vec::new(),
-            | Term::Residual(_) => {
-                unreachable!("residual nodes are introduced only after candidate collection")
-            }
-            | Term::Meta(term) => {
-                let b::MetaT(meta, inner) = &**term;
-                let candidates = self.term(*inner);
-                if matches!(
-                    meta.specialize::<crate::metadata::PreludeMeta>(),
-                    Ok(Some(crate::metadata::PreludeMeta::None))
-                ) {
-                    candidates.into_iter().map(MobileCandidate::without_prelude).collect()
-                } else {
-                    candidates
+            | t::Pattern::Alias(t::Alias(patterns)) => {
+                for item in patterns.iter() {
+                    self.scan_pat(*item, prelude, out);
                 }
             }
-            | Term::TypeOf(b::TypeOf(inner))
-            | Term::Sealed(b::Sealed(inner))
-            | Term::Thunk(b::Thunk(inner))
-            | Term::Force(b::Force(inner))
-            | Term::Ret(b::Return(inner)) => self.term(*inner),
-            | Term::MoBlock(term) => {
-                let b::MoBlock { body, basis } = &**term;
-                [self.term(basis.monad), self.term(basis.algebra), self.term(*body)]
-                    .into_iter()
-                    .flatten()
-                    .collect()
+            | t::Pattern::Paren(t::Paren(patterns)) => {
+                for item in patterns {
+                    self.scan_pat(*item, prelude, out);
+                }
             }
-            | Term::CbvBlock(term) => {
-                let b::CbvBlock { body } = term;
-                [self.term(*body)].into_iter().flatten().collect()
-            }
-            | Term::Ann(b::Ann { tm, ty }) => {
-                [self.term(*tm), self.term(*ty)].into_iter().flatten().collect()
-            }
-            | Term::Named(b::Named(_, inner))
-            | Term::Label(b::Label(_, inner))
-            | Term::Ctor(b::Ctor(_, inner))
-            | Term::Dtor(b::Dtor(inner, _))
-            | Term::Proj(b::Proj(inner, _)) => self.term(*inner),
-            | Term::Cons(items) => items.iter().flat_map(|item| self.term(*item)).collect(),
-            | Term::Abs(b::Abs(patterns, body)) | Term::Pi(b::Pi(patterns, body)) => patterns
-                .iter()
-                .flat_map(|pattern| self.pattern(*pattern))
-                .chain(self.term(*body))
-                .collect(),
-            | Term::ValAbs(b::Abs(pattern, body))
-            | Term::Fix(b::Fix(pattern, body))
-            | Term::ValPi(b::ValPi(pattern, body))
-            | Term::Sigma(b::Sigma(pattern, body)) => {
-                [self.pattern(*pattern), self.term(*body)].into_iter().flatten().collect()
-            }
-            | Term::App(b::App(function, arguments)) => self
-                .term(*function)
-                .into_iter()
-                .chain(arguments.iter().flat_map(|argument| self.term(*argument)))
-                .collect(),
-            | Term::ManifestExists(term) => {
-                let b::ManifestExists { binder, definition, body } = &**term;
-                [self.pattern(*binder), self.term(*definition), self.term(*body)]
-                    .into_iter()
-                    .flatten()
-                    .collect()
-            }
-            | Term::Pack(term) => {
-                let b::Pack { mode: _, binder, definition, body } = &**term;
-                [self.pattern(*binder), self.term(*definition), self.term(*body)]
-                    .into_iter()
-                    .flatten()
-                    .collect()
-            }
-            | Term::Do(term) => {
-                let b::Bind { binder, bindee, tail } = &**term;
-                [self.pattern(*binder), self.term(*bindee), self.term(*tail)]
-                    .into_iter()
-                    .flatten()
-                    .collect()
-            }
-            | Term::Let(term) => {
-                let b::Let { binder, bindee, tail } = &**term;
-                [self.pattern(*binder), self.term(*bindee), self.term(*tail)]
-                    .into_iter()
-                    .flatten()
-                    .collect()
-            }
-            | Term::Data(b::Data { arms }) => {
-                arms.iter().flat_map(|arm| self.term(arm.param)).collect()
-            }
-            | Term::CoData(b::CoData { arms }) => {
-                arms.iter().flat_map(|arm| self.term(arm.out)).collect()
-            }
-            | Term::Match(b::Match { scrut, arms }) => std::iter::once(self.term(*scrut))
-                .chain(arms.iter().flat_map(|arm| [self.pattern(arm.binder), self.term(arm.tail)]))
-                .flatten()
-                .collect(),
-            | Term::CoMatchClauses(b::CoMatchClauses { clauses }) => clauses
-                .iter()
-                .flat_map(|clause| {
-                    clause
-                        .spine
-                        .iter()
-                        .filter_map(|item| match item {
-                            | b::CoPatternItem::Pat(pattern) => Some(self.pattern(*pattern)),
-                            | b::CoPatternItem::Dtor(_) => None,
-                        })
-                        .chain(std::iter::once(self.term(clause.tail)))
-                })
-                .flatten()
-                .collect(),
-            | Term::CoMatch(b::CoMatch { arms }) => {
-                arms.iter().flat_map(|arm| self.term(arm.tail)).collect()
-            }
-            | Term::RecGroup(_) => {
-                unreachable!("recursive groups are introduced only after name resolution")
-            }
-            | Term::Internal(_) | Term::Hole(_) | Term::Var(_) | Term::Triv(_) | Term::Lit(_) => {
-                Vec::new()
-            }
-        }
+            | t::Pattern::Hole(_) | t::Pattern::Var(_) | t::Pattern::Lit(_) => {}
+        });
     }
-}
 
-/// Installs block-wide names before any occurrence in the block is resolved.
-struct BlockScope {
-    local: Local,
-}
+    fn scan_copat(&self, copat: t::CoPatId, prelude: bool, out: &mut Vec<TextualCandidate>) {
+        zydeco_foundation::stack::maybe_grow(|| match &self.textual.copats[&copat] {
+            | t::CoPattern::Pat(pat) => self.scan_pat(*pat, prelude, out),
+            | t::CoPattern::Dtor(_) => {}
+            | t::CoPattern::App(t::Appli(items)) => {
+                for item in items {
+                    self.scan_copat(*item, prelude, out);
+                }
+            }
+        });
+    }
 
-impl BlockScope {
-    fn new<O: ResolutionObserver>(
-        resolver: &mut ResolveFolder<'_, O>, block: TermId, candidates: &[MobileCandidate],
-        mut local: Local,
-    ) -> FoldResult<Self> {
-        let projected = candidates
-            .iter()
-            .flat_map(|candidate| {
-                let binder = match candidate {
-                    | MobileCandidate::Parameter { binder, .. }
-                    | MobileCandidate::Definition { binder, .. } => binder,
+    fn scan_binding(
+        &self, binding: &t::GenBind<t::TermId>, prelude: bool, out: &mut Vec<TextualCandidate>,
+    ) {
+        self.scan_pat(binding.binder, prelude, out);
+        if let Some(params) = binding.params {
+            self.scan_copat(params, prelude, out);
+        }
+        if let Some(ty) = binding.ty {
+            self.scan_term(ty, prelude, out);
+        }
+        self.scan_term(binding.bindee, prelude, out);
+    }
+
+    fn scan_term(&self, term: t::TermId, prelude: bool, out: &mut Vec<TextualCandidate>) {
+        zydeco_foundation::stack::maybe_grow(|| match &self.textual.terms[&term] {
+            | t::Term::Block(_) | t::Term::SourceBoundary(_) | t::Term::SignatureBoundary(_) => {}
+            | t::Term::Meta(t::MetaTerm(meta, payload)) => {
+                let node = &self.textual.metas[meta];
+                if node.is("cbv") || node.is("intrinsic") || node.is("ffi") || node.is("cbn") {
+                    return;
+                }
+                let next_prelude = if node.is("prelude")
+                    && matches!(
+                        self.textual.semantic_meta(*meta).specialize::<PreludeMeta>(),
+                        Ok(Some(PreludeMeta::None))
+                    ) {
+                    false
+                } else {
+                    prelude
                 };
-                let site = BindingSite { owner: block, id: candidate.binding_id() };
-                binder
-                    .binders(&resolver.bitter)
-                    .iter()
-                    .map(|(name, definition)| (*name, *definition, site))
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
-        let mut binders = rpds::HashTrieMapSync::<VarName, DefId>::new_sync();
-        let mut rejected = false;
-        for (name, definition, site) in projected {
-            if let Some(previous) = binders.get(&name) {
-                resolver.report(ResolveError::DuplicateDefinition(
-                    previous.span(resolver).make(name),
-                    definition.span(resolver).make(name),
-                ));
-                rejected = true;
-            } else {
-                binders.insert_mut(name, definition);
+                self.scan_term(*payload, next_prelude, out);
             }
-            local.under_map.insert_mut(definition, site);
-        }
-        if rejected {
-            return Err(ReportedError);
-        }
-        local.boundary = Some(block);
-        local = local.bind_group(binders.iter().map(|(name, definition)| (*name, *definition)));
-        Ok(Self { local })
+            | t::Term::Param(t::Param { flavor, binder, placement, tail }) => {
+                if matches!(placement, t::Placement::That) {
+                    out.push(TextualCandidate {
+                        source: term,
+                        kind: TextualCandidateKind::Param { flavor: *flavor, binder: *binder },
+                        prelude,
+                    });
+                }
+                self.scan_pat(*binder, prelude, out);
+                self.scan_term(*tail, prelude, out);
+            }
+            | t::Term::ContextBind(t::ContextBind { mode, binding, placement, tail }) => {
+                if matches!(placement, t::Placement::That) {
+                    out.push(TextualCandidate {
+                        source: term,
+                        kind: TextualCandidateKind::ContextBind {
+                            mode: *mode,
+                            binding: binding.clone(),
+                        },
+                        prelude,
+                    });
+                }
+                self.scan_binding(binding, prelude, out);
+                self.scan_term(*tail, prelude, out);
+            }
+            | t::Term::Let(t::GenLet { binding, tail }) => {
+                self.scan_binding(binding, prelude, out);
+                self.scan_term(*tail, prelude, out);
+            }
+            | t::Term::Named(t::Named(_, inner))
+            | t::Term::Label(t::Label(_, inner))
+            | t::Term::Thunk(t::Thunk(inner))
+            | t::Term::Force(t::Force(inner))
+            | t::Term::Ret(t::Return(inner))
+            | t::Term::Ctor(t::Ctor(_, inner))
+            | t::Term::Dtor(t::Dtor(inner, _))
+            | t::Term::Proj(t::Proj(inner, _)) => self.scan_term(*inner, prelude, out),
+            | t::Term::Ann(t::Ann { tm, ty }) => {
+                self.scan_term(*tm, prelude, out);
+                self.scan_term(*ty, prelude, out);
+            }
+            | t::Term::Arrow(t::Arrow(left, right)) => {
+                self.scan_term(*left, prelude, out);
+                self.scan_term(*right, prelude, out);
+            }
+            | t::Term::Paren(t::Paren(terms))
+            | t::Term::App(t::Appli(terms))
+            | t::Term::Prod(t::Prod(terms)) => {
+                for item in terms {
+                    self.scan_term(*item, prelude, out);
+                }
+            }
+            | t::Term::Abs(t::Abs(params, body))
+            | t::Term::ValAbs(t::Abs(params, body))
+            | t::Term::Pi(t::Pi(params, body))
+            | t::Term::ValPi(t::ValPi(params, body))
+            | t::Term::Forall(t::Forall(params, body))
+            | t::Term::Sigma(t::Sigma(params, body)) => {
+                self.scan_copat(*params, prelude, out);
+                self.scan_term(*body, prelude, out);
+            }
+            | t::Term::Fix(t::Fix(binder, body)) => {
+                self.scan_pat(*binder, prelude, out);
+                self.scan_term(*body, prelude, out);
+            }
+            | t::Term::Exists(t::Exists { parameters, body }) => {
+                for param in parameters {
+                    self.scan_pat(param.binder, prelude, out);
+                }
+                self.scan_term(*body, prelude, out);
+            }
+            | t::Term::Pack(t::Pack { parameters, body }) => {
+                for param in parameters {
+                    self.scan_pat(param.parameter.binder, prelude, out);
+                    if let Some(evidence) = param.evidence {
+                        self.scan_term(evidence, prelude, out);
+                    }
+                }
+                self.scan_term(*body, prelude, out);
+            }
+            | t::Term::Pipeline(t::Pipeline { direction: _, subject, function }) => {
+                self.scan_term(*subject, prelude, out);
+                self.scan_term(*function, prelude, out);
+            }
+            | t::Term::Do(t::Bind { binder, bindee, tail }) => {
+                self.scan_pat(*binder, prelude, out);
+                self.scan_term(*bindee, prelude, out);
+                self.scan_term(*tail, prelude, out);
+            }
+            | t::Term::Data(t::Data { arms }) => {
+                for arm in arms {
+                    self.scan_term(arm.param, prelude, out);
+                }
+            }
+            | t::Term::CoData(t::CoData { arms }) => {
+                for arm in arms {
+                    if let Some(params) = arm.params {
+                        self.scan_copat(params, prelude, out);
+                    }
+                    self.scan_term(arm.out, prelude, out);
+                }
+            }
+            | t::Term::Match(t::Match { scrut, arms }) => {
+                self.scan_term(*scrut, prelude, out);
+                for arm in arms {
+                    self.scan_pat(arm.binder, prelude, out);
+                    self.scan_term(arm.tail, prelude, out);
+                }
+            }
+            | t::Term::CoMatch(t::CoMatchParam { arms }) => {
+                for arm in arms {
+                    self.scan_copat(arm.params, prelude, out);
+                    self.scan_term(arm.tail, prelude, out);
+                }
+            }
+            | t::Term::Hole(_) | t::Term::Var(_) | t::Term::Lit(_) => {}
+        });
     }
 }
 
-/// Converts a resolved context DAG into the ordinary term forms used by the
-/// checker, retaining recursive type components explicitly.
+/// Elaborates a finished block `BindingContext` back into resolved terms around `residual`.
 struct ContextElaboration<'a> {
     context: &'a BindingContext,
 }
@@ -327,16 +275,16 @@ impl ContextElaboration<'_> {
             residual,
             |tail, node| match self.context.nodes[&node].clone() {
                 | ContextNode::Acyclic(binding) => {
-                    let term = match binding.inner {
+                    let term: Term = match binding.inner {
                         | BindingForm::Parameter(Parameter { flavor, binder }) => match flavor {
-                            | ParameterFlavor::Plain => b::Abs(vec![binder], tail).into(),
-                            | ParameterFlavor::Value => b::Term::ValAbs(b::Abs(binder, tail)),
+                            | ParameterFlavor::Plain => Abs(vec![binder], tail).into(),
+                            | ParameterFlavor::Value => Term::ValAbs(Abs(binder, tail)),
                         },
                         | BindingForm::Definition(Definition { binder, bindee }) => {
-                            b::Let { binder, bindee, tail }.into()
+                            Let { binder, bindee, tail }.into()
                         }
                     };
-                    resolver.builder.term(binding.id, term)
+                    resolver.builder.alloc_term_from_origin_of(binding.id, term)
                 }
                 | ContextNode::Recursive(bindings) => {
                     let source = bindings.first().map_or(block, |binding| binding.id);
@@ -344,50 +292,178 @@ impl ContextElaboration<'_> {
                         .into_iter()
                         .map(|binding| match binding.inner {
                             | BindingForm::Definition(Definition { binder, bindee }) => {
-                                b::RecursiveDefinition { binder, bindee }
+                                RecursiveDefinition { binder, bindee }
                             }
                             | BindingForm::Parameter(_) => unreachable!(
                                 "recursive parameters were rejected before elaboration"
                             ),
                         })
                         .collect();
-                    resolver.builder.term(source, b::RecGroup { definitions, tail }.into())
+                    resolver
+                        .builder
+                        .alloc_term_from_origin_of(source, RecGroup { definitions, tail })
                 }
             },
         ))
     }
 }
 
+struct PreparedCandidate {
+    source: t::TermId,
+    binding_id: TermId,
+    kind: TextualCandidateKind,
+    prelude: bool,
+    preallocated: FxHashMap<t::DefId, DefId>,
+}
+
 impl<O: ResolutionObserver> ResolveFolder<'_, O> {
     pub(super) fn resolve_block(
-        &mut self, block: TermId, body: TermId, env: ResolveEnv<'_>,
-    ) -> FoldResult<Term<DefId>> {
-        let candidates = BlockCandidateCollector::new(&self.bitter).collect(body);
-        let scope = BlockScope::new(self, block, &candidates, env.local)?;
-        let env = ResolveEnv { local: scope.local, global: env.global };
-        self.dependencies.begin_block(block, candidates.iter().map(MobileCandidate::binding_id));
-        let bindings = candidates
+        &mut self, block_origin: t::TermId, body: t::TermId,
+    ) -> FoldResult<TermId> {
+        let candidates = TextualBlockCollector::new(self.textual).collect(body);
+        self.resolve_block_with_candidates(block_origin, body, candidates)
+    }
+
+    pub(super) fn resolve_block_with_candidates(
+        &mut self, block_origin: t::TermId, body: t::TermId, candidates: Vec<TextualCandidate>,
+    ) -> FoldResult<TermId> {
+        let block_id = self.builder.reserve_term(block_origin.into());
+        let block_mark = self.scope.mark();
+        let saved_candidates = std::mem::take(&mut self.active_block_candidates);
+
+        let prepared = self.prepare_block_candidates(block_id, candidates);
+        let prepared = match prepared {
+            | Ok(prepared) => prepared,
+            | Err(err) => {
+                self.scope.rollback(block_mark);
+                self.active_block_candidates = saved_candidates;
+                return Err(err);
+            }
+        };
+
+        self.scope.boundary = Some(block_id);
+        for item in &prepared {
+            self.active_block_candidates.insert(item.source, Some(item.binding_id));
+        }
+        self.dependencies.begin_block(block_id, prepared.iter().map(|item| item.binding_id));
+
+        let bindings = prepared
             .iter()
             .enumerate()
-            .map(|(order, candidate)| candidate.resolve(self, block, env.clone(), order))
+            .map(|(order, candidate)| self.lower_block_candidate(block_id, candidate, order))
             .collect_reported::<Vec<_>>();
-        let residual = self.term(body, env);
-        let bindings = match (bindings, residual) {
-            | (Ok(bindings), Ok(_)) => {
-                bindings.into_iter().map(|binding| (binding.id, binding)).collect()
+        let residual = self.lower_term(body);
+
+        self.scope.rollback(block_mark);
+        self.active_block_candidates = saved_candidates;
+
+        let (bindings, residual) = match (bindings, residual) {
+            | (Ok(bindings), Ok(residual)) => {
+                (bindings.into_iter().map(|binding| (binding.id, binding)).collect(), residual)
             }
             | _ => {
-                self.dependencies.abort_block(block);
+                self.dependencies.abort_block(block_id);
                 return Err(ReportedError);
             }
         };
-        let dependencies = self.dependencies.finish_block(block);
+
+        let dependencies = self.dependencies.finish_block(block_id);
         let context = BindingContext::from_bindings(IdAllocator::new(), bindings, dependencies);
-        let elaborated = ContextElaboration { context: &context }.build(self, body, block)?;
+        let elaborated =
+            ContextElaboration { context: &context }.build(self, residual, block_id)?;
         self.builder.blocks.insert_new(
-            block,
-            ContextualTerm { context, body: BlockBody { residual: body, elaborated } },
+            block_id,
+            ContextualTerm { context, body: BlockBody { residual, elaborated } },
         );
-        Ok(b::Block(elaborated).into())
+        self.builder.fill_term(block_id, Block(elaborated).into());
+        Ok(block_id)
+    }
+
+    fn prepare_block_candidates(
+        &mut self, block_id: TermId, candidates: Vec<TextualCandidate>,
+    ) -> FoldResult<Vec<PreparedCandidate>> {
+        let mut prepared = Vec::with_capacity(candidates.len());
+        let mut raw_binders = Vec::new();
+        let mut seen = FxHashMap::<VarName, DefId>::default();
+        let mut block_binders = Vec::new();
+        let mut rejected = false;
+
+        for candidate in candidates {
+            let binding_id = self.builder.reserve_term(candidate.source.into());
+            raw_binders.clear();
+            collect_textual_binders(self.textual, candidate.outer_pattern(), &mut raw_binders);
+            let mut preallocated = FxHashMap::default();
+            for &(name, t_def) in &raw_binders {
+                let def = self.alloc_def(t_def);
+                if let Some(&previous) = seen.get(&name) {
+                    self.report(ResolveError::DuplicateDefinition(
+                        previous.span(self).make(name),
+                        def.span(self).make(name),
+                    ));
+                    rejected = true;
+                } else {
+                    seen.insert(name, def);
+                    block_binders.push((name, def));
+                }
+                self.scope.under_map.insert(def, BindingSite { owner: block_id, id: binding_id });
+                preallocated.insert(t_def, def);
+            }
+            prepared.push(PreparedCandidate {
+                source: candidate.source,
+                binding_id,
+                kind: candidate.kind,
+                prelude: candidate.prelude,
+                preallocated,
+            });
+        }
+
+        if rejected {
+            return Err(ReportedError);
+        }
+        self.scope.bind_group(block_binders);
+        Ok(prepared)
+    }
+
+    fn lower_block_candidate(
+        &mut self, block_id: TermId, candidate: &PreparedCandidate, source_order: usize,
+    ) -> FoldResult<Binding> {
+        let prev_prelude = self.scope.prelude_enabled;
+        self.scope.prelude_enabled &= candidate.prelude;
+        self.scope.under.push(BindingSite { owner: block_id, id: candidate.binding_id });
+
+        let inner = match &candidate.kind {
+            | TextualCandidateKind::Param { flavor, binder } => self
+                .lower_pattern(*binder, Some(&candidate.preallocated))
+                .map(|binder| BindingForm::Parameter(Parameter { flavor: *flavor, binder })),
+            | TextualCandidateKind::ContextBind { mode, binding } => self
+                .lower_binding(binding.clone(), *mode, Some(&candidate.preallocated))
+                .map(|LoweredBinding { binder, bindee }| {
+                    let bindee = match mode {
+                        | t::DefinitionMode::Transparent => bindee,
+                        | t::DefinitionMode::Nominal => {
+                            self.builder.alloc_term(Sealed(bindee), candidate.source.into())
+                        }
+                    };
+                    BindingForm::Definition(Definition { binder, bindee })
+                }),
+        };
+
+        self.scope.under.pop();
+        self.scope.prelude_enabled = prev_prelude;
+        Ok(Binding::from_term(candidate.binding_id, inner?, source_order))
+    }
+}
+
+pub(super) fn take_or_alloc_residual(
+    builder: &mut ScopedBuilder, active_candidates: &mut FxHashMap<t::TermId, Option<TermId>>,
+    source: t::TermId, tail: TermId,
+) -> TermId {
+    let term: Term = Residual(tail).into();
+    match active_candidates.get_mut(&source).and_then(Option::take) {
+        | Some(reserved) => {
+            builder.fill_term(reserved, term);
+            reserved
+        }
+        | None => builder.alloc_term(term, source.into()),
     }
 }

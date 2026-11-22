@@ -4,7 +4,7 @@ pub mod source;
 
 pub use source::{
     AnalysisError, AnalysisOutcome, CheckedProgram, CompilerSession, CompletionAnalysis,
-    CompletionError, CompletionSemantics, DesugarError, ExecutableError, ExecutableProgram,
-    LibraryProgram, ProgramAnalysis, SourceCaches, SourceDiagnosticSite, SourceGraph, SourceId,
+    CompletionError, CompletionSemantics, ExecutableError, ExecutableProgram, LibraryProgram,
+    ProgramAnalysis, ResolveError, SourceCaches, SourceDiagnosticSite, SourceGraph, SourceId,
     SourceImportId, SourceLoadError, SourceLoadErrors, TyckReport, UnitProgram,
 };

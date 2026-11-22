@@ -228,7 +228,7 @@ impl TermChecker<'_> {
 
     /// Dispatch a term to the rule for its syntactic form.
     fn check_term(
-        &self, tycker: &mut Tycker<'_>, term: su::Term<su::DefId>, switch: Switch<AnnId>,
+        &self, tycker: &mut Tycker<'_>, term: su::Term, switch: Switch<AnnId>,
         prepared_environment: Option<ss::TyEnv>,
     ) -> Result<TermAnnId> {
         use su::Term as Tm;
@@ -266,9 +266,6 @@ impl TermChecker<'_> {
             | Tm::Ret(term) => self.check_ret(tycker, term, switch)?,
             | Tm::Do(term) => self.check_do(tycker, *term, switch, prepared_environment)?,
             | Tm::Let(term) => self.check_let(tycker, *term, switch, prepared_environment)?,
-            | Tm::MobileParam(_) | Tm::MobileBind(_) => {
-                unreachable!("mobile syntax must be eliminated during name resolution")
-            }
             | Tm::Residual(term) => {
                 self.check_residual(tycker, term, switch, prepared_environment)?
             }

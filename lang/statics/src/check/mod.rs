@@ -9,7 +9,6 @@ use {
     },
     crate::surface_syntax::{ScopedArena, SpanArena},
     crate::validate::CoverageChecker,
-    zydeco_surface::metadata::{BuiltinMeta, FfiMeta, MetadataKind},
 };
 
 /// Checker lifecycle and source finalization.

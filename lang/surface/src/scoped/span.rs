@@ -25,8 +25,8 @@ impl<O> TextualBack for ResolveFolder<'_, O> {
 macro_rules! impl_span_view_resolver {
     ($($ty:ty)*) => {
         $(
-            impl<'a, O> SpanView<'a, ResolveFolder<'a, O>> for $ty {
-                fn span(&self, resolver: &'a ResolveFolder<'a, O>) -> &'a Span {
+            impl<'r, O> SpanView<'r, ResolveFolder<'_, O>> for $ty {
+                fn span(&self, resolver: &'r ResolveFolder<'_, O>) -> &'r Span {
                     span_via_back(&resolver.spans, resolver, *self)
                 }
             }

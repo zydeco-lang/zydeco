@@ -20,8 +20,8 @@ impl SyntacticallyAnnotated for su::TermId {
         use su::Term as Tm;
         match term {
             | Tm::Meta(term) => {
-                let su::MetaT(meta, term) = *term;
-                let _ = meta;
+                let su::MetaTerm { body: term, .. } = *term;
+                let _ = term;
                 term.syntactically_annotated(tycker)
             }
             | Tm::SourceBoundary(su::SourceBoundary(term)) => term.syntactically_annotated(tycker),
@@ -58,8 +58,6 @@ impl SyntacticallyAnnotated for su::TermId {
             | Tm::Ret(_)
             | Tm::Do(_)
             | Tm::Let(_)
-            | Tm::MobileParam(_)
-            | Tm::MobileBind(_)
             | Tm::RecGroup(_)
             | Tm::MoBlock(_)
             | Tm::CbvBlock(_)
@@ -88,8 +86,7 @@ impl SyntacticallySealed for su::TermId {
         use surface_syntax::Term as Tm;
         match term {
             | Tm::Meta(term) => {
-                let su::MetaT(meta, term) = *term;
-                let _ = meta;
+                let su::MetaTerm { body: term, .. } = *term;
                 term.syntactically_sealed(tycker)
             }
             | Tm::SourceBoundary(su::SourceBoundary(term)) => term.syntactically_sealed(tycker),
@@ -123,8 +120,6 @@ impl SyntacticallySealed for su::TermId {
             | Tm::Ret(_)
             | Tm::Do(_)
             | Tm::Let(_)
-            | Tm::MobileParam(_)
-            | Tm::MobileBind(_)
             | Tm::RecGroup(_)
             | Tm::MoBlock(_)
             | Tm::CbvBlock(_)

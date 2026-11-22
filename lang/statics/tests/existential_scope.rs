@@ -12,7 +12,7 @@ fn closing_a_hole_scope_rejects_an_existential_witness_solution() {
         tycker.statics.existential_skolems.ensure(witness);
         let body_env = TyEnv::new().with_skolem(witness);
         let witness_ty = Alloc::alloc(tycker, witness, vtype, &());
-        let mut source_ids = IdAllocator::<zydeco_surface::bitter::arena::BitterScope>::new();
+        let mut source_ids = IdAllocator::<zydeco_surface::scoped::arena::ScopedScope>::new();
         let site: zydeco_statics::surface_syntax::TermId = source_ids.alloc();
         let fill: zydeco_statics::syntax::FillId =
             Alloc::alloc(tycker, zydeco_statics::syntax::InferenceSite::Term(site), (), &());

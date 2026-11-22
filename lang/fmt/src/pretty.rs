@@ -2684,9 +2684,8 @@ impl<'a> Pretty<'a, PrettyFormatter<'a>> for TermId {
 mod tests {
     use super::*;
     use crate::{FormattedSource, IndentWidth};
-    use zydeco_foundation::pass::CompilerPass;
     use zydeco_surface::{
-        bitter::{SourceUnitDesugarer, fmt::Formatter as BitterFormatter},
+        scoped::{ResolveFolder, fmt::Formatter as ScopedFormatter},
         textual::{LexicalRole, LexicalTokens, StrictParser},
     };
     use zydeco_syntax::Ugly;
@@ -2736,13 +2735,10 @@ mod tests {
         }
 
         fn desugared_shape(&self) -> String {
-            let output = SourceUnitDesugarer {
-                spans: &self.formatted.spans,
-                textual: &self.formatted.arena,
-            }
-            .run(self.formatted.unit)
-            .unwrap();
-            output.root.ugly(&BitterFormatter::new(&output.arena))
+            let output = ResolveFolder::new(&self.formatted.spans, &self.formatted.arena)
+                .run_open_fragment(self.formatted.unit.root)
+                .unwrap();
+            output.root.ugly(&ScopedFormatter::alpha_normalized(&output.arena))
         }
     }
 

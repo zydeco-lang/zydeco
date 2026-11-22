@@ -9,12 +9,6 @@ pub mod metadata;
 /// Defines common syntax in the surface language
 pub mod syntax;
 
-/// Shared debug formatter for bitter and scoped syntax, generic over the phase arena.
-pub mod debug;
-
-/// Owned structural rebuilding for the shared bitter and scoped syntax family.
-pub mod fold;
-
 pub mod diagnostic;
 
 pub mod textual {
@@ -55,32 +49,6 @@ pub mod textual {
     mod tests;
 }
 
-pub mod bitter {
-    #![doc = include_str!("bitter/README.md")]
-
-    /// Core bitter AST and identifiers.
-    pub mod syntax;
-    /// Bitter arena storage and textual back-mapping.
-    pub mod arena;
-    /// Allocation helpers that preserve textual-to-bitter mappings.
-    pub mod alloc;
-    pub use alloc::*;
-    /// Fresh occurrence copying through the shared structural folder.
-    pub mod freshen;
-    /// Desugaring pass from textual syntax into bitter syntax.
-    pub mod desugar;
-    pub use desugar::*;
-    /// Desugaring error definitions.
-    pub mod err;
-    pub use err::*;
-    /// Debug formatter for bitter syntax (ugly surface syntax).
-    pub mod fmt;
-    /// Span lookup for bitter IDs.
-    mod span;
-    /// The call-by-value block: its printing and its construction.
-    pub mod cbv;
-}
-
 pub mod scoped {
     #![doc = include_str!("scoped/README.md")]
 
@@ -92,9 +60,8 @@ pub mod scoped {
     pub mod traverse;
     /// Checker-local free-variable analysis over resolved syntax.
     pub mod context;
-    /// Binder collection and primitive allocation helpers.
-    pub mod binders;
-    pub use binders::*;
+    /// Binder collection helpers.
+    mod binders;
     /// Collection, dependency analysis, and elaboration of nested term blocks.
     mod blocks;
     /// Lookup and borrowed lexical scope views.

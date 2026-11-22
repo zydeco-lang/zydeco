@@ -1,5 +1,5 @@
 use zydeco_cli::CompileError;
-use zydeco_session::DesugarError;
+use zydeco_session::ResolveError;
 use zydeco_statics::TyckDiagnosticCode;
 use zydeco_tests::utils::{CaseError, SourceCase};
 
@@ -74,13 +74,13 @@ fn partial_annotations_cannot_make_value_functions_partial() {
 
 #[test]
 fn partial_annotations_validate_their_arguments_and_target() {
-    SourceCase::assert_desugar_error(
+    SourceCase::assert_resolve_error_matching(
         SourceCase::check("@[partial(1)] let x = 0 in ret x"),
-        |error| matches!(error, DesugarError::InvalidPartialMeta { .. }),
+        |error| matches!(error, ResolveError::InvalidPartialMeta { .. }),
     );
-    SourceCase::assert_desugar_error(
+    SourceCase::assert_resolve_error_matching(
         SourceCase::check("@[partial] begin let x = 0 in ret x end"),
-        |error| matches!(error, DesugarError::PartialPayloadNotBinding(_)),
+        |error| matches!(error, ResolveError::PartialPayloadNotBinding(_)),
     );
 }
 

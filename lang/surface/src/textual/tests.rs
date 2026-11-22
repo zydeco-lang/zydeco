@@ -2,11 +2,11 @@ pub(super) mod corpus;
 
 use crate::textual::arena::TextArena;
 use crate::{
-    bitter::{SourceUnitDesugarer, fmt::Formatter as BitterFormatter, syntax as bitter},
     metadata::{
         BuiltinMetaError, IntrinsicMeta, IntrinsicMetaError, MetadataValidationError,
         MonadicMetaError,
     },
+    scoped::{self, ResolveError, ResolveFolder, fmt::Formatter as ScopedFormatter},
     textual::syntax::{
         Alias, Ann, Appli, BindingFlavor, Block, BuiltinRole, BuiltinValueRole, ContextBind, Ctor,
         DefinitionMode, Dtor, EntityId, ExistentialParameter, Exists, Force, Hole, IntegerLiteral,
@@ -17,7 +17,6 @@ use crate::{
     },
 };
 use std::{collections::HashMap, ops::Range};
-use zydeco_foundation::pass::CompilerPass;
 use zydeco_syntax::Ugly;
 
 use super::*;
@@ -152,16 +151,16 @@ fn monadic_metadata_lowers_arbitrary_terms_to_monadic_blocks() {
             let mut parser = Parser::new();
             let unit = StrictParser::source(source, &mut parser)
                 .unwrap_or_else(|error| panic!("expected `{source}` to parse: {error}"));
-            let output = SourceUnitDesugarer { spans: &parser.spans, textual: &parser.arena }
-                .run(unit)
-                .unwrap_or_else(|error| panic!("expected `{source}` to desugar: {error}"));
-            let bitter::Term::MoBlock(block) = &output.arena.terms[&output.root] else {
+            let output = ResolveFolder::new(&parser.spans, &parser.arena)
+                .run_open_fragment(unit.root)
+                .unwrap_or_else(|error| panic!("expected `{source}` to lower: {error}"));
+            let scoped::syntax::Term::MoBlock(block) = &output.arena.terms[&output.root] else {
                 panic!("expected `{source}` to lower to a monadic block")
             };
             let body = &block.body;
 
             assert_eq!(
-                matches!(output.arena.terms[body], bitter::Term::Block(_)),
+                matches!(output.arena.terms[body], scoped::syntax::Term::Block(_)),
                 expects_block_body,
                 "the annotation must preserve its payload term"
             );
@@ -173,23 +172,19 @@ fn monadic_metadata_rejects_arguments() {
     let source = "@[monadic(extra)] ret ()";
     let mut parser = Parser::new();
     let unit = StrictParser::source(source, &mut parser).unwrap();
-    let error =
-        match (SourceUnitDesugarer { spans: &parser.spans, textual: &parser.arena }).run(unit) {
-            | Ok(_) => panic!("monadic metadata must not accept arguments"),
-            | Err(errors) => {
-                assert_eq!(errors.len(), 1);
-                errors.into_iter().next().unwrap()
-            }
-        };
+    let error = match ResolveFolder::new(&parser.spans, &parser.arena).run_source(unit.root) {
+        | Ok(_) => panic!("monadic metadata must not accept arguments"),
+        | Err(errors) => {
+            assert_eq!(errors.len(), 1);
+            errors.into_iter().next().unwrap()
+        }
+    };
 
     assert!(matches!(
         &error,
-        crate::bitter::DesugarError::InvalidMonadicMeta {
-            source: MonadicMetaError::Arguments { found: 1 },
-            ..
-        }
+        ResolveError::InvalidMonadicMeta { source: MonadicMetaError::Arguments { found: 1 }, .. }
     ));
-    assert_eq!(&source[error.span().range()], "monadic(extra)");
+    assert_eq!(&source[error.primary_span().range()], "monadic(extra)");
 }
 
 #[test]
@@ -198,14 +193,18 @@ fn typeof_metadata_preserves_its_operand_in_a_distinct_elaboration_form() {
         let mut parser = Parser::new();
         let unit = StrictParser::source(source, &mut parser).unwrap();
         let output =
-            SourceUnitDesugarer { spans: &parser.spans, textual: &parser.arena }.run(unit).unwrap();
-        let bitter::Term::TypeOf(bitter::TypeOf(operand)) = output.arena.terms[&output.root] else {
+            ResolveFolder::new(&parser.spans, &parser.arena).run_open_fragment(unit.root).unwrap();
+        let scoped::syntax::Term::TypeOf(scoped::syntax::TypeOf(operand)) =
+            output.arena.terms[&output.root]
+        else {
             panic!("typeof must lower to a classifier query")
         };
-        let bitter::Term::Ann(bitter::Ann { tm, .. }) = output.arena.terms[&operand] else {
-            panic!("return synthesis must retain its desugared annotation")
+        let scoped::syntax::Term::Ann(scoped::syntax::Ann { tm, .. }) =
+            output.arena.terms[&operand]
+        else {
+            panic!("return synthesis must retain its lowered annotation")
         };
-        assert!(matches!(output.arena.terms[&tm], bitter::Term::Ret(_)));
+        assert!(matches!(output.arena.terms[&tm], scoped::syntax::Term::Ret(_)));
     });
 }
 
@@ -214,40 +213,41 @@ fn typeof_metadata_rejects_arguments_at_the_annotation_span() {
     let source = "@[typeof(extra)] ret 1";
     let mut parser = Parser::new();
     let unit = StrictParser::source(source, &mut parser).unwrap();
-    let error =
-        match (SourceUnitDesugarer { spans: &parser.spans, textual: &parser.arena }).run(unit) {
-            | Ok(_) => panic!("typeof metadata must not accept arguments"),
-            | Err(errors) => {
-                assert_eq!(errors.len(), 1);
-                errors.into_iter().next().unwrap()
-            }
-        };
+    let error = match ResolveFolder::new(&parser.spans, &parser.arena).run_source(unit.root) {
+        | Ok(_) => panic!("typeof metadata must not accept arguments"),
+        | Err(errors) => {
+            assert_eq!(errors.len(), 1);
+            errors.into_iter().next().unwrap()
+        }
+    };
     assert!(matches!(
         &error,
-        crate::bitter::DesugarError::InvalidTypeOfMeta {
+        ResolveError::InvalidTypeOfMeta {
             source: MetadataValidationError::Arity { expected: 0, found: 1, .. },
             ..
         }
     ));
-    assert_eq!(&source[error.span().range()], "typeof(extra)");
+    assert_eq!(&source[error.primary_span().range()], "typeof(extra)");
 }
 
 #[test]
-fn typeof_metadata_extent_survives_bitter_formatting() {
+fn typeof_metadata_extent_survives_scoped_formatting() {
     let source = "(@[typeof] fn value => ret value) argument";
     let mut parser = Parser::new();
     let unit = StrictParser::source(source, &mut parser).unwrap();
     let output =
-        SourceUnitDesugarer { spans: &parser.spans, textual: &parser.arena }.run(unit).unwrap();
-    let formatted = output.root.ugly(&BitterFormatter::new(&output.arena));
+        ResolveFolder::new(&parser.spans, &parser.arena).run_open_fragment(unit.root).unwrap();
+    let formatted = output.root.ugly(&ScopedFormatter::plain_names(&output.arena));
     let mut reparsed = Parser::new();
     let unit = StrictParser::source(&formatted, &mut reparsed).unwrap();
     let output =
-        SourceUnitDesugarer { spans: &reparsed.spans, textual: &reparsed.arena }.run(unit).unwrap();
-    let bitter::Term::App(bitter::App(function, _)) = output.arena.terms[&output.root] else {
+        ResolveFolder::new(&reparsed.spans, &reparsed.arena).run_open_fragment(unit.root).unwrap();
+    let scoped::syntax::Term::App(scoped::syntax::App(function, _)) =
+        output.arena.terms[&output.root]
+    else {
         panic!("the application must remain outside typeof")
     };
-    assert!(matches!(output.arena.terms[&function], bitter::Term::TypeOf(_)));
+    assert!(matches!(output.arena.terms[&function], scoped::syntax::Term::TypeOf(_)));
 }
 
 #[test]
@@ -255,38 +255,39 @@ fn metadata_payload_errors_highlight_the_payload() {
     let source = "@[intrinsic(unit)] Unit";
     let mut parser = Parser::new();
     let unit = StrictParser::source(source, &mut parser).unwrap();
-    let error =
-        match (SourceUnitDesugarer { spans: &parser.spans, textual: &parser.arena }).run(unit) {
-            | Ok(_) => panic!("intrinsic metadata must reject a non-hole payload"),
-            | Err(errors) => {
-                assert_eq!(errors.len(), 1);
-                errors.into_iter().next().unwrap()
-            }
-        };
+    let error = match ResolveFolder::new(&parser.spans, &parser.arena).run_source(unit.root) {
+        | Ok(_) => panic!("intrinsic metadata must reject a non-hole payload"),
+        | Err(errors) => {
+            assert_eq!(errors.len(), 1);
+            errors.into_iter().next().unwrap()
+        }
+    };
 
-    assert!(matches!(&error, crate::bitter::DesugarError::IntrinsicPayloadNotHole(_)));
-    assert_eq!(&source[error.span().range()], "Unit");
+    assert!(matches!(&error, ResolveError::IntrinsicPayloadNotHole(_)));
+    assert_eq!(&source[error.primary_span().range()], "Unit");
 }
 
 #[test]
-fn monadic_metadata_extent_survives_bitter_formatting() {
+fn monadic_metadata_extent_survives_scoped_formatting() {
     let source = "(@[monadic] fn value => ret value) argument";
     let mut parser = Parser::new();
     let unit = StrictParser::source(source, &mut parser).unwrap();
     let output =
-        SourceUnitDesugarer { spans: &parser.spans, textual: &parser.arena }.run(unit).unwrap();
-    let rendered = output.root.ugly(&BitterFormatter::new(&output.arena));
+        ResolveFolder::new(&parser.spans, &parser.arena).run_open_fragment(unit.root).unwrap();
+    let rendered = output.root.ugly(&ScopedFormatter::plain_names(&output.arena));
 
     let mut reparsed = Parser::new();
     let unit = StrictParser::source(&rendered, &mut reparsed)
         .unwrap_or_else(|error| panic!("expected `{rendered}` to reparse: {error}"));
     let output =
-        SourceUnitDesugarer { spans: &reparsed.spans, textual: &reparsed.arena }.run(unit).unwrap();
-    let bitter::Term::App(bitter::App(function, _)) = output.arena.terms[&output.root] else {
+        ResolveFolder::new(&reparsed.spans, &reparsed.arena).run_open_fragment(unit.root).unwrap();
+    let scoped::syntax::Term::App(scoped::syntax::App(function, _)) =
+        output.arena.terms[&output.root]
+    else {
         panic!("expected the reparsed root to remain an application")
     };
 
-    assert!(matches!(output.arena.terms[&function], bitter::Term::MoBlock(_)));
+    assert!(matches!(output.arena.terms[&function], scoped::syntax::Term::MoBlock(_)));
 }
 
 #[test]
