@@ -70,7 +70,7 @@ to its invariant.
 
 ## Following a Change
 
-For a source feature, follow textual syntax and metadata through bitter/scoped forms, typing,
+For a source feature, follow textual syntax and metadata through scoped lowering/resolution, typing,
 static elaboration, interpreter linking, SPS lowering, and every consuming backend.
 For an optimization, identify its required input invariant and every representation or root map it changes.
 For a primitive, update the role catalog, checked signature, materializers, interpreter,

@@ -1,11 +1,14 @@
 # C4. Parsing, Desugaring, and Name Resolution
 
-[Textual syntax](../../../../lang/surface/src/textual/README.md) owns Logos tokens, literal decoding,
-LALRPOP parsing, metadata syntax, spans, trivia, and retained layout intentions.
+[Textual syntax](../../../../lang/surface/src/textual/README.md) owns Logos tokens,
+literal decoding, LALRPOP parsing, metadata syntax, spans,
+and contiguous `--|` [`TextBlock`](../../../../lang/surface/src/textual/text_block.rs) capture attached
+from the token stream in `O(N log N)`.
 Strict parsing supplies compilation input; recovering parsing supplies structured holes
 and recovery evidence for tooling.
 A recovered edit is not silently accepted as an executable program.
-Formatting consumes the same textual model, so parser changes must preserve the information required by C15.
+Formatting trivia and retained layout intentions live separately in [`zydeco-fmt`](../../../../lang/fmt/src/lib.rs)
+so compilation never captures formatter tables.
 
 ## Recovering Parsing
 
@@ -125,74 +128,61 @@ with strict rejection, including authored holes, Unicode cursors, invalid litera
 Further grammar and candidate extensions remain an
 [open idea](../../../ideas/README.md#structural-completion-and-last-successful-state).
 
-## Desugaring Boundary
+## Fused Lowering and Resolution
 
-[Bitter desugaring](../../../../lang/surface/src/bitter/README.md) removes surface sugar while keeping unresolved names.
+Surface lowering and lexical resolution execute in one fused recursive pass
+in [`ResolveFolder`](../../../../lang/surface/src/scoped/resolver.rs) using
+[`telescopes`](../../../../lang/surface/src/scoped/resolver/telescopes.rs),
+[`bindings`](../../../../lang/surface/src/scoped/resolver/bindings.rs),
+and [`meta`](../../../../lang/surface/src/scoped/resolver/meta.rs), guarded
+by [`zydeco_foundation::stack::maybe_grow`](../../../../lang/foundation/src/stack.rs) and building
+into [`ScopedBuilder`](../../../../lang/surface/src/scoped/alloc.rs) without an intermediate lowered tree.
 It expands binding headers and telescopes, makes nominal sealing and CBPV introductions explicit,
-keeps the consecutive parameters of `fn`, `pi` and `forall` and the arguments of one juxtaposition as one node,
-and retains special boundaries such as classifier queries and monadic payloads.
-Source assembly has already resolved import and literal splices.
-Primitive terms have compiler-owned identities, and every generated node records its textual origin.
-A special metadata node must survive whenever ordinary forwarding would change its checking environment or expectation.
+keeps consecutive parameters of `fn`, `pi`, and `forall` and juxtaposition arguments
+as single nodes, replaces bound names with `DefId`s, and retains explicit boundaries such
+as classifier queries, `@[monadic]` blocks, and `@[cbv]` blocks.
+Source loading supplies per-unit file slices and resolved literal attachments;
+[`ResolveFolder::run_unit`](../../../../lang/surface/src/scoped/resolver.rs) lowers one closed unit
+at a time and emits `SourceBoundary` placeholders for imports and the default prelude,
+which assembly patches once all units are resolved.
+Every generated scoped node records its textual origin in `TextualOrigins`.
 
-## Desugaring Folders
+A rejected unit collects independent diagnostics across children and publishes no valid scoped output;
+reusing an already-failed child does not repeat diagnostics.
+The [telescope lowering rules](../../../../lang/surface/src/scoped/resolver/telescopes.rs) handle parameter sequences,
+flatten consecutive existential layers, keep `pi` telescopes as single ordered binder groups
+(while `@[cbv]` blocks translate each group as one function), and turn `val pi`
+and `sigma` telescopes into one layer per binder.
+The [binding lowering rules](../../../../lang/surface/src/scoped/resolver/bindings.rs) handle binding flavors together
+with classifiers across the same parameter fold, distinguishing absence, whole-binding ascriptions,
+and classifiers extended across parameters (freshening classifier binders only in the last case).
+Destructor parameters discard propagated abstraction classifiers, replace binding classifiers with holes,
+or reject value abstractions per the enclosing rule.
 
-[`DesugarFolder`](../../../../lang/surface/src/bitter/desugar/mod.rs) owns textual lookup,
-recursive lowering, the `BitterBuilder`, and a source-term memo table.
-Successful and rejected terms enter that table through one path;
-reusing a rejected source node does not repeat its diagnostic.
-Independent child checks collect their errors before rejecting the enclosing construction.
-A rejected source returns all collected errors with their source context and publishes no complete bitter arena.
+[`MetaRules`](../../../../lang/surface/src/scoped/resolver/meta.rs) decodes textual metadata
+in one pass into typed `MetaAction` directives before visiting payloads
+when the rule inspects authored syntax — lowering surviving term annotations directly
+into span-free [`ResolvedMeta`](../../../../lang/surface/src/scoped/syntax.rs) values:
+strip `@[doc]`/`@[format]`, handle prelude opt-out/override, record partial binders,
+construct typed intrinsics, build `@[typeof]`, build `@[monadic]` or `@[cbv]` blocks,
+validate `@[builtin]` roles and `@[ffi]` signatures, or retain opaque/debug metadata.
+Intrinsic construction skips its hole payload, while `@[typeof]`, `@[monadic]`, and `@[cbv]` lower their payloads once.
 
-The [telescope rules](../../../../lang/surface/src/bitter/desugar/telescopes.rs) lower parameter sequences,
-flatten consecutive existential layers, and construct quantifier and packed value layers.
-A `pi` telescope stays one node with its binders in order, as an abstraction's parameters
-and an application's arguments do, and checking walks it one binder at a time,
-each at an allocation site of its own, so in the core a group and its nested spelling elaborate alike;
-a call-by-value block translates the group as one function.
-`val pi` and `sigma` telescopes become one layer per binder.
-The [binding rules](../../../../lang/surface/src/bitter/desugar/bindings.rs) interpret binding flavors
-and build terms together with classifiers over the same parameter fold.
-Classifier state distinguishes absence, an annotation on the complete binding,
-and an annotation extended across its parameters.
-Only the last case freshens classifier binders.
-Destructor parameters discard a propagated abstraction classifier, replace a binding classifier with a hole,
-or reject a value abstraction, according to the enclosing rule.
-
-Already-lowered construction receives the builder;
-[CBPV introductions](../../../../lang/surface/src/bitter/desugar/cbpv.rs) share this allocation and provenance boundary.
-Rules retain their semantic child schedules: a binding lowers its binder, bindee, classifier, and parameters;
-a packed value lowers its body before processing parameters in reverse, with evidence before the parameter form.
-Meta annotation inspection precedes payload lowering when its rule depends on authored syntax.
-
-[`MetaRules`](../../../../lang/surface/src/bitter/desugar/meta.rs) inspects read-only textual syntax
-and selects one typed action: preserve an annotation, construct an intrinsic, query a classifier,
-build a monadic block, expand a prelude opening, or record partial binders and preserve the annotation.
-The catalog identifies the recognized kind once; arbitrary annotations retain their structure.
-Intrinsic and FFI payload checks inspect authored syntax before any lowering can erase grouping.
-Intrinsic construction skips its hole payload; classifier queries and monadic actions lower their payload once.
-Partial actions carry the header's textual binder identities and record them before visiting the payload,
-including when that payload has already been memoized.
-Existential parameter annotations use their own allowed-role validation and retain their precise annotation sites.
-
-`PreludeMeta` validates either `none` or a lexical `from` argument independently of reconstruction.
-The override action builds the ordinary fixed projection group and lowers the payload once;
-`none` survives to resolution because it changes fallback lookup.
-The [default source prefix](sessions-and-queries.md#source-loading-and-package-selection) is already present
-when this folder runs.
-These bounded actions need no separate `Explicit` traversal or resumable scheduler.
-
-Override-generated definitions and projections retain the annotation's metadata origin;
-the bindee retains the exact identifier argument's origin.
-Default-generated definitions instead retain the source prefix's pattern origin and an explicit generated-binder mark.
-Neither creates an editable declaration token.
-Hover and completion identify the prelude origin; rename refuses generated definitions,
-while renaming a supplied view includes its `from` reference.
-Go-to-definition for an override points to its annotation; a default binding has no fabricated declaration location.
-Contextual `OS` retains its authored term origin without inventing a `DefId`.
-The editor classifies that term from checked evidence and filters its completion using its `CType` classifier.
-The textual formatter preserves authored annotations rather than printing the inserted default prefix.
-[Surface tests](../../../../lang/surface/src/bitter/desugar/tests.rs),
+`PreludeMeta` validates `none` or a `from` identifier without rebuilding intermediate ASTs:
+`from` inserts the projection group and lowers its payload once,
+while `none` suppresses `PreludeScope` fallback in its payload.
+The [default source prefix](sessions-and-queries.md#source-loading-and-package-selection) provides default names
+when opted in.
+Override-generated definitions and projections retain the metadata annotation origin
+(with bindees keeping the identifier origin),
+whereas default-generated definitions retain synthetic origins (`insert_synthetic`)
+so they never become editable declaration tokens.
+Hover and completion identify prelude origins; rename refuses generated definitions
+while renaming a supplied view includes its `from` reference, and go-to-definition resolves overrides
+to the annotation while omitting fabricated default locations.
+Contextual `OS` retains its authored term origin without inventing a `DefId`,
+and the formatter prints authored annotations rather than inserted default prefixes.
+[Resolver tests](../../../../lang/surface/src/scoped/resolver/tests.rs),
 [composition regressions](../../../../lang/tests/tests/suite/prelude.rs), and CLI, REPL,
 and editor tests cover opt-out and replacement, witness sharing, source independence,
 and rejected downstream publication.

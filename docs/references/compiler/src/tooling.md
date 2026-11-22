@@ -25,8 +25,16 @@ Positions beyond either edge do not select that occurrence.
 Cursor hit-testing is separate from source-range representation.
 The [shared endpoint policy](../../../../editor/cajun/src/cursor.rs) changes which positions match,
 while source spans, navigation targets, reference locations, and edit ranges remain half-open.
-Hover uses the same occurrence lookup with its configured endpoint policy and falls back
-to the smallest matching term; resolved symbols take precedence over enclosing terms.
+[`SpanIndex`](../../../../editor/cajun/src/span_index.rs) partitions definition, use,
+and term spans by `FileId` over the session's shared `SourceMap` into per-file augmented interval trees once
+per analysis revision, serving `symbol_at`, `term_at`, and `document_symbols`
+in `O(log N_file)` time with deterministic `(length, order)` tie-breaking.
+[`Cajun`](../../../../editor/cajun/src/lib.rs) caches canonicalized `Url -> PathBuf` mappings (`SourcePath::identity`)
+per open document (refreshing on `did_save` and removing on `did_close`), and `ProjectState` precomputes `file_uris`
+per `FileId`, eliminating repeated `realpath` syscalls and `Url::from_file_path` conversions from hot request paths.
+Hover uses `symbol_at` with its configured endpoint policy and falls back to `term_at`; when a symbol or term hits,
+`Cajun::hover` takes a disposable Salsa snapshot outside the session mutex and re-materializes `StaticsArena`
+on demand inside `AnalysisTask::run`, so Salsa's `lru = 1` cache reclaims arenas when switching files.
 The [editor guide](../../../../editor/README.md#runtime-configuration) documents the hover settings.
 
 ## Diagnostic Collection
@@ -59,7 +67,8 @@ of an unconstrained-inference diagnostic; unresolved fills in independent expres
 
 Recovery boundaries are owned by their producing phases: [source loading](sessions-and-queries.md),
 [shared source analysis](sessions-and-queries.md#shared-source-analysis),
-[desugaring](parsing-and-resolution.md#desugaring-folders), [resolution](parsing-and-resolution.md#name-resolution),
+[lowering and resolution](parsing-and-resolution.md#fused-lowering-and-resolution),
+[name resolution](parsing-and-resolution.md#name-resolution),
 [checking and finalization](checking-and-inference.md#checker-recovery),
 [execution readiness](elaboration-and-validation.md#residual-runtime-traversal),
 and [SPS verification](sps.md#sps-analysis-traversal).

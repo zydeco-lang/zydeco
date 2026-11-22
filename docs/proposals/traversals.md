@@ -4,8 +4,8 @@ This proposal retains unfinished extensions to compiler traversal and diagnostic
 The implemented surface, classifier, runtime, and SPS interfaces are indexed
 by [choosing and composing traversals](../references/compiler/src/compiler-data.md#choosing-and-composing-traversals).
 That reference owns their shared design rules and links to the detailed phase contracts.
-The [diagnostic collection contract](../references/compiler/src/tooling.md#diagnostic-collection) records current recovery
-and reporting behavior.
+The [diagnostic collection contract](../references/compiler/src/tooling.md#diagnostic-collection) records
+current recovery and reporting behavior.
 
 ## Diagnostic collection and recovery
 
@@ -31,8 +31,8 @@ Establish recoverable structural regions before batching dependent contract chec
 malformed ownership and cyclic input cannot supply the evidence those checks expect.
 
 More checker recovery should begin with a demonstrated diagnostic or tooling gap.
-The implemented [checker recovery](../references/compiler/src/checking-and-inference.md#checker-recovery) covers independent components,
-arms, closed imports, and finalization roots.
+The implemented [checker recovery](../references/compiler/src/checking-and-inference.md#checker-recovery)
+covers independent components, arms, closed imports, and finalization roots.
 Recovery through failed sequential bindings, telescope witnesses,
 or ambiguous clause prefixes would require an explicit representation of unavailable evidence
 before their dependent bodies could be checked.
@@ -44,8 +44,8 @@ or the phase's acceptance boundary.
 
 ## Further resumable folder migrations
 
-The implemented [resumable execution contract](../references/compiler/src/compiler-data.md#resumable-folder-execution) provides
-an explicit-stack driver for residual lowering, Builtin packed value materialization,
+The implemented [resumable execution contract](../references/compiler/src/compiler-data.md#resumable-folder-execution)
+provides an explicit-stack driver for residual lowering, Builtin packed value materialization,
 SPS reconstruction and pattern decisions, closure conversion, SPSLow structural analysis, local unboxing,
 and [CPS assembly lowering](../references/compiler/src/zasm.md#cps-assembly-lowering).
 Their behavior and depth checks support using the interface for those boundaries.
@@ -93,26 +93,12 @@ Replace the affected callback interfaces and their callers together once the own
 
 ### Surface rebuilding and recovery
 
-The [freshening folder](../../lang/surface/src/bitter/freshen.rs) has a suitable ownership policy:
-it copies each occurrence into `BitterBuilder`, retains textual origins, and stores no borrowed child environment.
-Its recursive edge, however, passes through the shared [surface rebuilding interface](../../lang/surface/src/fold.rs).
-Patterns can contain terms in annotations and views, so migrating only pattern recursion would leave that cycle intact.
-
-`Pattern::fold_with` and `Term::fold_with` currently finish their children inside ordinary Rust callbacks.
-The interface also changes reference representation from `InputRef` to `OutputRef`,
-and its generic `fold_items` callback supplies the grouping boundary for recovery.
-Freshening keeps source names and cannot fail; resolution converts names to definition IDs
-and collects independent reported failures through `OrdinaryFolder::fold_items`.
-An annotation's structural copying order is term then classifier, while the resolver deliberately handles
-that constructor itself and resolves the classifier first.
-A child layer must expose positions without imposing one semantic schedule on both clients.
-
-This is a design boundary beyond changing the driver invocation.
-Copying the syntax match into a dedicated freshening machine would duplicate the shared structural rule.
-Starting a new explicit driver inside each existing callback would still leave recursive callbacks on the native stack.
-The useful next step is a resumable description of one owned syntax layer, shared by copying and resolution.
-It must support partial child results, reference conversion, and continuing independent children after rejection
-without constructing a successful parent from failed prerequisites.
+*Status note (2026-11-22):* The separate `bitter` representation, `FreshenFolder`,
+and shared rebuilding trait (`lang/surface/src/fold.rs`) were retired.
+Surface lowering and lexical resolution now execute in one fused recursive pass
+in [`ResolveFolder`](../../lang/surface/src/scoped/resolver.rs) guarded
+by [`zydeco_foundation::stack::maybe_grow`](../../lang/foundation/src/stack.rs), collecting independent diagnostics
+per unit while building directly into [`ScopedBuilder`](../../lang/surface/src/scoped/alloc.rs).
 
 Two implementation approaches deserve comparison before replacing the interface:
 
@@ -128,7 +114,8 @@ A later complete resolver migration must also retain global environments beyond 
 and resume block dependency collection through its existing success and abort boundaries.
 The [resolver](../../lang/surface/src/scoped/resolver.rs)
 and [block handling](../../lang/surface/src/scoped/blocks.rs) show those current lifetimes;
-the [name-resolution reference](../references/compiler/src/parsing-and-resolution.md#name-resolution) owns their semantic contract.
+the [name-resolution reference](../references/compiler/src/parsing-and-resolution.md#name-resolution)
+owns their semantic contract.
 
 Acceptance should cover repeated source and signature boundaries, fresh binder identities,
 origins, annotation and view children, and copattern spines.
@@ -138,8 +125,8 @@ A direct deep fixture must cross pattern-to-term edges and include destruction o
 
 ### SPSLow semantic evidence
 
-The implemented [SPSLow scan](../references/compiler/src/closure-conversion.md#spslow-traversal-and-analyzers) covers structural ownership
-and variable summaries.
+The implemented [SPSLow scan](../references/compiler/src/closure-conversion.md#spslow-traversal-and-analyzers)
+covers structural ownership and variable summaries.
 The [entry-contract validator](../../lang/stackir/src/low/contracts.rs)
 and [protocol validator](../../lang/stackir/src/low/protocols.rs) require more than the same structural events.
 They propagate entry-specific evidence through bindings, opened records, and branch-local contexts.
@@ -162,8 +149,8 @@ and drop retained facts and error payloads on the small test stack.
 
 ### Normalization fact ownership
 
-Borrowed [pattern decisions](../references/compiler/src/sps/operations-and-patterns.md#pattern-decisions-and-validation) now use the common driver,
-including suffix views that borrow existing physical fields.
+Borrowed [pattern decisions](../references/compiler/src/sps/operations-and-patterns.md#pattern-decisions-and-validation)
+now use the common driver, including suffix views that borrow existing physical fields.
 The remaining owned [producer facts](../../lang/stackir/src/high/normalize.rs)
 and [consumer demands](../../lang/stackir/src/high/demand.rs) are a medium–high difficulty case,
 skipped because traversal and fact lifetime must be addressed together.
@@ -226,8 +213,9 @@ first establish that two real clients share a stable child description.
 Further typed migrations must identify the graph they observe.
 [Type support collection](../../lang/statics/src/normalize/scope.rs) depends on occurrence-specific scope constraints;
 a replacement needs a context-sensitive traversal or a justified memo key under the reference's cache rules.
-The raw classifier folder and residual runtime iterator provide distinct starting points. Further SPS
-rebuilding must preserve the established [consumer-demand schedule](../references/compiler/src/sps/normalization-and-demand.md#consumer-demands).
+The raw classifier folder and residual runtime iterator provide distinct starting points.
+Further SPS rebuilding must preserve the established
+[consumer-demand schedule](../references/compiler/src/sps/normalization-and-demand.md#consumer-demands).
 
 Residual lowering and SPS normalization now use explicit reconstruction frames,
 as recorded in [C8](../references/compiler/src/sps.md).
@@ -263,9 +251,8 @@ The benefit is evidence of the overall effect and identification of any memory r
 
 ## Migration acceptance
 
-For each extension, identify the client and its repeated structural rule,
-then apply the [reference's traversal selection criteria](../references/compiler/src/compiler-data.md#choosing-and-composing-traversals).
-Remove the superseded recursion and update callers in the same change.
-Compare accepted behavior and rejected inputs, including error multiplicity and locations,
-arena identities, provenance, and the absence of invalid normal products.
+For each extension, identify the client and its repeated structural rule, then apply the
+[reference's traversal selection criteria](../references/compiler/src/compiler-data.md#choosing-and-composing-traversals).
+Remove the superseded recursion and update callers in the same change. Compare accepted behavior and rejected inputs,
+including error multiplicity and locations, arena identities, provenance, and the absence of invalid normal products.
 Measure traversal work, allocations, and temporary storage before claiming compilation-time or memory improvements.

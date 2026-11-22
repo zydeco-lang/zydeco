@@ -11,7 +11,7 @@ Their current implementation representations are:
 | Project | `Project`, `PackageContext`, and project registrations |
 | Package | `Package` / `PackageId`, `PackageInstance`, and `ResolvedPackage` |
 | Compilation unit | `ExecutableProgram`, `LibraryProgram`, and `UnitProgram` |
-| Semantic unit | Merged `SourceId`, `ProgramAnalysis` / `CheckedProgram` |
+| Semantic unit | `UnitSpec`, `UnitInterface`, `ProgramAnalysis` / `CheckedProgram` |
 
 `CompilerSession` manages source revisions, snapshots, and cached queries for these abstractions.
 Package instance and analysis identity follow the
@@ -52,9 +52,10 @@ original templates, and import edges.
 `ResolvedPackage` records names, roles, relationship targets, and declaration origins for these nodes.
 Namespace equality and structural equality are compared directly through domain types.
 
-[Source assembly](../../../../lang/session/src/source/program.rs) allocates semantic input identities
-from the merged graph.
-Its source map preserves original file spans for diagnostics and editor queries.
+[Per-unit compilation and assembly](../../../../lang/session/src/source/unit.rs) normalizes canonical file paths once
+with `SourcePath::identity` and assigns each unique source file a dense `FileId` inside one shared `SourceMap`
+without deep-copying provider syntax trees across import sites.
+Its source map preserves original file byte offsets for diagnostics and editor queries.
 
 The [default prelude loader](../../../../lang/session/src/source/prelude.rs) records a separate
 `SourceFile.prelude` edge for the [language-level default](../../language/src/sources/core-prelude.md),
@@ -86,11 +87,12 @@ The [CLI guide](../../../../cli/README.md#selecting-an-execution-backend) docume
 and [Execution Profiles](../../language/src/execution-profiles.md) owns backend runtime contracts.
 
 `CompilerSession` is the Salsa database and revision owner.
-[ScopedData](../../../../lang/statics/src/query/input.rs) connects the resolved root,
-scoped arena and spans to `TyckDb`.
-The coarse [check_source query](../../../../lang/statics/src/query/source.rs) runs the mutable checker, finalization,
-coverage, and static elaboration together, then publishes an `Arc<StaticsArena>` and a checked or rejected outcome.
-Splitting those phases into separately copied arenas would multiply the dominant materialization cost.
+[Unit compilation](../../../../lang/session/src/source/unit.rs) compiles closed source units separately
+through `semantic_source`, `resolve_unit`, `check_unit_internal`, and `unit_interface`,
+while `assemble_program` links verified units and delegates whole-program finalization,
+coverage, and static elaboration to [`zydeco-statics`](../../../../lang/statics/src/query/source.rs).
+Each checking query publishes an `Arc<StaticsArena>` and a checked or rejected outcome once;
+splitting finalization and static elaboration across separate arena copies would multiply materialization cost.
 
 ## Shared Source Analysis
 
@@ -130,8 +132,21 @@ Individual malformed directives may stop at their first local error until a furt
 
 ## Query and Checker Ownership
 
-`CompilerSession` tracks coarse source-level queries (`load_source`, `parse_source`,
-`check_source`, `check_library`, and `check_unit`) rather than fine-grained per-AST-node Salsa leaf queries.
+`CompilerSession` tracks per-file and per-unit Salsa queries (`load_source`,
+`parse_source`, `semantic_source`, `resolve_unit`, `check_unit_internal`,
+and `unit_interface`) alongside whole-program assembly queries (`assemble_program`, `prepare_library_program`,
+and `prepare_unit_program`) rather than fine-grained per-AST-node Salsa leaf queries.
+Because `semantic_source` compares parsed units using a span-
+and comment-insensitive [`SyntaxDigest`](../../../../lang/session/src/source/digest.rs),
+edits limited to whitespace or `--` comments backdate downstream resolution and checking.
+Because imports and companion signatures form closed lexical terms checked under an empty context,
+`unit_interface` publishes an immutable, span-free `UnitInterface` implementing `Eq`: body edits inside a provider
+that preserve its exported classifier and residual static interface backdate importers via Salsa early cutoff.
+Only units containing `@[monadic]` request dependency bodies directly during unit checking.
+
+For interactive submissions, `CompilerSession::install_repl_entry`, `check_repl_path`,
+and `check_repl_entry` check each numbered entry directly against the session graph
+and return a `ReplEntry` without writing synthetic wrapper files.
 `Tycker::new` allocates shared intrinsic singletons directly into a fresh `StaticsArena`
 via [`IntrinsicStatics`](../../../../lang/statics/src/check/intrinsics.rs),
 and uses a root-keyed `DefGenAllocator` (`KeySpaceRegistry<su::TermId>`) for generated `DefId`s.
@@ -165,10 +180,15 @@ with the matching session revision or snapshot.
 Live consumers share the complete arena through `Arc`; lowerers add phase-local metadata instead of cloning it.
 Checker-only indexes (`TypeArena::strip_kind_index`) and transient `Tycker` state are dropped
 before full-arena publication.
-Cajun may keep a project's materialization alive while that project is in use.
+Cajun does not pin an `Arc<StaticsArena>` on open projects: it materializes `StaticsArena` transiently
+during initial semantic highlighting and re-materializes on demand inside `hover` using a disposable Salsa snapshot.
 
-`check_source` has a one-entry LRU configuration.
-The test session pool explicitly triggers eviction between analyses and periodically replaces its database generation.
+`assemble_program` and the coarse statics queries carry a one-entry LRU configuration,
+and `CompilerSession` calls `salsa::Database::trigger_lru_eviction` on source edits (`set_overlay`,
+`refresh_disk`, and `clear_overlay`).
+Because Cajun drops `StaticsArena` after highlighting, switching open documents allows Salsa's LRU eviction
+to reclaim stale typed arenas.
+The test session pool likewise triggers eviction between analyses and periodically replaces its database generation.
 Coarse queries avoid per-node Salsa memo retention overhead
 while deterministic `DefGenAllocator` spaces preserve definition identities across re-materialization.
 [Retention questions](../../../ideas/README.md#compiler-memory-retention) concern memo lifetime,

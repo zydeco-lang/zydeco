@@ -84,8 +84,7 @@ The implemented interfaces serve different questions and therefore expose differ
 | Input and purpose | Shared operation | Identity and scheduling contract |
 | --- | --- | --- |
 | File directives and documentation | [Source scan and analyzers](sessions-and-queries.md#shared-source-analysis) | File-local textual identities; analyzer interests select allocated terms, reachable terms, and text blocks |
-| Bitter or scoped syntax reconstruction | [Owned surface folder](#surface-structural-rebuilding) | Child IDs flow through client hooks; the folder supplies copying, reference, scope, and rejection policies |
-| Desugaring and lexical resolution | [Desugaring folders](parsing-and-resolution.md#desugaring-folders) and [resolution events](parsing-and-resolution.md#name-resolution) | Semantic handlers own telescope and scope transitions; builders and event consumers own their respective results |
+| Lowering and lexical resolution | [Fused lowering and resolution](parsing-and-resolution.md#fused-lowering-and-resolution) and [scoped allocation](#scoped-syntax-allocation) | Semantic handlers own telescope and scope transitions; [`ScopedBuilder`](../../../../lang/surface/src/scoped/alloc.rs) and observers own their respective results |
 | Resolved syntax analysis | [Scoped traversal](#scoped-structural-traversal) | Borrowed nodes; choose unique identities or path occurrences; cycles reject the traversal |
 | Raw inferred classifiers | [Classifier folders](checking-and-inference.md#classifier-folders) | Owned child reconstruction; preserve unchanged IDs; clients select substitution environments and reductions |
 | Raw checked terms and static evidence | [`CheckedNode` children](elaboration-and-validation.md#nominal-algebra-construction) | Include classifier, pattern, and static-argument edges; clients select declaration expansion and use `TypeFolder` for classifiers |
@@ -184,54 +183,20 @@ Pattern depth uses the driver independently of the normalizer's consumer schedul
 Regressions cover these invariants and empty field vectors with nonzero physical arity;
 the normalization depth regression retains 8,192 nested alias patterns on a 512 KiB stack.
 
-## Surface Structural Rebuilding
+## Scoped Syntax Allocation
 
-Bitter and scoped syntax share `Pattern` and `Term<Ref>`, with source names
-or resolved definition IDs in reference positions.
-Their [owned rebuilding operations](../../../../lang/surface/src/fold.rs) describe immediate children once
-for that syntax family.
-`Pattern::fold_with`, `Term::fold_with`, and the copattern operations consume a node
-and rebuild its children through a `Folder`.
-Literal values, field names, meta annotations, and other non-child payloads retain their contents.
-Internal terms are leaves, and sealing retains its wrapper around the transformed payload.
+[`ScopedBuilder`](../../../../lang/surface/src/scoped/alloc.rs) owns one sequential `IdAllocator<ScopedScope>`
+alongside `ArenaSparse` and `ArenaIndexed` tables for definitions, patterns, terms, and resolved block bodies.
+Every allocation records its textual origin in `TextualOrigins`, keeping authored terms anchored
+to file-local `textual` IDs while marking synthesized default prelude bindings explicitly via `insert_synthetic`.
+Non-authored binder annotations stay indexed by their textual pattern ID in `partial_binders`.
 
-The folder supplies `fold_def`, `fold_pat`, and `fold_term` for ID-bearing children;
-those hooks own arena lookup, recursive descent, and identity policy.
-`InputRef` and `OutputRef` distinguish source and resolved references, and `Error` makes rebuilding fallible.
-`fold_var` returns an output term: successful resolution can produce `Var(definition)`,
-while supported recovery can produce an internal hole after recording an error.
-Changing a binder identity does not implicitly rename references; each folder supplies its reference behavior.
-Freshening preserves source names and uses `Infallible`.
-The structural operations themselves neither issue arena IDs nor memoize and do not establish lexical environments.
-Fixed independent child hooks are evaluated before propagating rejection.
-`fold_items` controls iteration over collections: recovery-aware folders visit every independent item,
-record each diagnostic at its producer, and propagate only the already-reported failure token.
-A semantic handler retains responsibility for children that require a preceding child's environment.
-
-Rebuilding follows the existing bitter copying order: annotations process payload then classifier,
-view patterns process function then pattern, and binder-bearing forms process binder before body or bindee.
-Binding tails follow their bindees. Recursive definitions and arms retain their sequence,
-and a copattern spine processes its head followed by its tail items.
-A monadic block processes body, monad, then algebra.
-These are structural copying rules; a scope-sensitive folder must choose its own child environments
-or handle the enclosing form before delegating to `fold_with`.
-
-The [bitter builder](../../../../lang/surface/src/bitter/alloc.rs) owns one sequential ID issuer and its `BitterArena`.
-Every `Alloc` operation stores a node and its textual origin together; consuming `finish` publishes a `FrozenArena`.
-Desugaring owns a builder alongside its textual inputs and source-term memo table.
-[FreshenFolder](../../../../lang/surface/src/bitter/freshen.rs) uses the same builder
-to copy an existing bitter fragment: every reachable occurrence receives fresh IDs,
-including definition IDs, while retaining the original textual origins.
-Source names remain unchanged for subsequent lexical resolution.
-Source and signature boundary payloads are copied per occurrence, even when the input shares a provider.
-There is no copy memoization, and source identities in `partial_binders` remain valid through the retained origins.
-Freshening uses recursive descent and requires acyclic input; it does not provide the scoped visitor's explicit-stack
-or cycle-reporting guarantees.
-
-The folder is used for binder copies in annotated abstractions, generated binding classifiers,
-and recursive binding sugar.
-Its regressions check distinct resolved binders, retained provenance, copattern order,
-shared annotation copying, and sealed payloads.
+When dependency-scheduled blocks or recursive terms require cyclic identity reservation,
+[`ScopedBuilder`](../../../../lang/surface/src/scoped/alloc.rs) separates `reserve_term` from `fill_term`.
+Direct single-pass resolution
+in [`ResolveFolder`](../../../../lang/surface/src/scoped/resolver.rs) consumes immutable textual syntax once
+per file unit without constructing an intermediate lowered tree, and `ScopedBuilder::finish` transfers ownership
+of the completed `ScopedArena` to [`FrozenArena`](../../../../lang/foundation/src/arena.rs) for publication.
 
 ## Scoped Structural Traversal
 

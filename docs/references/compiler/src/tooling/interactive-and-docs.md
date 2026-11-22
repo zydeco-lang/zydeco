@@ -56,11 +56,12 @@ Re-importing a computation can repeat effects: history stores source, not memoiz
 Clearing the transcript leaves those importable sources available.
 A rejected submission returns to the editor at the same number; retry replaces that unrecorded attempt.
 
-For ordinary input, a generated observation root declares its own Builtin parameter around the imported complete input.
-The engine analyzes the direct import first, then tries a `ret` wrapper if the first analysis rejects,
-allowing values and returning computations without requiring a user wrapper.
-If both analyses reject, it reports the original direct diagnostic.
-Static observations use analysis facts; runtime observations link the accepted root with captured output and errors.
+For ordinary input, the engine installs the numbered submission directly as an overlay and checks it once
+through `CompilerSession::check_repl_entry` against the default core prelude (and resolved imports),
+without generating wrapper files or re-checking under a synthetic `ret` wrapper.
+Types, kinds, and non-runtime values inspect directly via `ReplEntry` analysis facts;
+runtime values and computations evaluate against the linked entry with captured output
+and errors, preserving any user `@[debug(...)]` observations.
 Explicit execution goes through the executable entry boundary.
 
 Root command metadata is parsed into typed commands before ordinary submission handling.

@@ -5,8 +5,8 @@ Canonical syntax gives equivalent spellings one form; retained intentions preser
 at declared grammatical boundaries.
 A pretty-printer maps that model to a document, and a formatter parses, prints, and replaces source.
 The CLI and Cajun share that implementation.
-The [textual formatter](../../../../../lang/surface/src/textual/pretty.rs) owns source layout;
-its [options](../../../../../lang/surface/src/textual/pretty/config.rs) default to width 100, indentation 2,
+The [`zydeco-fmt` formatter](../../../../../lang/fmt/src/pretty.rs) owns source layout;
+its [options](../../../../../lang/fmt/src/config.rs) default to width 100, indentation 2,
 preserved layout intentions, and minimal parentheses.
 
 ## Terminology
@@ -77,11 +77,16 @@ so the boundary compositor sees the separation before the comment.
 The comment text itself remains stored once in `SurfaceTrivia`.
 
 ```text
-source -> lexer and parser -> textual arenas and spans
-       -> presentation capture -> trivia and intentions
+source -> Parser::for_formatting -> textual arenas and spans
+       -> FormatPresentation::capture (lang/fmt/src/presentation.rs) -> trivia and intentions
        -> grammar-aware document construction
        -> width selection -> formatted source
 ```
+
+Because [`zydeco-fmt`](../../../../../lang/fmt/src/lib.rs) captures `SurfaceTrivia`
+and `SurfaceIntentions` during `FormattedSource::parse` (`Parser::for_formatting`) outside
+[`zydeco-surface`](../../../../../lang/surface/src/textual/parser.rs), ordinary compilation never allocates trivia
+or layout-intention tables.
 
 Punning belongs to canonical syntax rather than intention.
 If a named term or pattern contains the same-named variable, the printer always chooses its concise form.

@@ -9,7 +9,7 @@ and return continuations form explicit stacks.
 
 ```mermaid
 flowchart TD
-    Sources[Source graph and parsing] --> Frontend[Desugaring and resolution]
+    Sources[Source graph and parsing] --> Frontend[Per-unit lowering and resolution]
     Frontend --> Statics[Checking, finalization, coverage, static elaboration]
     Statics --> Queries[Static queries and editor analysis]
     Statics --> Core[CoreProgram: typed residual CBPV IR]
@@ -28,7 +28,7 @@ The main boundaries are concrete program types:
 
 | Product | Establishing entry point | Consumer |
 | --- | --- | --- |
-| `TextualProgram`, `BitterProgram`, `ScopedProgram` | [Source assembly and surface pipeline](../../../../lang/session/src/source/pipeline.rs) | The next frontend phase |
+| `SourceTemplate`, `ResolvedUnitMemo`, `AssembledProgram` | [Per-unit compilation and assembly](../../../../lang/session/src/source/unit.rs) | The next frontend or statics phase |
 | `ProgramAnalysis` | `CompilerSession::analyze` | Diagnostics and tooling facts |
 | `CheckedProgram` | `CompilerSession::checked_program` | Full typed-tree inspection |
 | `CoreProgram` | [Static elaborator](../../../../lang/statics/src/elaborate/static_values/mod.rs) via `StaticsArena::core` | Readiness validation, Builtin planning, interpretation, and SPS lowering |

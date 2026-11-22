@@ -556,7 +556,7 @@ the control-flow graph explicit for assembly-derived targets.
 | Responsibility | Owning reference | Implementation |
 | --- | --- | --- |
 | Source graph, overlays, and shared analysis | [C3](docs/references/compiler/src/sessions-and-queries.md) | `lang/session/src/source` |
-| Parsing, desugaring, and resolution | [C4](docs/references/compiler/src/parsing-and-resolution.md) | `lang/surface/src/{textual,bitter,scoped}` |
+| Parsing, lowering, and resolution | [C4](docs/references/compiler/src/parsing-and-resolution.md) | `lang/surface/src/{textual,scoped}` |
 | Typing, finalization, elaboration, and validation | [C5–C6](docs/references/compiler/src/checking-and-inference.md) | `lang/statics/src` |
 | Core IR, protocols, and readiness | [C6–C8](docs/references/compiler/src/elaboration-and-validation.md) | `lang/ir/src` |
 | Linking and interpretation | [C7](docs/references/compiler/src/reference-interpreter.md) | `lang/dynamics/src` |
@@ -564,6 +564,7 @@ the control-flow graph explicit for assembly-derived targets.
 | ZASM and representation analysis | [C10](docs/references/compiler/src/zasm.md) | `lang/assembly/src` |
 | Native preparation, emission, and runtime | [C11–C12](docs/references/compiler/src/native-emission.md) | `lang/{assembly,amd64,machine}`, `runtime` |
 | WebAssembly emission and embedding | [C13](docs/references/compiler/src/webassembly.md) | `lang/{wasm-sps,wasm-common}` |
+| Source formatting | [C15](docs/references/compiler/src/tooling/formatting-and-rendering.md) | `lang/fmt/src` |
 
 Each completed representation has one selected program root and the storage needed by its syntax.
 Phase-owned builders publish immutable products; later metadata lives in phase-local deltas.
@@ -581,8 +582,11 @@ See [compiler pass composition](docs/references/compiler/src/architecture.md#com
 ### Query-Based Analysis
 
 Source and statics queries share one Salsa database and revision system.
-File loading, parsing, resolution, and whole-source static checking (`check_source`,
-`check_library`, and `check_unit`) run as coarse Salsa queries over `ScopedData`.
+File loading, parsing, resolution (`resolve_unit`), and separate interface checking (`check_unit_internal`,
+`unit_interface`) run per closed compilation unit with span-insensitive `SyntaxDigest`
+and `UnitInterface` early-cutoff backdating before assembly (`assemble_program`),
+while whole-source checking (`check_source`, `check_library`,
+and `check_unit`) runs coarse Salsa queries over `ScopedData`.
 Stateful inference, elaboration, and dense statics allocation stay inside one mutable `Tycker` run,
 while [analysis retention](docs/references/compiler/src/sessions-and-queries.md#analysis-facts-and-materialization)
 distinguishes keyed tooling facts from full typed-tree consumers.
@@ -955,7 +959,7 @@ and `memory`, but the embedding must supply the imports before invoking either f
 
 | Path | Role |
 | --- | --- |
-| `lang/` | Compiler foundation (`zydeco-foundation`), frontend, statics, interpreter, emitters, and test harnesses under `lang/tests/cases/`. |
+| `lang/` | Compiler foundation (`zydeco-foundation`), frontend, formatting (`zydeco-fmt`), statics, IR, interpreter, emitters, and test harnesses under `lang/tests/cases/`. |
 | `lang/machine/` | Rust representations and host-resumption descriptions shared by compiler phases and native stubs. |
 | `lib/` | Standard library, reusable examples, and regression projects under `lib/tests/`. |
 | `cli/` | Source checking, shared backend execution, the bundled Node host, formatting, and compilation commands. |

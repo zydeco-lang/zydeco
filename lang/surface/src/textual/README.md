@@ -1,7 +1,8 @@
 # Textual (Parsed Surface Syntax)
 
 `textual` defines the concrete surface syntax and produces the first AST from source text.
-It owns lexing, parsing, and span collection, and stores parsed nodes in arenas keyed by lightweight IDs.
+It owns lexing, parsing, token-stream `--|` text-block capture, and span collection,
+and stores parsed nodes in arenas keyed by lightweight IDs.
 
 ## Role in the pipeline
 
@@ -10,7 +11,7 @@ textual -> scoped -> statics
 ```
 
 This phase is responsible for turning source text into structured syntax with accurate span information,
-but it does not perform desugaring or name resolution.
+without performing desugaring, name resolution, or formatting trivia capture.
 
 ## Data model
 
@@ -20,22 +21,21 @@ but it does not perform desugaring or name resolution.
 - `SourceUnit` identifies the single complete term in one source file.
   It decodes typed metadata directives attached to holes, collects `@[doc]` attachments for arbitrary terms,
   and validates `@[literal]` splices without assigning them a presentation.
+- `text_block` captures contiguous `--|` blocks directly from the Logos token stream and attaches them
+  to entities by span.
 - Parsed metadata is an arena-backed tree of `MetaNode` values.
-  Every nested value has a `MetaId`, so it participates in span lookup, source-layout retention,
-  and comment attachment like other textual syntax.
-  The textual-to-scoped boundary lowers and resolves metadata into the span-free `ResolvedMeta`
-  and `Meta` representations used by later phases.
+  Every nested value has a `MetaId`, so it participates in span lookup
+  and formatting presentation like other textual syntax.
+  The textual-to-scoped boundary lowers and resolves metadata into the span-free `Meta` representation
+  and typed actions used by later phases.
   Concrete interpretations live in `zydeco_surface::metadata`, implement `SpecializeMeta`,
   and are requested explicitly by the phases that consume them.
 - `SpanArena` stores `Span` values for every textual entity so later phases can report precise locations;
   it is storage-only and retains no ID allocator.
-- `SurfaceIntentions` is an auxiliary arena keyed by `EntityId`.
-  It records layout choices such as whether a parsed entity crossed a line boundary
-  without adding presentation-only variants to the syntax tree.
-- `SurfaceTrivia` retains source content outside the syntax tree.
-  Text, line, and nested block comments are kept as typed values in one source-ordered sequence and anchored
-  to stable textual entities, so formatters can move the surrounding syntax without discarding comment content.
 - `Parser` combines `TextArena` and `SpanArena` and is passed through the LALRPOP-generated parser.
+  When invoked through `Parser::for_formatting()`, it also retains structural prefix ranges consumed
+  by `zydeco-fmt`; otherwise formatting trivia and layout intentions (`SurfaceTrivia`,
+  `SurfaceIntentions`) live strictly in `lang/fmt/` and are never captured during compilation.
   It owns the `KeySpace` only while nodes are being parsed, then `finish` returns the two durable arenas
   and drops the issuer.
 
@@ -61,10 +61,8 @@ of highlighting the whole annotation.
 ## Errors and formatting
 
 - [`err`] formats every retained parser issue with its source context.
-- The [`fmt`] module re-exports the pretty printer's entry points and options.
-- `pretty` constructs documents from textual syntax, trivia, and intentions.
-  Its private `context`, `punning`, and `config` modules supply grammar contexts, punning, and options;
-  corpus checks in `corpus` compare preservation and idempotence.
+- Source layout formatting lives in the separate `zydeco-fmt` crate (`lang/fmt/`), consuming parsed `TextArena`,
+  `SpanArena`, and `FormatPresentation` while parser/formatter corpus tests live under `tests/corpus`.
 
 Formatting follows shared laws over source intentions, boundary algebra, canonical layout families, and directives.
 Source analysis decodes documentation and literal attachments and reports their diagnostics.
