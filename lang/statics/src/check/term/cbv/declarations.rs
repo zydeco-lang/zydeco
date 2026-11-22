@@ -509,7 +509,7 @@ impl TermChecker<'_> {
                 })
             }
         };
-        let seal = tycker.alloc_abst();
+        let seal: ss::AbstId = Alloc::alloc(tycker, None::<su::DefId>, seal_kind, &());
         let sealed: ss::TypeId = Alloc::alloc(tycker, seal, seal_kind, &());
         let denoted = match shape {
             | CbvDeclarationShape::Data => sealed,

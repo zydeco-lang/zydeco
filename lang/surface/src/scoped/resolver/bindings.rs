@@ -386,7 +386,6 @@ impl<O: super::ResolutionObserver> ResolveFolder<'_, O> {
         &mut self, binding: t::GenBind<t::TermId>, mode: t::DefinitionMode, tail: t::TermId,
         id: t::TermId,
     ) -> FoldResult<TermId> {
-        let source_binder = binding.binder;
         let mark = self.scope.mark();
         let lowered = self.lower_binding(binding, mode, None);
         let lowered = match lowered {
@@ -400,24 +399,7 @@ impl<O: super::ResolutionObserver> ResolveFolder<'_, O> {
         };
         let res = match lowered {
             | Ok(LoweredBinding { binder, bindee }) => {
-                let saved_prelude = if self.builder.default_prelude_binders.contains(&source_binder)
-                {
-                    let defs = self
-                        .scope
-                        .var_to_def
-                        .iter()
-                        .filter(|(_, binding)| binding.depth > mark.depth())
-                        .map(|(name, binding)| (*name, binding.definition))
-                        .collect();
-                    self.scope.rollback(mark);
-                    Some(std::mem::replace(&mut self.scope.prelude_definitions, defs))
-                } else {
-                    None
-                };
                 let tail_res = self.lower_term(tail);
-                if let Some(prev_prelude) = saved_prelude {
-                    self.scope.prelude_definitions = prev_prelude;
-                }
                 self.scope.rollback(mark);
                 tail_res.map(|tail| Let { binder, bindee, tail })
             }

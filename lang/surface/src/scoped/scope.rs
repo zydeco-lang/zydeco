@@ -26,12 +26,6 @@ pub(super) struct ScopeMark {
     prelude_enabled: bool,
 }
 
-impl ScopeMark {
-    pub(super) fn depth(&self) -> usize {
-        self.depth
-    }
-}
-
 /// Mutable undo-trail lexical environment shared across lowered syntax resolution.
 #[derive(Clone, Debug)]
 pub struct ScopeState {

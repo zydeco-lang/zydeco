@@ -6,7 +6,7 @@ use crate::textual::syntax as t;
 use ariadne::{Label, Report, ReportKind};
 use std::ops::Range;
 use thiserror::Error;
-use zydeco_foundation::span::{PathDisplay, Sp, Span, internal_ariadne_span};
+use zydeco_foundation::span::{BytePos, PathDisplay, Sp, Span, internal_ariadne_span};
 use zydeco_syntax::{BuiltinTypeRole, BuiltinValueRole, VarName};
 
 /// Errors reported during surface lowering and name resolution.
@@ -128,6 +128,91 @@ impl ResolveError {
             | Self::UnboundVar(variable) => variable.info,
             | Self::DuplicateDefinition(_, duplicate) => duplicate.info,
             | Self::UnenclosedThat(span) | Self::RecursiveParameter(span) => *span,
+        }
+    }
+
+    /// Shift every embedded source span by `base` when assembling a merged program map.
+    pub fn rebase(self, base: BytePos) -> Self {
+        let map_term = |mut term: Sp<t::TermId>| {
+            term.info = term.info.rebase(base);
+            term
+        };
+        let map_pat = |mut pattern: Sp<t::PatId>| {
+            pattern.info = pattern.info.rebase(base);
+            pattern
+        };
+        let map_copat = |mut copattern: Sp<t::CoPatId>| {
+            copattern.info = copattern.info.rebase(base);
+            copattern
+        };
+        let map_var = |mut var: Sp<VarName>| {
+            var.info = var.info.rebase(base);
+            var
+        };
+        match self {
+            | Self::InvalidBuiltinMeta { term, source } => {
+                Self::InvalidBuiltinMeta { term: map_term(term), source }
+            }
+            | Self::InvalidBuiltinPatternMeta { pattern, source } => {
+                Self::InvalidBuiltinPatternMeta { pattern: map_pat(pattern), source }
+            }
+            | Self::BuiltinTypeRoleOnTerm { term, role } => {
+                Self::BuiltinTypeRoleOnTerm { term: map_term(term), role }
+            }
+            | Self::BuiltinValueRoleOnExistentialPattern { pattern, role } => {
+                Self::BuiltinValueRoleOnExistentialPattern { pattern: map_pat(pattern), role }
+            }
+            | Self::UnsupportedExistentialPatternMeta(pattern) => {
+                Self::UnsupportedExistentialPatternMeta(map_pat(pattern))
+            }
+            | Self::InvalidIntrinsicMeta { term, source } => {
+                Self::InvalidIntrinsicMeta { term: map_term(term), source }
+            }
+            | Self::InvalidPreludeMeta { term, source } => {
+                Self::InvalidPreludeMeta { term: map_term(term), source }
+            }
+            | Self::InvalidMonadicMeta { term, source } => {
+                Self::InvalidMonadicMeta { term: map_term(term), source }
+            }
+            | Self::InvalidCbvMeta { term, source } => {
+                Self::InvalidCbvMeta { term: map_term(term), source }
+            }
+            | Self::CbnNotImplemented(term) => Self::CbnNotImplemented(map_term(term)),
+            | Self::InvalidTypeOfMeta { term, source } => {
+                Self::InvalidTypeOfMeta { term: map_term(term), source }
+            }
+            | Self::InvalidPartialMeta { term, source } => {
+                Self::InvalidPartialMeta { term: map_term(term), source }
+            }
+            | Self::PartialPayloadNotBinding(term) => {
+                Self::PartialPayloadNotBinding(map_term(term))
+            }
+            | Self::IntrinsicPayloadNotHole(term) => Self::IntrinsicPayloadNotHole(map_term(term)),
+            | Self::InvalidFfiMeta { term, source } => {
+                Self::InvalidFfiMeta { term: map_term(term), source }
+            }
+            | Self::FfiPayloadNotHole(term) => Self::FfiPayloadNotHole(map_term(term)),
+            | Self::QuantifierParameterNotPattern(copattern) => {
+                Self::QuantifierParameterNotPattern(map_copat(copattern))
+            }
+            | Self::ValueParameterNotPattern(copattern) => {
+                Self::ValueParameterNotPattern(map_copat(copattern))
+            }
+            | Self::ManifestPatternOutsideExistential(pattern) => {
+                Self::ManifestPatternOutsideExistential(map_pat(pattern))
+            }
+            | Self::PackParameterNeedsEvidence(pattern) => {
+                Self::PackParameterNeedsEvidence(map_pat(pattern))
+            }
+            | Self::PackParameterRedundantEvidence(pattern) => {
+                Self::PackParameterRedundantEvidence(map_pat(pattern))
+            }
+            | Self::UnboundVar(var) => Self::UnboundVar(map_var(var)),
+            | Self::DuplicateDefinition(first, second) => {
+                Self::DuplicateDefinition(map_var(first), map_var(second))
+            }
+            | Self::UnenclosedThat(span) => Self::UnenclosedThat(span.rebase(base)),
+            | Self::RecursiveParameter(span) => Self::RecursiveParameter(span.rebase(base)),
         }
     }
 

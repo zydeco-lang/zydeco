@@ -468,3 +468,39 @@ fn groups_and_chains_keep_their_shape() {
         assert_eq!(Fixture::open_shape(source), desugared, "{source}");
     }
 }
+
+#[test]
+fn unit_resolution_records_imports_prelude_and_signature_boundaries() {
+    let fixture = Fixture::parse("(@(import(\"a.zy\")), @(import(\"b.zy\")), Bool)");
+    let out = ResolveFolder::new(&fixture.spans, &fixture.textual)
+        .run_unit(
+            fixture.root,
+            UnitResolveConfig { literals: &[], has_prelude: true, is_signature: true },
+        )
+        .unwrap();
+    assert_eq!(out.imports.len(), 2);
+    assert!(out.prelude_boundary.is_some());
+    assert!(out.arena.origins.source(&out.prelude_boundary.unwrap().into()).is_none());
+    for &(_, boundary) in &out.imports {
+        assert!(out.arena.origins.source(&boundary.into()).is_some());
+        let Term::SourceBoundary(SourceBoundary(placeholder)) = out.arena.terms[&boundary] else {
+            panic!("import boundary must be a SourceBoundary");
+        };
+        assert!(out.arena.origins.source(&placeholder.into()).is_none());
+    }
+    assert!(!out.has_monadic);
+    assert!(matches!(out.arena.terms[&out.root], Term::SignatureBoundary(_)));
+    assert!(out.arena.defs.iter().any(|(def, name)| {
+        name.as_str() == "Bool" && out.arena.is_default_prelude_definition(*def)
+    }));
+
+    let bad = Fixture::parse("unbound_name");
+    let err = ResolveFolder::new(&bad.spans, &bad.textual)
+        .run_unit(
+            bad.root,
+            UnitResolveConfig { literals: &[], has_prelude: false, is_signature: false },
+        )
+        .err()
+        .expect("unbound name must fail unit resolution");
+    assert_eq!(err.len(), 1);
+}

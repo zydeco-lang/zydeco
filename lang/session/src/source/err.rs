@@ -270,25 +270,6 @@ impl From<super::PackageError> for SourceLoadError {
     }
 }
 
-#[derive(Clone, Debug, Error)]
-pub enum TextualProgramError {
-    #[error("source `{}` has no import edge for term {term:?}", path.display())]
-    MissingImport { path: PathBuf, term: zydeco_surface::textual::syntax::TermId, span: Span },
-    #[error("source `{}` has no attached text block for literal term {term:?}", path.display())]
-    MissingLiteralText { path: PathBuf, term: zydeco_surface::textual::syntax::TermId, span: Span },
-}
-
-impl TextualProgramError {
-    pub fn diagnostic_site(&self) -> SourceDiagnosticSite {
-        match self {
-            | Self::MissingImport { path, span, .. }
-            | Self::MissingLiteralText { path, span, .. } => {
-                SourceDiagnosticSite::new(path.clone(), span.range())
-            }
-        }
-    }
-}
-
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum CheckedRootSort {
     Hole,

@@ -4,8 +4,13 @@ use super::{
     alloc::ScopedBuilder, blocks::TextualBlockCollector, dependencies::DependencyAnalyzer,
     scope::ScopeState, syntax::*, *,
 };
-use crate::{diagnostic::Diagnostics, textual::syntax as t};
+use crate::metadata::CorePrelude;
+use crate::{
+    diagnostic::Diagnostics,
+    textual::{LiteralSite, syntax as t},
+};
 use rustc_hash::FxHashMap;
+use std::sync::Arc;
 use zydeco_foundation::{
     err::{CollectReported, Report, ReportedError},
     prelude::FrozenArena,
@@ -29,6 +34,37 @@ pub(super) enum UnboundPolicy {
     BindFree,
 }
 
+pub struct UnitResolveConfig<'a> {
+    pub literals: &'a [LiteralSite],
+    pub has_prelude: bool,
+    pub is_signature: bool,
+}
+
+pub struct ResolvedUnitOut {
+    pub arena: FrozenArena<ScopedArena>,
+    pub root: TermId,
+    /// `(textual_import_term, scoped_source_boundary_term)` in encounter order.
+    pub imports: Vec<(t::TermId, TermId)>,
+    /// Scoped `SourceBoundary` term for the default prelude when `has_prelude` is true.
+    pub prelude_boundary: Option<TermId>,
+    /// True if this unit lowered any `@[monadic]` block.
+    pub has_monadic: bool,
+}
+
+pub(super) struct UnitResolveState {
+    pub literals: FxHashMap<t::TermId, Arc<str>>,
+    pub imports: Vec<(t::TermId, TermId)>,
+    pub has_monadic: bool,
+}
+
+impl UnitResolveState {
+    fn from_literals(literals: &[LiteralSite]) -> Self {
+        let literals =
+            literals.iter().map(|site| (site.term, site.directive.text.text.clone())).collect();
+        Self { literals, imports: Vec::new(), has_monadic: false }
+    }
+}
+
 pub struct ResolveFolder<'a, O = ()> {
     pub spans: &'a t::SpanArena,
     pub textual: &'a t::TextArena,
@@ -40,6 +76,7 @@ pub struct ResolveFolder<'a, O = ()> {
     free_vars: FxHashMap<VarName, DefId>,
     unbound_policy: UnboundPolicy,
     pub(super) secondary_copy: bool,
+    pub(super) unit_mode: Option<UnitResolveState>,
     observers: (ReferenceIndex, O),
     diagnostics: Vec<ResolveError>,
 }
@@ -61,7 +98,7 @@ impl<'a> ResolveFolder<'a> {
         Self {
             spans,
             textual,
-            builder: ScopedBuilder::new(textual.default_prelude_binders.clone()),
+            builder: ScopedBuilder::new(),
             scope: ScopeState::new(),
             dependencies: DependencyAnalyzer::default(),
             active_block_candidates: FxHashMap::default(),
@@ -69,6 +106,7 @@ impl<'a> ResolveFolder<'a> {
             free_vars: FxHashMap::default(),
             unbound_policy: UnboundPolicy::Reject,
             secondary_copy: false,
+            unit_mode: None,
             observers: (ReferenceIndex::default(), ()),
             diagnostics: Vec::new(),
         }
@@ -86,6 +124,7 @@ impl<'a> ResolveFolder<'a> {
             free_vars: self.free_vars,
             unbound_policy: self.unbound_policy,
             secondary_copy: self.secondary_copy,
+            unit_mode: self.unit_mode,
             observers: (self.observers.0, observer),
             diagnostics: self.diagnostics,
         }
@@ -99,6 +138,23 @@ impl<'a> ResolveFolder<'a> {
             diagnostics: output.diagnostics,
             program: output.program,
         }
+    }
+
+    /// Lower and resolve one closed compilation unit directly from its frozen template.
+    pub fn run_unit(
+        self, root: t::TermId, config: UnitResolveConfig<'_>,
+    ) -> Result<ResolvedUnitOut> {
+        self.run_unit_inner(root, config).0
+    }
+
+    /// Lower and resolve one unit for completion recovery without reading dependency files.
+    pub fn run_unit_completion(
+        mut self, root: t::TermId, target: t::TermId, config: UnitResolveConfig<'_>,
+    ) -> UnitCompletionResolution {
+        self.unbound_policy = UnboundPolicy::RecoverForCompletion;
+        let (unit, site, diagnostics) =
+            self.with_observer(CompletionObserver::new(target)).run_unit_inner(root, config);
+        UnitCompletionResolution { site, diagnostics, unit }
     }
 
     /// Lower and resolve an arbitrary snippet with free variables left abstract.
@@ -131,6 +187,69 @@ impl<O: ResolutionObserver> ResolveFolder<'_, O> {
 
     pub fn run_observed(self, root: t::TermId) -> ResolutionOutput<O::Output> {
         self.run_inner(root)
+    }
+
+    fn install_default_prelude(&mut self, root: t::TermId) -> (TermId, PatId) {
+        let placeholder = self.builder.alloc_synthetic_term(Hole);
+        let boundary = self.builder.alloc_synthetic_term(SourceBoundary(placeholder));
+        let patterns = CorePrelude::closed_names()
+            .map(|name| {
+                let var_name = VarName::new(name);
+                let definition = self.builder.alloc_default_prelude_def(var_name);
+                self.scope.prelude_definitions.insert(var_name, definition);
+                let pat_var = self.builder.alloc_pat(Pattern::Var(definition), root.into());
+                self.builder
+                    .alloc_pat(ProjectionPattern(FieldName::new(name), pat_var).into(), root.into())
+            })
+            .collect();
+        let binder = self.builder.alloc_pat(
+            Alias(ConsN::from_vec(patterns).expect("default prelude is nonempty")).into(),
+            root.into(),
+        );
+        (boundary, binder)
+    }
+
+    fn run_unit_inner(
+        mut self, root: t::TermId, config: UnitResolveConfig<'_>,
+    ) -> (Result<ResolvedUnitOut>, O::Output, Vec<ResolveError>) {
+        self.unit_mode = Some(UnitResolveState::from_literals(config.literals));
+        let prelude = if config.has_prelude {
+            Some(self.install_default_prelude(root))
+        } else {
+            self.scope.prelude_enabled = false;
+            None
+        };
+        let mut resolved = self.lower_term(root);
+        if let Some((prelude_boundary, binder)) = prelude {
+            resolved = resolved.map(|tail| {
+                self.builder.alloc_term(Let { binder, bindee: prelude_boundary, tail }, root.into())
+            });
+        }
+        if config.is_signature {
+            resolved = resolved
+                .map(|inner| self.builder.alloc_term(SignatureBoundary(inner), root.into()));
+        }
+        self.dependencies.assert_closed();
+        let unit_state = self.unit_mode.take().expect("unit mode remains active");
+        let (users, observations) = self.observers.finish();
+        let rejected = resolved.is_err()
+            || (matches!(self.unbound_policy, UnboundPolicy::Reject)
+                && !self.diagnostics.is_empty());
+        let program = if rejected {
+            Err(Box::new(
+                Diagnostics::with_errors(self.diagnostics.clone())
+                    .expect("rejection has a recorded diagnostic"),
+            ))
+        } else {
+            Ok(ResolvedUnitOut {
+                arena: FrozenArena::new(self.builder.finish(users)),
+                root: resolved.expect("accepted unit lowers to a root term"),
+                imports: unit_state.imports,
+                prelude_boundary: prelude.map(|(boundary, _)| boundary),
+                has_monadic: unit_state.has_monadic,
+            })
+        };
+        (program, observations, self.diagnostics)
     }
 
     fn run_inner(mut self, root: t::TermId) -> ResolutionOutput<O::Output> {
@@ -177,13 +296,7 @@ impl<O: ResolutionObserver> ResolveFolder<'_, O> {
 
     pub(super) fn alloc_def(&mut self, id: t::DefId) -> DefId {
         let name = self.textual.defs[&id];
-        let origin = self
-            .textual
-            .default_prelude_definitions
-            .get(&id)
-            .map(|pattern| (*pattern).into())
-            .unwrap_or_else(|| id.into());
-        self.builder.alloc_def(name, origin)
+        self.builder.alloc_def(name, id.into())
     }
 
     pub(super) fn scope_event(&mut self, id: TermId) {

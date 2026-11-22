@@ -32,6 +32,8 @@ pub use foreign::*;
 /// Closed type interfaces for native compilation units.
 pub mod unit;
 pub use unit::*;
+/// Separate unit checking, interface fingerprinting, and program assembly.
+pub mod separate;
 
 /// Typed arena allocation helpers.
 pub mod alloc;

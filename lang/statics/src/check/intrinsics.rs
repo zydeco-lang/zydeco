@@ -53,6 +53,12 @@ impl BuiltinTypeResolution {
 /// meaning without routing it through a source-level definition name.
 pub(crate) struct InternalTerm(pub(super) su::Internal, pub(super) su::TermId);
 
+pub(crate) const INTRINSIC_KIND_COUNT: usize = 4;
+
+pub(crate) fn intrinsic_type_count() -> usize {
+    3 + ss::PrimitiveType::all().count()
+}
+
 /// Intrinsic identities installed before a checker can construct typed nodes.
 pub(crate) struct IntrinsicStatics {
     pub(crate) vtype: KindId,
@@ -64,7 +70,7 @@ pub(crate) struct IntrinsicStatics {
 }
 
 impl IntrinsicStatics {
-    pub(super) fn new(statics: &mut StaticsArena) -> Self {
+    pub(crate) fn new(statics: &mut StaticsArena) -> Self {
         let vtype = statics.kinds_pre.alloc(ss::Fillable::Done(ss::Kind::VType(ss::VType)));
         let ctype = statics.kinds_pre.alloc(ss::Fillable::Done(ss::Kind::CType(ss::CType)));
         let thk_kind = statics.kinds_pre.alloc(ss::Fillable::Done(ss::Arrow(ctype, vtype).into()));
@@ -79,6 +85,25 @@ impl IntrinsicStatics {
                     .alloc(ss::Fillable::Done(ss::PrimitiveTy(primitive).into()), vtype);
                 (primitive, ty)
             })
+            .collect();
+        debug_assert_eq!(statics.kinds_pre.len(), INTRINSIC_KIND_COUNT);
+        debug_assert_eq!(statics.types_pre.len(), intrinsic_type_count());
+        Self { vtype, ctype, thk, ret, unit, primitives }
+    }
+
+    pub(crate) fn from_existing(statics: &StaticsArena) -> Self {
+        use zydeco_foundation::dense::DenseId;
+
+        debug_assert!(statics.kinds_pre.len() >= INTRINSIC_KIND_COUNT);
+        debug_assert!(statics.types_pre.len() >= intrinsic_type_count());
+        let vtype = KindId::from_index(0);
+        let ctype = KindId::from_index(1);
+        let thk = TypeId::from_index(0);
+        let ret = TypeId::from_index(1);
+        let unit = TypeId::from_index(2);
+        let primitives = ss::PrimitiveType::all()
+            .enumerate()
+            .map(|(offset, primitive)| (primitive, TypeId::from_index(3 + offset)))
             .collect();
         Self { vtype, ctype, thk, ret, unit, primitives }
     }

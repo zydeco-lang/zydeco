@@ -28,6 +28,7 @@ impl ArenaSchema<SourceImportId> for SourceGraphScope {
 /// Parsed contents shared by every reference to one canonical source file.
 #[derive(Clone, Debug)]
 pub struct SourceTemplate {
+    pub file_id: zydeco_foundation::span::FileId,
     pub path: PathBuf,
     pub source: String,
     /// File-local map decoding this template's spans for parse diagnostics.
@@ -35,6 +36,7 @@ pub struct SourceTemplate {
     pub spans: FrozenArena<t::SpanArena>,
     pub arena: FrozenArena<t::TextArena>,
     pub unit: t::SourceUnit,
+    pub(crate) syntax_digest: crate::source::digest::SyntaxDigest,
     pub documentation: Vec<DocumentationSite>,
     pub warnings: Vec<SourceWarning>,
     pub import_sites: Vec<ImportSite>,

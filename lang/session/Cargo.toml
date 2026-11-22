@@ -11,12 +11,15 @@ description = "revisioned source and semantic analysis sessions for zydeco"
 
 [dependencies]
 zydeco-foundation = { workspace = true }
+zydeco-syntax = { workspace = true }
 zydeco-ir = { workspace = true }
 zydeco-surface = { workspace = true }
 zydeco-statics = { workspace = true }
 ariadne = { workspace = true }
 thiserror = { workspace = true }
 dashmap = { workspace = true }
+rustc-hash = { workspace = true }
+sha3 = { workspace = true }
 derive_more = { workspace = true, features = ["is_variant"] }
 salsa = { workspace = true }
 strum = { workspace = true }
@@ -27,7 +30,6 @@ doctest = false
 
 [dev-dependencies]
 tempfile = { workspace = true }
-zydeco-syntax = { workspace = true }
 zydeco-dynamics = { workspace = true }
 zydeco-stackir = { workspace = true }
 zydeco-assembly = { workspace = true }

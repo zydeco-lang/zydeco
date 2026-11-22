@@ -33,17 +33,16 @@ impl ArenaSchema<ContextNodeId> for ScopedScope {
 
 /// One compact textual origin for every derived surface node.
 ///
-/// A complete source program has one textual key space. The resolver allocates
-/// derived IDs sequentially within its key space, so each page stores the
-/// repeated key spaces and raw derived IDs implicitly.
+/// Each resolved unit allocates derived IDs sequentially within its own key space,
+/// so each page retains the unit's textual key space and compact per-slot origins.
 #[derive(Clone, Debug, Default)]
 pub struct TextualOrigins {
-    textual_key_space: Option<KeySpaceId>,
-    pages: ArenaAssoc<KeySpaceId, OriginPage>,
+    pages: ArenaAssoc<KeySpaceId, std::sync::Arc<OriginPage>>,
 }
 
 #[derive(Clone, Debug, Default)]
 struct OriginPage {
+    textual_key_space: Option<KeySpaceId>,
     derived_categories: Vec<DerivedCategory>,
     textual_origins: Vec<CompactTextualOrigin>,
 }
@@ -67,35 +66,41 @@ impl DerivedCategory {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct CompactTextualOrigin {
-    raw: RawIdx,
-    category: t::EntityCategory,
+enum CompactTextualOrigin {
+    Source { raw: RawIdx, category: t::EntityCategory },
+    Synthetic,
 }
 
 impl CompactTextualOrigin {
     fn split(entity: t::EntityId) -> (KeySpaceId, Self) {
         let (category, key_space, raw) = entity.into_parts();
-        (key_space, Self { raw, category })
+        (key_space, Self::Source { raw, category })
     }
 
-    fn join(self, key_space: KeySpaceId) -> t::EntityId {
-        self.category.restore(key_space, self.raw)
+    fn join(self, key_space: Option<KeySpaceId>) -> Option<t::EntityId> {
+        match self {
+            | Self::Source { raw, category } => Some(
+                category
+                    .restore(key_space.expect("a source origin page has a textual key space"), raw),
+            ),
+            | Self::Synthetic => None,
+        }
     }
 }
 
 impl TextualOrigins {
     pub fn insert_new(&mut self, textual: t::EntityId, derived: EntityId) {
         let (textual_key_space, textual) = CompactTextualOrigin::split(textual);
-        match self.textual_key_space {
+        let (category, derived_key_space, raw) = DerivedCategory::split(derived);
+        let entry = self.pages.entry(derived_key_space).or_default();
+        let page = std::sync::Arc::make_mut(entry);
+        match page.textual_key_space {
             | Some(existing) => assert_eq!(
                 existing, textual_key_space,
                 "textual origins must belong to one source program",
             ),
-            | None => self.textual_key_space = Some(textual_key_space),
+            | None => page.textual_key_space = Some(textual_key_space),
         }
-
-        let (category, derived_key_space, raw) = DerivedCategory::split(derived);
-        let page = self.pages.entry(derived_key_space).or_default();
         assert_eq!(
             raw.into_u32() as usize,
             page.textual_origins.len(),
@@ -105,17 +110,40 @@ impl TextualOrigins {
         page.textual_origins.push(textual);
     }
 
+    pub fn insert_synthetic(&mut self, derived: EntityId) {
+        let (category, derived_key_space, raw) = DerivedCategory::split(derived);
+        let entry = self.pages.entry(derived_key_space).or_default();
+        let page = std::sync::Arc::make_mut(entry);
+        assert_eq!(
+            raw.into_u32() as usize,
+            page.textual_origins.len(),
+            "derived IDs must follow their allocation sequence",
+        );
+        page.derived_categories.push(category);
+        page.textual_origins.push(CompactTextualOrigin::Synthetic);
+    }
+
+    pub fn textual_key_space(&self) -> Option<KeySpaceId> {
+        let mut spaces = self.pages.iter().filter_map(|(_, page)| page.textual_key_space);
+        let first = spaces.next()?;
+        assert!(spaces.next().is_none(), "unit origins have at most one textual key space");
+        Some(first)
+    }
+
+    pub fn merge(&mut self, other: &TextualOrigins) {
+        for (key_space, page) in other.pages.iter() {
+            self.pages.entry(*key_space).or_insert_with(|| std::sync::Arc::clone(page));
+        }
+    }
+
     pub fn source(&self, derived: &EntityId) -> Option<t::EntityId> {
         let (category, key_space, raw) = DerivedCategory::split(*derived);
         let page = self.pages.get(&key_space)?;
         let index = raw.into_u32() as usize;
         let origin = *page.textual_origins.get(index)?;
-        (page.derived_categories.get(index) == Some(&category)).then_some(origin).map(|origin| {
-            origin.join(
-                self.textual_key_space
-                    .expect("a nonempty textual-origin arena has a textual key space"),
-            )
-        })
+        (page.derived_categories.get(index) == Some(&category))
+            .then_some(origin)
+            .and_then(|origin| origin.join(page.textual_key_space))
     }
 }
 
@@ -264,8 +292,8 @@ pub struct ScopedArena {
     pub origins: TextualOrigins,
     /// Source binders explicitly opted in to refutable computation binding.
     pub partial_binders: std::collections::HashSet<t::PatId>,
-    /// Non-editable default definitions retain their generated projection-group origin.
-    pub default_prelude_binders: std::collections::HashSet<t::PatId>,
+    /// Default prelude definitions synthesized per unit without an editable token.
+    pub default_prelude_defs: rustc_hash::FxHashSet<DefId>,
 
     /// def user map
     pub users: ArenaForth<DefId, TermId>,
@@ -275,16 +303,12 @@ pub struct ScopedArena {
 
 impl ScopedArena {
     pub fn is_prelude_definition(&self, definition: DefId) -> bool {
-        match self.origins.source(&definition.into()) {
-            | Some(t::EntityId::Meta(_)) => true,
-            | _ => self.is_default_prelude_definition(definition),
-        }
+        self.is_default_prelude_definition(definition)
+            || matches!(self.origins.source(&definition.into()), Some(t::EntityId::Meta(_)))
     }
 
     pub fn is_default_prelude_definition(&self, definition: DefId) -> bool {
-        matches!(self.origins.source(&definition.into()),
-            Some(t::EntityId::Pat(pattern))
-                if self.default_prelude_binders.contains(&pattern))
+        self.default_prelude_defs.contains(&definition)
     }
 
     pub fn allows_partial_binding(&self, pattern: PatId) -> bool {
@@ -297,6 +321,37 @@ impl ScopedArena {
     /// Insert a synthetic definition issued by the pass creating it.
     pub fn insert_def(&mut self, id: DefId, name: VarName) {
         self.defs.insert_new(id, name);
+    }
+
+    /// Merge an independently resolved unit arena (disjoint key space) into this arena.
+    pub fn merge_unit(&mut self, other: &ScopedArena) {
+        self.defs.reserve(other.defs.len());
+        for (id, name) in other.defs.iter() {
+            self.defs.insert_new(*id, *name);
+        }
+        for (id, pat) in other.pats.iter() {
+            self.pats.insert_new(id, pat.clone());
+        }
+        for (id, term) in other.terms.iter() {
+            self.terms.insert_new(id, term.clone());
+        }
+        self.origins.merge(&other.origins);
+        self.partial_binders.extend(other.partial_binders.iter().copied());
+        self.default_prelude_defs.extend(other.default_prelude_defs.iter().copied());
+        for (def, users) in other.users.iter() {
+            for user in users {
+                self.users.insert_new(*def, *user);
+            }
+        }
+        self.blocks.reserve(other.blocks.len());
+        for (id, block) in other.blocks.iter() {
+            self.blocks.insert_new(*id, block.clone());
+        }
+    }
+
+    /// Replace an existing placeholder term (such as a `SourceBoundary`) when linking units.
+    pub fn patch_term(&mut self, id: TermId, term: Term) {
+        self.terms.replace_existing(id, term);
     }
 }
 

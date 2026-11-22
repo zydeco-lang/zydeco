@@ -16,13 +16,13 @@ mod driver;
 mod library;
 pub use library::{CheckedExport, CheckedLibrary, CheckedUnit, LibraryCheckError, UnitInitializer};
 /// Checked source results and synthesis reuse.
-mod source;
+pub(crate) mod source;
 use source::CheckedTermRepository;
 pub use source::{
     CheckedSource, RejectedSource, SourceCheckOutcome, TyckDiagnostics, TyckObservation,
 };
 /// Common checking protocol and expected annotations.
-mod judgment;
+pub(crate) mod judgment;
 pub use judgment::{Action, Switch, Tyck, TyckTask};
 /// Pattern rules and lexical opening scopes.
 mod pattern;
@@ -38,8 +38,9 @@ mod functions;
 /// Source-term checking rules.
 mod term;
 /// Intrinsic and foreign attachment points.
-mod intrinsics;
-use intrinsics::{IntrinsicStatics, PendingForeignImport};
+pub(crate) mod intrinsics;
+pub(crate) use intrinsics::IntrinsicStatics;
+use intrinsics::PendingForeignImport;
 /// Monadic basis checking and algebra translation.
 mod monadic;
 
@@ -121,6 +122,13 @@ pub struct Tycker<'a> {
     field_materializations: DeferredEnvMaterializationCache,
     completion: Option<completion::CompletionCapture>,
     lub_probe: Option<lub::LubProbe>,
+    /// Pre-checked imported `SourceBoundary` outcomes supplied by separate compilation.
+    pub(crate) prechecked_boundaries:
+        rustc_hash::FxHashMap<su::TermId, std::result::Result<TermAnnId, ()>>,
+    /// Definitions transitively owned by each imported `SourceBoundary` term.
+    pub(crate) boundary_owned_defs: rustc_hash::FxHashMap<su::TermId, std::sync::Arc<[su::DefId]>>,
+    /// Value index ranges per dependency mapped to that dependency's transitively owned defs.
+    pub(crate) dep_value_ranges: Vec<(std::ops::Range<usize>, std::sync::Arc<[su::DefId]>)>,
     /// a writer monad for error handling
     pub errors: Vec<TyckErrorEntry>,
     pub(crate) observations: Vec<TyckObservation>,
@@ -130,5 +138,15 @@ pub struct Tycker<'a> {
     pending_foreign_imports: Vec<PendingForeignImport>,
 }
 
+/// Dependency artifacts preloaded into a separate-compilation unit check.
+#[derive(Default)]
+pub(crate) struct PreloadedState {
+    pub boundaries: rustc_hash::FxHashMap<su::TermId, std::result::Result<TermAnnId, ()>>,
+    pub monadic_families:
+        std::collections::BTreeMap<ss::AbstId, crate::elaborate::monadic::nominal::NominalFamily>,
+    pub boundary_owned_defs: rustc_hash::FxHashMap<su::TermId, std::sync::Arc<[su::DefId]>>,
+    pub dep_value_ranges: Vec<(std::ops::Range<usize>, std::sync::Arc<[su::DefId]>)>,
+}
+
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

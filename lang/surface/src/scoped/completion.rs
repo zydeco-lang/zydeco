@@ -1,4 +1,4 @@
-use super::{ResolveError, ResolveSourceOut, Result, ScopeSnapshot, syntax::*};
+use super::{ResolveError, ResolveSourceOut, ResolvedUnitOut, Result, ScopeSnapshot, syntax::*};
 
 /// The resolved cursor node and the lexical environment captured at that node.
 pub struct CompletionSite {
@@ -11,6 +11,13 @@ pub struct CompletionResolution {
     pub site: Option<CompletionSite>,
     pub diagnostics: Vec<ResolveError>,
     pub program: Result<ResolveSourceOut>,
+}
+
+/// Per-unit completion resolution retaining unresolved import/prelude boundary sites.
+pub struct UnitCompletionResolution {
+    pub site: Option<CompletionSite>,
+    pub diagnostics: Vec<ResolveError>,
+    pub unit: Result<ResolvedUnitOut>,
 }
 
 #[cfg(test)]

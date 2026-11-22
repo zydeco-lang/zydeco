@@ -126,11 +126,16 @@ impl<'a> CoverageChecker<'a> {
     }
 
     pub fn validate(&self) -> Vec<CoverageError> {
+        self.validate_from(0, 0)
+    }
+
+    pub fn validate_from(&self, compu_start: usize, value_start: usize) -> Vec<CoverageError> {
         self.statics
             .compus
             .iter()
+            .skip(compu_start)
             .flat_map(|(computation, term)| self.validate_computation(computation, term))
-            .chain(self.statics.values.iter().flat_map(|(value, node)| {
+            .chain(self.statics.values.iter().skip(value_start).flat_map(|(value, node)| {
                 let Value::Match(Match { scrut, arms }) = node else {
                     return Vec::new();
                 };

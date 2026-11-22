@@ -10,14 +10,15 @@ use crate::traverse::CheckedNode;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::ops::ControlFlow;
 use std::sync::Arc;
+use zydeco_foundation::arena::ArenaAccess;
 use zydeco_surface::scoped::traverse::{Node, Traversal, Visitor};
 
 /// A closed type family; the dictionary is deliberately absent from its key.
 #[derive(Clone)]
 pub(crate) struct NominalFamily {
-    constructor: TypeId,
-    dependencies: Vec<AbstId>,
-    method: DtorName,
+    pub(crate) constructor: TypeId,
+    pub(crate) dependencies: Vec<AbstId>,
+    pub(crate) method: DtorName,
 }
 
 /// Source declarations owned by a payload, including admitted closed expansions.
@@ -25,6 +26,7 @@ pub(crate) struct NominalFamily {
 struct Ownership {
     definitions: BTreeSet<DefId>,
     references: Vec<DefId>,
+    boundaries: Vec<su::TermId>,
 }
 
 impl Visitor for Ownership {
@@ -36,6 +38,7 @@ impl Visitor for Ownership {
                 self.definitions.insert(*definition);
             }
             | Node::Term(_, su::Term::Var(definition)) => self.references.push(*definition),
+            | Node::Term(id, su::Term::SourceBoundary(_)) => self.boundaries.push(id),
             | _ => {}
         }
         ControlFlow::Continue(())
@@ -54,11 +57,25 @@ impl Ownership {
             let _ = Traversal::new(tycker.scoped)
                 .run(root.into(), &mut ownership)
                 .expect("resolved source has no structural cycles");
+            for boundary in ownership.boundaries.drain(..) {
+                if let Some(defs) = tycker.boundary_owned_defs.get(&boundary) {
+                    ownership.definitions.extend(defs.iter().copied());
+                }
+            }
             for reference in ownership.references.drain(..) {
-                if let Some(value) = tycker.statics.inlinables.get(&reference)
-                    && let Some(source) = tycker.statics.terms.source(&(*value).into())
-                {
-                    pending.push(source);
+                if let Some(value) = tycker.statics.inlinables.get(&reference) {
+                    if let Some(source) = tycker.statics.terms.source(&(*value).into())
+                        && tycker.scoped.terms.get(&source).is_some()
+                    {
+                        pending.push(source);
+                    } else {
+                        let idx = value.index();
+                        if let Some((_, defs)) =
+                            tycker.dep_value_ranges.iter().find(|(range, _)| range.contains(&idx))
+                        {
+                            ownership.definitions.extend(defs.iter().copied());
+                        }
+                    }
                 }
             }
         }

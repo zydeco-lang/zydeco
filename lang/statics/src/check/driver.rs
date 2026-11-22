@@ -15,9 +15,53 @@ impl<'a> Tycker<'a> {
         scoped: &'a ScopedArena,
     ) -> Self {
         let mut statics = StaticsArena::default();
-        statics.reserve(scoped);
         let intrinsics = IntrinsicStatics::new(&mut statics);
+        Self::with_preloaded(
+            db,
+            data,
+            spans,
+            scoped,
+            statics,
+            intrinsics,
+            PreloadedState::default(),
+        )
+    }
+
+    /// Create a type checker seeded with preloaded dependency interfaces or bodies.
+    pub(crate) fn with_preloaded(
+        db: &'a dyn crate::query::TyckDb, data: crate::query::ScopedData<'a>, spans: &'a SpanArena,
+        scoped: &'a ScopedArena, mut statics: StaticsArena, intrinsics: IntrinsicStatics,
+        preloaded: PreloadedState,
+    ) -> Self {
+        statics.reserve(scoped);
         let source_contexts = TermContexts::collect(scoped, data.root(db));
+        Self::build_tycker(db, data, spans, scoped, statics, intrinsics, source_contexts, preloaded)
+    }
+
+    /// Reconstruct a post-judgment checker over an already-assembled `StaticsArena`
+    /// without scanning `TermContexts` again.
+    pub(crate) fn from_assembled(
+        db: &'a dyn crate::query::TyckDb, data: crate::query::ScopedData<'a>, spans: &'a SpanArena,
+        scoped: &'a ScopedArena, statics: StaticsArena, intrinsics: IntrinsicStatics,
+    ) -> Self {
+        Self::build_tycker(
+            db,
+            data,
+            spans,
+            scoped,
+            statics,
+            intrinsics,
+            TermContexts::default(),
+            PreloadedState::default(),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn build_tycker(
+        db: &'a dyn crate::query::TyckDb, data: crate::query::ScopedData<'a>, spans: &'a SpanArena,
+        scoped: &'a ScopedArena, statics: StaticsArena, intrinsics: IntrinsicStatics,
+        source_contexts: TermContexts, preloaded: PreloadedState,
+    ) -> Self {
         Self {
             allocator: DefGenAllocator::new(db.generated_def_spaces(), data.root(db)),
             db,
@@ -41,9 +85,12 @@ impl<'a> Tycker<'a> {
             field_materializations: DeferredEnvMaterializationCache::default(),
             completion: None,
             lub_probe: None,
+            prechecked_boundaries: preloaded.boundaries,
+            boundary_owned_defs: preloaded.boundary_owned_defs,
+            dep_value_ranges: preloaded.dep_value_ranges,
             errors: Vec::new(),
             observations: Vec::new(),
-            monadic_families: Default::default(),
+            monadic_families: preloaded.monadic_families,
             monadic_memo: None,
             pending_foreign_imports: Vec::new(),
         }
@@ -213,13 +260,20 @@ impl<'a> Tycker<'a> {
     /// Normalize and validate the checked arena, the second half of the finish
     /// phase.
     pub(crate) fn normalize_and_validate(&mut self) -> Result<()> {
-        let mut normalizer = crate::normalize::FilledNormalizer::default();
-        let kind_ids: Vec<_> = self.statics.kinds_pre.ids().collect();
+        self.normalize_and_validate_from(0, 0, 0, 0)
+    }
+
+    pub(crate) fn normalize_and_validate_from(
+        &mut self, kind_start: usize, type_start: usize, compu_start: usize, value_start: usize,
+    ) -> Result<()> {
+        let mut normalizer =
+            crate::normalize::FilledNormalizer::with_starts(kind_start, type_start);
+        let kind_ids: Vec<_> = self.statics.kinds_pre.ids().skip(kind_start).collect();
         let kinds = kind_ids
             .into_iter()
             .map(|id| normalizer.normalize_kind(id, self).map(|_| ()))
             .collect_reported::<()>();
-        let type_ids: Vec<_> = self.statics.types_pre.ids().collect();
+        let type_ids: Vec<_> = self.statics.types_pre.ids().skip(type_start).collect();
         let types = type_ids
             .into_iter()
             .map(|id| normalizer.normalize_type(id, self).map(|_| ()))
@@ -231,7 +285,8 @@ impl<'a> Tycker<'a> {
         // editor facts can answer without the occurrence payload.
         self.statics.retain_normalized_annotations();
         if self.errors.is_empty() {
-            let coverage = CoverageChecker::new(&self.statics).validate();
+            let coverage =
+                CoverageChecker::new(&self.statics).validate_from(compu_start, value_start);
             self.statics.coverage_errors = coverage.clone();
             self.errors.extend(coverage.into_iter().map(|error| TyckErrorEntry {
                 error: TyckError::Coverage(error),
@@ -303,8 +358,12 @@ impl<'a> Tycker<'a> {
     /// Resolve all holes with solutions (including nested ones).
     #[inline]
     pub fn do_resolve_holes(&mut self) {
-        let type_ids: Vec<_> = self.statics.types_pre.ids().collect();
-        let mut resolver = crate::normalize::HoleResolver::default();
+        self.do_resolve_holes_from(0);
+    }
+
+    pub(crate) fn do_resolve_holes_from(&mut self, type_start: usize) {
+        let type_ids: Vec<_> = self.statics.types_pre.ids().skip(type_start).collect();
+        let mut resolver = crate::normalize::HoleResolver::with_start(type_start);
         for id in type_ids {
             let solu = match resolver.resolve(id, self) {
                 | Ok(res) => res,
@@ -321,7 +380,7 @@ impl<'a> Tycker<'a> {
             let _: Result<()> = self.err(TyckError::MissingSolution(missing));
         }
     }
-    pub(super) fn collect_hole_solutions(&mut self) {
+    pub(crate) fn collect_hole_solutions(&mut self) {
         self.observations.extend(self.statics.fill_hints.iter().map(|id| {
             TyckObservation::HoleSolution {
                 site: self.statics.fills[id],

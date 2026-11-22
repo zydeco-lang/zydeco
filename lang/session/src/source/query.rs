@@ -1,16 +1,22 @@
 use super::loader::{SourceGraphLoader, SourceProvider};
 use crate::source::{
-    CheckedRootSort, ScopedProgram, SourceDiagnosticSite, SourceGraph, SourceLoadError,
-    SourceLoadErrors, SourcePath, SourceTemplate, TextualProgramError,
+    CheckedRootSort, SourceDiagnosticSite, SourceGraph, SourceLoadError, SourceLoadErrors,
+    SourcePath, SourceTemplate,
 };
 use dashmap::{DashMap, mapref::entry::Entry};
 use salsa::{Setter as _, Storage};
 use std::{
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicU32, Ordering},
+    },
 };
 use thiserror::Error;
-use zydeco_foundation::arena::ArenaAccess;
+use zydeco_foundation::{
+    arena::{ArenaAccess, KeySpaceRegistry},
+    span::FileId,
+};
 use zydeco_statics::{
     CheckedSource, RejectedSource, TyckDiagnostics, TyckObservation,
     arena::StaticsArena,
@@ -172,11 +178,6 @@ pub enum AnalysisError {
         #[source]
         error: Arc<SourceLoadErrors>,
     },
-    #[error("Textual program error: {error}")]
-    TextualProgram {
-        #[source]
-        error: TextualProgramError,
-    },
     #[error("Resolution error: {error}")]
     Resolve {
         #[source]
@@ -199,10 +200,6 @@ impl AnalysisError {
                     site: SourceDiagnosticSite::from_span(spans, error.primary_span()),
                 })
                 .collect(),
-            | _ => vec![super::SourceDiagnostic {
-                message: self.to_string(),
-                site: self.diagnostic_site(),
-            }],
         }
     }
 
@@ -210,7 +207,6 @@ impl AnalysisError {
     pub fn diagnostic_site(&self) -> Option<SourceDiagnosticSite> {
         match self {
             | Self::Source { error } => error.diagnostic_site(),
-            | Self::TextualProgram { error } => Some(error.diagnostic_site()),
             | Self::Resolve { error, spans, .. } => error
                 .iter()
                 .find_map(|error| SourceDiagnosticSite::from_span(spans, error.primary_span())),
@@ -219,7 +215,9 @@ impl AnalysisError {
 }
 
 #[salsa::input(debug)]
-struct SourceInput {
+pub(crate) struct SourceInput {
+    #[returns(copy)]
+    file_id: FileId,
     #[returns(clone)]
     path: PathBuf,
     #[returns(clone)]
@@ -229,21 +227,24 @@ struct SourceInput {
 }
 
 #[salsa::db]
-trait SourceQueryDb: salsa::Database + zydeco_statics::query::TyckDb {
+pub(super) trait SourceQueryDb: salsa::Database + zydeco_statics::query::TyckDb {
     fn source_input(&self, path: PathBuf) -> Result<SourceInput, SourceLoadError>;
+    fn unit_def_spaces(&self) -> &Arc<KeySpaceRegistry<usize>>;
+    #[cfg(test)]
+    fn query_counters(&self) -> &super::unit::QueryCounters;
 }
 
 /// Long-lived source inputs and memoized compiler queries.
 #[salsa::db]
 pub struct CompilerSession {
     storage: Storage<Self>,
-    generated_def_spaces: std::sync::Arc<
-        zydeco_foundation::arena::KeySpaceRegistry<zydeco_statics::surface_syntax::TermId>,
-    >,
+    generated_def_spaces: Arc<KeySpaceRegistry<zydeco_statics::surface_syntax::TermId>>,
+    unit_def_spaces: Arc<KeySpaceRegistry<usize>>,
+    next_file_id: Arc<AtomicU32>,
     files: DashMap<PathBuf, SourceInput>,
-    pending: std::sync::Arc<
-        std::sync::Mutex<Option<std::sync::Arc<zydeco_statics::query::PendingParts>>>,
-    >,
+    pending: Arc<std::sync::Mutex<Option<Arc<zydeco_statics::query::PendingParts>>>>,
+    #[cfg(test)]
+    counters: Arc<super::unit::QueryCounters>,
 }
 
 impl Clone for CompilerSession {
@@ -251,8 +252,12 @@ impl Clone for CompilerSession {
         Self {
             storage: self.storage.clone(),
             generated_def_spaces: self.generated_def_spaces.clone(),
+            unit_def_spaces: self.unit_def_spaces.clone(),
+            next_file_id: self.next_file_id.clone(),
             files: self.files.clone(),
-            pending: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            pending: Arc::new(std::sync::Mutex::new(None)),
+            #[cfg(test)]
+            counters: self.counters.clone(),
         }
     }
 }
@@ -262,8 +267,12 @@ impl Default for CompilerSession {
         Self {
             storage: Storage::default(),
             generated_def_spaces: Default::default(),
+            unit_def_spaces: Default::default(),
+            next_file_id: Arc::new(AtomicU32::new(0)),
             files: DashMap::new(),
-            pending: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            pending: Arc::new(std::sync::Mutex::new(None)),
+            #[cfg(test)]
+            counters: Default::default(),
         }
     }
 }
@@ -275,17 +284,13 @@ impl salsa::Database for CompilerSession {}
 impl zydeco_statics::query::TyckDb for CompilerSession {
     fn generated_def_spaces(
         &self,
-    ) -> &std::sync::Arc<
-        zydeco_foundation::arena::KeySpaceRegistry<zydeco_statics::surface_syntax::TermId>,
-    > {
+    ) -> &Arc<KeySpaceRegistry<zydeco_statics::surface_syntax::TermId>> {
         &self.generated_def_spaces
     }
 
     fn pending_parts(
         &self,
-    ) -> &std::sync::Arc<
-        std::sync::Mutex<Option<std::sync::Arc<zydeco_statics::query::PendingParts>>>,
-    > {
+    ) -> &Arc<std::sync::Mutex<Option<Arc<zydeco_statics::query::PendingParts>>>> {
         &self.pending
     }
 }
@@ -307,13 +312,36 @@ impl SourceQueryDb for CompilerSession {
                         });
                     }
                 };
-                *entry.insert(SourceInput::new(self, canonical, disk_text, None))
+                *entry.insert(SourceInput::new(
+                    self,
+                    self.alloc_file_id(),
+                    canonical,
+                    disk_text,
+                    None,
+                ))
             }
         })
+    }
+
+    fn unit_def_spaces(&self) -> &Arc<KeySpaceRegistry<usize>> {
+        &self.unit_def_spaces
+    }
+
+    #[cfg(test)]
+    fn query_counters(&self) -> &super::unit::QueryCounters {
+        &self.counters
     }
 }
 
 impl CompilerSession {
+    fn alloc_file_id(&self) -> FileId {
+        FileId(self.next_file_id.fetch_add(1, Ordering::Relaxed))
+    }
+
+    /// Stable session-wide numeric identity assigned to a canonical source path.
+    pub fn file_id(&self, path: impl AsRef<Path>) -> Result<FileId, SourceLoadError> {
+        Ok(self.source_input(path.as_ref().to_path_buf())?.file_id(self))
+    }
     /// The input of an analysis root, with a load failure reported as an analysis error.
     fn analysis_root(&self, root: &Path) -> Result<SourceInput, AnalysisError> {
         self.source_input(root.to_path_buf())
@@ -435,7 +463,8 @@ impl CompilerSession {
         let canonical = Self::path_identity(path.as_ref())?;
         let input = self.files.get(&canonical).map(|entry| *entry).unwrap_or_else(|| {
             let disk_text = super::prelude::DefaultPrelude::read(&canonical).ok();
-            let input = SourceInput::new(self, canonical.clone(), disk_text, None);
+            let input =
+                SourceInput::new(self, self.alloc_file_id(), canonical.clone(), disk_text, None);
             self.files.insert(canonical, input);
             input
         });
@@ -576,14 +605,13 @@ impl CompilerSession {
         let input = self
             .source_input(analysis.root_path().to_path_buf())
             .map_err(|_| zydeco_statics::LibraryCheckError::Root)?;
-        let data = resolved_data(self, input, analysis.package.clone(), analysis.project.clone())
-            .map_err(|_| zydeco_statics::LibraryCheckError::Root)?;
-        let library = zydeco_statics::query::check_library(self, data, contract.clone())?;
-        Ok(LibraryProgram {
-            spans: data.spans(self).clone(),
-            scoped: data.scoped(self).clone(),
-            library,
-        })
+        super::unit::prepare_library_program(
+            self,
+            input,
+            analysis.package.clone(),
+            analysis.project.clone(),
+            contract.clone(),
+        )
     }
 
     pub fn unit_program(
@@ -592,10 +620,12 @@ impl CompilerSession {
         let input = self
             .source_input(analysis.root_path().to_path_buf())
             .map_err(|_| zydeco_statics::LibraryCheckError::Root)?;
-        let data = resolved_data(self, input, analysis.package.clone(), analysis.project.clone())
-            .map_err(|_| zydeco_statics::LibraryCheckError::Root)?;
-        let unit = zydeco_statics::query::check_unit(self, data)?;
-        Ok(UnitProgram { spans: data.spans(self).clone(), scoped: data.scoped(self).clone(), unit })
+        super::unit::prepare_unit_program(
+            self,
+            input,
+            analysis.package.clone(),
+            analysis.project.clone(),
+        )
     }
 
     /// Check a resolved program constructed outside the source pipeline.
@@ -720,9 +750,12 @@ fn source_text(db: &dyn SourceQueryDb, input: SourceInput) -> Option<String> {
 // These results own all of their data and contain no database-tied references. The
 // non-Update escape hatch remains temporary until semantic fragments gain structural equality.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
-fn parse_source(
+pub(super) fn parse_source(
     db: &dyn SourceQueryDb, input: SourceInput,
 ) -> Result<Arc<SourceTemplate>, Arc<SourceLoadError>> {
+    #[cfg(test)]
+    db.query_counters().parse.fetch_add(1, Ordering::Relaxed);
+
     let path = input.path(db);
     let source = source_text(db, input).ok_or_else(|| {
         Arc::new(SourceLoadError::Read {
@@ -731,13 +764,13 @@ fn parse_source(
                 .into(),
         })
     })?;
-    SourceTemplate::parse(path, source)
+    SourceTemplate::parse_with_id(input.file_id(db), path, source)
         .map(Arc::new)
         .map_err(|error| Arc::new(SourceLoadError::Parse(error)))
 }
 
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
-fn source_graph(
+pub(super) fn source_graph(
     db: &dyn SourceQueryDb, root: SourceInput, package: Option<super::PackagePath>,
     project: Arc<super::Project>,
 ) -> Result<Arc<SourceGraph>, Arc<SourceLoadErrors>> {
@@ -747,41 +780,15 @@ fn source_graph(
         .map_err(Arc::new)
 }
 
-/// The name-resolved program of one root, memoized so that every consumer of
-/// the root shares one [`ScopedData`] identity — and therefore one
-/// [`zydeco_statics::query::check_source`] memo entry.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
-fn resolved_data<'db>(
-    db: &'db dyn SourceQueryDb, root: SourceInput, package: Option<super::PackagePath>,
-    project: Arc<super::Project>,
-) -> Result<zydeco_statics::query::ScopedData<'db>, AnalysisError> {
-    let graph = source_graph(db, root, package, project)
-        .map_err(|error| AnalysisError::Source { error })?;
-    let program = graph.parse().map_err(|error| AnalysisError::TextualProgram { error })?;
-    let ScopedProgram { spans, arena, root } =
-        program.resolve().map_err(|failure| AnalysisError::Resolve {
-            error: failure.error,
-            graph,
-            spans: Arc::new(failure.spans.into_inner()),
-        })?;
-    Ok(zydeco_statics::query::ScopedData::new(
-        db,
-        Arc::new(spans.into_inner()),
-        Arc::new(arena.into_inner()),
-        root,
-    ))
-}
-
 /// Run the whole source pipeline for one root and return the memoized check
-/// output. The typed arena stays in the salsa memo (`check_source` keeps only
-/// the latest root via `lru = 1`); immutable phase arenas are shared with callers.
+/// output. The typed arena stays in the assembled memo (`assemble_program` keeps
+/// only the latest root via `lru = 1`); immutable phase arenas are shared with callers.
 fn rechecked(
     db: &dyn SourceQueryDb, root: SourceInput, package: Option<super::PackagePath>,
     project: Arc<super::Project>,
 ) -> Result<(Arc<SpanArena>, zydeco_statics::query::TyckOutput), AnalysisError> {
-    let data = resolved_data(db, root, package, project)?;
-    let spans = Arc::clone(data.spans(db));
-    Ok((spans, zydeco_statics::query::check_source(db, data)))
+    let assembled = super::unit::assemble_program(db, root, package, project)?;
+    Ok((assembled.spans, assembled.output))
 }
 
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
@@ -789,10 +796,10 @@ fn analyze_source(
     db: &dyn SourceQueryDb, root: SourceInput, package: Option<super::PackagePath>,
     project: Arc<super::Project>,
 ) -> Result<Arc<ProgramAnalysis>, AnalysisError> {
-    let graph = source_graph(db, root, package.clone(), project.clone())
-        .map_err(|error| AnalysisError::Source { error })?;
-    let (spans, zydeco_statics::query::TyckOutput { scoped, outcome: checked }) =
-        rechecked(db, root, package.clone(), project.clone())?;
+    let assembled = super::unit::assemble_program(db, root, package.clone(), project.clone())?;
+    let graph = assembled.graph;
+    let spans = assembled.spans;
+    let zydeco_statics::query::TyckOutput { scoped, outcome: checked } = assembled.output;
     let (statics, outcome, observations) = match checked {
         | zydeco_statics::SourceCheckOutcome::Checked(CheckedSource {
             statics,
@@ -892,7 +899,7 @@ fn term_annotation_at<'db>(
 
 #[cfg(test)]
 mod tests {
-    use super::{CompilerSession, SourcePath};
+    use super::{CompilerSession, SourcePath, SourceQueryDb};
     use std::{path::Path, sync::Arc};
     use zydeco_surface::textual::SourceNumber;
 
@@ -1306,5 +1313,307 @@ end
             .filter_map(|(term, _)| session.annotation_of_term(&root, term).unwrap())
             .collect::<Vec<_>>();
         assert!(!annotated.is_empty(), "some scoped term should carry a checked annotation",);
+    }
+
+    const INTRINSIC_PREAMBLE: &str = "let VType = @(intrinsic(vtype)) in let CType = @(intrinsic(ctype)) in let Thk = @(intrinsic(thk)) in let Ret = @(intrinsic(ret)) in let Unit = @(intrinsic(unit)) in let Int = @(intrinsic(int)) in ";
+
+    fn run_dynamics_int(session: &CompilerSession, analysis: &super::ProgramAnalysis) -> i64 {
+        let checked = session.checked_program(analysis).expect("expected checked program");
+        let core = checked.statics.core.as_ref().expect("checked computation carries CoreProgram");
+        let mut input = std::io::empty();
+        let mut output = Vec::new();
+        let result =
+            zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], core)
+                .run();
+        match result {
+            | zydeco_dynamics::ProgKont::Ret(zydeco_dynamics::syntax::SemValue::Literal(
+                zydeco_syntax::Literal::Integer(zydeco_syntax::IntegerLiteral::Int(n)),
+            )) => n,
+            | other => panic!("expected integer return, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn file_id_is_stable_across_overlays_and_disk_refreshes() {
+        let fixture = Fixture::new();
+        let a = fixture.write("a.zy", "1");
+        let b = fixture.write("b.zy", "2");
+        let mut session = CompilerSession::default();
+
+        let id_a = session.file_id(&a).unwrap();
+        let id_b = session.file_id(&b).unwrap();
+        assert_ne!(id_a, id_b);
+
+        session.set_overlay(&a, "3".to_string()).unwrap();
+        assert_eq!(session.file_id(&a).unwrap(), id_a);
+
+        session.clear_overlay(&a).unwrap();
+        assert_eq!(session.file_id(&a).unwrap(), id_a);
+
+        std::fs::write(&a, "4").unwrap();
+        session.refresh_disk(&a).unwrap();
+        assert_eq!(session.file_id(&a).unwrap(), id_a);
+    }
+
+    #[test]
+    fn comment_and_whitespace_edits_backdate_semantic_source_and_refresh_spans() {
+        let fixture = Fixture::new();
+        let valid = fixture.write("valid.zy", "ret 1");
+        let broken = fixture.write("broken.zy", "missing");
+        let mut session = CompilerSession::default();
+
+        let prefix = "-- comment\n  ";
+        let a1 = session.analyze(&valid).unwrap();
+        let checked1 = session.checked_program(&a1).unwrap();
+        let typed_root1 = checked1.root.as_term().expect("expected checked root term");
+        let src_term1 = checked1.statics.terms.source(&typed_root1).unwrap();
+        let ent1 = checked1.scoped.origins.source(&src_term1.into()).unwrap();
+        let (file1, range1) =
+            checked1.spans.source_map().unwrap().range(checked1.spans[&ent1]).unwrap();
+        let slice1 = file1.source()[range1.clone()].to_string();
+
+        session.query_counters().reset();
+        session.set_overlay(&valid, format!("{prefix}ret 1")).unwrap();
+        let a2 = session.analyze(&valid).unwrap();
+        let snap_valid = session.query_counters().snapshot();
+        assert_eq!(snap_valid.parse, 1);
+        assert_eq!(snap_valid.resolve, 0);
+        assert_eq!(snap_valid.check_unit, 0);
+
+        let checked2 = session.checked_program(&a2).unwrap();
+        let typed_root2 = checked2.root.as_term().expect("expected checked root term");
+        let src_term2 = checked2.statics.terms.source(&typed_root2).unwrap();
+        let ent2 = checked2.scoped.origins.source(&src_term2.into()).unwrap();
+        let (file2, range2) =
+            checked2.spans.source_map().unwrap().range(checked2.spans[&ent2]).unwrap();
+        assert_eq!(range2.start, range1.start + prefix.len());
+        assert_eq!(range2.end, range1.end + prefix.len());
+        assert_eq!(&file2.source()[range2], slice1);
+
+        let Err(super::AnalysisError::Resolve { error: err1, spans: spans1, .. }) =
+            session.analyze(&broken)
+        else {
+            panic!("expected unbound variable resolve failure");
+        };
+        let zydeco_surface::scoped::ResolveError::UnboundVar(name1) = err1.iter().next().unwrap()
+        else {
+            panic!("expected UnboundVar diagnostic");
+        };
+        let (bfile1, brange1) = spans1.source_map().unwrap().range(name1.info).unwrap();
+        assert_eq!(&bfile1.source()[brange1.clone()], "missing");
+
+        session.query_counters().reset();
+        session.set_overlay(&broken, format!("{prefix}missing")).unwrap();
+        let Err(super::AnalysisError::Resolve { error: err2, spans: spans2, .. }) =
+            session.analyze(&broken)
+        else {
+            panic!("expected unbound variable resolve failure after comment edit");
+        };
+        let snap_broken = session.query_counters().snapshot();
+        assert_eq!(snap_broken.parse, 1);
+        assert_eq!(snap_broken.resolve, 0);
+        let zydeco_surface::scoped::ResolveError::UnboundVar(name2) = err2.iter().next().unwrap()
+        else {
+            panic!("expected UnboundVar diagnostic");
+        };
+        let (bfile2, brange2) = spans2.source_map().unwrap().range(name2.info).unwrap();
+        assert_eq!(brange2.start, brange1.start + prefix.len());
+        assert_eq!(brange2.end, brange1.end + prefix.len());
+        assert_eq!(&bfile2.source()[brange2], "missing");
+    }
+
+    #[test]
+    fn thunk_body_edit_cuts_off_downstream_recheck_and_updates_runtime_behavior() {
+        let fixture = Fixture::new();
+        let provider = fixture.write(
+            "provider.zy",
+            &format!("{INTRINSIC_PREAMBLE}let f : Thk (Ret Int) = {{ ret 1 }} in f"),
+        );
+        let main = fixture.write("main.zy", r#"let f = @(import("provider.zy")) in ! f"#);
+        let mut session = CompilerSession::default();
+
+        let a1 = session.analyze(&main).unwrap();
+        assert_eq!(run_dynamics_int(&session, &a1), 1);
+
+        session.query_counters().reset();
+        session
+            .set_overlay(
+                &provider,
+                format!("{INTRINSIC_PREAMBLE}let f : Thk (Ret Int) = {{ ret 2 }} in f"),
+            )
+            .unwrap();
+        let a2 = session.analyze(&main).unwrap();
+        let snap = session.query_counters().snapshot();
+        assert_eq!(snap.check_unit, 1, "only provider.zy must recheck across thunk cutoff");
+        assert_eq!(run_dynamics_int(&session, &a2), 2);
+    }
+
+    #[test]
+    fn interface_breaking_edit_invalidates_cutoff_and_rejects_consumer() {
+        let fixture = Fixture::new();
+        let provider = fixture.write(
+            "provider.zy",
+            &format!("{INTRINSIC_PREAMBLE}let f : Thk (Int -> Ret Int) = {{ fn x => ret x }} in f"),
+        );
+        let main = fixture.write("main.zy", r#"let f = @(import("provider.zy")) in ! f 1"#);
+        let mut session = CompilerSession::default();
+
+        let a1 = session.analyze(&main).unwrap();
+        assert!(a1.outcome().root().is_some());
+
+        session.query_counters().reset();
+        session
+            .set_overlay(
+                &provider,
+                format!(
+                    "{INTRINSIC_PREAMBLE}let f : Thk (Unit -> Ret Unit) = {{ fn x => ret x }} in f"
+                ),
+            )
+            .unwrap();
+        let a2 = session.analyze(&main).unwrap();
+        let snap = session.query_counters().snapshot();
+        assert_eq!(snap.check_unit, 2, "interface break must recheck both provider and consumer");
+        assert!(a2.outcome().diagnostics().is_some(), "consumer must fail on changed signature");
+    }
+
+    #[test]
+    fn consumer_edit_does_not_recheck_unchanged_provider() {
+        let fixture = Fixture::new();
+        fixture.write(
+            "provider.zy",
+            &format!("{INTRINSIC_PREAMBLE}let f : Thk (Int -> Ret Int) = {{ fn x => ret x }} in f"),
+        );
+        let main = fixture.write("main.zy", r#"let f = @(import("provider.zy")) in ! f 1"#);
+        let mut session = CompilerSession::default();
+
+        let a1 = session.analyze(&main).unwrap();
+        assert!(a1.outcome().root().is_some());
+
+        session.query_counters().reset();
+        session
+            .set_overlay(&main, r#"let f = @(import("provider.zy")) in ! f 2"#.to_string())
+            .unwrap();
+        let a2 = session.analyze(&main).unwrap();
+        let snap = session.query_counters().snapshot();
+        assert_eq!(snap.check_unit, 1, "only edited consumer must recheck");
+        assert!(a2.outcome().root().is_some());
+    }
+
+    #[test]
+    fn shared_dependency_checked_once_across_multiple_roots() {
+        let fixture = Fixture::new();
+        fixture.write("provider.zy", "1");
+        let a = fixture.write("a.zy", r#"@(import("provider.zy"))"#);
+        let b = fixture.write("b.zy", r#"@(import("provider.zy"))"#);
+        let session = CompilerSession::default();
+
+        assert!(session.analyze(&a).unwrap().outcome().root().is_some());
+        session.query_counters().reset();
+        assert!(session.analyze(&b).unwrap().outcome().root().is_some());
+        let snap = session.query_counters().snapshot();
+        assert_eq!(snap.check_unit, 1, "shared provider.zy must be reused when checking b.zy");
+    }
+
+    #[test]
+    fn diamond_import_preserves_nominal_identity_and_distinct_sealed_units_reject() {
+        let fixture = Fixture::new();
+        let make_unit = |tag_body: &str| {
+            format!(
+                "{INTRINSIC_PREAMBLE}begin def T : VType = data | +Tag : Unit end that let v : T = +Tag(()) in let use : Thk (T -> Ret Unit) = {{ fn _ => {tag_body} }} in (#item = v, #use = use) end"
+            )
+        };
+        fixture.write("shared.zy", &make_unit("ret ()"));
+        // Structurally distinct wrappers prevent `SourceGraph::merge` from collapsing both
+        // edges into a single `SourceId`, preserving a true 4-node diamond over `shared.zy`.
+        fixture.write("left.zy", r#"let _ = 1 in @(import("shared.zy"))"#);
+        fixture.write("right.zy", r#"let _ = 2 in @(import("shared.zy"))"#);
+        let main_ok = fixture.write(
+            "main_ok.zy",
+            r#"let (/item = lv; /use = luse) = @(import("left.zy")) in let (/item = rv; /use = _) = @(import("right.zy")) in let _ = lv in ! luse rv"#,
+        );
+
+        // Distinct thunk bodies keep `left_sealed.zy` and `right_sealed.zy` separate across
+        // `SourceGraph::merge` while both define an otherwise identical sealed `def T`.
+        fixture.write("left_sealed.zy", &make_unit("let _ = 1 in ret ()"));
+        fixture.write("right_sealed.zy", &make_unit("let _ = 2 in ret ()"));
+        let main_bad = fixture.write(
+            "main_bad.zy",
+            r#"let (/item = lv; /use = luse) = @(import("left_sealed.zy")) in let (/item = rv; /use = _) = @(import("right_sealed.zy")) in let _ = lv in ! luse rv"#,
+        );
+
+        let session = CompilerSession::default();
+        let ok = session.analyze(&main_ok).unwrap();
+        let ok_graph = ok.graph();
+        let ok_imports = &ok_graph.sources[&ok_graph.root].imports;
+        assert_eq!(ok_imports.len(), 2);
+        assert_ne!(
+            ok_graph.imports[&ok_imports[0]].imported,
+            ok_graph.imports[&ok_imports[1]].imported
+        );
+        assert!(ok.outcome().root().is_some());
+
+        let bad = session.analyze(&main_bad).unwrap();
+        let bad_graph = bad.graph();
+        let bad_imports = &bad_graph.sources[&bad_graph.root].imports;
+        assert_eq!(bad_imports.len(), 2);
+        assert_ne!(
+            bad_graph.imports[&bad_imports[0]].imported,
+            bad_graph.imports[&bad_imports[1]].imported
+        );
+        assert!(bad.outcome().diagnostics().is_some());
+    }
+
+    #[test]
+    fn monadic_consumer_loads_dependency_bodies_and_rechecks_on_body_change() {
+        let fixture = Fixture::new();
+        let monad = fixture.write(
+            "monad.zy",
+            &format!(
+                "{INTRINSIC_PREAMBLE}let Monad (M : VType -> CType) = codata | .return : forall (A : VType) . A -> M A | .bind : forall (A : VType) (B : VType) . Thk (M A) -> Thk (A -> M B) -> M B end in let Algebra (M : VType -> CType) (R : CType) = forall (A : VType) . Thk (M A) -> Thk (A -> R) -> R in let M (A : VType) = Ret A in let monad : Thk (Monad M) = {{ comatch | .return => fn A x => ret x | .bind => fn A B m k => do x <- ! m; ! k x end }} in pack (= Monad as Monad) (= Algebra as Algebra) (= M as M) where (#monad = monad) end"
+            ),
+        );
+        let main = fixture.write(
+            "main.zy",
+            &format!(
+                r#"{INTRINSIC_PREAMBLE}let (/Monad; /Algebra; /M; /monad) = @(import("monad.zy")) in (@[monadic] fn (x : Unit) => ret x) M monad ()"#
+            ),
+        );
+        let mut session = CompilerSession::default();
+
+        let a1 = session.analyze(&main).unwrap();
+        assert!(a1.outcome().root().is_some());
+
+        session.query_counters().reset();
+        session
+            .set_overlay(
+                &monad,
+                format!(
+                    "{INTRINSIC_PREAMBLE}let Monad (M : VType -> CType) = codata | .return : forall (A : VType) . A -> M A | .bind : forall (A : VType) (B : VType) . Thk (M A) -> Thk (A -> M B) -> M B end in let Algebra (M : VType -> CType) (R : CType) = forall (A : VType) . Thk (M A) -> Thk (A -> R) -> R in let M (A : VType) = Ret A in let monad : Thk (Monad M) = {{ comatch | .return => fn A x => let _ : Unit = () in ret x | .bind => fn A B m k => do x <- ! m; ! k x end }} in pack (= Monad as Monad) (= Algebra as Algebra) (= M as M) where (#monad = monad) end"
+                ),
+            )
+            .unwrap();
+        let a2 = session.analyze(&main).unwrap();
+        let snap = session.query_counters().snapshot();
+        assert!(a2.outcome().root().is_some());
+        assert_eq!(snap.check_unit, 2, "monadic consumer must recheck on dependency body change");
+    }
+
+    #[test]
+    fn companion_signature_cuts_off_body_only_edits_and_rejects_mismatched_impl() {
+        let fixture = Fixture::new();
+        fixture.write("lib.zyi", &format!("{INTRINSIC_PREAMBLE}Thk (Ret Int)"));
+        let lib = fixture.write("lib.zy", "{ ret 1 }");
+        let main = fixture.write("main.zy", r#"let f = @(import("lib.zy")) in ! f"#);
+        let mut session = CompilerSession::default();
+
+        assert!(session.analyze(&main).unwrap().outcome().root().is_some());
+
+        session.query_counters().reset();
+        session.set_overlay(&lib, "{ ret 2 }".to_string()).unwrap();
+        assert!(session.analyze(&main).unwrap().outcome().root().is_some());
+        assert_eq!(session.query_counters().snapshot().check_unit, 1);
+
+        session.set_overlay(&lib, "{ ret () }".to_string()).unwrap();
+        assert!(session.analyze(&main).unwrap().outcome().diagnostics().is_some());
     }
 }

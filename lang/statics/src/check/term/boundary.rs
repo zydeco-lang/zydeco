@@ -1,6 +1,7 @@
 //! Source boundaries, classifier queries, metadata, and elaborated blocks.
 
 use super::*;
+use crate::check::source::CheckedTerm;
 
 impl TermChecker<'_> {
     pub(super) fn check_type_of<'db>(
@@ -48,6 +49,18 @@ impl TermChecker<'_> {
     pub(super) fn check_source_boundary<'db>(
         &self, tycker: &mut Tycker<'db>, term: su::TermId, switch: Switch<AnnId>,
     ) -> Result<TermAnnId> {
+        if let Some(prechecked) = tycker.prechecked_boundaries.get(&self.inner).copied() {
+            let checked = tycker.source_guarded(|tycker| {
+                tycker.tasks.push(TyckTask::Term(self.inner, Switch::Syn));
+                match prechecked {
+                    | Ok(root) => {
+                        CheckedTerm(root).require_complete(tycker, TyckError::MissingAnnotation)
+                    }
+                    | Err(()) => Err(ReportedError),
+                }
+            })?;
+            return checked.reconcile(tycker, switch);
+        }
         Ok({
             let environment = TyEnv::new();
             let checked = tycker.source_guarded(|tycker| {

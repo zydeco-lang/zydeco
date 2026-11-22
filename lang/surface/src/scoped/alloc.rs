@@ -13,7 +13,7 @@ pub(super) struct ScopedBuilder {
     pub terms: ArenaIndexed<ScopedScope, TermId>,
     pub blocks: ArenaAssoc<TermId, ContextualTerm<BindingContext, BlockBody>>,
     pub partial_binders: HashSet<t::PatId>,
-    pub default_prelude_binders: HashSet<t::PatId>,
+    pub default_prelude_defs: rustc_hash::FxHashSet<DefId>,
 }
 
 pub(super) enum Introduction {
@@ -22,7 +22,7 @@ pub(super) enum Introduction {
 }
 
 impl ScopedBuilder {
-    pub fn new(default_prelude_binders: HashSet<t::PatId>) -> Self {
+    pub fn new() -> Self {
         Self {
             allocator: IdAllocator::new(),
             origins: TextualOrigins::default(),
@@ -31,8 +31,16 @@ impl ScopedBuilder {
             terms: ArenaIndexed::default(),
             blocks: ArenaAssoc::default(),
             partial_binders: HashSet::new(),
-            default_prelude_binders,
+            default_prelude_defs: Default::default(),
         }
+    }
+
+    pub fn alloc_default_prelude_def(&mut self, name: VarName) -> DefId {
+        let id: DefId = self.allocator.alloc();
+        self.origins.insert_synthetic(id.into());
+        self.defs.insert_new(id, name);
+        self.default_prelude_defs.insert(id);
+        id
     }
 
     pub fn alloc_def(&mut self, name: VarName, origin: t::EntityId) -> DefId {
@@ -62,6 +70,13 @@ impl ScopedBuilder {
     pub fn alloc_term(&mut self, term: impl Into<Term>, origin: t::EntityId) -> TermId {
         let id = self.reserve_term(origin);
         self.fill_term(id, term.into());
+        id
+    }
+
+    pub fn alloc_synthetic_term(&mut self, term: impl Into<Term>) -> TermId {
+        let id: TermId = self.allocator.alloc();
+        self.origins.insert_synthetic(id.into());
+        self.terms.insert_new(id, term.into());
         id
     }
 
@@ -145,7 +160,7 @@ impl ScopedBuilder {
             origins: self.origins,
             users,
             partial_binders: self.partial_binders,
-            default_prelude_binders: self.default_prelude_binders,
+            default_prelude_defs: self.default_prelude_defs,
         }
     }
 }

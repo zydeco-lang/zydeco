@@ -115,7 +115,13 @@ impl<'a> TextualBlockCollector<'a> {
             | t::Term::Block(_) | t::Term::SourceBoundary(_) | t::Term::SignatureBoundary(_) => {}
             | t::Term::Meta(t::MetaTerm(meta, payload)) => {
                 let node = &self.textual.metas[meta];
-                if node.is("cbv") || node.is("intrinsic") || node.is("ffi") || node.is("cbn") {
+                if node.is("cbv")
+                    || node.is("intrinsic")
+                    || node.is("ffi")
+                    || node.is("cbn")
+                    || node.is("import")
+                    || node.is("literal")
+                {
                     return;
                 }
                 let next_prelude = if node.is("prelude")

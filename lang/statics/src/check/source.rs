@@ -97,13 +97,13 @@ impl SourceCheckOutcome {
 }
 
 /// Flexible pattern metavariables owned by one local inference boundary.
-pub(super) struct InferenceRegion {
+pub(crate) struct InferenceRegion {
     watermark: usize,
 }
 
 /// One immutable handle to an already synthesized typed term.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct CheckedTerm(pub(super) TermAnnId);
+pub(crate) struct CheckedTerm(pub(crate) TermAnnId);
 
 /// The synthesis outcome retained for a resolved term. Later references may
 /// extend this context, but must preserve its existing bindings and witnesses.
@@ -200,11 +200,11 @@ impl CheckedTermRepository {
 }
 
 impl InferenceRegion {
-    pub(super) fn enter(tycker: &Tycker<'_>) -> Self {
+    pub(crate) fn enter(tycker: &Tycker<'_>) -> Self {
         Self { watermark: tycker.statics.fills.len() }
     }
 
-    pub(super) fn close(self, tycker: &mut Tycker<'_>) -> Result<()> {
+    pub(crate) fn close(self, tycker: &mut Tycker<'_>) -> Result<()> {
         use zydeco_foundation::dense::DenseId;
 
         let candidates = (self.watermark..tycker.statics.fills.len())
@@ -238,7 +238,7 @@ impl InferenceRegion {
 impl Tycker<'_> {
     /// After rejection, check unreached providers in dependency order. No local
     /// body is resumed without the typing environment its binders establish.
-    pub(super) fn check_independent_sources(&mut self, root: su::TermId) {
+    pub(crate) fn check_independent_sources(&mut self, root: su::TermId) {
         let mut sources = IndependentSources::default();
         let _ = Traversal::new(self.scoped)
             .run(root.into(), &mut sources)

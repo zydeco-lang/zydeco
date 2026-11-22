@@ -10,11 +10,17 @@ use crate::fold::TypeFolder;
 /// overlapping type subgraphs are normalized only once.
 #[derive(Default)]
 pub(crate) struct FilledNormalizer {
+    kind_start: usize,
+    type_start: usize,
     kinds: HashMap<KindId, KindId>,
     types: HashMap<TypeId, TypeId>,
 }
 
 impl FilledNormalizer {
+    pub(crate) fn with_starts(kind_start: usize, type_start: usize) -> Self {
+        Self { kind_start, type_start, kinds: HashMap::default(), types: HashMap::default() }
+    }
+
     pub(crate) fn normalize_kind(&mut self, root: KindId, tycker: &mut Tycker<'_>) -> Result<()> {
         let _ = root.filled_norm_id(tycker, self)?;
         Ok(())
@@ -36,6 +42,11 @@ impl KindId {
     fn filled_norm_id_inner(
         self, tycker: &mut Tycker<'_>, norm: &mut FilledNormalizer,
     ) -> Result<KindId> {
+        use zydeco_foundation::dense::DenseId;
+
+        if self.index() < norm.kind_start {
+            return Ok(self);
+        }
         if let Some(norm) = norm.kinds.get(&self).cloned() {
             return Ok(norm);
         }
@@ -97,6 +108,11 @@ impl TypeId {
     fn filled_norm_id_inner(
         self, tycker: &mut Tycker<'_>, norm: &mut FilledNormalizer,
     ) -> Result<TypeId> {
+        use zydeco_foundation::dense::DenseId;
+
+        if self.index() < norm.type_start {
+            return Ok(self);
+        }
         if let Some(normalized) = norm.types.get(&self).cloned() {
             return Ok(normalized);
         }

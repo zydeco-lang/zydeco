@@ -1,21 +1,19 @@
 mod cache;
+mod digest;
 mod err;
 mod graph;
 mod loader;
 mod package;
-mod program;
 mod prelude;
 mod query;
-mod pipeline;
 mod report;
+mod unit;
 mod warning;
 
 pub use cache::*;
 pub use err::*;
 pub use graph::*;
 pub use package::*;
-pub(crate) use pipeline::*;
-pub use program::*;
 pub use query::*;
 pub use report::*;
 pub use warning::*;

@@ -6,12 +6,22 @@ use crate::fold::{TypeFolder, TypeRebuilder};
 /// Pass-wide hole resolution after inference has stopped mutating solutions.
 #[derive(Default)]
 pub(crate) struct HoleResolver {
+    type_start: usize,
     types: HashMap<TypeId, TypeId>,
     missing: HashSet<FillId>,
 }
 
 impl HoleResolver {
+    pub(crate) fn with_start(type_start: usize) -> Self {
+        Self { type_start, types: HashMap::default(), missing: HashSet::default() }
+    }
+
     pub(crate) fn resolve(&mut self, root: TypeId, tycker: &mut Tycker<'_>) -> Result<TypeId> {
+        use zydeco_foundation::dense::DenseId;
+
+        if root.index() < self.type_start {
+            return Ok(root);
+        }
         if !tycker
             .statics
             .types_pre

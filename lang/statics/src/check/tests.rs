@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 
 #[salsa::db]
 #[derive(Clone)]
-pub(super) struct TestDb {
+pub(crate) struct TestDb {
     storage: salsa::Storage<Self>,
     generated_def_spaces: Arc<zydeco_foundation::arena::KeySpaceRegistry<su::TermId>>,
     pub(super) pending: Arc<Mutex<Option<Arc<crate::query::PendingParts>>>>,

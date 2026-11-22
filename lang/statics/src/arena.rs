@@ -446,6 +446,26 @@ impl TypeArena {
     pub(crate) fn strip_kind_index(&mut self) {
         self.kind_indexes = Default::default();
     }
+
+    /// Recompute structural summary bits for every type allocated from `start..len`.
+    pub(crate) fn refresh_summaries_from(&mut self, start: usize) {
+        use zydeco_foundation::dense::DenseId;
+
+        loop {
+            let mut changed = false;
+            for index in start..self.nodes.len() {
+                let id = TypeId::from_index(index);
+                let summary = self.compute_summary(&self.nodes[id].value);
+                if summary != self.nodes[id].summary {
+                    self.nodes[id].summary = summary;
+                    changed = true;
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
+    }
 }
 
 impl Index<TypeId> for TypeArena {

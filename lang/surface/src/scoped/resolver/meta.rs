@@ -22,6 +22,8 @@ enum MetaAction {
     Builtin(BuiltinRole),
     Ffi(ForeignTarget),
     Debug(Meta),
+    Import(Meta),
+    Literal(Meta),
     Opaque(Meta),
 }
 
@@ -111,13 +113,11 @@ impl MetaRules<'_> {
             }
             | Some(MetadataKind::Cbn) => Err(super::ResolveError::CbnNotImplemented(annotation)),
             | Some(MetadataKind::Debug) => Ok(MetaAction::Debug(meta)),
-            | Some(
-                MetadataKind::Import
-                | MetadataKind::Package
-                | MetadataKind::Discover
-                | MetadataKind::Literal,
-            )
-            | None => Ok(MetaAction::Opaque(meta)),
+            | Some(MetadataKind::Import) => Ok(MetaAction::Import(meta)),
+            | Some(MetadataKind::Literal) => Ok(MetaAction::Literal(meta)),
+            | Some(MetadataKind::Package | MetadataKind::Discover) | None => {
+                Ok(MetaAction::Opaque(meta))
+            }
         }
     }
 
@@ -225,6 +225,9 @@ impl<O: super::ResolutionObserver> ResolveFolder<'_, O> {
                 Ok(self.builder.alloc_term(TypeOf(operand), id.into()))
             }
             | MetaAction::Monadic => {
+                if let Some(unit) = &mut self.unit_mode {
+                    unit.has_monadic = true;
+                }
                 let monad_id = self.builder.reserve_term(id.into());
                 let monad_term = self.reference(monad_id, VarName::new("Monad"), id.into());
                 self.builder.fill_term(monad_id, monad_term);
@@ -257,6 +260,32 @@ impl<O: super::ResolutionObserver> ResolveFolder<'_, O> {
                 Ok(self
                     .builder
                     .alloc_term(MetaTerm { meta: ResolvedMeta::Debug(meta), body }, id.into()))
+            }
+            | MetaAction::Import(meta) => {
+                if let Some(unit) = &mut self.unit_mode {
+                    let placeholder = self.builder.alloc_synthetic_term(Hole);
+                    let boundary = self.builder.alloc_term(SourceBoundary(placeholder), id.into());
+                    unit.imports.push((id, boundary));
+                    Ok(boundary)
+                } else {
+                    let body = self.lower_term(payload)?;
+                    Ok(self
+                        .builder
+                        .alloc_term(MetaTerm { meta: ResolvedMeta::Opaque(meta), body }, id.into()))
+                }
+            }
+            | MetaAction::Literal(meta) => {
+                if let Some(text) = self.unit_mode.as_ref().and_then(|unit| unit.literals.get(&id))
+                {
+                    Ok(self
+                        .builder
+                        .alloc_term(Term::Lit(Literal::String(text.as_ref().into())), id.into()))
+                } else {
+                    let body = self.lower_term(payload)?;
+                    Ok(self
+                        .builder
+                        .alloc_term(MetaTerm { meta: ResolvedMeta::Opaque(meta), body }, id.into()))
+                }
             }
             | MetaAction::Opaque(meta) => {
                 let body = self.lower_term(payload)?;

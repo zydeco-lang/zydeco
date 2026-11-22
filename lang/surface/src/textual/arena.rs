@@ -39,10 +39,6 @@ pub struct TextArena {
     pub terms: ArenaSparse<TextualScope, TermId>,
     /// Contiguous `--|` documentation and literal text blocks retained for semantic analysis.
     pub text_blocks: TextBlocks,
-    /// Compiler-inserted projection groups supplying fallback lexical names.
-    pub default_prelude_binders: HashSet<PatId>,
-    /// Generated definitions point at their owning projection group, not an identifier token.
-    pub default_prelude_definitions: std::collections::HashMap<DefId, PatId>,
 }
 
 impl TextArena {
@@ -209,18 +205,25 @@ impl TextArena {
     }
 }
 
-/// Dense span storage for the entities issued by one textual parser.
-#[derive(Clone, Default, Debug)]
-pub struct SpanArena {
-    key_space: Option<KeySpaceId>,
+#[derive(Clone, Debug)]
+struct SpanPage {
+    key_space: KeySpaceId,
     categories: Vec<EntityCategory>,
     spans: Vec<Span>,
+}
+
+/// Dense span storage for entities across one or more textual units.
+#[derive(Clone, Default, Debug)]
+pub struct SpanArena {
+    pages: Vec<SpanPage>,
+    page_index: rustc_hash::FxHashMap<KeySpaceId, usize>,
     map: Option<Arc<SourceMap>>,
 }
 
 mod impl_span_arena {
     use super::*;
     use std::ops::Index;
+    use zydeco_foundation::span::BytePos;
 
     impl SpanArena {
         /// Create empty span storage.
@@ -233,38 +236,53 @@ mod impl_span_arena {
             Id: Into<EntityId>,
         {
             let (category, key_space, raw) = id.into().into_parts();
-            match self.key_space {
-                | Some(existing) => {
-                    assert_eq!(existing, key_space, "span ID belongs to another parser")
-                }
-                | None => self.key_space = Some(key_space),
+            if self.pages.is_empty() {
+                self.pages.push(SpanPage { key_space, categories: Vec::new(), spans: Vec::new() });
+                self.page_index.insert(key_space, 0);
             }
+            assert_eq!(self.pages.len(), 1, "merged span arena is read-only for parser allocation");
+            let page = &mut self.pages[0];
+            assert_eq!(page.key_space, key_space, "span ID belongs to another parser");
             assert_eq!(
                 raw.into_u32() as usize,
-                self.spans.len(),
+                page.spans.len(),
                 "span IDs must follow the parser allocation sequence",
             );
-            self.categories.push(category);
-            self.spans.push(span);
+            page.categories.push(category);
+            page.spans.push(span);
         }
         /// Replace the span of an existing textual entity.
         pub fn replace<Id>(&mut self, id: Id, span: Span)
         where
             Id: Into<EntityId>,
         {
-            let index = self.index_of(id.into()).expect("span ID not found");
-            self.spans[index] = span;
+            let (page_idx, index) = self.index_of(id.into()).expect("span ID not found");
+            self.pages[page_idx].spans[index] = span;
         }
         /// Iterate over stored spans with their IDs.
         pub fn iter(&self) -> impl Iterator<Item = (EntityId, &Span)> {
-            self.iter_from(0)
+            self.pages.iter().flat_map(|page| {
+                debug_assert_eq!(page.categories.len(), page.spans.len());
+                let key_space = page.key_space;
+                page.categories.iter().copied().zip(&page.spans).enumerate().map(
+                    move |(raw, (category, span))| {
+                        let raw = u32::try_from(raw).expect("span arena exceeded the raw ID range");
+                        (category.restore(key_space, RawIdx::from_u32(raw)), span)
+                    },
+                )
+            })
         }
-        /// Iterate over stored spans starting at raw index `start`.
+        /// Iterate over stored spans starting at raw index `start` in the first parser page.
         pub fn iter_from(&self, start: usize) -> impl Iterator<Item = (EntityId, &Span)> {
-            debug_assert_eq!(self.categories.len(), self.spans.len());
-            let start = start.min(self.spans.len());
-            let key_space = self.key_space;
-            self.categories[start..].iter().copied().zip(&self.spans[start..]).enumerate().map(
+            let (key_space, categories, spans) = match self.pages.first() {
+                | Some(page) => {
+                    debug_assert_eq!(page.categories.len(), page.spans.len());
+                    (Some(page.key_space), page.categories.as_slice(), page.spans.as_slice())
+                }
+                | None => (None, [].as_slice(), [].as_slice()),
+            };
+            let start = start.min(spans.len());
+            categories[start..].iter().copied().zip(&spans[start..]).enumerate().map(
                 move |(offset, (category, span))| {
                     let key_space = key_space.expect("a nonempty span arena has a key space");
                     let raw = u32::try_from(start + offset)
@@ -275,11 +293,49 @@ mod impl_span_arena {
         }
         /// Number of textual entities currently carrying spans.
         pub fn len(&self) -> usize {
-            self.spans.len()
+            self.pages.iter().map(|page| page.spans.len()).sum()
         }
         /// Whether no textual entity currently carries a span.
         pub fn is_empty(&self) -> bool {
-            self.spans.is_empty()
+            self.pages.iter().all(|page| page.spans.is_empty())
+        }
+        /// The parser key space of a single-unit span arena, if nonempty.
+        pub fn key_space(&self) -> Option<KeySpaceId> {
+            (self.pages.len() == 1).then(|| self.pages[0].key_space)
+        }
+        /// Compact category tags for a single-unit parser arena, used to validate
+        /// span-table layout equivalence across edits.
+        pub fn category_tags(&self) -> Option<Vec<u8>> {
+            if self.pages.is_empty() {
+                return Some(Vec::new());
+            }
+            (self.pages.len() == 1)
+                .then(|| self.pages[0].categories.iter().map(|category| *category as u8).collect())
+        }
+        /// Merge another span arena into this arena, shifting every span by `base`
+        /// and optionally aliasing its single page under `alias_key_space` so backdated
+        /// semantic units resolve to updated byte offsets.
+        pub fn merge_rebased_as(
+            &mut self, other: &SpanArena, base: BytePos, alias_key_space: Option<KeySpaceId>,
+        ) {
+            let single_page = other.pages.len() == 1;
+            for page in &other.pages {
+                let key_space = if single_page {
+                    alias_key_space.unwrap_or(page.key_space)
+                } else {
+                    page.key_space
+                };
+                if self.page_index.contains_key(&key_space) {
+                    continue;
+                }
+                let index = self.pages.len();
+                self.pages.push(SpanPage {
+                    key_space,
+                    categories: page.categories.clone(),
+                    spans: page.spans.iter().map(|span| span.rebase(base)).collect(),
+                });
+                self.page_index.insert(key_space, index);
+            }
         }
         /// Attach the source map that decodes the stored spans' address space.
         ///
@@ -290,7 +346,8 @@ mod impl_span_arena {
         }
         /// Look up the span stored for an existing textual entity, if present.
         pub fn get(&self, entity: impl Into<EntityId>) -> Option<&Span> {
-            self.index_of(entity.into()).map(|index| &self.spans[index])
+            let (page_idx, index) = self.index_of(entity.into())?;
+            Some(&self.pages[page_idx].spans[index])
         }
         /// The source map decoding the stored spans, when one was attached.
         pub fn source_map(&self) -> Option<&SourceMap> {
@@ -298,14 +355,21 @@ mod impl_span_arena {
         }
         /// Release geometric vector growth after parsing finishes.
         pub(crate) fn shrink_to_fit(&mut self) {
-            self.categories.shrink_to_fit();
-            self.spans.shrink_to_fit();
+            for page in &mut self.pages {
+                page.categories.shrink_to_fit();
+                page.spans.shrink_to_fit();
+            }
         }
-        fn index_of(&self, entity: EntityId) -> Option<usize> {
+        fn index_of(&self, entity: EntityId) -> Option<(usize, usize)> {
             let (category, key_space, raw) = entity.into_parts();
-            (self.key_space == Some(key_space))
-                .then_some(raw.into_u32() as usize)
-                .filter(|index| self.categories.get(*index) == Some(&category))
+            let page_idx = if self.pages.len() == 1 {
+                (self.pages[0].key_space == key_space).then_some(0)?
+            } else {
+                *self.page_index.get(&key_space)?
+            };
+            let slot = raw.into_u32() as usize;
+            (self.pages[page_idx].categories.get(slot) == Some(&category))
+                .then_some((page_idx, slot))
         }
     }
 
@@ -313,8 +377,8 @@ mod impl_span_arena {
         type Output = Span;
 
         fn index(&self, entity: &EntityId) -> &Self::Output {
-            let index = self.index_of(*entity).expect("span ID not found");
-            &self.spans[index]
+            let (page_idx, index) = self.index_of(*entity).expect("span ID not found");
+            &self.pages[page_idx].spans[index]
         }
     }
 

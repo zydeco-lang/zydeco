@@ -44,8 +44,20 @@ pub(crate) struct SourceGraphLoader<Provider> {
 }
 
 impl SourceTemplate {
+    #[cfg(test)]
     pub(crate) fn parse(path: PathBuf, source: String) -> Result<Self, SourceParseErrors> {
-        let file = FileMap::local(source.as_str(), Some(Arc::new(path.clone())));
+        Self::parse_with_id(zydeco_foundation::span::FileId(0), path, source)
+    }
+
+    pub(crate) fn parse_with_id(
+        file_id: zydeco_foundation::span::FileId, path: PathBuf, source: String,
+    ) -> Result<Self, SourceParseErrors> {
+        let file = FileMap::new(
+            file_id,
+            source.as_str(),
+            Some(Arc::new(path.clone())),
+            zydeco_foundation::span::BytePos(0),
+        );
         let mut parser = t::Parser::new();
         let unit = StrictParser::source(&source, &mut parser).map_err(|error| {
             SourceParseError::Parse {
@@ -73,7 +85,7 @@ impl SourceTemplate {
             arena: &parser.arena,
             spans: &parser.spans,
         });
-        let warnings = warnings.into_iter().map(SourceWarning::from).collect();
+        let warnings: Vec<_> = warnings.into_iter().map(SourceWarning::from).collect();
         let diagnostics = imports
             .diagnostics
             .into_iter()
@@ -102,13 +114,28 @@ impl SourceTemplate {
         let package_sites = packages.facts;
         let discovery = discovery.facts;
         let (spans, arena) = parser.finish();
+        let syntax_digest = crate::source::digest::compute_syntax_digest(
+            crate::source::digest::SyntaxDigestInput {
+                spans: &spans,
+                arena: &arena,
+                unit,
+                documentation: &documentation,
+                warnings: &warnings,
+                import_sites: &import_sites,
+                literals: &literals,
+                package_sites: &package_sites,
+                discovery: &discovery,
+            },
+        );
         Ok(Self {
+            file_id: file.id(),
             path,
             source,
             file,
             spans: FrozenArena::new(spans),
             arena: FrozenArena::new(arena),
             unit,
+            syntax_digest,
             documentation,
             warnings,
             import_sites,

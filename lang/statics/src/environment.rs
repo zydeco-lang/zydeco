@@ -109,6 +109,10 @@ mod impls_skolem_scope {
         pub fn union(&self, other: &Self) -> Self {
             Self(self.0.iter().chain(other.0.iter()).copied().collect())
         }
+
+        pub(crate) fn iter(&self) -> impl Iterator<Item = AbstId> + '_ {
+            self.0.iter().copied()
+        }
     }
 
     impl FromIterator<AbstId> for SkolemScope {

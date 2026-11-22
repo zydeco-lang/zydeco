@@ -40,38 +40,6 @@ enum TestPipelineError {
     Frame(zydeco_assembly::frames::FramePlanError),
 }
 
-impl ScopedProgram {
-    fn check(self) -> Result<CheckedProgram, zydeco_statics::TyckDiagnostics> {
-        let Self { spans, arena, root } = self;
-        let session = super::CompilerSession::default();
-        let spans = spans.into_inner();
-        let output = session.check_resolved(spans.clone(), arena.into_inner(), root);
-        let checked = output.outcome.into_result()?;
-        Ok(CheckedProgram {
-            spans: Arc::new(spans),
-            scoped: output.scoped,
-            statics: checked.statics,
-            root: checked.root,
-        })
-    }
-}
-
-impl TextualProgram {
-    fn authored(
-        &self, root: zydeco_surface::textual::syntax::TermId,
-    ) -> zydeco_surface::textual::syntax::TermId {
-        use zydeco_surface::textual::syntax::Term;
-        match &self.arena.terms[&root] {
-            | Term::Let(binding)
-                if self.arena.default_prelude_binders.contains(&binding.binding.binder) =>
-            {
-                binding.tail
-            }
-            | _ => root,
-        }
-    }
-}
-
 struct AuthoredRoot;
 
 impl AuthoredRoot {
@@ -82,8 +50,10 @@ impl AuthoredRoot {
         use zydeco_surface::{scoped::syntax::Term, textual::syntax::EntityId};
         match &arena.terms[&root] {
             | Term::Let(binding)
-                if matches!(arena.origins.source(&binding.binder.into()),
-                Some(EntityId::Pat(pattern)) if arena.default_prelude_binders.contains(&pattern)) =>
+                if !matches!(
+                    arena.origins.source(&binding.binder.into()),
+                    Some(EntityId::Pat(_))
+                ) && matches!(arena.terms[&binding.bindee], Term::SourceBoundary(_)) =>
             {
                 binding.tail
             }
@@ -358,10 +328,22 @@ impl SourceFixture {
     }
 }
 
-fn resolve_program(
-    program: TextualProgram,
-) -> Result<ScopedProgram, crate::source::ResolveFailure> {
-    program.resolve()
+fn resolve_root_unit(
+    path: impl AsRef<Path>,
+) -> (Arc<zydeco_surface::textual::syntax::SpanArena>, zydeco_surface::scoped::ResolvedUnitOut) {
+    let graph = SourceGraph::load(path).unwrap();
+    let root_file = &graph.sources[&graph.root];
+    let resolved = zydeco_surface::scoped::ResolveFolder::new(&root_file.spans, &root_file.arena)
+        .run_unit(
+            root_file.root,
+            zydeco_surface::scoped::UnitResolveConfig {
+                literals: &root_file.literals,
+                has_prelude: root_file.prelude.is_some(),
+                is_signature: root_file.kind() == crate::source::SourceKind::Signature,
+            },
+        )
+        .unwrap();
+    (Arc::new((*root_file.spans).clone()), resolved)
 }
 
 /// The file a merged-program span belongs to, via the arena's source map.
@@ -793,46 +775,34 @@ fn program_assembly_consumes_import_directives_and_preserves_a_source_boundary()
     fixture.write("library.zy", "1");
     let root = fixture.write("main.zy", r#"@(import("library.zy"))"#);
 
-    let program = SourceGraph::load(root).unwrap().parse().unwrap();
+    let (_, resolved) = resolve_root_unit(root);
 
     assert!(matches!(
-        program.arena.terms[&program.authored(program.unit.root)],
-        zydeco_surface::textual::syntax::Term::SourceBoundary(_)
+        resolved.arena.terms[&AuthoredRoot::scoped(&resolved.arena, resolved.root)],
+        zydeco_surface::scoped::syntax::Term::SourceBoundary(_)
     ));
-    assert!(program.arena.terms.iter().all(|(_, term)| {
-        !matches!(
-            term,
-            zydeco_surface::textual::syntax::Term::Meta(
-                zydeco_surface::textual::syntax::MetaTerm(meta, _),
-            ) if program.arena.metas[meta].is("import")
-        )
-    }));
+    assert_eq!(resolved.imports.len(), 1);
 }
 
 #[test]
 fn textual_program_ascribes_an_implementation_with_its_signature() {
-    use zydeco_surface::textual::syntax::{Ann, SignatureBoundary, Term};
-
     let fixture = SourceFixture::new();
     fixture.write("library.zyi", "@(intrinsic(unit))");
     let root = fixture.write("library.zy", "()");
 
-    let program = SourceGraph::load(root).unwrap().parse().unwrap();
-    let Term::Ann(Ann { tm: _, ty }) = program.arena.terms[&program.authored(program.unit.root)]
-    else {
-        panic!("expected a root ascription")
-    };
+    let graph = SourceGraph::load(&root).unwrap();
+    assert!(graph.sources[&graph.root].signature.is_some());
 
-    assert!(matches!(program.arena.terms[&ty], Term::SignatureBoundary(SignatureBoundary(_))));
+    let checked = TestPipeline::check(&root).unwrap();
+    assert!(matches!(checked.root, zydeco_statics::syntax::TermAnnId::Value(_, _)));
 }
 
 #[test]
 fn builtin_operation_roles_remain_specializable_through_name_resolution() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "@(builtin(int_add))");
-    let program = SourceGraph::load(root).unwrap().parse().unwrap();
 
-    let resolved = resolve_program(program).unwrap();
+    let (_, resolved) = resolve_root_unit(root);
     let zydeco_surface::scoped::syntax::Term::Meta(term) =
         &resolved.arena.terms[&AuthoredRoot::scoped(&resolved.arena, resolved.root)]
     else {
@@ -854,32 +824,44 @@ fn builtin_operation_roles_remain_specializable_through_name_resolution() {
 
 #[test]
 fn program_assembly_shares_one_source_root_across_import_occurrences() {
-    use zydeco_surface::textual::syntax::{Abs, CoPattern, Paren, Pattern, SourceBoundary, Term};
+    use zydeco_surface::scoped::syntax::{Abs, Ann, Pattern, SourceBoundary, Term, Thunk};
 
     let fixture = SourceFixture::new();
-    fixture.write("library.zy", "fn value => value");
+    fixture.write("library.zy", "{ fn (value : @(intrinsic(unit))) => ret value }");
     let root = fixture.write("main.zy", r#"(@(import("library.zy")), @(import("library.zy")))"#);
 
-    let program = SourceGraph::load(root).unwrap().parse().unwrap();
-    let Term::Paren(Paren(imports)) = &program.arena.terms[&program.authored(program.unit.root)]
+    let checked = TestPipeline::check(root).unwrap();
+    let typed_root = checked.root.as_term().expect("expected a checked pair of imports");
+    let source_root =
+        checked.statics.terms.source(&typed_root).expect("checked pair retains its source root");
+    let Term::Cons(imports) =
+        &checked.scoped.terms[&AuthoredRoot::scoped(&checked.scoped, source_root)]
     else {
         panic!("expected a pair of imports")
     };
     let functions_and_definitions = imports
         .iter()
         .map(|import| {
-            let Term::SourceBoundary(SourceBoundary(function)) = &program.arena.terms[import]
+            let Term::SourceBoundary(SourceBoundary(function)) = &checked.scoped.terms[import]
             else {
                 panic!("expected a source boundary")
             };
-            let Term::Abs(Abs(copattern, _)) = &program.arena.terms[&program.authored(*function)]
+            let Term::Ann(Ann { tm: thunk, .. }) =
+                &checked.scoped.terms[&AuthoredRoot::scoped(&checked.scoped, *function)]
             else {
+                panic!("expected an annotated thunk body")
+            };
+            let Term::Thunk(Thunk(abs)) = &checked.scoped.terms[thunk] else {
+                panic!("expected a thunk body")
+            };
+            let Term::Abs(Abs(patterns, _)) = &checked.scoped.terms[abs] else {
                 panic!("expected an imported function")
             };
-            let CoPattern::Pat(pattern) = program.arena.copats[copattern] else {
-                panic!("expected a parameter pattern")
+            let [pattern] = patterns.as_slice() else { panic!("expected one parameter pattern") };
+            let Pattern::Ann(Ann { tm: inner, .. }) = checked.scoped.pats[pattern] else {
+                panic!("expected an annotated variable parameter")
             };
-            let Pattern::Var(definition) = program.arena.pats[&pattern] else {
+            let Pattern::Var(definition) = checked.scoped.pats[&inner] else {
                 panic!("expected a variable parameter")
             };
             (*function, definition)
@@ -932,46 +914,74 @@ fn repeated_imports_share_one_resolved_and_checked_term() {
 
 #[test]
 fn program_assembly_retains_importer_and_provider_spans() {
-    use zydeco_surface::textual::syntax::{SourceBoundary, Term};
+    use zydeco_surface::scoped::syntax::{SourceBoundary, Term};
 
     let fixture = SourceFixture::new();
-    fixture.write("library.zy", "fn value => value");
-    let root = fixture.write("main.zy", r#"@(import("library.zy"))"#);
+    fixture.write("library.zy", "1");
+    let root = fixture.write("main.zy", r#"(@(import("library.zy")), ())"#);
 
-    let program = SourceGraph::load(root).unwrap().parse().unwrap();
-    let boundary = program.authored(program.unit.root);
-    let Term::SourceBoundary(SourceBoundary(provider)) = program.arena.terms[&boundary] else {
+    let checked = TestPipeline::check(root).unwrap();
+    let typed_root = checked.root.as_term().expect("expected a checked pair");
+    let source_root = checked.statics.terms.source(&typed_root).expect("checked root origin");
+    let Term::Cons(items) =
+        &checked.scoped.terms[&AuthoredRoot::scoped(&checked.scoped, source_root)]
+    else {
+        panic!("expected a pair containing the import boundary")
+    };
+    let boundary = items[0];
+    let Term::SourceBoundary(SourceBoundary(provider)) = checked.scoped.terms[&boundary] else {
         panic!("expected a source boundary")
     };
+    let boundary_entity = checked.scoped.origins.source(&boundary.into()).unwrap();
+    let provider_entity = checked.scoped.origins.source(&provider.into()).unwrap();
 
     assert_eq!(
-        span_file(&program.spans, &program.spans[&boundary.into()]),
+        span_file(&checked.spans, &checked.spans[&boundary_entity]),
         Some(std::ffi::OsString::from("main.zy"))
     );
     assert_eq!(
-        span_file(&program.spans, &program.spans[&provider.into()]),
+        span_file(&checked.spans, &checked.spans[&provider_entity]),
         Some(std::ffi::OsString::from("library.zy"))
     );
 }
 
 #[test]
 fn program_assembly_rebases_every_nested_metadata_span() {
-    use zydeco_surface::textual::syntax::{EntityId, MetaNode, MetaTerm, Term};
+    use zydeco_foundation::span::{BytePos, FileSource, SourceMap};
+    use zydeco_surface::textual::syntax::{EntityId, MetaNode, MetaTerm, SpanArena, Term};
 
     let fixture = SourceFixture::new();
     let source = r#"@(custom(name("root"),nested("value")))"#;
-    let root = fixture.write("main.zy", source);
-    let program = SourceGraph::load(root).unwrap().parse().unwrap();
-    let Term::Meta(MetaTerm(metadata, _)) =
-        &program.arena.terms[&program.authored(program.unit.root)]
-    else {
-        panic!("expected metadata to remain in the assembled program")
+    let lib_path = fixture.write("library.zy", source);
+    let root = fixture.write("main.zy", r#"@(import("library.zy"))"#);
+    let graph = SourceGraph::load(root).unwrap();
+    let root_file = &graph.sources[&graph.root];
+    let lib_id = graph.source_by_path(&lib_path).unwrap();
+    let lib_file = &graph.sources[&lib_id];
+
+    let lib_base = BytePos(1 + root_file.template.source.len() as u32);
+    let mut merged = SpanArena::new();
+    merged.attach_map(Arc::new(SourceMap::from_sources(vec![
+        FileSource {
+            path: Some(Arc::new(root_file.template.path.clone())),
+            source: root_file.template.source.as_str().into(),
+        },
+        FileSource {
+            path: Some(Arc::new(lib_file.template.path.clone())),
+            source: lib_file.template.source.as_str().into(),
+        },
+    ])));
+    merged.merge_rebased_as(&root_file.spans, BytePos(1), None);
+    merged.merge_rebased_as(&lib_file.spans, lib_base, None);
+
+    let Term::Meta(MetaTerm(metadata, _)) = &lib_file.arena.terms[&lib_file.root] else {
+        panic!("expected metadata to remain in the parsed library template")
     };
-    let MetaNode::Apply { args, .. } = &program.arena.metas[metadata] else {
+    let MetaNode::Apply { args, .. } = &lib_file.arena.metas[metadata] else {
         panic!("expected custom metadata")
     };
     let [name, nested] = args.as_slice() else { panic!("expected two package fields") };
-    let MetaNode::Apply { args, .. } = &program.arena.metas[nested] else {
+    let MetaNode::Apply { args, .. } = &lib_file.arena.metas[nested] else {
         panic!("expected nested metadata")
     };
     let [value] = args.as_slice() else { panic!("expected one nested value") };
@@ -984,37 +994,44 @@ fn program_assembly_rebases_every_nested_metadata_span() {
     ]
     .into_iter()
     .for_each(|(metadata, expected)| {
-        let span = program.spans[&EntityId::Meta(metadata)];
-        let (file, range) = program.spans.source_map().unwrap().range(span).unwrap();
-        assert_eq!(file.path().file_name(), Some(std::ffi::OsStr::new("main.zy")));
+        let span = merged[&EntityId::Meta(metadata)];
+        let (file, range) = merged.source_map().unwrap().range(span).unwrap();
+        assert_eq!(file.path().file_name(), Some(std::ffi::OsStr::new("library.zy")));
         assert_eq!(&file.source()[range], expected);
     });
 }
 
 #[test]
 fn program_assembly_expands_nested_imports_recursively() {
-    use zydeco_surface::textual::syntax::{SourceBoundary, Term};
+    use zydeco_surface::scoped::syntax::{SourceBoundary, Term};
 
     let fixture = SourceFixture::new();
     fixture.write("leaf.zy", "1");
     fixture.write("library.zy", r#"@(import("leaf.zy"))"#);
-    let root = fixture.write("main.zy", r#"@(import("library.zy"))"#);
+    let root = fixture.write("main.zy", r#"(@(import("library.zy")), ())"#);
 
-    let program = SourceGraph::load(root).unwrap().parse().unwrap();
-    let Term::SourceBoundary(SourceBoundary(library)) =
-        program.arena.terms[&program.authored(program.unit.root)]
+    let checked = TestPipeline::check(root).unwrap();
+    let typed_root = checked.root.as_term().expect("expected a checked pair");
+    let source_root = checked.statics.terms.source(&typed_root).expect("checked root origin");
+    let Term::Cons(items) =
+        &checked.scoped.terms[&AuthoredRoot::scoped(&checked.scoped, source_root)]
     else {
+        panic!("expected a pair containing the library boundary")
+    };
+    let Term::SourceBoundary(SourceBoundary(library)) = checked.scoped.terms[&items[0]] else {
         panic!("expected the library boundary")
     };
     let Term::SourceBoundary(SourceBoundary(leaf)) =
-        program.arena.terms[&program.authored(library)]
+        checked.scoped.terms[&AuthoredRoot::scoped(&checked.scoped, library)]
     else {
         panic!("expected the nested leaf boundary")
     };
+    let leaf_authored = AuthoredRoot::scoped(&checked.scoped, leaf);
+    let leaf_entity = checked.scoped.origins.source(&leaf_authored.into()).unwrap();
 
-    assert!(matches!(program.arena.terms[&program.authored(leaf)], Term::Lit(_)));
+    assert!(matches!(checked.scoped.terms[&leaf_authored], Term::Lit(_)));
     assert_eq!(
-        span_file(&program.spans, &program.spans[&leaf.into()]),
+        span_file(&checked.spans, &checked.spans[&leaf_entity]),
         Some(std::ffi::OsString::from("leaf.zy"))
     );
 }
@@ -1024,20 +1041,20 @@ fn imported_free_names_do_not_capture_importer_bindings() {
     let fixture = SourceFixture::new();
     fixture.write("library.zy", "value");
     let root = fixture.write("main.zy", r#"let value = _ in @(import("library.zy"))"#);
-    let program = SourceGraph::load(root).unwrap().parse().unwrap();
 
-    let Err(failure) = resolve_program(program) else {
+    let Err(crate::source::AnalysisError::Resolve { error, spans, .. }) =
+        CompilerSession::default().analyze(root)
+    else {
         panic!("expected name resolution to reject caller capture")
     };
-    assert_eq!(failure.error.len(), 1);
-    let zydeco_surface::scoped::ResolveError::UnboundVar(name) =
-        failure.error.iter().next().unwrap()
+    assert_eq!(error.len(), 1);
+    let zydeco_surface::scoped::ResolveError::UnboundVar(name) = error.iter().next().unwrap()
     else {
-        panic!("expected an unbound imported name, got {}", failure.error)
+        panic!("expected an unbound imported name, got {error}")
     };
 
     assert_eq!(name.inner.as_str(), "value");
-    assert_eq!(span_file(&failure.spans, &name.info), Some(std::ffi::OsString::from("library.zy")));
+    assert_eq!(span_file(&spans, &name.info), Some(std::ffi::OsString::from("library.zy")));
 }
 
 #[test]
@@ -1045,36 +1062,35 @@ fn imported_mobile_bindings_do_not_move_into_an_importer_block() {
     let fixture = SourceFixture::new();
     fixture.write("library.zy", "param value that value");
     let root = fixture.write("main.zy", r#"begin @(import("library.zy")) end"#);
-    let program = SourceGraph::load(root).unwrap().parse().unwrap();
 
-    let Err(failure) = resolve_program(program) else {
+    let Err(crate::source::AnalysisError::Resolve { error, spans, .. }) =
+        CompilerSession::default().analyze(root)
+    else {
         panic!("expected name resolution to reject cross-file mobility")
     };
-    assert_eq!(failure.error.len(), 1);
-    let zydeco_surface::scoped::ResolveError::UnenclosedThat(span) =
-        failure.error.iter().next().unwrap()
+    assert_eq!(error.len(), 1);
+    let zydeco_surface::scoped::ResolveError::UnenclosedThat(span) = error.iter().next().unwrap()
     else {
-        panic!("expected an unenclosed imported binding, got {}", failure.error)
+        panic!("expected an unenclosed imported binding, got {error}")
     };
 
-    assert_eq!(span_file(&failure.spans, span), Some(std::ffi::OsString::from("library.zy")));
+    assert_eq!(span_file(&spans, span), Some(std::ffi::OsString::from("library.zy")));
 }
 
 #[test]
 fn a_self_contained_imported_term_resolves_normally() {
     let fixture = SourceFixture::new();
-    fixture.write("library.zy", "fn value => value");
+    fixture.write("library.zy", "1");
     let root = fixture.write("main.zy", r#"@(import("library.zy"))"#);
-    let program = SourceGraph::load(root).unwrap().parse().unwrap();
 
-    let resolved = resolve_program(program).unwrap();
+    let (_, resolved) = resolve_root_unit(root);
 
     assert!(matches!(
         resolved.arena.terms[&AuthoredRoot::scoped(&resolved.arena, resolved.root)],
         zydeco_surface::scoped::syntax::Term::SourceBoundary(_)
     ));
-    let contexts =
-        zydeco_surface::scoped::context::TermContexts::collect(&resolved.arena, resolved.root);
+    let arena = resolved.arena.into_inner();
+    let contexts = zydeco_surface::scoped::context::TermContexts::collect(&arena, resolved.root);
     assert!(contexts.at(&resolved.root).is_empty());
 }
 
@@ -1086,9 +1102,8 @@ fn importing_once_and_binding_once_shares_one_lexical_identity() {
     fixture.write("library.zy", "fn value => value");
     let root =
         fixture.write("main.zy", r#"let library = @(import("library.zy")) in (library, library)"#);
-    let program = SourceGraph::load(root).unwrap().parse().unwrap();
 
-    let resolved = resolve_program(program).unwrap();
+    let (_, resolved) = resolve_root_unit(root);
     let Term::Let(binding) =
         &resolved.arena.terms[&AuthoredRoot::scoped(&resolved.arena, resolved.root)]
     else {
@@ -1106,12 +1121,13 @@ fn importing_once_and_binding_once_shares_one_lexical_identity() {
 fn the_source_pipeline_reaches_statics_without_a_declaration_entry() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "_");
-    let scoped = SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap();
+    let analysis = CompilerSession::default().analyze(root).unwrap();
 
-    let _root_term = &scoped.arena.terms[&scoped.root];
-    let Err(diagnostics) = scoped.check() else {
-        panic!("an unclassified root hole must not count as a checked source term")
-    };
+    assert!(analysis.outcome().root().is_none());
+    let diagnostics = analysis
+        .outcome()
+        .diagnostics()
+        .expect("an unclassified root hole must not count as a checked source term");
     assert!(!diagnostics.is_empty());
 }
 
@@ -1119,12 +1135,12 @@ fn the_source_pipeline_reaches_statics_without_a_declaration_entry() {
 fn a_literal_splice_parses_to_a_string_literal() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "--| Line one\n--| Line two\n@(literal)");
-    let program = SourceGraph::load(root).unwrap().parse().unwrap();
-    let zydeco_surface::textual::syntax::Term::Lit(
+    let (_, resolved) = resolve_root_unit(root);
+    let zydeco_surface::scoped::syntax::Term::Lit(
         zydeco_surface::textual::syntax::Literal::String(text),
-    ) = &program.arena.terms[&program.authored(program.unit.root)]
+    ) = &resolved.arena.terms[&AuthoredRoot::scoped(&resolved.arena, resolved.root)]
     else {
-        panic!("expected `@[literal]` to parse to a string literal")
+        panic!("expected `@[literal]` to resolve to a string literal")
     };
     assert_eq!(text.as_str(), "Line one\nLine two");
 }
@@ -1256,18 +1272,15 @@ fn an_explicit_signature_import_still_rejects_a_non_type_root() {
 
 #[test]
 fn the_declaration_free_unbound_fixture_fails_during_resolution() {
-    let program = SourceGraph::load(repository_source("tests/core/fail-unbound.zy"))
-        .unwrap()
-        .parse()
-        .unwrap();
-    let Err(failure) = resolve_program(program) else {
+    let Err(crate::source::AnalysisError::Resolve { error, .. }) =
+        CompilerSession::default().analyze(repository_source("tests/core/fail-unbound.zy"))
+    else {
         panic!("the unbound fixture unexpectedly resolved")
     };
-    assert_eq!(failure.error.len(), 1);
-    let zydeco_surface::scoped::ResolveError::UnboundVar(name) =
-        failure.error.iter().next().unwrap()
+    assert_eq!(error.len(), 1);
+    let zydeco_surface::scoped::ResolveError::UnboundVar(name) = error.iter().next().unwrap()
     else {
-        panic!("expected an unbound variable, got {}", failure.error)
+        panic!("expected an unbound variable, got {error}")
     };
 
     assert_eq!(name.inner.as_str(), "x");
@@ -1308,8 +1321,7 @@ fn explicit_intrinsic_splices_produce_canonical_cbpv_terms() {
     .for_each(|(source, expected)| {
         let fixture = SourceFixture::new();
         let root = fixture.write("main.zy", source);
-        let checked =
-            SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap().check().unwrap();
+        let checked = TestPipeline::check(root).unwrap();
 
         match (checked.root, expected) {
             | (TermAnnId::Kind(kind), "vtype") => {
@@ -1336,8 +1348,7 @@ fn explicit_intrinsic_splices_produce_canonical_cbpv_terms() {
 fn intrinsic_spellings_are_ordinary_bindable_names_in_root_sources() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "begin def VType = @(intrinsic(unit)) that VType end");
-    let checked =
-        SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap().check().unwrap();
+    let checked = TestPipeline::check(root).unwrap();
 
     use zydeco_statics::syntax::{Fillable, Kind, TermAnnId, Type};
     let TermAnnId::Type(unit, kind) = checked.root else {
@@ -1362,8 +1373,7 @@ fn intrinsic_kind_spellings_bind_as_ordinary_kind_aliases() {
     Unit
 end"#,
     );
-    let checked =
-        SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap().check().unwrap();
+    let checked = TestPipeline::check(root).unwrap();
 
     use zydeco_statics::syntax::{Fillable, TermAnnId, Type};
     let TermAnnId::Type(exists, _) = checked.root else {
@@ -1376,8 +1386,7 @@ end"#,
 fn a_zero_dependency_source_program_checks_and_runs_as_one_term() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "ret ()");
-    let checked =
-        SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap().check().unwrap();
+    let checked = TestPipeline::check(root).unwrap();
 
     assert!(matches!(checked.root, zydeco_statics::syntax::TermAnnId::Compu(_, _)));
 
@@ -1401,8 +1410,7 @@ fn a_zero_dependency_source_program_checks_and_runs_as_one_term() {
 fn a_zero_dependency_source_program_lowers_directly_to_stack_ir() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "ret ()");
-    let checked =
-        SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap().check().unwrap();
+    let checked = TestPipeline::check(root).unwrap();
 
     let SourceStack { stackir } = checked.stackir().unwrap();
     let stackir = stackir.as_program();
@@ -1417,8 +1425,7 @@ fn a_fixed_primitive_intrinsic_classifies_literals_without_a_package_scope() {
         "main.zy",
         "begin let Int = @(intrinsic(int)) that def value : Int = 1 that ret value end",
     );
-    let checked =
-        SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap().check().unwrap();
+    let checked = TestPipeline::check(root).unwrap();
 
     assert!(matches!(checked.root, zydeco_statics::syntax::TermAnnId::Compu(_, _)));
 }
@@ -1427,8 +1434,7 @@ fn a_fixed_primitive_intrinsic_classifies_literals_without_a_package_scope() {
 fn an_integer_literal_defaults_to_int_without_a_package_scope() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "ret 1");
-    let checked =
-        SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap().check().unwrap();
+    let checked = TestPipeline::check(root).unwrap();
 
     use zydeco_statics::syntax::{Fillable, PrimitiveTy, TermAnnId, Type};
     use zydeco_syntax::{App, IntegerType, PrimitiveType};
@@ -1460,8 +1466,7 @@ fn repeated_primitive_intrinsics_have_one_applicative_identity() {
             "def a : IntA = 1 that def b : IntB = a that ret b end",
         ),
     );
-    let checked =
-        SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap().check().unwrap();
+    let checked = TestPipeline::check(root).unwrap();
 
     // Both aliases must denote one primitive identity: the result of `ret b`
     // is the Int primitive itself, not a choice between the two bindings.
@@ -1500,9 +1505,9 @@ param (
   ret value
 "#,
     );
-    let scoped = SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap();
+    let analysis = CompilerSession::default().analyze(root).unwrap();
 
-    assert!(scoped.check().is_err());
+    assert!(analysis.outcome().diagnostics().is_some());
 }
 
 #[test]
@@ -1522,9 +1527,9 @@ param (
   ret ()
 "#,
     );
-    let scoped = SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap();
+    let analysis = CompilerSession::default().analyze(root).unwrap();
 
-    assert!(scoped.check().is_err());
+    assert!(analysis.outcome().diagnostics().is_some());
 }
 
 #[test]
@@ -1544,9 +1549,9 @@ fn builtin_host_type_roles_require_abstract_entries_of_the_right_kind() {
     cases.into_iter().for_each(|source| {
         let fixture = SourceFixture::new();
         let root = fixture.write("main.zy", source);
-        let scoped = SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap();
+        let analysis = CompilerSession::default().analyze(root).unwrap();
 
-        assert!(scoped.check().is_err(), "`{source}` unexpectedly checked");
+        assert!(analysis.outcome().diagnostics().is_some(), "`{source}` unexpectedly checked");
     });
 }
 
@@ -1554,8 +1559,7 @@ fn builtin_host_type_roles_require_abstract_entries_of_the_right_kind() {
 fn a_builtin_operation_role_attaches_to_its_named_classifier() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "@[builtin(int_add)] (#add :: @(intrinsic(unit)))");
-    let checked =
-        SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap().check().unwrap();
+    let checked = TestPipeline::check(root).unwrap();
     let zydeco_statics::syntax::TermAnnId::Type(entry, _) = checked.root else {
         panic!("a named classifier must check as a type")
     };
@@ -1573,17 +1577,16 @@ fn a_builtin_operation_role_attaches_to_its_named_classifier() {
 fn a_builtin_operation_role_rejects_an_unnamed_classifier() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "@[builtin(int_add)] @(intrinsic(unit))");
-    let scoped = SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap();
+    let analysis = CompilerSession::default().analyze(root).unwrap();
 
-    assert!(scoped.check().is_err());
+    assert!(analysis.outcome().diagnostics().is_some());
 }
 
 #[test]
 fn the_interpreter_constructs_and_applies_a_typed_builtin_package() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", builtin_add_exit_source());
-    let checked =
-        SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap().check().unwrap();
+    let checked = TestPipeline::check(root).unwrap();
 
     let SourceDynamics { program, packages } = checked.dynamics_with_builtin().unwrap();
     let mut input = std::io::empty();
@@ -1669,8 +1672,7 @@ end
 fn stack_ir_constructs_and_applies_the_same_typed_builtin_package() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", builtin_add_exit_source());
-    let checked =
-        SourceGraph::load(root).unwrap().parse().unwrap().resolve().unwrap().check().unwrap();
+    let checked = TestPipeline::check(root).unwrap();
 
     let SourceStack { stackir } = checked.sps_with_builtin().unwrap();
 

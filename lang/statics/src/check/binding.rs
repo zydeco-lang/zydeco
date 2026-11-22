@@ -14,6 +14,9 @@ impl BindingCycle {
     /// annotations may themselves refer to not-yet-established group members.
     pub(super) fn has_value_body(tycker: &Tycker<'_>, mut term: su::TermId) -> bool {
         loop {
+            if let Some(prechecked) = tycker.prechecked_boundaries.get(&term) {
+                return matches!(prechecked, Ok(TermAnnId::Value(_, _)));
+            }
             term = match &tycker.scoped.terms[&term] {
                 | su::Term::Ann(su::Ann { tm, .. })
                 | su::Term::Sealed(su::Sealed(tm))
