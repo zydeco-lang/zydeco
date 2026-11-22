@@ -1,8 +1,6 @@
-use std::{
-    collections::HashMap,
-    fs::{File, OpenOptions},
-    io::{self, BufReader},
-};
+use std::io;
+pub(crate) use zydeco_abi::HostIoErrorKind;
+pub use zydeco_host::io::{HostIoError, HostIoRuntime, ReaderHandle, WriterHandle};
 use zydeco_machine::memory::{Address, MemoryError, RetainedMemory};
 
 /// Opaque values whose representation belongs to the interpreter runtime.
@@ -13,42 +11,16 @@ pub enum HostValue {
     Writer(WriterHandle),
 }
 
-/// Identifier for a readable runtime capability.
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
-pub struct ReaderHandle(usize);
-
-impl ReaderHandle {
-    pub const STDIN: Self = Self(0);
-}
-
-/// Identifier for a writable runtime capability.
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
-pub struct WriterHandle(usize);
-
-impl WriterHandle {
-    pub const STDOUT: Self = Self(0);
-    pub const STDERR: Self = Self(1);
-}
-
 /// File resources owned by one interpreter invocation.
 #[derive(Debug)]
 pub struct HostRuntime {
     pub(crate) memory: RetainedMemory,
-    next_reader: usize,
-    next_writer: usize,
-    readers: HashMap<ReaderHandle, BufReader<File>>,
-    writers: HashMap<WriterHandle, File>,
+    pub(crate) io: HostIoRuntime,
 }
 
 impl HostRuntime {
     pub(crate) fn new() -> Self {
-        Self {
-            memory: RetainedMemory::default(),
-            next_reader: 1,
-            next_writer: 2,
-            readers: HashMap::new(),
-            writers: HashMap::new(),
-        }
+        Self { memory: RetainedMemory::default(), io: HostIoRuntime::new() }
     }
 
     pub(crate) fn import_memory(&mut self, bytes: &[u8]) -> io::Result<Address> {
@@ -59,90 +31,31 @@ impl HostRuntime {
         &mut self, writer: WriterHandle, address: Address, length: i64, output: &mut dyn io::Write,
         stderr: &mut dyn io::Write,
     ) -> io::Result<()> {
-        use io::Write;
         let length =
             usize::try_from(length).map_err(|_| HostIoError::memory(MemoryError::InvalidLayout))?;
         let bytes = unsafe { address.bytes(length) };
-        match writer {
-            | WriterHandle::STDOUT => output.write_all(bytes),
-            | WriterHandle::STDERR => stderr.write_all(bytes),
-            | writer => {
-                self.writers.get_mut(&writer).ok_or_else(HostIoError::closed)?.write_all(bytes)
-            }
-        }
+        self.io.write_with(writer, output, stderr, |stream| stream.write_all(bytes))
     }
 
     pub(crate) fn open_reader(&mut self, path: &str) -> io::Result<ReaderHandle> {
-        let reader = BufReader::new(File::open(path)?);
-        let handle = ReaderHandle(self.next_reader);
-        self.next_reader += 1;
-        self.readers.insert(handle, reader);
-        Ok(handle)
+        self.io.open_reader(path)
     }
 
     pub(crate) fn create_writer(&mut self, path: &str) -> io::Result<WriterHandle> {
-        self.open_writer(path, false)
+        self.io.create_writer(path)
     }
 
     pub(crate) fn append_writer(&mut self, path: &str) -> io::Result<WriterHandle> {
-        self.open_writer(path, true)
-    }
-
-    fn open_writer(&mut self, path: &str, append: bool) -> io::Result<WriterHandle> {
-        let writer = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(!append)
-            .append(append)
-            .open(path)?;
-        let handle = WriterHandle(self.next_writer);
-        self.next_writer += 1;
-        self.writers.insert(handle, writer);
-        Ok(handle)
-    }
-
-    pub(crate) fn reader(&mut self, handle: ReaderHandle) -> io::Result<&mut BufReader<File>> {
-        self.readers.get_mut(&handle).ok_or_else(HostIoError::closed)
-    }
-
-    pub(crate) fn writer(&mut self, handle: WriterHandle) -> io::Result<&mut File> {
-        self.writers.get_mut(&handle).ok_or_else(HostIoError::closed)
+        self.io.append_writer(path)
     }
 
     pub(crate) fn close_reader(&mut self, handle: ReaderHandle) -> io::Result<()> {
-        if handle == ReaderHandle::STDIN || self.readers.remove(&handle).is_some() {
-            Ok(())
-        } else {
-            Err(HostIoError::closed())
-        }
+        self.io.close_reader(handle)
     }
 
-    pub(crate) fn close_writer(&mut self, handle: WriterHandle) -> io::Result<()> {
-        if matches!(handle, WriterHandle::STDOUT | WriterHandle::STDERR) {
-            Ok(())
-        } else if let Some(mut writer) = self.writers.remove(&handle) {
-            use std::io::Write;
-            writer.flush()
-        } else {
-            Err(HostIoError::closed())
-        }
-    }
-}
-
-pub(crate) use zydeco_abi::HostIoErrorKind;
-
-struct HostIoError;
-
-impl HostIoError {
-    fn memory(error: MemoryError) -> io::Error {
-        let kind = match error {
-            | MemoryError::AllocationFailed => io::ErrorKind::OutOfMemory,
-            | _ => io::ErrorKind::InvalidInput,
-        };
-        io::Error::new(kind, error.message())
-    }
-
-    fn closed() -> io::Error {
-        io::Error::new(io::ErrorKind::NotConnected, "I/O capability is closed")
+    pub(crate) fn close_writer(
+        &mut self, handle: WriterHandle, output: &mut dyn io::Write, stderr: &mut dyn io::Write,
+    ) -> io::Result<()> {
+        self.io.close_writer_with(handle, output, stderr)
     }
 }

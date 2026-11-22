@@ -141,6 +141,33 @@ impl<S: Storage> Frames<S> {
         self.storage.reserved_words()
     }
 
+    /// Pending suspension slot addresses deduplicated across retained frames.
+    pub fn suspension_roots(&mut self) -> Vec<*mut Word> {
+        if self.suspensions.is_empty() {
+            return Vec::new();
+        }
+        let mut indices = self
+            .suspensions
+            .iter()
+            .flat_map(|suspension| {
+                let base = self.activations[suspension.frame].base;
+                suspension.slots.iter().map(move |slot| base + slot)
+            })
+            .collect::<Vec<_>>();
+        indices.sort_unstable();
+        indices.dedup();
+        let base = self.storage.base();
+        indices.into_iter().map(|index| base.wrapping_add(index)).collect()
+    }
+
+    /// Clear active activations and suspensions while retaining allocated word storage.
+    pub fn reset(&mut self) {
+        self.activations.clear();
+        self.suspensions.clear();
+        self.next_suspension = 0;
+        self.high_water = 0;
+    }
+
     /// Rust owner plus allocated control records, excluding word buffers and
     /// allocator bookkeeping. Includes unused vector capacity after reclamation.
     pub fn metadata_reserved_bytes(&self) -> usize {
@@ -504,6 +531,42 @@ mod tests {
         assert_eq!(impossible.enter(CALLER), Err(FrameError::Allocation { words: usize::MAX }));
         assert_eq!(impossible.used_words(), 0);
         assert_eq!(impossible.reserved_words(), 0);
+    }
+
+    #[test]
+    fn suspension_roots_and_reset_reuse_storage_cleanly() {
+        let mut frames = Frames::<storage::Growable>::EMPTY;
+        assert!(frames.suspension_roots().is_empty());
+
+        let base = frames.enter(CALLER).unwrap();
+        unsafe {
+            base.write(11);
+            base.add(2).write(33);
+        }
+        let first = frames.suspend(CALLER.id, &[0, 2]).unwrap();
+        let second = frames.suspend(CALLER.id, &[2]).unwrap();
+        let callee = frames.enter(CALLEE).unwrap();
+        let relocated_base = callee.wrapping_sub(CALLER.words);
+        let expected = [relocated_base, relocated_base.wrapping_add(2)];
+        assert_eq!(frames.suspension_roots(), expected);
+        assert_eq!(unsafe { (*expected[0], *expected[1]) }, (11, 33));
+        assert_eq!(frames.resume(CALLER.id, second).unwrap(), relocated_base);
+        assert_eq!(frames.suspension_roots(), expected);
+        assert_eq!(frames.resume(CALLER.id, first).unwrap(), relocated_base);
+        assert!(frames.suspension_roots().is_empty());
+
+        frames.reset();
+        assert_eq!(frames.used_words(), 0);
+        assert_eq!(frames.high_water_words(), 0);
+        assert!(frames.suspension_roots().is_empty());
+        assert!(frames.reserved_words() >= CALLER.words + CALLEE.words);
+
+        let reused = frames.enter(CALLER).unwrap();
+        unsafe { reused.write(44) };
+        let third = frames.suspend(CALLER.id, &[0]).unwrap();
+        assert_eq!(frames.suspension_roots(), [reused]);
+        assert_eq!(frames.resume(CALLER.id, third).unwrap(), reused);
+        assert_eq!(unsafe { reused.read() }, 44);
     }
 }
 

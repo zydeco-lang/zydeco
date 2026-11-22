@@ -691,3 +691,42 @@ do result <- ! foreign -4611686018427387904;
     let error = CommandCompiler::test_io_with_libraries(executable, &[], "", paths).unwrap_err();
     assert!(error.to_string().contains("cannot load foreign library"), "{error}");
 }
+
+#[test]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn repeated_c_calls_recycle_runtime_instances_cleanly_with_string_work() {
+    let fixture = Fixture::new();
+    let builtin = Fixture::builtin();
+    let source = fixture.write(
+        "library.zy",
+        &format!(
+            r#"
+@[package(library(c, export(root, symbol("str_work"))), name(example/reusable))]
+param val (/Thk; /Ret; /Int; /String; /numeric; /text) : @(import({builtin:?})) in
+let int_to_string = numeric/int/to_string in
+let append = text/string/append in
+let byte_len = text/string/byte_length in
+({{ fn x =>
+  do s <- ! int_to_string x;
+  do a <- ! append "prefix:" s;
+  ! byte_len a
+}} : Thk (Int -> Ret Int))
+"#
+        ),
+    );
+    Fixture::success(&fixture.build(&source, "sharedlib", "reuse", &[]));
+    let manifest = fixture.manifest("reuse", "example.reusable", "sharedlib");
+    let executable = fixture.harness(
+        &manifest,
+        r#"
+int main(void) {
+    for (int64_t i = 0; i < 500; i++) {
+        int64_t expected = (i < 10) ? 8 : (i < 100) ? 9 : 10;
+        assert(str_work(i) == expected);
+    }
+    return 0;
+}
+"#,
+    );
+    Fixture::success(&Fixture::run(&executable));
+}

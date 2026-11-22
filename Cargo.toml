@@ -5,6 +5,7 @@ members = [
     "lang/derive",
     "lang/machine",
     "lang/abi",
+    "lang/host",
     "lang/syntax",
     "lang/surface",
     "lang/fmt",
@@ -46,6 +47,7 @@ zydeco-foundation = { path = "lang/foundation" }
 zydeco-derive = { path = "lang/derive" }
 zydeco-machine = { path = "lang/machine" }
 zydeco-abi = { path = "lang/abi" }
+zydeco-host = { path = "lang/host" }
 zydeco-syntax = { path = "lang/syntax" }
 zydeco-surface = { path = "lang/surface" }
 zydeco-fmt = { path = "lang/fmt" }
@@ -71,7 +73,6 @@ auto_impl = "1.3"
 strum = { version = "0.28", features = ["derive"] }
 # utils
 stacker = "0.1"
-rand = "0.10"
 tempfile = "3.27"
 libtest-mimic = "0.8"
 walkdir = "2"

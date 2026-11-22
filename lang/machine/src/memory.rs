@@ -153,6 +153,11 @@ impl RetainedMemory {
         }
         Ok(address)
     }
+
+    /// Release all retained allocations so an owned instance can be reused.
+    pub fn clear(&mut self) {
+        self.allocations.clear();
+    }
 }
 
 #[cfg(test)]
@@ -195,5 +200,8 @@ mod tests {
         }
         assert_eq!(unsafe { first.offset(1).bytes(3) }, b"ell");
         assert_eq!(unsafe { Address::NULL.bytes(0) }, b"");
+        retained.clear();
+        let fresh = retained.import(b"world").unwrap();
+        assert_eq!(unsafe { fresh.bytes(5) }, b"world");
     }
 }

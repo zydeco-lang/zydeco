@@ -1,0 +1,36 @@
+-- Builds > 2 MiB of simultaneously live linked nodes to exercise geometric GC growth.
+param (/numeric; /process; builtin) : @(import("../../std/builtin.zy")) in
+begin
+  let make_std = @(import("../../std/std.zy")) that
+  let (/bool; /int) = builtin |> make_std in
+  def Node : VType =
+    data
+    | +Nil : Unit
+    | +Cons : Int * Int * Int * Int * Int * Int * Int * Int * Node
+    end
+  that
+  @[format(verbatim)]
+  def fix build (n : Int) (acc : Node) : Ret Node =
+    do zero? <- ! int/eq n 0;
+    ! (bool/if)
+      (Ret Node)
+      zero?
+      { ret acc }
+      {
+        do n' <- ! int/sub n 1;
+        ! build n' +Cons(n', n', n', n', n', n', n', n', acc)
+      }
+  in
+  @[format(verbatim)]
+  def fix sum_nodes (xs : Node) (acc : Int) : Ret Int =
+    match xs
+    | +Nil() => ret acc
+    | +Cons(x, _, _, _, _, _, _, _, rest) =>
+      do acc' <- ! int/add acc x;
+      ! sum_nodes rest acc'
+    end
+  in
+  do list <- ! build 20000 +Nil();
+  do total <- ! sum_nodes list 0;
+  ! numeric/int/eq OS total 199990000 { ! process/exit 0 } { ! process/exit 1 }
+end

@@ -1,0 +1,58 @@
+-- Churns dynamic managed strings across dozens of collections while keeping roots live.
+param (/numeric; /text; /process; builtin) : @(import("../../std/builtin.zy")) in
+begin
+  let make_std = @(import("../../std/std.zy")) that
+  let (/bool; /int) = builtin |> make_std in
+  let string = text/string that
+  @[format(verbatim)]
+  def fix churn (i : Int) (anchor : String) (checksum : Int) : Ret String =
+    do zero? <- ! int/eq i 0;
+    ! (bool/if)
+      (Ret String)
+      zero?
+      {
+        ! numeric/int/eq
+          (Ret String)
+          checksum
+          12000
+          { ret anchor }
+          { ret "bad-checksum" }
+      }
+      {
+        do rendered <- ! int/to_string i;
+        do joined <- ! string/append rendered ":tail";
+        do ok? <- ! string/split_once
+          (Ret Int)
+          joined
+          ':'
+          { ret 0 }
+          {
+            fn prefix suffix =>
+              ! string/split_at
+                (Ret Int)
+                suffix
+                2
+                { ret 0 }
+                {
+                  fn left right =>
+                    do len <- ! string/length prefix;
+                    do left_len <- ! string/length left;
+                    ! numeric/int/gt
+                      (Ret Int)
+                      len
+                      0
+                      {
+                        ! numeric/int/eq (Ret Int) left_len 2 { ret 1 } { ret 0 }
+                      }
+                      { ret 0 }
+                }
+          };
+        do checksum' <- ! int/add checksum ok?;
+        do i' <- ! int/sub i 1;
+        ! churn i' anchor checksum'
+      }
+  in
+  do anchor <- ! string/append "anchor:" "live-root-42";
+  do result <- ! churn 12000 anchor 0;
+  ! string/eq OS result "anchor:live-root-42" { ! process/exit 0 } { ! process/exit 1 }
+end

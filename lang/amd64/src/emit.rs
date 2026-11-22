@@ -655,8 +655,6 @@ impl Emitter<'_> {
             Instr::Extern("zydeco_integer_division_by_zero".to_string()),
             Instr::Extern("zydeco_integer_remainder_by_zero".to_string()),
             Instr::Extern("zydeco_integer_out_of_range".to_string()),
-            // construct an owned host string from static UTF-8 bytes
-            Instr::Extern("zydeco_string_literal".to_string()),
             // source-to-C marshalling helpers
         ]);
         for integer in IntegerType::VARIANTS {
@@ -780,17 +778,17 @@ impl NativeStringLiteral {
         Self { label, bytes }
     }
 
-    fn length(&self) -> usize {
-        self.bytes.len()
-    }
-
-    fn declaration(self) -> [Instr; 3] {
-        let storage = if self.bytes.is_empty() { vec![0] } else { self.bytes };
-        [
+    fn declaration(self) -> Vec<Instr> {
+        let mut instrs = vec![
+            Instr::Align(8),
             Instr::Comment("UTF-8 string literal".to_string()),
             Instr::Label(self.label),
-            Instr::Db(ByteSequence(storage)),
-        ]
+            Instr::Dq(self.bytes.len().to_string()),
+        ];
+        if !self.bytes.is_empty() {
+            instrs.push(Instr::Db(ByteSequence(self.bytes)));
+        }
+        instrs
     }
 }
 impl JumpTable {
@@ -942,6 +940,12 @@ impl<'a> Emit<'a> for Terminator {
                     em.asm
                         .text
                         .push(Instr::Mov(MovArgs::ToReg(spare_register, Arg64::Reg(Reg::R11))));
+                } else if role.may_allocate_gc() {
+                    let stack_index = arity + 1;
+                    let stack_register = Emitter::argument_register(stack_index);
+                    em.asm
+                        .text
+                        .push(Instr::Mov(MovArgs::ToReg(stack_register, Arg64::Reg(Reg::Rsp))));
                 }
                 em.shift_stack_parity(-i64::try_from(*arity).expect("extern arity overflow"));
                 // All externs must be non-tail called so that we can restore the
@@ -1207,22 +1211,14 @@ impl<'a> Emit<'a> for Atom {
                     }
                     | Symbol::StringLiteral(s) => {
                         em.asm.text.push(Instr::Comment(format!("push_sym_str {:?}", s)));
-                        let literal = NativeStringLiteral::new(em.assembly.sym_label(sym_id), &s);
-                        let length = literal.length();
+                        let label = em.assembly.sym_label(sym_id);
                         em.asm.text.extend([
                             Instr::Lea(
-                                Reg::Rdi,
-                                LeaArgs::RelLabel(RelLabel { label: literal.label, offset: None }),
+                                Reg::Rax,
+                                LeaArgs::RelLabel(RelLabel { label, offset: None }),
                             ),
-                            Instr::Mov(MovArgs::ToReg(
-                                Reg::Rsi,
-                                Arg64::Unsigned(
-                                    u64::try_from(length).expect("string literal length overflow"),
-                                ),
-                            )),
+                            Instr::Push(Arg32::Reg(Reg::Rax)),
                         ]);
-                        em.emit_aligned_call(JmpArgs::Label("zydeco_string_literal".to_string()));
-                        em.asm.text.push(Instr::Push(Arg32::Reg(Reg::Rax)));
                         em.shift_stack_parity(1);
                     }
                 }

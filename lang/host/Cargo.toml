@@ -1,0 +1,26 @@
+[package]
+name = "zydeco-host"
+# Explicit metadata keeps this crate usable in standalone runtime bundles
+# without requiring workspace package inheritance.
+version = "0.3.0"
+rust-version = "1.97"
+edition = "2024"
+license = "MIT"
+description = "Shared garbage collector, managed strings, I/O handles, and entropy for Zydeco hosts"
+
+[features]
+default = ["std"]
+bundle = []
+std = ["zydeco-abi/std"]
+
+[dependencies]
+zydeco-machine = { workspace = true }
+zydeco-abi = { workspace = true }
+
+[lib]
+doctest = false
+
+[lints.clippy]
+debug_assert_with_mut_call = "warn"
+# Function-length budget; the threshold lives in `clippy.toml`.
+too_many_lines = "warn"

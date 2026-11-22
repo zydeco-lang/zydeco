@@ -239,17 +239,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600"
 
 [[package]]
-name = "chacha20"
-version = "0.10.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65c35e4b699c7e15ccbe7ee35c005e4fc0a278d22238a2857e6ce2dadeda1b06"
-dependencies = [
- "cfg-if",
- "cpufeatures",
- "rand_core",
-]
-
-[[package]]
 name = "clap"
 version = "4.6.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -719,7 +708,6 @@ dependencies = [
  "cfg-if",
  "libc",
  "r-efi",
- "rand_core",
 ]
 
 [[package]]
@@ -1485,23 +1473,6 @@ name = "r-efi"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
-
-[[package]]
-name = "rand"
-version = "0.10.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f6fa277c67e6ea590466f04c3fe82cb509f0864fe470643e5570de9514a9b11"
-dependencies = [
- "chacha20",
- "getrandom",
- "rand_core",
-]
-
-[[package]]
-name = "rand_core"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
 
 [[package]]
 name = "ratatui"
@@ -2628,11 +2599,13 @@ dependencies = [
  "thiserror",
  "toml_edit",
  "wasmparser",
+ "zydeco-abi",
  "zydeco-amd64",
  "zydeco-assembly",
  "zydeco-dynamics",
  "zydeco-fmt",
  "zydeco-foundation",
+ "zydeco-host",
  "zydeco-ir",
  "zydeco-machine",
  "zydeco-session",
@@ -2662,12 +2635,12 @@ dependencies = [
  "derive_more",
  "libffi",
  "pretty",
- "rand",
  "tempfile",
  "thiserror",
  "zydeco-abi",
  "zydeco-derive",
  "zydeco-foundation",
+ "zydeco-host",
  "zydeco-ir",
  "zydeco-machine",
  "zydeco-syntax",
@@ -2696,6 +2669,14 @@ dependencies = [
  "rustc-hash",
  "stacker",
  "thiserror",
+]
+
+[[package]]
+name = "zydeco-host"
+version = "0.3.0"
+dependencies = [
+ "zydeco-abi",
+ "zydeco-machine",
 ]
 
 [[package]]
@@ -2826,6 +2807,7 @@ dependencies = [
  "walkdir",
  "zydeco-assembly",
  "zydeco-cli",
+ "zydeco-host",
  "zydeco-ir",
  "zydeco-machine",
  "zydeco-session",

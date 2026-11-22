@@ -21,6 +21,17 @@ pub use host::*;
 pub use unit::*;
 pub use zydeco_machine::word::ScalarRepresentation;
 
+#[cfg(feature = "bundle")]
+pub mod bundle {
+    /// One source file in a self-contained copy of this crate.
+    pub struct SourceFile {
+        pub path: &'static str,
+        pub contents: &'static str,
+    }
+
+    include!(concat!(env!("OUT_DIR"), "/bundle.rs"));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

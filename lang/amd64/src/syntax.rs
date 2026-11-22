@@ -257,6 +257,8 @@ pub enum Instr {
     SetCC(ConditionCode, Reg8),
 
     // Define data
+    #[display("        align {_0}")]
+    Align(u32),
     #[display("        dq {_0}")]
     Dq(String),
     #[display("        db {_0}")]

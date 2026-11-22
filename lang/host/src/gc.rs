@@ -1,35 +1,29 @@
-//! A deliberately small two-space copying heap.
+//! A growable two-space copying heap.
 //!
-//! The layout follows the useful part of OCaml's runtime representation: every
-//! allocated block has a header, and the header says whether its payload contains
-//! values that the collector should scan.  Zydeco product blocks are scanned;
-//! opaque blocks are available for future boxed scalars or byte payloads.
-//!
-//! Collection is Cheney's breadth-first algorithm.  Roots are copied into the
-//! inactive semispace, then `scan` walks that space until it catches the allocation
-//! cursor.
-//! Each semispace has a block-start index; locating a payload's header reads one
-//! index region and one header, including for pointers into large blocks.
+//! Every allocated block starts with a two-word header declaring its payload size in words and
+//! whether the collector should scan its payload fields. Collection runs Cheney's breadth-first
+//! copying algorithm and doubles semispace capacity geometrically when live data outgrows the
+//! active space.
 //!
 //! Values use the same one-bit convention as OCaml: odd words are immediate values,
 //! while managed pointers are aligned and therefore even. Full-width scalars that
-//! cannot surrender a tag bit live in opaque one-word blocks. The collector can
-//! consequently distinguish immediates from pointer-shaped live words. The caller
-//! supplies slot liveness separately through root ranges and sparse addresses.
+//! cannot surrender a tag bit live in opaque one-word blocks. Each semispace maintains a
+//! block-start bitmap index so locating a block header for any interior pointer takes one region
+//! lookup and one header read.
 
-use std::{mem::size_of, ptr};
-
+use alloc::{boxed::Box, vec};
+use core::{mem::size_of, ptr};
 use zydeco_machine::native::{AllocationKind, IMMEDIATE_TAG, WORD_BYTES, Word};
 
 const FORWARDED_BIT: Word = 1;
 const TAG_MASK: Word = 0xff;
 
+/// Default initial semispace size (64 KiB) before geometric growth.
+pub const DEFAULT_INITIAL_SPACE_BYTES: usize = 64 * 1024;
+/// Reusable semispaces larger than 4 MiB shrink back to initial capacity on [`CheneyHeap::reset`].
+pub const REUSE_SHRINK_THRESHOLD_BYTES: usize = 4 * 1024 * 1024;
+
 /// The header immediately before every payload pointer returned to generated code.
-///
-/// `metadata` normally contains a [`AllocationKind`].  After a block has moved, its old
-/// header contains the new payload pointer with [`FORWARDED_BIT`] set.  Keeping the
-/// size in a separate word makes interior-pointer lookup possible even after a
-/// preceding block has been forwarded.
 #[derive(Clone, Copy)]
 #[repr(C)]
 struct BlockHeader {
@@ -39,7 +33,7 @@ struct BlockHeader {
 
 const HEADER_BYTES: usize = size_of::<BlockHeader>();
 const INDEX_REGION_WORDS: usize = Word::BITS as usize;
-pub(crate) const INDEX_REGION_BYTES: usize = INDEX_REGION_WORDS * WORD_BYTES;
+pub const INDEX_REGION_BYTES: usize = INDEX_REGION_WORDS * WORD_BYTES;
 
 const _: () = {
     assert!(size_of::<Word>() == WORD_BYTES, "the native runtime requires 64-bit words");
@@ -71,8 +65,6 @@ impl BlockHeader {
     }
 }
 
-/// Block headers starting in one 512-byte region, plus the header of a block
-/// crossing into it. The predecessor is unused when a preceding start bit exists.
 #[derive(Clone, Copy)]
 struct RegionStarts {
     headers: Word,
@@ -97,23 +89,19 @@ struct LookupWork {
 }
 
 /// An append-only index of block boundaries in one semispace.
-///
-/// Recording a block initializes each region it first touches. Starting again at
-/// offset zero therefore replaces stale metadata as the semispace is reused,
-/// without clearing its whole index or visiting dead blocks. Lookups must stay
-/// within the current allocation cursor; entries beyond it may be stale.
-struct BlockStartIndex<const REGIONS: usize> {
+struct BlockStartIndex {
     regions: Box<[RegionStarts]>,
     #[cfg(test)]
-    work: std::cell::Cell<LookupWork>,
+    work: core::cell::Cell<LookupWork>,
 }
 
-impl<const REGIONS: usize> BlockStartIndex<REGIONS> {
-    fn new() -> Self {
+impl BlockStartIndex {
+    fn new(space_bytes: usize) -> Self {
+        let count = space_bytes.div_ceil(INDEX_REGION_BYTES).max(1);
         Self {
-            regions: vec![RegionStarts::EMPTY; REGIONS].into_boxed_slice(),
+            regions: vec![RegionStarts::EMPTY; count].into_boxed_slice(),
             #[cfg(test)]
-            work: std::cell::Cell::new(LookupWork { regions: 0, headers: 0 }),
+            work: core::cell::Cell::new(LookupWork { regions: 0, headers: 0 }),
         }
     }
 
@@ -145,10 +133,6 @@ impl<const REGIONS: usize> BlockStartIndex<REGIONS> {
     }
 
     /// Find the owning payload with one index-region read and one header read.
-    ///
-    /// The prefix mask includes the pointer's word. A pointer to either word of
-    /// a header therefore selects that header and fails the payload bounds check,
-    /// even when the header straddles an index-region boundary.
     unsafe fn containing_block(
         &self, value: Word, from_base: *mut u8, from_used: usize,
     ) -> Option<LocatedBlock> {
@@ -180,13 +164,13 @@ impl<const REGIONS: usize> BlockStartIndex<REGIONS> {
     }
 }
 
-/// One statically sized and word-aligned semispace.
+/// One word-aligned semispace buffer.
 #[repr(align(8))]
-struct Space<const BYTES: usize>(Box<[Word]>);
+struct Space(Box<[Word]>);
 
-impl<const BYTES: usize> Space<BYTES> {
-    fn new() -> Self {
-        Self(vec![0; BYTES.div_ceil(WORD_BYTES)].into_boxed_slice())
+impl Space {
+    fn new(bytes: usize) -> Self {
+        Self(vec![0; bytes.div_ceil(WORD_BYTES)].into_boxed_slice())
     }
 
     fn base(&mut self) -> *mut u8 {
@@ -195,26 +179,25 @@ impl<const BYTES: usize> Space<BYTES> {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct OutOfMemory {
+pub struct OutOfMemory {
     pub requested_words: usize,
     pub live_bytes: usize,
     pub capacity_bytes: usize,
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct RootRange {
+pub struct RootRange {
     pub start: *mut Word,
     pub end: *mut Word,
 }
 
-pub(crate) struct Roots<'a> {
+pub struct Roots<'a> {
     pub stack: RootRange,
     pub slots: &'a mut [*mut Word],
 }
 
 /// Publish a complete root set only when collection needs to inspect it.
-/// A provider may allocate temporary address metadata before invoking `trace`.
-pub(crate) trait RootSource {
+pub trait RootSource {
     fn with_roots<T>(self, trace: impl FnOnce(Roots<'_>) -> T) -> T;
 }
 
@@ -224,56 +207,102 @@ impl RootSource for Roots<'_> {
     }
 }
 
-/// Two fixed semispaces and the cursor in the currently active one.
-///
-/// `BYTES` includes block headers. Each space additionally reserves two index
-/// words per 512 bytes (rounded up), or 3.125% for a whole number of regions.
-/// `REGIONS` is explicit because stable const generics cannot derive an array
-/// length from `BYTES`; construction checks their relationship.
-pub(crate) struct CheneyHeap<const BYTES: usize, const REGIONS: usize> {
-    spaces: [Space<BYTES>; 2],
-    starts: [BlockStartIndex<REGIONS>; 2],
+/// Two semispaces and the bump cursor in the currently active one.
+pub struct CheneyHeap {
+    spaces: [Space; 2],
+    starts: [BlockStartIndex; 2],
+    space_bytes: [usize; 2],
+    initial_bytes: usize,
+    max_bytes: Option<usize>,
+    next_to_capacity: usize,
     active: usize,
     used: usize,
     collections: usize,
 }
 
-impl<const BYTES: usize, const REGIONS: usize> CheneyHeap<BYTES, REGIONS> {
+impl Default for CheneyHeap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CheneyHeap {
     pub fn new() -> Self {
-        assert!(REGIONS == BYTES.div_ceil(INDEX_REGION_BYTES), "incorrect block index capacity");
+        Self::with_limits(DEFAULT_INITIAL_SPACE_BYTES, None)
+    }
+
+    /// Construct a heap with configurable initial semispace bytes and an optional growth ceiling.
+    pub fn with_limits(initial_bytes: usize, max_bytes: Option<usize>) -> Self {
+        assert!(initial_bytes >= HEADER_BYTES, "initial semispace must fit at least one header");
+        assert!(initial_bytes.is_multiple_of(WORD_BYTES), "semispace capacity must be aligned");
+        if let Some(max) = max_bytes {
+            assert!(max >= initial_bytes, "maximum heap capacity cannot be below initial size");
+            assert!(max.is_multiple_of(WORD_BYTES), "maximum heap capacity must be aligned");
+        }
         Self {
-            spaces: [Space::new(), Space::new()],
-            starts: [BlockStartIndex::new(), BlockStartIndex::new()],
+            spaces: [Space::new(initial_bytes), Space::new(initial_bytes)],
+            starts: [BlockStartIndex::new(initial_bytes), BlockStartIndex::new(initial_bytes)],
+            space_bytes: [initial_bytes, initial_bytes],
+            initial_bytes,
+            max_bytes,
+            next_to_capacity: initial_bytes,
             active: 0,
             used: 0,
             collections: 0,
         }
     }
 
-    /// Allocate a block, collecting first when the active semispace is full.
-    ///
-    /// The root source is invoked exactly once if collection is needed, and never
-    /// on the allocation fast path or for requests larger than one semispace.
-    /// Its stack range and sparse slot addresses are updated in place.
+    /// Current active semispace capacity in bytes.
+    pub fn capacity_bytes(&self) -> usize {
+        self.space_bytes[self.active]
+    }
+
+    /// Active bytes occupied by live/allocated blocks since the last collection.
+    pub fn used_bytes(&self) -> usize {
+        self.used
+    }
+
+    /// Number of copying collections performed on this heap.
+    pub fn collections(&self) -> usize {
+        self.collections
+    }
+
+    /// Reset cursor and live state for runtime instance reuse, shrinking oversized buffers.
+    pub fn reset(&mut self) {
+        self.active = 0;
+        self.used = 0;
+        self.collections = 0;
+        self.next_to_capacity = self.initial_bytes;
+        let shrink_limit = REUSE_SHRINK_THRESHOLD_BYTES.max(self.initial_bytes);
+        for index in 0..2 {
+            if self.space_bytes[index] > shrink_limit {
+                self.spaces[index] = Space::new(self.initial_bytes);
+                self.starts[index] = BlockStartIndex::new(self.initial_bytes);
+                self.space_bytes[index] = self.initial_bytes;
+            }
+        }
+    }
+
+    /// Allocate a block, collecting (and growing geometrically when needed) if full.
     ///
     /// # Safety
     ///
-    /// The source must publish every live root. Its stack range and every nonnull
-    /// slot address must be valid, word-aligned, writable, and exclusive to the
-    /// current runtime thread while its trace callback runs.
+    /// The root source must publish every live root. Its stack range and every nonnull slot
+    /// address must be valid, word-aligned, writable, and exclusive while `trace` runs.
     pub unsafe fn allocate(
         &mut self, size_words: usize, tag: AllocationKind, roots: impl RootSource,
     ) -> Result<*mut u8, OutOfMemory> {
         let cell_bytes = Self::cell_bytes(size_words).ok_or_else(|| self.oom(size_words))?;
-        if cell_bytes > BYTES {
+        if self.max_bytes.is_some_and(|max| cell_bytes > max) {
             return Err(self.oom(size_words));
         }
 
-        if self.used + cell_bytes > BYTES {
-            roots.with_roots(|roots| unsafe { self.collect(roots) });
-        }
-        if self.used + cell_bytes > BYTES {
-            return Err(self.oom(size_words));
+        if self.used.checked_add(cell_bytes).is_none_or(|total| total > self.capacity_bytes()) {
+            let fits = roots
+                .with_roots(|mut roots| unsafe { self.collect_or_grow(cell_bytes, &mut roots) });
+            if !fits {
+                return Err(self.oom(size_words));
+            }
         }
 
         let base = unsafe { self.active_base().add(self.used) };
@@ -284,12 +313,74 @@ impl<const BYTES: usize, const REGIONS: usize> CheneyHeap<BYTES, REGIONS> {
         Ok(payload)
     }
 
+    unsafe fn collect_or_grow(&mut self, cell_bytes: usize, roots: &mut Roots<'_>) -> bool {
+        let from_cap = self.capacity_bytes();
+        let mut target_cap = self.next_to_capacity.max(from_cap);
+        if cell_bytes > target_cap {
+            let Some(grown) = self.grown_capacity(cell_bytes) else {
+                return false;
+            };
+            target_cap = grown;
+        }
+        let to_index = 1 - self.active;
+        self.ensure_space(to_index, target_cap);
+        unsafe { self.collect(roots) };
+
+        let Some(needed) = self.used.checked_add(cell_bytes) else {
+            return false;
+        };
+        if needed > self.capacity_bytes() {
+            let Some(bigger) = self.grown_capacity(needed) else {
+                return false;
+            };
+            let next_to = 1 - self.active;
+            self.ensure_space(next_to, bigger);
+            unsafe { self.collect(roots) };
+        }
+
+        if let Some(doubled_live) = self.used.checked_mul(2)
+            && doubled_live > self.capacity_bytes()
+            && let Some(grown) = self.grown_capacity(doubled_live)
+        {
+            self.next_to_capacity = grown;
+        } else {
+            self.next_to_capacity = self.next_to_capacity.max(self.capacity_bytes());
+        }
+
+        self.used.checked_add(cell_bytes).is_some_and(|total| total <= self.capacity_bytes())
+    }
+
+    fn grown_capacity(&self, min_bytes: usize) -> Option<usize> {
+        let aligned_min = min_bytes.checked_next_multiple_of(WORD_BYTES)?;
+        if let Some(max) = self.max_bytes
+            && aligned_min > max
+        {
+            return None;
+        }
+        let doubled = self.capacity_bytes().saturating_mul(2);
+        let raw = doubled.max(aligned_min);
+        let target = raw.checked_next_power_of_two().unwrap_or(aligned_min);
+        Some(self.max_bytes.map_or(target, |max| target.min(max)))
+    }
+
+    fn ensure_space(&mut self, index: usize, target_bytes: usize) {
+        if self.space_bytes[index] < target_bytes {
+            self.spaces[index] = Space::new(target_bytes);
+            self.starts[index] = BlockStartIndex::new(target_bytes);
+            self.space_bytes[index] = target_bytes;
+        }
+    }
+
     fn cell_bytes(size_words: usize) -> Option<usize> {
         HEADER_BYTES.checked_add(size_words.checked_mul(WORD_BYTES)?)
     }
 
     fn oom(&self, requested_words: usize) -> OutOfMemory {
-        OutOfMemory { requested_words, live_bytes: self.used, capacity_bytes: BYTES }
+        OutOfMemory {
+            requested_words,
+            live_bytes: self.used,
+            capacity_bytes: self.capacity_bytes(),
+        }
     }
 
     fn active_base(&mut self) -> *mut u8 {
@@ -297,26 +388,33 @@ impl<const BYTES: usize, const REGIONS: usize> CheneyHeap<BYTES, REGIONS> {
     }
 
     /// Swap semispaces and copy the transitive closure of the roots.
-    unsafe fn collect(&mut self, roots: Roots<'_>) {
-        let Roots { stack, slots } = roots;
+    unsafe fn collect(&mut self, roots: &mut Roots<'_>) {
         let from_index = self.active;
         let to_index = 1 - from_index;
         let from_base = self.spaces[from_index].base();
         let to_base = self.spaces[to_index].base();
         let from_used = self.used;
+        let to_cap = self.space_bytes[to_index];
         let mut to_used = 0;
 
         unsafe {
-            self.forward_range(stack.start, stack.end, from_base, from_used, to_base, &mut to_used)
-        };
-        for root in slots.iter_mut().filter(|root| !root.is_null()) {
+            self.forward_range(
+                roots.stack.start,
+                roots.stack.end,
+                from_base,
+                from_used,
+                to_base,
+                &mut to_used,
+                to_cap,
+            );
+        }
+        for root in roots.slots.iter_mut().filter(|root| !root.is_null()) {
             let value = unsafe { **root };
-            unsafe { **root = self.forward(value, from_base, from_used, to_base, &mut to_used) };
+            unsafe {
+                **root = self.forward(value, from_base, from_used, to_base, &mut to_used, to_cap);
+            }
         }
 
-        // Cheney's queue is the copied part of to-space itself. Newly discovered
-        // blocks extend `to_used`; the loop ends exactly when every copied block has
-        // been scanned.
         let mut scan = 0;
         while scan < to_used {
             let header_pointer = unsafe { to_base.add(scan).cast::<BlockHeader>() };
@@ -328,8 +426,9 @@ impl<const BYTES: usize, const REGIONS: usize> CheneyHeap<BYTES, REGIONS> {
                 for index in 0..header.size_words {
                     let slot = unsafe { payload.add(index) };
                     let value = unsafe { slot.read() };
-                    let forwarded =
-                        unsafe { self.forward(value, from_base, from_used, to_base, &mut to_used) };
+                    let forwarded = unsafe {
+                        self.forward(value, from_base, from_used, to_base, &mut to_used, to_cap)
+                    };
                     unsafe { slot.write(forwarded) };
                 }
             }
@@ -342,15 +441,17 @@ impl<const BYTES: usize, const REGIONS: usize> CheneyHeap<BYTES, REGIONS> {
         self.collections += 1;
     }
 
+    #[allow(clippy::too_many_arguments)]
     unsafe fn forward_range(
         &mut self, start: *mut Word, end: *mut Word, from_base: *mut u8, from_used: usize,
-        to_base: *mut u8, to_used: &mut usize,
+        to_base: *mut u8, to_used: &mut usize, to_cap: usize,
     ) {
         debug_assert!(start <= end);
         let mut slot = start;
         while slot < end {
             let value = unsafe { slot.read() };
-            let forwarded = unsafe { self.forward(value, from_base, from_used, to_base, to_used) };
+            let forwarded =
+                unsafe { self.forward(value, from_base, from_used, to_base, to_used, to_cap) };
             unsafe { slot.write(forwarded) };
             slot = unsafe { slot.add(1) };
         }
@@ -359,7 +460,7 @@ impl<const BYTES: usize, const REGIONS: usize> CheneyHeap<BYTES, REGIONS> {
     /// Copy the block containing `value`, preserving an interior pointer's offset.
     unsafe fn forward(
         &mut self, value: Word, from_base: *mut u8, from_used: usize, to_base: *mut u8,
-        to_used: &mut usize,
+        to_used: &mut usize, to_cap: usize,
     ) -> Word {
         let Some(LocatedBlock { header: old_header, contents: old_header_value, interior_offset }) =
             (unsafe { self.starts[self.active].containing_block(value, from_base, from_used) })
@@ -372,35 +473,22 @@ impl<const BYTES: usize, const REGIONS: usize> CheneyHeap<BYTES, REGIONS> {
 
         let cell_bytes = Self::cell_bytes(old_header_value.size_words)
             .expect("a heap block has an invalid size");
-        // The live graph was allocated in from-space and therefore fits in one
-        // semispace. This assertion documents the Cheney invariant directly.
-        assert!(*to_used + cell_bytes <= BYTES, "live data does not fit in to-space");
+        assert!(*to_used + cell_bytes <= to_cap, "live data does not fit in to-space");
         let new_header = unsafe { to_base.add(*to_used).cast::<BlockHeader>() };
         unsafe { ptr::copy_nonoverlapping(old_header.cast::<u8>(), new_header.cast(), cell_bytes) };
         let new_payload = unsafe { new_header.cast::<u8>().add(HEADER_BYTES) };
         unsafe { (*old_header).set_forwarded_to(new_payload) };
-        // A copied header must carry its ordinary tag, not a forwarding address.
         unsafe { (*new_header).metadata = old_header_value.metadata };
         self.starts[1 - self.active].record(*to_used, cell_bytes);
         *to_used += cell_bytes;
         (unsafe { new_payload.add(interior_offset) }) as Word
     }
-
-    #[cfg(test)]
-    fn used_bytes(&self) -> usize {
-        self.used
-    }
-
-    #[cfg(test)]
-    fn collections(&self) -> usize {
-        self.collections
-    }
 }
 
-/// Generated Tests
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::vec::Vec;
 
     struct TestRoots<const N: usize> {
         words: [Word; N],
@@ -416,18 +504,17 @@ mod tests {
             Roots { stack: RootRange { start, end: unsafe { start.add(N) } }, slots: &mut [] }
         }
 
-        unsafe fn allocate<const BYTES: usize, const REGIONS: usize>(
-            &mut self, heap: &mut CheneyHeap<BYTES, REGIONS>, words: usize, tag: AllocationKind,
+        unsafe fn allocate(
+            &mut self, heap: &mut CheneyHeap, words: usize, tag: AllocationKind,
         ) -> Result<*mut u8, OutOfMemory> {
             unsafe { heap.allocate(words, tag, self.roots()) }
         }
 
-        unsafe fn collect<const BYTES: usize, const REGIONS: usize>(
-            &mut self, heap: &mut CheneyHeap<BYTES, REGIONS>,
-        ) -> LookupWork {
+        unsafe fn collect(&mut self, heap: &mut CheneyHeap) -> LookupWork {
             let from_index = heap.active;
             heap.starts[from_index].work.set(LookupWork::default());
-            unsafe { heap.collect(self.roots()) };
+            let mut roots = self.roots();
+            unsafe { heap.collect(&mut roots) };
             heap.starts[from_index].work.get()
         }
     }
@@ -444,12 +531,9 @@ mod tests {
 
     #[test]
     fn index_accepts_payloads_and_rejects_headers_and_unused_space() {
-        let mut heap = CheneyHeap::<4096, 8>::new();
+        let mut heap = CheneyHeap::with_limits(4096, Some(4096));
         let mut roots = TestRoots::new([]);
         let base = heap.active_base();
-        // The third header starts at word 63 and crosses into the next region;
-        // the seventh starts exactly at a region boundary. Empty blocks, large
-        // blocks, and partial regions exercise payload bounds.
         let blocks = [1, 58, 1, 0, 1, 119, 3, 0, 190, 64, 1]
             .into_iter()
             .map(|words| {
@@ -487,10 +571,8 @@ mod tests {
 
     #[test]
     fn large_product_aliases_survive_semispace_reuse() {
-        let mut heap = CheneyHeap::<4096, 8>::new();
+        let mut heap = CheneyHeap::with_limits(4096, Some(4096));
         let mut roots = TestRoots::new([IMMEDIATE_TAG; 4]);
-        // These old starts will lie inside the large product when this space is
-        // reused. Its index must replace them, including the final partial region.
         for _ in 0..32 {
             let garbage = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned) }.unwrap();
             unsafe { write_words(garbage, &[IMMEDIATE_TAG]) };
@@ -531,8 +613,6 @@ mod tests {
             }
         }
 
-        // Shrink the live set, then append a block over old index entries. Lookup
-        // must ignore stale entries both inside its new payload and past `used`.
         let leaf = roots.words[3];
         roots.words.fill(leaf);
         unsafe { roots.collect(&mut heap) };
@@ -558,7 +638,7 @@ mod tests {
     #[test]
     fn chain_lookup_work_grows_linearly_with_live_edges() {
         for blocks in [1024, 2048, 4096, 8192, 16384] {
-            let mut heap = CheneyHeap::<{ 512 * 1024 }, 1024>::new();
+            let mut heap = CheneyHeap::with_limits(512 * 1024, Some(512 * 1024));
             let mut roots = TestRoots::new([IMMEDIATE_TAG]);
             for _ in 0..blocks {
                 let previous = roots.words[0];
@@ -582,7 +662,7 @@ mod tests {
     #[test]
     fn alias_lookup_work_is_independent_of_dead_block_count() {
         for blocks in [1024, 4096, 16384] {
-            let mut heap = CheneyHeap::<{ 512 * 1024 }, 1024>::new();
+            let mut heap = CheneyHeap::with_limits(512 * 1024, Some(512 * 1024));
             let mut roots = TestRoots::new([IMMEDIATE_TAG]);
             for _ in 0..blocks {
                 let payload =
@@ -602,7 +682,7 @@ mod tests {
     #[test]
     fn interior_lookup_work_is_independent_of_block_size() {
         for words in [64, 1024, 16384] {
-            let mut heap = CheneyHeap::<{ 512 * 1024 }, 1024>::new();
+            let mut heap = CheneyHeap::with_limits(512 * 1024, Some(512 * 1024));
             let mut roots = TestRoots::new([IMMEDIATE_TAG]);
             let payload =
                 unsafe { roots.allocate(&mut heap, words, AllocationKind::Opaque) }.unwrap();
@@ -617,7 +697,7 @@ mod tests {
 
     #[test]
     fn copies_reachable_blocks_and_rewrites_edges() {
-        let mut heap = CheneyHeap::<128, 1>::new();
+        let mut heap = CheneyHeap::with_limits(128, Some(128));
         let mut roots = TestRoots::new([0]);
         let leaf = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned).unwrap() };
         unsafe { write_words(leaf, &[immediate(41)]) };
@@ -637,8 +717,8 @@ mod tests {
                     immediate(5),
                     immediate(6),
                 ],
-            )
-        };
+            );
+        }
         let old_parent = roots.words[0];
         let fresh = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned).unwrap() };
         unsafe { write_words(fresh, &[immediate(99)]) };
@@ -653,7 +733,7 @@ mod tests {
 
     #[test]
     fn tagged_immediate_cannot_be_mistaken_for_a_heap_pointer() {
-        let mut heap = CheneyHeap::<80, 1>::new();
+        let mut heap = CheneyHeap::with_limits(80, Some(80));
         let mut roots = TestRoots::new([0]);
         let target = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned).unwrap() };
         let pointer_shaped_payload = target as Word | IMMEDIATE_TAG;
@@ -671,7 +751,7 @@ mod tests {
 
     #[test]
     fn preserves_interior_product_pointers() {
-        let mut heap = CheneyHeap::<104, 1>::new();
+        let mut heap = CheneyHeap::with_limits(104, Some(104));
         let mut roots = TestRoots::new([0]);
         let product = unsafe { roots.allocate(&mut heap, 3, AllocationKind::Scanned).unwrap() };
         unsafe { write_words(product, &[immediate(10), immediate(20), immediate(30)]) };
@@ -692,7 +772,7 @@ mod tests {
 
     #[test]
     fn forwarding_breaks_cycles_without_a_mark_stack() {
-        let mut heap = CheneyHeap::<96, 1>::new();
+        let mut heap = CheneyHeap::with_limits(96, Some(96));
         let mut roots = TestRoots::new([0]);
         let first = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned).unwrap() };
         let second = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned).unwrap() };
@@ -714,7 +794,7 @@ mod tests {
 
     #[test]
     fn opaque_blocks_do_not_trace_payload_words() {
-        let mut heap = CheneyHeap::<96, 1>::new();
+        let mut heap = CheneyHeap::with_limits(96, Some(96));
         let mut roots = TestRoots::new([0]);
         let target = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned).unwrap() };
         unsafe { write_words(target, &[immediate(77)]) };
@@ -732,7 +812,7 @@ mod tests {
 
     #[test]
     fn rewrites_registered_host_roots() {
-        let mut heap = CheneyHeap::<80, 1>::new();
+        let mut heap = CheneyHeap::with_limits(80, Some(80));
         let mut roots = TestRoots::new([]);
         let target = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned).unwrap() };
         unsafe { write_words(target, &[immediate(55)]) };
@@ -740,7 +820,7 @@ mod tests {
 
         let garbage = unsafe { roots.allocate(&mut heap, 2, AllocationKind::Scanned).unwrap() };
         unsafe { write_words(garbage, &[immediate(1), immediate(2)]) };
-        let mut host_slots = [std::ptr::addr_of_mut!(host_value)];
+        let mut host_slots = [ptr::addr_of_mut!(host_value)];
         let empty = ptr::null_mut();
         let root_set =
             Roots { stack: RootRange { start: empty, end: empty }, slots: &mut host_slots };
@@ -755,7 +835,7 @@ mod tests {
 
     #[test]
     fn reports_oom_when_the_live_set_leaves_no_room() {
-        let mut heap = CheneyHeap::<64, 1>::new();
+        let mut heap = CheneyHeap::with_limits(64, Some(64));
         let mut roots = TestRoots::new([0, 0]);
         let first = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned).unwrap() };
         unsafe { write_words(first, &[immediate(0)]) };
@@ -768,8 +848,6 @@ mod tests {
         assert_eq!(error.requested_words, 1);
         assert_eq!(error.live_bytes, 2 * (HEADER_BYTES + WORD_BYTES));
         assert_eq!(error.capacity_bytes, 64);
-        // Failed allocation still leaves a valid copied graph and index. Dropping
-        // one root makes room for the next allocation through another collection.
         assert!(
             roots.words.iter().all(|&root| unsafe { (root as *const Word).read() == immediate(0) })
         );
@@ -779,5 +857,54 @@ mod tests {
         assert_eq!(heap.collections(), 2);
         assert_eq!(heap.used_bytes(), 2 * (HEADER_BYTES + WORD_BYTES));
         assert_eq!(unsafe { (roots.words[0] as *const Word).read() }, immediate(0));
+    }
+
+    #[test]
+    fn geometric_growth_preserves_live_graphs_and_interior_pointers() {
+        let mut heap = CheneyHeap::with_limits(128, None);
+        let mut roots = TestRoots::new([IMMEDIATE_TAG, IMMEDIATE_TAG]);
+        // Build 2,048 live 2-word nodes (~64 KiB total cell bytes) starting from 128 B.
+        for index in 0..2048 {
+            let payload = unsafe { roots.allocate(&mut heap, 2, AllocationKind::Scanned) }.unwrap();
+            // Read `roots.words[0]` after allocation in case collection relocated it.
+            let previous = roots.words[0];
+            unsafe { write_words(payload, &[previous, immediate(index)]) };
+            roots.words[0] = payload as Word;
+            if index == 100 {
+                roots.words[1] = unsafe { payload.add(WORD_BYTES) } as Word;
+            }
+        }
+        assert!(heap.capacity_bytes() >= 64 * 1024);
+        assert_eq!(unsafe { (roots.words[1] as *const Word).read() }, immediate(100));
+
+        let mut node = roots.words[0];
+        for expected in (0..2048).rev() {
+            let words = node as *const Word;
+            assert_eq!(unsafe { words.add(1).read() }, immediate(expected));
+            node = unsafe { words.read() };
+        }
+        assert_eq!(node, IMMEDIATE_TAG);
+    }
+
+    #[test]
+    fn single_large_allocation_grows_semispace_and_reset_shrinks_oversized_buffers() {
+        let mut heap = CheneyHeap::with_limits(DEFAULT_INITIAL_SPACE_BYTES, None);
+        let mut roots = TestRoots::new([IMMEDIATE_TAG]);
+        let retained = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned) }.unwrap();
+        unsafe { write_words(retained, &[immediate(42)]) };
+        roots.words[0] = retained as Word;
+
+        // Allocate > 4 MiB in one opaque block, forcing growth past REUSE_SHRINK_THRESHOLD_BYTES.
+        let large_words = 600_000;
+        let large =
+            unsafe { roots.allocate(&mut heap, large_words, AllocationKind::Opaque) }.unwrap();
+        unsafe { write_words(large, &[immediate(99)]) };
+        assert!(heap.capacity_bytes() > REUSE_SHRINK_THRESHOLD_BYTES);
+        assert_eq!(unsafe { (roots.words[0] as *const Word).read() }, immediate(42));
+
+        heap.reset();
+        assert_eq!(heap.used_bytes(), 0);
+        assert_eq!(heap.collections(), 0);
+        assert_eq!(heap.space_bytes, [DEFAULT_INITIAL_SPACE_BYTES, DEFAULT_INITIAL_SPACE_BYTES]);
     }
 }

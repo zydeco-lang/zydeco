@@ -230,6 +230,11 @@ impl LibraryDigest {
         paths.sort();
         let mut hash = Sha3_256::new();
         hash.update(zydeco_machine::native::ENTRY_SYMBOL);
+        hash.update([0]);
+        hash.update(zydeco_abi::bundle::DIGEST);
+        hash.update([0]);
+        hash.update(zydeco_host::bundle::DIGEST);
+        hash.update([0]);
         for path in paths.into_iter().filter(|path| path.is_file()) {
             // Build products and lockfiles are not runtime source inputs.
             if path.extension().is_some_and(|ext| ext == "rs")

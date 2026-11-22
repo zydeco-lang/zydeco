@@ -52,37 +52,58 @@ impl BuildOptions {
             .map_err(NativeError::PackageRuntimeModel)?
             .parse::<toml_edit::DocumentMut>()
             .map_err(NativeError::RuntimeManifest)?;
-        let inherits_model = manifest
-            .get("dependencies")
-            .and_then(|item| item.get("zydeco-machine"))
-            .and_then(|item| item.get("workspace"))
-            .and_then(toml_edit::Item::as_bool);
-        if inherits_model != Some(true) {
-            return Err(NativeError::RuntimeModelDependency);
+        for (crate_name, directory_name) in
+            [("zydeco-machine", "machine"), ("zydeco-abi", "abi"), ("zydeco-host", "host")]
+        {
+            let inherits_crate = manifest
+                .get("dependencies")
+                .and_then(|item| item.get(crate_name))
+                .and_then(|item| item.get("workspace"))
+                .and_then(toml_edit::Item::as_bool);
+            if inherits_crate != Some(true) {
+                return Err(NativeError::RuntimeModelDependency);
+            }
+            let dependency = manifest
+                .get_mut("workspace")
+                .and_then(|item| item.get_mut("dependencies"))
+                .and_then(|item| item.get_mut(crate_name))
+                .and_then(toml_edit::Item::as_table_like_mut)
+                .ok_or(NativeError::RuntimeModelDependency)?;
+            dependency.insert("path", toml_edit::value(directory_name));
         }
-        let dependency = manifest
-            .get_mut("workspace")
-            .and_then(|item| item.get_mut("dependencies"))
-            .and_then(|item| item.get_mut("zydeco-machine"))
-            .and_then(toml_edit::Item::as_table_like_mut)
-            .ok_or(NativeError::RuntimeModelDependency)?;
-        dependency.insert("path", toml_edit::value("machine"));
 
         // Use the compiler's embedded sources, including when installed outside this
-        // repository. Remove previous generated sources so deleted model files cannot
+        // repository. Remove previous generated sources so deleted bundle files cannot
         // influence the next build's identity.
-        let model_dir = self.build_dir.join("machine");
-        if model_dir.exists() {
-            std::fs::remove_dir_all(&model_dir).map_err(NativeError::PackageRuntimeModel)?;
-        }
-        for source in zydeco_machine::bundle::FILES {
-            let path = model_dir.join(source.path);
-            std::fs::create_dir_all(path.parent().unwrap())
-                .map_err(NativeError::PackageRuntimeModel)?;
-            std::fs::write(path, source.contents).map_err(NativeError::PackageRuntimeModel)?;
-        }
+        Self::unpack_bundle(
+            &self.build_dir.join("machine"),
+            zydeco_machine::bundle::FILES.iter().map(|source| (source.path, source.contents)),
+        )?;
+        Self::unpack_bundle(
+            &self.build_dir.join("abi"),
+            zydeco_abi::bundle::FILES.iter().map(|source| (source.path, source.contents)),
+        )?;
+        Self::unpack_bundle(
+            &self.build_dir.join("host"),
+            zydeco_host::bundle::FILES.iter().map(|source| (source.path, source.contents)),
+        )?;
         std::fs::write(manifest_path, manifest.to_string())
             .map_err(NativeError::PackageRuntimeModel)
+    }
+
+    fn unpack_bundle<'a>(
+        target_dir: &Path, entries: impl Iterator<Item = (&'a str, &'a str)>,
+    ) -> Result<(), NativeError> {
+        if target_dir.exists() {
+            std::fs::remove_dir_all(target_dir).map_err(NativeError::PackageRuntimeModel)?;
+        }
+        for (relative, contents) in entries {
+            let path = target_dir.join(relative);
+            std::fs::create_dir_all(path.parent().unwrap())
+                .map_err(NativeError::PackageRuntimeModel)?;
+            std::fs::write(path, contents).map_err(NativeError::PackageRuntimeModel)?;
+        }
+        Ok(())
     }
 
     pub fn link_amd64(
@@ -225,103 +246,84 @@ impl BuildOptions {
             .map_err(NativeError::PrepareBuildDirectory)?;
 
         let machine_rlib = stage_dir.join("libzydeco_machine.rlib");
-        NativeTool::Rustc.run(
-            Command::new("rustc")
-                .arg(prepared_dir.join("machine/src/lib.rs"))
-                .args([
-                    "--crate-name",
-                    "zydeco_machine",
-                    "--crate-type",
-                    "rlib",
-                    "--edition",
-                    "2024",
-                    "--target",
-                    target_triple,
-                    "--cfg",
-                    "feature=\"runtime\"",
-                    "-C",
-                    "opt-level=2",
-                    "-C",
-                    "codegen-units=1",
-                    "-C",
-                    "panic=abort",
-                    "-C",
-                    "lto=off",
-                    "-C",
-                    "relocation-model=pic",
-                ])
-                .env("OUT_DIR", &machine_out)
-                .arg("-o")
-                .arg(&machine_rlib),
+        Self::compile_runtime_crate(
+            &prepared_dir.join("machine/src/lib.rs"),
+            "zydeco_machine",
+            "rlib",
+            target_triple,
+            Some("feature=\"runtime\""),
+            &[],
+            Some(("OUT_DIR", &machine_out)),
+            None,
+            &machine_rlib,
         )?;
 
+        let abi_rlib = stage_dir.join("libzydeco_abi.rlib");
+        Self::compile_runtime_crate(
+            &prepared_dir.join("abi/src/lib.rs"),
+            "zydeco_abi",
+            "rlib",
+            target_triple,
+            Some("feature=\"std\""),
+            &[("zydeco_machine", &machine_rlib)],
+            None,
+            None,
+            &abi_rlib,
+        )?;
+
+        let host_rlib = stage_dir.join("libzydeco_host.rlib");
+        Self::compile_runtime_crate(
+            &prepared_dir.join("host/src/lib.rs"),
+            "zydeco_host",
+            "rlib",
+            target_triple,
+            Some("feature=\"std\""),
+            &[("zydeco_machine", &machine_rlib), ("zydeco_abi", &abi_rlib)],
+            None,
+            None,
+            &host_rlib,
+        )?;
+
+        let runtime_externs = [
+            ("zydeco_machine", machine_rlib.as_path()),
+            ("zydeco_abi", abi_rlib.as_path()),
+            ("zydeco_host", host_rlib.as_path()),
+        ];
         let runtime_rlib = stage_dir.join("libzydeco_runtime.rlib");
-        NativeTool::Rustc.run(
-            Command::new("rustc")
-                .arg(prepared_dir.join("stub.rs"))
-                .args([
-                    "--crate-name",
-                    "zydeco_runtime",
-                    "--crate-type",
-                    "rlib",
-                    "--edition",
-                    "2024",
-                    "--target",
-                    target_triple,
-                    "--cfg",
-                    "feature=\"process-entry\"",
-                    "-C",
-                    "opt-level=2",
-                    "-C",
-                    "codegen-units=1",
-                    "-C",
-                    "panic=abort",
-                    "-C",
-                    "lto=off",
-                    "-C",
-                    "relocation-model=pic",
-                ])
-                .arg("--extern")
-                .arg(format!("zydeco_machine={}", machine_rlib.display()))
-                .arg("-o")
-                .arg(&runtime_rlib),
+        Self::compile_runtime_crate(
+            &prepared_dir.join("stub.rs"),
+            "zydeco_runtime",
+            "rlib",
+            target_triple,
+            Some("feature=\"process-entry\""),
+            &runtime_externs,
+            None,
+            Some(&stage_dir),
+            &runtime_rlib,
         )?;
 
         let runtime_staticlib = stage_dir.join("libzydeco_runtime.a");
-        NativeTool::Rustc.run(
-            Command::new("rustc")
-                .arg(prepared_dir.join("stub.rs"))
-                .args([
-                    "--crate-name",
-                    "zydeco_runtime",
-                    "--crate-type",
-                    "staticlib",
-                    "--edition",
-                    "2024",
-                    "--target",
-                    target_triple,
-                    "-C",
-                    "opt-level=2",
-                    "-C",
-                    "codegen-units=1",
-                    "-C",
-                    "panic=abort",
-                    "-C",
-                    "lto=off",
-                    "-C",
-                    "relocation-model=pic",
-                ])
-                .arg("--remap-path-prefix")
-                .arg(format!("{}=/zydeco-runtime", prepared_dir.display()))
-                .arg("--extern")
-                .arg(format!("zydeco_machine={}", machine_rlib.display()))
-                .arg("-o")
-                .arg(&runtime_staticlib),
-        )?;
+        let mut staticlib_cmd = Self::rustc_runtime_command(
+            &prepared_dir.join("stub.rs"),
+            "zydeco_runtime",
+            "staticlib",
+            target_triple,
+            None,
+            &runtime_externs,
+            None,
+            Some(&stage_dir),
+            &runtime_staticlib,
+        );
+        staticlib_cmd
+            .arg("--remap-path-prefix")
+            .arg(format!("{}=/zydeco-runtime", prepared_dir.display()));
+        NativeTool::Rustc.run(&mut staticlib_cmd)?;
 
         std::fs::create_dir_all(&entry_dir).map_err(NativeError::PrepareBuildDirectory)?;
         for (source, destination) in [
             (&machine_rlib, &cached.machine_rlib),
+            (&abi_rlib, &cached.abi_rlib),
+            (&host_rlib, &cached.host_rlib),
             (&runtime_rlib, &cached.rlib),
             (&runtime_staticlib, &cached.staticlib),
         ] {
@@ -329,6 +331,69 @@ impl BuildOptions {
         }
         std::fs::write(&cached.ready_marker, b"ok").map_err(NativeError::PrepareBuildDirectory)?;
         Ok(cached)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn rustc_runtime_command(
+        root_source: &Path, crate_name: &str, crate_type: &str, target_triple: &str,
+        cfg_flag: Option<&str>, externs: &[(&str, &Path)], env_dir: Option<(&str, &Path)>,
+        dependency_dir: Option<&Path>, output: &Path,
+    ) -> Command {
+        let mut command = Command::new("rustc");
+        command.arg(root_source).args([
+            "--crate-name",
+            crate_name,
+            "--crate-type",
+            crate_type,
+            "--edition",
+            "2024",
+            "--target",
+            target_triple,
+            "-C",
+            "opt-level=2",
+            "-C",
+            "codegen-units=1",
+            "-C",
+            "panic=abort",
+            "-C",
+            "lto=off",
+            "-C",
+            "relocation-model=pic",
+        ]);
+        if let Some(cfg) = cfg_flag {
+            command.args(["--cfg", cfg]);
+        }
+        if let Some(dir) = dependency_dir {
+            command.arg("-L").arg(format!("dependency={}", dir.display()));
+        }
+        for (name, path) in externs {
+            command.arg("--extern").arg(format!("{name}={}", path.display()));
+        }
+        if let Some((key, value)) = env_dir {
+            command.env(key, value);
+        }
+        command.arg("-o").arg(output);
+        command
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn compile_runtime_crate(
+        root_source: &Path, crate_name: &str, crate_type: &str, target_triple: &str,
+        cfg_flag: Option<&str>, externs: &[(&str, &Path)], env_dir: Option<(&str, &Path)>,
+        dependency_dir: Option<&Path>, output: &Path,
+    ) -> Result<(), NativeError> {
+        let mut command = Self::rustc_runtime_command(
+            root_source,
+            crate_name,
+            crate_type,
+            target_triple,
+            cfg_flag,
+            externs,
+            env_dir,
+            dependency_dir,
+            output,
+        );
+        NativeTool::Rustc.run(&mut command)
     }
 
     fn publish_executable(source: &Path, destination: &Path) -> Result<(), NativeError> {
@@ -350,6 +415,8 @@ impl BuildOptions {
 pub(crate) struct CachedRuntime {
     pub(crate) dir: PathBuf,
     pub(crate) machine_rlib: PathBuf,
+    pub(crate) abi_rlib: PathBuf,
+    pub(crate) host_rlib: PathBuf,
     pub(crate) rlib: PathBuf,
     pub(crate) staticlib: PathBuf,
     ready_marker: PathBuf,
@@ -359,6 +426,8 @@ impl CachedRuntime {
     fn at(dir: PathBuf) -> Self {
         Self {
             machine_rlib: dir.join("libzydeco_machine.rlib"),
+            abi_rlib: dir.join("libzydeco_abi.rlib"),
+            host_rlib: dir.join("libzydeco_host.rlib"),
             rlib: dir.join("libzydeco_runtime.rlib"),
             staticlib: dir.join("libzydeco_runtime.a"),
             ready_marker: dir.join(".ready"),
@@ -369,6 +438,8 @@ impl CachedRuntime {
     fn is_ready(&self) -> bool {
         self.ready_marker.is_file()
             && self.machine_rlib.is_file()
+            && self.abi_rlib.is_file()
+            && self.host_rlib.is_file()
             && self.rlib.is_file()
             && self.staticlib.is_file()
     }
@@ -387,7 +458,7 @@ impl Drop for CacheLockGuard {
 fn runtime_cache_root() -> PathBuf {
     std::env::var_os("ZYDECO_RUNTIME_CACHE_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|| std::env::temp_dir().join("zydeco-runtime-cache-v1"))
+        .unwrap_or_else(|| std::env::temp_dir().join("zydeco-runtime-cache-v2"))
 }
 
 fn acquire_cache_lock(
@@ -480,6 +551,14 @@ mod tests {
             manifest["workspace"]["dependencies"]["zydeco-machine"]["path"].as_str(),
             Some("machine"),
         );
+        assert_eq!(
+            manifest["workspace"]["dependencies"]["zydeco-abi"]["path"].as_str(),
+            Some("abi")
+        );
+        assert_eq!(
+            manifest["workspace"]["dependencies"]["zydeco-host"]["path"].as_str(),
+            Some("host"),
+        );
         for source in zydeco_machine::bundle::FILES {
             assert_eq!(
                 std::fs::read_to_string(directory.path().join("machine").join(source.path))
@@ -487,12 +566,31 @@ mod tests {
                 source.contents,
             );
         }
+        for source in zydeco_abi::bundle::FILES {
+            assert_eq!(
+                std::fs::read_to_string(directory.path().join("abi").join(source.path)).unwrap(),
+                source.contents,
+            );
+        }
+        for source in zydeco_host::bundle::FILES {
+            assert_eq!(
+                std::fs::read_to_string(directory.path().join("host").join(source.path)).unwrap(),
+                source.contents,
+            );
+        }
+        for subdir in ["machine", "abi", "host"] {
+            let manifest =
+                std::fs::read_to_string(directory.path().join(subdir).join("Cargo.toml"))
+                    .unwrap()
+                    .parse::<toml_edit::DocumentMut>()
+                    .unwrap();
+            assert!(manifest["package"]["version"].is_str());
+            assert!(manifest["package"]["edition"].is_str());
+        }
         let model = std::fs::read_to_string(directory.path().join("machine/Cargo.toml"))
             .unwrap()
             .parse::<toml_edit::DocumentMut>()
             .unwrap();
-        assert!(model["package"]["version"].is_str());
-        assert!(model["package"]["edition"].is_str());
         assert!(!model.contains_key("dependencies"));
     }
 

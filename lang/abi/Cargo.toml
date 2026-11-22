@@ -1,15 +1,16 @@
 [package]
 name = "zydeco-abi"
-version = { workspace = true }
-rust-version = { workspace = true }
-edition = { workspace = true }
-repository = { workspace = true }
-license = { workspace = true }
-readme = { workspace = true }
+# Explicit metadata keeps this crate usable in standalone runtime bundles
+# without requiring workspace package inheritance.
+version = "0.3.0"
+rust-version = "1.97"
+edition = "2024"
+license = "MIT"
 description = "Shared builtin, FFI, and host contracts across Zydeco frontend, backends, and runtime"
 
 [features]
 default = []
+bundle = []
 std = []
 serde = ["dep:serde"]
 
@@ -20,5 +21,7 @@ serde = { workspace = true, optional = true }
 [lib]
 doctest = false
 
-[lints]
-workspace = true
+[lints.clippy]
+debug_assert_with_mut_call = "warn"
+# Function-length budget; the threshold lives in `clippy.toml`.
+too_many_lines = "warn"

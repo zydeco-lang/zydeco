@@ -1,7 +1,4 @@
-// The native executable links a generated entry point. Include its independent
-// collector here so its unit tests also run in the workspace suite on every host.
-#[path = "../../../../runtime/gc.rs"]
-mod gc;
+use zydeco_host::gc;
 
 struct CountedRoots<'a> {
     calls: &'a std::cell::Cell<usize>,
@@ -19,7 +16,7 @@ impl gc::RootSource for CountedRoots<'_> {
 fn allocation_publishes_roots_only_when_collection_needs_them() {
     use gc::{CheneyHeap, RootRange, Roots};
     use zydeco_machine::native::{AllocationKind, Word};
-    let mut heap = CheneyHeap::<64, 1>::new();
+    let mut heap = CheneyHeap::with_limits(64, Some(64));
     let calls = std::cell::Cell::new(0);
     let empty = RootRange { start: std::ptr::null_mut(), end: std::ptr::null_mut() };
     let roots = CountedRoots { calls: &calls, roots: Roots { stack: empty, slots: &mut [] } };
@@ -73,7 +70,7 @@ impl EnvironmentCollection {
             frames::{Layout, LayoutId},
             native::{AllocationKind, Word},
         };
-        let mut heap = CheneyHeap::<128, 1>::new();
+        let mut heap = CheneyHeap::with_limits(128, Some(128));
         let owner = Layout { id: LayoutId(0), words: 2 };
         let callee = Layout { id: LayoutId(1), words: 1 };
         let base = frames.enter(owner).unwrap();
@@ -115,5 +112,21 @@ impl EnvironmentCollection {
         let moved_again = unsafe { restored.read() as *mut Word };
         assert_ne!(moved_again, relocated);
         assert_eq!(unsafe { moved_again.read() }, 71);
+    }
+}
+
+#[test]
+fn native_heap_grows_beyond_one_megabyte_live_data() {
+    use zydeco_tests::utils::{ExecutionTarget, SourceProgram};
+    for backend in [ExecutionTarget::Interpreter, ExecutionTarget::Exe] {
+        SourceProgram::setup("tests/core/native-heap-growth.zy").test(backend);
+    }
+}
+
+#[test]
+fn managed_strings_reclaim_garbage_and_preserve_live_roots() {
+    use zydeco_tests::utils::{ExecutionTarget, SourceProgram};
+    for backend in [ExecutionTarget::Interpreter, ExecutionTarget::Exe, ExecutionTarget::WasmSps] {
+        SourceProgram::setup("tests/core/gc-string-churn.zy").test(backend);
     }
 }

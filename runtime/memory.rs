@@ -100,12 +100,21 @@ extern "sysv64" fn from_string(string: Word, error: Word, success: Word) -> Word
     }
 }
 #[unsafe(export_name = "\x01zydeco_memory_to_string")]
-extern "sysv64" fn to_string(address: Word, count: Word, error: Word, success: Word) -> Word {
+extern "sysv64" fn to_string(
+    address: Word, count: Word, error: Word, mut success: Word, stack_start: *mut Word,
+) -> Word {
     let bytes = unsafe {
         MemoryBranch::address(address).bytes(<i64 as RuntimeInteger>::decode(count) as usize)
     };
-    let result = std::str::from_utf8(bytes)
-        .map(|s| Some(HostString::own(s.to_owned())))
-        .map_err(|_| MemoryError::InvalidEncoding);
-    MemoryBranch::finish(result, error, success)
+    match std::str::from_utf8(bytes) {
+        | Ok(s) => {
+            let owned = HostString::allocate_bytes(
+                s.as_bytes(),
+                stack_start,
+                &mut [std::ptr::addr_of_mut!(success)],
+            );
+            HostControl::with_one_argument(success, owned)
+        }
+        | Err(_) => MemoryBranch::finish(Err(MemoryError::InvalidEncoding), error, success),
+    }
 }

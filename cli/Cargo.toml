@@ -13,6 +13,8 @@ description = "Command-line interface for the Zydeco programming language"
 serde = { workspace = true }
 serde_json = { workspace = true }
 zydeco-machine = { workspace = true, features = ["bundle"] }
+zydeco-abi = { workspace = true, features = ["bundle"] }
+zydeco-host = { workspace = true, features = ["bundle"] }
 toml_edit = { workspace = true }
 clap = { workspace = true }
 zydeco-session = { workspace = true }

@@ -2,31 +2,10 @@ use crate::{
     host::{HostIoErrorKind, HostRuntime, HostValue, ReaderHandle, WriterHandle},
     syntax::*,
 };
-use std::io::{self, BufRead, Read, Write};
+use std::io::{self, BufRead, Write};
+use zydeco_host::{io::LineInput, random::random_signed_int, string as host_str};
 
 type ZValue = SemValue;
-
-struct Input;
-
-impl Input {
-    fn line(reader: &mut dyn BufRead) -> io::Result<String> {
-        let mut line = String::new();
-        reader.read_line(&mut line)?;
-        if line.ends_with('\n') {
-            line.pop();
-            if line.ends_with('\r') {
-                line.pop();
-            }
-        }
-        Ok(line)
-    }
-
-    fn remaining(reader: &mut dyn BufRead) -> io::Result<String> {
-        let mut input = String::new();
-        reader.read_to_string(&mut input)?;
-        Ok(input)
-    }
-}
 
 fn ret<E>(value: ZValue) -> Result<HostAction, E> {
     Ok(HostAction::Return(value))
@@ -164,7 +143,10 @@ pub fn str_split_at_branch(args: Vec<ZValue>) -> Result<HostAction, i32> {
             when_none @ ZValue::Thunk(_),
             when_some @ ZValue::Thunk(_),
         ] => {
-            let pair = usize::try_from(*index).ok().and_then(|index| string.split_at_scalar(index));
+            let pair = host_str::split_at_scalar_byte(string.as_str(), *index).map(|split| {
+                let s = string.as_str();
+                (s[..split].into(), s[split..].into())
+            });
             OptionalPairBranch::select(pair, when_none, when_some)
         }
         | _ => unreachable!(""),
@@ -207,9 +189,7 @@ pub fn str_get_branch(args: Vec<ZValue>) -> Result<HostAction, i32> {
             when_none @ ZValue::Thunk(_),
             when_some @ ZValue::Thunk(_),
         ] => {
-            let character = usize::try_from(*index)
-                .ok()
-                .and_then(|index| string.scalar(index))
+            let character = host_str::scalar_at(string.as_str(), *index)
                 .map(|character| Literal::Char(character).into());
             OptionalValueBranch::select(character, when_none, when_some)
         }
@@ -243,9 +223,7 @@ pub fn char_from_codepoint_branch(args: Vec<ZValue>) -> Result<HostAction, i32> 
             when_none @ ZValue::Thunk(_),
             when_some @ ZValue::Thunk(_),
         ] => {
-            let character = u32::try_from(*codepoint)
-                .ok()
-                .and_then(char::from_u32)
+            let character = host_str::char_from_codepoint(*codepoint)
                 .map(|character| Literal::Char(character).into());
             OptionalValueBranch::select(character, when_none, when_some)
         }
@@ -261,10 +239,7 @@ pub fn str_parse_int_branch(args: Vec<ZValue>) -> Result<HostAction, i32> {
             when_none @ ZValue::Thunk(_),
             when_some @ ZValue::Thunk(_),
         ] => {
-            let integer = string
-                .as_str()
-                .parse::<i64>()
-                .ok()
+            let integer = host_str::parse_signed_int(string.as_str())
                 .and_then(|integer| IntegerLiteral::new(integer.into()).with_type(IntegerType::Int))
                 .map(|integer| Literal::Integer(integer).into());
             OptionalValueBranch::select(integer, when_none, when_some)
@@ -311,36 +286,6 @@ impl HostContinuation {
     }
 }
 
-struct ReaderIo;
-
-impl ReaderIo {
-    fn run<T>(
-        handle: ReaderHandle, input: &mut dyn BufRead, host: &mut HostRuntime,
-        operation: impl FnOnce(&mut dyn BufRead) -> io::Result<T>,
-    ) -> io::Result<T> {
-        if handle == ReaderHandle::STDIN {
-            operation(input)
-        } else {
-            operation(host.reader(handle)?)
-        }
-    }
-}
-
-struct WriterIo;
-
-impl WriterIo {
-    fn run<T>(
-        handle: WriterHandle, output: &mut dyn Write, stderr: &mut dyn Write,
-        host: &mut HostRuntime, operation: impl FnOnce(&mut dyn Write) -> io::Result<T>,
-    ) -> io::Result<T> {
-        match handle {
-            | WriterHandle::STDOUT => operation(output),
-            | WriterHandle::STDERR => operation(stderr),
-            | handle => operation(host.writer(handle)?),
-        }
-    }
-}
-
 /// Return the interpreter's injected standard-input capability.
 pub fn stdin(args: Vec<ZValue>) -> Result<HostAction, i32> {
     match args.as_slice() {
@@ -376,23 +321,8 @@ pub fn io_read(
             when_error @ ZValue::Thunk(_),
             when_success @ ZValue::Thunk(_),
         ] => {
-            let count = match u64::try_from(*count) {
-                | Ok(count) => count,
-                | Err(_) => {
-                    return HostContinuation::io_error(
-                        when_error,
-                        io::Error::new(
-                            io::ErrorKind::InvalidInput,
-                            "byte count cannot be negative",
-                        ),
-                    );
-                }
-            };
-            match ReaderIo::run(*reader, input, host, |reader| {
-                let mut bytes = Vec::new();
-                reader.take(count).read_to_end(&mut bytes)?;
-                Ok(bytes)
-            }) {
+            match host.io.read_with(*reader, input, |reader| LineInput::read_up_to(reader, *count))
+            {
                 | Ok(bytes) => HostContinuation::memory(host, bytes, when_error, when_success),
                 | Err(error) => HostContinuation::io_error(when_error, error),
             }
@@ -411,17 +341,7 @@ pub fn io_read_line(
             when_error @ ZValue::Thunk(_),
             when_eof @ ZValue::Thunk(_),
             when_line @ ZValue::Thunk(_),
-        ] => match ReaderIo::run(*reader, input, host, |reader| {
-            let mut bytes = Vec::new();
-            let read = reader.read_until(b'\n', &mut bytes)?;
-            if bytes.last() == Some(&b'\n') {
-                bytes.pop();
-                if bytes.last() == Some(&b'\r') {
-                    bytes.pop();
-                }
-            }
-            Ok((read, bytes))
-        }) {
+        ] => match host.io.read_with(*reader, input, LineInput::read_line_bytes) {
             | Ok((0, _)) => Ok(HostContinuation::force(when_eof)),
             | Ok((_, bytes)) => HostContinuation::memory(host, bytes, when_error, when_line),
             | Err(error) => HostContinuation::io_error(when_error, error),
@@ -439,11 +359,7 @@ pub fn io_read_all(
             ZValue::Host(HostValue::Reader(reader)),
             when_error @ ZValue::Thunk(_),
             when_success @ ZValue::Thunk(_),
-        ] => match ReaderIo::run(*reader, input, host, |reader| {
-            let mut bytes = Vec::new();
-            reader.read_to_end(&mut bytes)?;
-            Ok(bytes)
-        }) {
+        ] => match host.io.read_with(*reader, input, LineInput::read_all) {
             | Ok(bytes) => HostContinuation::memory(host, bytes, when_error, when_success),
             | Err(error) => HostContinuation::io_error(when_error, error),
         },
@@ -479,7 +395,7 @@ pub fn io_flush(
             ZValue::Host(HostValue::Writer(writer)),
             when_error @ ZValue::Thunk(_),
             when_success @ ZValue::Thunk(_),
-        ] => match WriterIo::run(*writer, output, stderr, host, |writer| writer.flush()) {
+        ] => match host.io.write_with(*writer, output, stderr, |writer| writer.flush()) {
             | Ok(()) => Ok(HostContinuation::force(when_success)),
             | Err(error) => HostContinuation::io_error(when_error, error),
         },
@@ -511,17 +427,10 @@ pub fn io_close_writer(
             ZValue::Host(HostValue::Writer(writer)),
             when_error @ ZValue::Thunk(_),
             when_success @ ZValue::Thunk(_),
-        ] => {
-            let result = if matches!(*writer, WriterHandle::STDOUT | WriterHandle::STDERR) {
-                WriterIo::run(*writer, output, stderr, host, |writer| writer.flush())
-            } else {
-                host.close_writer(*writer)
-            };
-            match result {
-                | Ok(()) => Ok(HostContinuation::force(when_success)),
-                | Err(error) => HostContinuation::io_error(when_error, error),
-            }
-        }
+        ] => match host.close_writer(*writer, output, stderr) {
+            | Ok(()) => Ok(HostContinuation::force(when_success)),
+            | Err(error) => HostContinuation::io_error(when_error, error),
+        },
         | _ => unreachable!(""),
     }
 }
@@ -620,7 +529,9 @@ pub fn read_line(
 ) -> Result<HostAction, i32> {
     match args.as_slice() {
         | [e @ ZValue::Thunk(_)] => {
-            let line = ReaderIo::run(ReaderHandle::STDIN, input, host, Input::line)
+            let line = host
+                .io
+                .read_with(ReaderHandle::STDIN, input, LineInput::read_line)
                 .expect("legacy standard-input read failed");
             resume(e, [Literal::String(line.into()).into()])
         }
@@ -635,11 +546,11 @@ pub fn read_line_as_int_branch(
 ) -> Result<HostAction, i32> {
     match args.as_slice() {
         | [failure @ ZValue::Thunk(_), success @ ZValue::Thunk(_)] => {
-            let line = ReaderIo::run(ReaderHandle::STDIN, input, host, Input::line)
+            let line = host
+                .io
+                .read_with(ReaderHandle::STDIN, input, LineInput::read_line)
                 .expect("legacy standard-input read failed");
-            match line
-                .parse::<i64>()
-                .ok()
+            match host_str::parse_signed_int(&line)
                 .and_then(|integer| IntegerLiteral::new(integer.into()).with_type(IntegerType::Int))
             {
                 | Some(integer) => resume(success, [Literal::Integer(integer).into()]),
@@ -656,7 +567,9 @@ pub fn read_till_eof(
 ) -> Result<HostAction, i32> {
     match args.as_slice() {
         | [e @ ZValue::Thunk(_)] => {
-            let line = ReaderIo::run(ReaderHandle::STDIN, input, host, Input::remaining)
+            let line = host
+                .io
+                .read_with(ReaderHandle::STDIN, input, LineInput::read_remaining)
                 .expect("legacy standard-input read failed");
             resume(e, [Literal::String(line.into()).into()])
         }
@@ -682,17 +595,10 @@ pub fn arg_at(args: Vec<ZValue>, argv: &[String]) -> Result<HostAction, i32> {
 
 /// Produce a random integer literal and pass it to the continuation.
 pub fn random_int(args: Vec<ZValue>) -> Result<HostAction, i32> {
-    use rand::RngExt;
     match args.as_slice() {
         | [k] => {
-            let mut rng = rand::rng();
-            let i = Literal::Integer(
-                rng.random_range(
-                    zydeco_syntax::word::RuntimeWord::SIGNED_MIN
-                        ..=zydeco_syntax::word::RuntimeWord::SIGNED_MAX,
-                )
-                .into(),
-            );
+            let integer = random_signed_int().expect("cannot read random source");
+            let i = Literal::Integer(integer.into());
             resume(k, [i.into()])
         }
         | _ => unreachable!(""),
@@ -728,20 +634,5 @@ impl IntegerConversion {
             when_none,
             when_some,
         )
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Input;
-    use std::io::Cursor;
-
-    #[test]
-    fn line_input_removes_one_line_ending_and_preserves_other_content() {
-        for (source, expected) in
-            [("text\n", "text"), ("text\r\n", "text"), ("text", "text"), ("text\r", "text\r")]
-        {
-            assert_eq!(Input::line(&mut Cursor::new(source)).unwrap(), expected);
-        }
     }
 }
