@@ -205,7 +205,7 @@ static specialization, readiness, SPS, and native-frame machinery as other bound
 `CheckedUnit` retains one `UnitInitializer`, its exported classifier, optional Builtin plan, and residual return root.
 Preparing that return together preserves sharing between the exported values.
 The closed structural classifier is retained before erasure
-as [`UnitValueType` and `UnitStackType`](../../../../lang/syntax/src/unit.rs), independently of SPS partial protocols.
+as [`UnitValueType` and `UnitStackType`](../../../../lang/abi/src/unit.rs), independently of SPS partial protocols.
 Unsupported source types reject through the [unit classifier](../../../../lang/statics/src/unit.rs).
 Generated source reconstructs the complete supported classifier without producer-local arena identities.
 

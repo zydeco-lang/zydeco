@@ -1,52 +1,61 @@
-# C13. WebAssembly Backend and Embedding
+# C13. WebAssembly Backend and Standalone WASI Executables
 
-The [wasm-sps](../../../../lang/wasm-sps/src/emit.rs) emitter produces core `wasm32` modules
-with `memory`, `entry`, and `_start` exports.
-An embedding supplies the `zydeco` import namespace; the module is not a standalone WASI program.
-[wasm-common](../../../../lang/wasm-common/src) owns the runtime contract: the tagged-word encoding,
-the host-call ABI, the allocator body, and the module scaffolding.
+The [wasm-sps](../../../../lang/wasm-sps/src/emit.rs) emitter produces relocatable `wasm32` object files (`.o`
+with Linking Specification v2 `linking`, `reloc.CODE`, `reloc.DATA`,
+and `target_features` `+tail-call`) using [wasm-common](../../../../lang/wasm-common/src).
+`wasm-common` owns the shared WebAssembly contract: relocatable object scaffolding (`WasmObjectBuilder`,
+`RelocFunction`), tagged-word encoding, inline scalar/memory helpers, the host-call ABI,
+and `.rodata.strings` table packing.
+The CLI links the emitted object against cached `wasm32-wasip1` `rlib` builds of `zydeco-machine`,
+`zydeco-abi`, and [zydeco-host](../../../../lang/host/src/wasm.rs) (`wasm-runtime` feature) using `rustc`
+and `rust-lld` (`-C target-feature=+tail-call -C link-arg=--no-check-features`),
+producing a standalone `.sps.wasm` WASI executable whose only import module is `wasi_snapshot_preview1`.
 
 Emission starts from SPSLow, after shared closure conversion and before ZASM lowering.
 Starting at SPS would duplicate closure conversion, and recovering structure
 from ZASM would require reconstructing lexical regions and stack effects from machine program points.
-SPSLow still retains lexical blocks, so the emitter uses structured Wasm and locals
-within a block and remains independent of lazy ZASM construction and native preparation.
-The root and each SPSLow block become one function: structured code
-and locals carry the block's lexical computations, and a trampoline transfers control between blocks,
-because recursive host calls would consume the engine's stack on unbounded source transfers.
-Closure code handles are tagged table indices. Persistent `[head, tail]` stack frames,
-boxed products, and closure records live in a bump heap that grows without collection.
+SPSLow retains lexical blocks and closed labels,
+so each becomes one WebAssembly case function taking its ambient stack parameter (`(i64) -> ()`),
+with structured WebAssembly instructions and per-case locals (`LocalPlan::for_case`) carrying its lexical bindings.
+Control transfers use WebAssembly tail calls directly without a dispatcher loop or mutable globals:
+a local label wraps its tail in a `block` and branches within the same frame; a closed label emits `return_call`
+to its case function; and closure/continuation jumps load linked `__indirect_function_table` slots
+from `.rodata.cases` (`R_WASM_TABLE_INDEX_I32`) and emit `return_call_indirect`.
+`zydeco_wasm_entry` tail-calls `sps.root`.
+
+Closure code handles are tagged case indices. Persistent `[head, tail]` stack frames,
+boxed products, boxed `Int64`/`UInt64`/`Float64` scalars, and dynamic strings allocate 8-byte-aligned blocks
+through `zydeco_wasm_alloc` from a bump arena over WASI linear memory, while manual `Addr` loads
+and stores execute inline unaligned `i64.load*`/`i64.store*` instructions directly in linear memory.
 Partial products use a pointer into the product suffix; constructors use `[tag, payload]`.
 Emission sorts arena-derived IDs before assigning functions, imports, locals,
 and static-data offsets; unsupported forms report typed emission errors.
-The emitter currently uses a whole-program local plan and uniform product boxing,
-without ZASM's local-unboxing analysis.
-A local label wraps its tail in a `block` and follows it with the label body,
-so a jump sets the ambient-stack local and branches out of the `block` within the same function and locals.
-A closed label becomes a function of its own, and a jump to it sets the ambient stack and a static program counter
-before returning to the trampoline.
+Native C imports and Zydeco units remain rejected by the emitter.
 
 ## Module and Host ABI
 
-Source values cross as tagged `i64` words. Pointer-shaped values address module or host-owned representations;
-module-created closures and stack records remain opaque to the host except through the shared protocol.
+Relocatable objects import linear memory (`env.__linear_memory`), the indirect table (`env.__indirect_function_table`),
+and host functions from `"env"`, linked statically with `zydeco-host::wasm`:
 
 | Import shape | Contract |
 | --- | --- |
 | Returning operation | Zydeco arguments as `i64`, one `i64` result |
-| Control operation | Arguments as `i64`; result is count, closure, and two argument slots, all `i64` |
-| Potential full-width scalar result | A trailing `i32` spare-box address where the operation signature requires it |
-| `string_literal` | UTF-8 byte offset and length as `i32`, opaque host string word as `i64` |
+| Control operation | Zydeco arguments as `i64`; returns `i32` pointer to `#[repr(C)] WasmHostTransfer` (`count`, `closure`, `first`, `second`) |
+| Potential full-width scalar result | One trailing `i32` spare-box address allocated with `zydeco_wasm_alloc(1)` |
+| `zydeco_wasm_alloc` | Requested 8-byte word count as `i32`, aligned linear-memory pointer as `i32` |
+| `zydeco_runtime_error` | Fault code (`RuntimeFailure`) as `i32`, never returns |
 
-Control arity is at most two. Spare boxes belong to the module's allocation protocol;
-the host must not invent closure layouts or return unregistered control code.
-Native C imports are rejected by the emitter.
+Static string literals are packed at 8-byte-aligned offsets
+in `.rodata.strings` using the same `(byte_len: u64, utf8_bytes...)` header as heap-allocated Wasm strings
+and referenced via relocatable `i32.const` (`R_WASM_MEMORY_ADDR_SLEB`) extended with `i64.extend_i32_u`.
+Control arity is at most two; spare boxes belong to the module's allocation protocol
+so the host never invents closure layouts.
 
-The [Node host](../../../../cli/wasm/wasm-host.mjs) supplies I/O, resources, random integers, and scalar adapters.
-The CLI bundles it with its numeric and checked-memory helpers for source execution outside the checkout.
+[zydeco_host::wasm](../../../../lang/host/src/wasm.rs) reuses shared I/O handles (`HostIoRuntime`),
+`RetainedMemory`, string algorithms, `RuntimeFailure`, `HostIoErrorKind`,
+and WASI entropy (`random_get`) from `zydeco-host`, `zydeco-abi`, and `zydeco-machine`.
+For CLI execution and tests, `WasmRunner` runs the linked `.sps.wasm` binary with `wasmtime` (`WASMTIME`,
+with `-W tail-call=y` and `--dir` preopens) and falls back to Node.js `node:wasi` (`NODE`) when `wasmtime` is absent.
 `run` inherits terminal streams; `test` captures output with explicit input through the shared execution runner.
-Argument lookup uses the invocation's supplied sequence; lazy folds use module-created source closures,
-so multi-argument traversal needs no host-created closure layout.
-[Backend questions](../../../proposals/wasm-backends.md) retain default-target criteria and reclamation questions.
-Conformance tests should distinguish module emission, embedding failures, memory exhaustion,
-and source runtime failures.
+Conformance tests verify relocatable object imports, standalone `wasi_snapshot_preview1` imports,
+100k-iteration tail recursion without stack overflow, memory faults, and cross-backend numeric/I/O parity.

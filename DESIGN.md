@@ -33,7 +33,7 @@ codata describes alternatives of observable frames.
 > forbids inferring a fixed frame size or an allocation/reclamation boundary from `Ret` alone.
 
 Stack shape is a typed control protocol, not a physical layout: native code may use the machine stack,
-while WebAssembly may use explicit frames and a trampoline.
+while WebAssembly uses explicit continuation frames and direct tail calls.
 `Thk B` is suspended code compatible with a `B` stack, not the stack itself.
 
 `OS` is the root protocol. An `OS`-typed computation consumes the process stack prepared
@@ -757,12 +757,16 @@ The [runtime-word reference](docs/references/compiler/src/native-runtime.md) own
 `Int64`, `UInt64`, and `Float64` use opaque boxes. Storage and C transport follow their
 [separate carrier contract](docs/references/language/src/foreign-interfaces.md#storage-and-foreign-transport).
 
-### Shared Rust Runtime Model
+### Shared Rust Runtime Crates
 
 [`zydeco-machine`](lang/machine/src/lib.rs) is a dependency-free `no_std` crate consumed
-by compiler phases and the standalone native runtime.
-It owns the tagged-word operations described above, the closure field order used by ZASM,
-the AMD64 host-transfer representation, and nested environment transitions.
+by compiler phases and both native and WASI stubs.
+[`zydeco-abi`](lang/abi/src/lib.rs) provides the canonical `#![no_std]` builtin catalog,
+calling modes, FFI/unit boundary metadata, `RuntimeFailure`, and `HostIoErrorKind`,
+while [`zydeco-host`](lang/host/src/lib.rs) provides the growable Cheney collector,
+managed/static string helpers, I/O handle table, OS entropy, and `wasm32-wasip1` runtime exports.
+`zydeco-machine` owns the tagged-word operations described above, the closure field order used by ZASM,
+the AMD64 host-transfer representation, manual memory primitives, and nested environment transitions.
 The frame model uses Rust's `alloc` for control metadata and growable environment storage.
 Compiler-specific literal resolution stays in `zydeco-syntax`.
 
@@ -829,22 +833,27 @@ The [native environment proposal](docs/proposals/native-frames.md) retains remai
 
 ### Native Garbage Collection
 
-The native runtime uses Cheney copying collection with two fixed 1 MiB semispaces.
-The live graph must fit in one semispace, including block headers; allocation reports out
-of memory when collection cannot make enough room.
+The native runtime uses Cheney copying collection with two geometrically growing semispaces starting
+at 64 KiB (`DEFAULT_INITIAL_SPACE_BYTES`) by default.
+When live objects and an allocation request outgrow a semispace, collection doubles semispace capacity
+and preserves the relocated live graph (stopping only at an explicit ceiling if configured).
 Collection updates the control stack, live slots in active and suspended frames, and registered host roots,
 preserving sharing, cycles, and word-aligned interior pointers into payloads.
 Frame slot maps exclude reserved, uninitialized, and dead slots; word tags then identify immediate values.
+Dynamic strings allocate GC-managed opaque heap blocks using `(byte_len: u64, utf8_bytes...)`
+and static literals sit in aligned `.rodata`, while reusable C FFI instances reset and cache spaces up
+to 4 MiB (`REUSE_SHRINK_THRESHOLD_BYTES`) across calls via `ParkedInstance`.
 
 Allocation receives a deferred root source.
 If a cell fits, it advances the allocation cursor without enumerating frame or host roots.
 If collection is needed, the source publishes the complete root set once,
 and the collector updates those locations before allocation continues.
-An oversized request rejected before collection does not enumerate roots;
-a request rejected after collection still preserves the relocated live graph.
+An oversized request exceeding an explicit ceiling is rejected before enumeration;
+a collection that still leaves insufficient room preserves the relocated live graph cleanly.
 The native frame model continues to own which slots are live, independently of when they are enumerated.
 
-Each semispace has a block-start index that locates the owning header with one index-region read and one header read.
+Each semispace maintains a block-start index that locates the owning header
+with one index-region read and one header read.
 For each 512-byte region, a bitmap records header starts at word granularity,
 and a predecessor offset identifies a block crossing into that region.
 The collector validates payload bounds before forwarding, so addresses into headers
@@ -857,9 +866,9 @@ when a semispace is reused; entries beyond the current cursor are never consulte
 Collection therefore needs neither an index rebuild over dead objects nor a sweep to clear the whole index.
 Lookup work scales with inspected pointer references, while copying, scanning,
 and destination-index maintenance scale with the live graph.
-Each index occupies 32 KiB per 1 MiB semispace, adding 3.125% to the space reservation.
-The implementation and boundary, reuse, and lookup-work regressions live in [runtime/gc.rs](runtime/gc.rs);
-the workspace runs those tests through the `native_gc` module of the `suite` target in `zydeco-tests`.
+Each index occupies 16 bytes (`RegionStarts`) per 512-byte region, adding 3.125% to the space reservation.
+The implementation and boundary, reuse, and lookup-work regressions live in [lang/host/src/gc.rs](lang/host/src/gc.rs);
+the workspace runs those tests through both `zydeco-host` and the `native_gc` module of `zydeco-tests`.
 
 ### Text and Bytes
 
@@ -921,49 +930,56 @@ and the open runtime questions.
 
 SPSLow has already made closures and continuations first order: code is represented by explicit blocks,
 closure records pair an environment with code, and continuation records pair code with a residual stack.
-The backend maps the root and each SPSLow block to one WebAssembly function.
+The backend maps the root and each SPSLow block or closed label
+to one WebAssembly case function taking its ambient stack parameter (`i64`).
 Lexical computations inside a block become structured instructions in that function,
-and value bindings become WebAssembly locals instead of entries in a global environment array.
+and value bindings become per-case WebAssembly locals instead of entries in a global environment array.
 
 Dynamic jumps still require indirection because core WebAssembly does not expose raw function addresses.
-The backend assigns tagged table-index handles to blocks and uses a trampoline between blocks,
-so recursive Zydeco calls do not consume the host call stack.
-Products, closure records, boxed scalars, and persistent stack frames live in linear memory.
-This retains SPSLow's block granularity without reconstructing the instruction-level ZASM machine.
-Products currently use a growing bump heap rather than a collector.
+Closed labels use `return_call`, while closure and continuation jumps map tagged case handles
+through a linked `.rodata.cases` table-index array (`R_WASM_TABLE_INDEX_I32`) and emit `return_call_indirect`,
+so unbounded source recursion executes without growing the Wasm call stack or using a trampoline loop.
+Products, closure records, boxed scalars, persistent stack frames, and dynamic strings allocate
+through `zydeco_wasm_alloc` from a bump arena over WASI linear memory, while manual `Addr` loads
+and stores execute inline unaligned `i64.load*`/`i64.store*` instructions directly.
 
-### Runtime ABI
+### Runtime ABI and WASI Linking
 
+`zydeco-wasm-sps` emits a relocatable WebAssembly object file (Linking Specification v2) importing `__linear_memory`,
+`__indirect_function_table`, and `zydeco_*` host symbols from `"env"`.
 The backend uses `i64` runtime data words and retains the native low-bit convention:
 odd words are immediate values and aligned even words are pointer-shaped.
 Block handles are encoded as tagged immediates.
-Generated modules import builtins from the `zydeco` namespace through these typed forms:
 
 - A returning builtin accepts its Zydeco arguments as `i64` parameters and returns one `i64` runtime word.
-- A control builtin accepts its Zydeco arguments and returns four `i64` values:
-  an untagged argument count from zero through two, a module-created closure pointer, and up to two arguments.
-  The backend supplies the arguments and closure environment before resuming the selected code block.
-- An operation that may produce a boxed full-width scalar receives a trailing `i32` address for a one-word spare box.
-  Narrow operations receive zero in this position when their shared ABI includes the parameter.
+- A control builtin accepts its Zydeco arguments and returns an `i32` pointer
+  to a `#[repr(C)] WasmHostTransfer` struct containing an argument count (`0..=2`),
+  a closure pointer, and up to two arguments.
+  The backend supplies the arguments and closure environment before tail-calling the selected code block.
+- An operation that may produce a boxed full-width scalar receives a trailing `i32` address
+  for a one-word spare box allocated via `zydeco_wasm_alloc(1)`.
 
-The additional `string_literal(i32, i32) -> i64` import receives an offset and UTF-8 byte length
-in exported memory and returns the host's opaque string value.
-The mandatory `runtime_error(i32) -> ()` import reports fatal language errors.
-Its codes are defined by `RuntimeFailure` in `lang/wasm-common/src/host.rs`: `1` means pattern-match failure,
-`2` integer division by zero, `3` integer remainder by zero, and `4` an integer outside the tagged payload range.
-The host must report the error and stop execution unsuccessfully.
-Generated code traps if the host returns. Each module exports `entry`, the conventional `_start` alias,
-and `memory`, but the embedding must supply the imports before invoking either function.
+Static string literals live in `.rodata.strings`
+at 8-byte-aligned offsets using the same `(byte_len: u64, utf8_bytes...)` header as heap-allocated strings
+and are referenced with relocatable `i32.const` (`R_WASM_MEMORY_ADDR_SLEB`) extended to `i64`.
+The mandatory `zydeco_runtime_error(i32) -> ()` import reports fatal language errors defined by `RuntimeFailure`
+in `lang/abi/src/host.rs`: `1` means pattern-match failure, `2` integer division by zero,
+`3` integer remainder by zero, and `4` an integer outside the tagged payload range.
+The CLI links the relocatable `.o` object against cached `wasm32-wasip1` `rlib` builds of `zydeco-machine`,
+`zydeco-abi`, and `zydeco-host` (`wasm-runtime` feature) using `rustc` and `rust-lld`
+into a standalone `.sps.wasm` binary whose only imports belong to `wasi_snapshot_preview1`.
 
 ## Repository Layout
 
 | Path | Role |
 | --- | --- |
 | `lang/` | Compiler foundation (`zydeco-foundation`), frontend, formatting (`zydeco-fmt`), statics, IR, interpreter, emitters, and test harnesses under `lang/tests/cases/`. |
-| `lang/machine/` | Rust representations and host-resumption descriptions shared by compiler phases and native stubs. |
+| `lang/machine/` | `no_std` tagged words, closure/transfer records, manual memory, and frame actions shared across targets. |
+| `lang/abi/` | `no_std` canonical builtin catalog, C FFI/unit contracts, `RuntimeFailure`, and `HostIoErrorKind`. |
+| `lang/host/` | Shared growable Cheney collector, managed strings, I/O handles, OS entropy, and WASI (`wasm32-wasip1`) host exports. |
 | `lib/` | Standard library, reusable examples, and regression projects under `lib/tests/`. |
-| `cli/` | Source checking, shared backend execution, the bundled Node host, formatting, and compilation commands. |
-| `runtime/` | Runtime instances and process launcher, packaged with native executables and libraries. |
+| `cli/` | Source checking, shared backend execution (`wasmtime` and `node:wasi`), formatting, and native/WASI linking commands. |
+| `runtime/` | Native runtime instance caching (`ParkedInstance`) and process/FFI launchers over `zydeco-host`. |
 | `tui/` | Ratatui REPL using the shared compiler session. |
 | `xtask/` | Repository tasks, including `cargo test-resume` and `cargo xtask docs` (`docs/scripts/build-books.py`). |
 | `editor/cajun/` | Language server, included in the Rust workspace. |
@@ -985,10 +1001,10 @@ and `memory`, but the embedding must supply the imports before invoking either f
 - Native execution is AMD64 on Linux or macOS.
   `build` defaults to the host architecture, so an ARM host needs explicit AMD64 target selection.
   `run -t exe` and `test -t exe` select AMD64 directly; execution still requires appropriate tools and host support.
-- WebAssembly requires a `zydeco` host embedding.
-  The heap grows without collection, and the backend allocates persistent stack frames
+- WebAssembly produces standalone `wasi_snapshot_preview1` executables with tail calls
+  and linear-memory I/O, without native C FFI or Zydeco unit imports.
+  Its heap grows without garbage collection, and the backend still allocates persistent stack frames
   and boxes products without ZASM's local-unboxing analysis.
-  CLI Wasm execution uses the bundled Node.js host; standalone WASI execution is not implemented.
 - Native interoperability includes the explicit [C boundary](docs/references/language/src/foreign-interfaces.md)
   and [Zydeco unit initializers](docs/references/language/src/foreign-interfaces.md#native-zydeco-units);
   callbacks and retained foreign handles remain deferred.

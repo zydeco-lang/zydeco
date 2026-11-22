@@ -1,9 +1,13 @@
-# C12. Shared Native Model, Allocation, and Collection
+# C12. Shared Runtime Model, Allocation, and Collection
 
-[zydeco-machine](../../../../lang/machine/src/lib.rs) is a dependency-free `no_std` model shared
-by the compiler and native stub.
-It owns tagged words, closure records, host-transfer records, and frame actions.
-Code generation derives layout from 64-bit carriers; the target runtime checks its `usize` representation against them.
+Three shared `#![no_std]`-capable crates factor runtime layout and host support out of compiler backends:
+[zydeco-machine](../../../../lang/machine/src/lib.rs) defines tagged words,
+closure records, host-transfer records, manual memory primitives, and frame actions;
+[zydeco-abi](../../../../lang/abi/src/lib.rs) defines the canonical builtin role catalog,
+calling modes, spare-box markers, C FFI/unit boundary specs, `RuntimeFailure`, and `HostIoErrorKind`;
+and [zydeco-host](../../../../lang/host/src/lib.rs) implements the growable copying collector,
+managed string layout, I/O handle table, OS entropy helper, and WASI runtime exports.
+Code generation derives layout from 64-bit carriers; native stubs check their `usize` representation against them.
 The bundled model sources determine fingerprinted process and library entry symbols,
 so mismatched compiler/runtime source bundles fail to link.
 This is artifact pairing, not verification of handwritten instruction selection.
@@ -95,8 +99,8 @@ literal and intermediate scalars introduce no boxes, callback objects, or succes
 Raw definitions have distinct temporary stack homes, with no collection inside that area.
 Fatal arithmetic helpers do not return; required failures precede the store and later arithmetic.
 This removes allocation sites without claiming register allocation or minimal spill traffic.
-Wasm uses raw locals and the existing virtual-memory imports for the load and store;
-the host's address lookup cost remains.
+Wasm uses raw locals and emits unaligned little-endian linear-memory load and store instructions directly
+over WASI linear memory, with no virtual-memory host call or lookup cost.
 
 The [regressions](../../../../cli/tests/passes.rs) pair optimized kernels with ordinary and unknown-callback paths,
 check full-width wrapping and runtime operands across all backends, preserve error order,
@@ -122,9 +126,16 @@ defines concurrency and fault behavior.
 The process launcher in [runtime/main.rs](../../../../runtime/main.rs) uses the same instance API,
 with process arguments and the established executable entry.
 Reusable support disables the `process-entry` feature.
-Semispace words and block indices are boxed allocations, avoiding multi-megabyte stack temporaries on each C entry.
-Host strings retain stable boxed addresses in their instance, and handles/buffers use instance-owned arenas.
-These resources are released at normal teardown; managed GC does not individually reclaim host-owned strings.
+On normal C FFI completion, [runtime/stub.rs](../../../../runtime/stub.rs) resets the active instance's heap,
+frame store, retained allocations, and I/O handles and parks it in a single-slot reusable `ParkedInstance` cache
+for subsequent FFI calls into the library.
+Semispace words and block indices are heap-allocated, avoiding multi-megabyte stack temporaries on each C entry.
+Static string literals are emitted into 8-byte-aligned `.rodata` as `(byte_len: u64, utf8_bytes...)`;
+dynamic strings allocate opaque GC-managed blocks on the same `(byte_len: u64, utf8_bytes...)` layout
+so managed GC reclaims dead dynamic strings automatically.
+String-allocating host builtins receive the live control-stack cursor and root live managed arguments
+across any triggered collection, while CLI arguments remain cached outside the managed heap
+as `StaticHeapString` blocks with no managed pointers.
 
 ## Environment Actions and Roots
 
@@ -156,13 +167,17 @@ they do not extend the environment contract described here.
 
 ## Managed Allocation
 
-The [native stub](../../../../runtime/stub.rs) uses [CheneyHeap](../../../../runtime/gc.rs)
-with two fixed 1 MiB semispaces.
-The live graph, including headers, must fit in one space.
+The [native stub](../../../../runtime/stub.rs) uses [CheneyHeap](../../../../lang/host/src/gc.rs)
+with two geometrically growing semispaces starting at `DEFAULT_INITIAL_SPACE_BYTES` (64 KiB) by default.
+When live objects and an allocation request outgrow the current semispace,
+collection doubles target semispace capacity (up to any configured ceiling in `CheneyHeap::with_limits`,
+or unbounded by default for normal execution) and preserves the relocated live graph before completing the allocation.
+Reusable instances shrink semispaces exceeding `REUSE_SHRINK_THRESHOLD_BYTES` (4 MiB) back
+to initial capacity on `CheneyHeap::reset`.
 Allocation receives a deferred root source: a successful fast allocation does not enumerate roots;
-collection requests the control-stack range and live frame slots and updates them in place.
-An oversized request can fail before enumeration.
-Failure after collection still leaves the relocated live graph valid.
+collection requests the control-stack range, registered host roots, and live frame slots and updates them in place.
+An oversized request exceeding an explicit ceiling is rejected before enumeration;
+a collection that still leaves insufficient room preserves the relocated live graph cleanly.
 
 A block-start index finds the allocation owning a word-aligned interior payload pointer.
 Copying installs forwarding information and preserves sharing, cycles, and the interior offset.

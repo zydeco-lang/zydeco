@@ -46,7 +46,8 @@ Put whole-program regressions under `lib/tests/` and register them in `lang/test
 [test harness reference](docs/references/compiler/src/validation-and-extending.md#source-fixtures-and-runtime-oracles)
 explains backend coverage, I/O assertions, and source templates.
 Native tests need the [AMD64 toolchain](cli/README.md#native-executables).
-WebAssembly tests use Node.js 24; `NODE` selects its executable.
+WebAssembly linking needs the `wasm32-wasip1` Rust target (`rustup target add wasm32-wasip1`),
+and WASI tests use `wasmtime` (`WASMTIME` selects its executable, falling back to Node.js 24 `node:wasi` via `NODE`).
 
 CI runs the full workspace suite and doctests separately:
 
@@ -90,9 +91,9 @@ but the operating system releases the lock when the process exits.
 
 The saved identity covers the workspace, target directory, toolchain, Cargo arguments,
 and test selection, but not process environment variables.
-Rerunning from a different shell therefore keeps the saved results;
-rerun with `--force` after an environment change (a different Node.js binary,
-C toolchain, or `RUSTFLAGS`) that should invalidate cached passes.
+Rerunning from a different shell therefore keeps the saved results; rerun with `--force`
+after an environment change (a different Wasmtime/Node binary, C toolchain,
+or `RUSTFLAGS`) that should invalidate cached passes.
 Environment changes that alter compiled code are also visible as changed test executables.
 
 Saved passes are reused even when the build changed.

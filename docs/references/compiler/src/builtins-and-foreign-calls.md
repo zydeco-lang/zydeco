@@ -1,6 +1,8 @@
 # C14. Builtin Contracts, Primitive Operations, and Foreign Calls
 
-The [syntax role catalog](../../../../lang/syntax/src/lib.rs) identifies intrinsics and operations with domain types.
+The [ABI crate](../../../../lang/abi/src/lib.rs) (`zydeco-abi`, re-exported
+by `zydeco-syntax`) owns the canonical `#![no_std]` builtin role catalog, host-call modes (`Returning` vs `Control`),
+spare-box policies, C FFI/unit boundary descriptors, `RuntimeFailure` codes, and `HostIoErrorKind`.
 [Static Builtin validation](../../../../lang/statics/src/builtin.rs) checks the authored
 [Builtin signature](../../../../lib/std/builtin.zy) against those roles.
 Interpreter linking and [SPS Builtin lowering](../../../../lang/stackir/src/builtin.rs)
@@ -25,20 +27,17 @@ whose [owning design](../../library/src/memory/views-and-buffers.md#immutable-ow
 specifies its representation and operations.
 The compiler and host recognize general memory capabilities, without a byte-sequence type or operation family.
 
-[Manual memory](../../../../lang/machine/src/memory.rs) is shared by the interpreter and native host.
+[Manual memory](../../../../lang/machine/src/memory.rs) is shared by the interpreter,
+the native host, and the [WASI host](../../../../lang/host/src/wasm.rs).
 `Address` wraps a raw pointer; `MemoryLayout` validates allocation requests using the platform allocator layout.
 Allocation is uninitialized, and explicit release receives the exact base and original layout.
-Native `Addr` words contain pointer bits directly.
+Native and WASI `Addr` words carry linear pointer bits directly (sign-free `i64` zero-extended on `wasm32`,
+addressed via inline little-endian linear-memory loads and stores).
 The tracing collector leaves unmanaged addresses outside its managed semispaces unchanged;
 raw storage must not contain unrooted managed references.
 There are no grant records, liveness tables, pointer-slot maps, or initialization bitmaps.
 `RetainedMemory` owns explicitly transferred immutable allocations until runtime teardown.
 It reserves retention bookkeeping before accepting ownership, so failure leaves ownership with the caller.
-
-The [Node host](../../../../cli/wasm/wasm-memory.mjs) emulates unmanaged memory
-with virtual 64-bit addresses and byte arrays.
-Its range lookup is an embedding implementation cost; it is not a source guarantee of recoverable raw-access errors.
-The virtual address space is separate from managed Wasm memory and exports no native pointer.
 [Manual Memory](../../library/src/memory/manual-memory.md#manual-memory) owns caller obligations
 and the distinction between static evidence and runtime data.
 The source [view](../../../../lib/std/memory/view.zy),
@@ -72,11 +71,14 @@ The former native host closure and fixed host-root table have been removed.
 across collection, live captured `Float64` values, discarded tails, and invalid indices on all four backends.
 Source observations belong to [L13](../../language/src/primitives-and-capabilities.md).
 
+[HostIoRuntime](../../../../lang/host/src/io.rs) and OS entropy helpers
+in [zydeco-host](../../../../lang/host/src/random.rs) are shared by the interpreter,
+the native stub, and the linked WASI host.
 Host resource tables allocate monotonically increasing handle IDs and validate reader and writer operations.
 Closing removes the resource, so every alias subsequently observes `Closed`;
 identifiers are not source-visible pointers.
 Reserved standard-stream capabilities remain open.
-The interpreter backs them with injected streams, while native execution uses the process streams.
+The interpreter backs them with injected streams, while native and WASI executables use the process streams.
 Primitive success/error branches carry a result or an error kind and message;
 [the library](../../../../lib/std/README.md#streams-and-files) constructs `Either`, `Option`, and typed paths.
 Adapters distinguish EOF, empty data, invalid text, I/O errors, and closed resources. Stream extensions and

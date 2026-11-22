@@ -135,11 +135,10 @@ Stores decode their ordinary input before writing.
 [Raw memory kernels](../native-runtime.md#raw-memory-kernels) remove these conversions
 when a bounded local chain closes at a store.
 
-The Wasm backend calls `raw_*` memory imports with virtual 64-bit addresses and raw bits:
-loads return one `i64`, and stores return nothing.
-No source callback or spare box crosses these imports.
-Generated code performs the ordinary value conversions and carrier validation.
-The Node host retains its virtual-memory lookup cost; these operations do not address managed Wasm linear memory.
+The Wasm backend emits inline unaligned little-endian `i64.load*` and `i64.store*` instructions directly
+over WASI linear memory through `WordEmitter::{raw_load, raw_store}`, with no host-call or lookup overhead.
+Generated code performs the same ordinary value conversions, sign extension,
+and carrier range checks as native execution.
 Interpreter adapters implement the same carrier and effect contract with their own memory representation.
 
 The [scalar-memory regressions](../../../../../cli/tests/passes.rs) cover unaligned integer extremes,

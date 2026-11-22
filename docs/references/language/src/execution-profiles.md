@@ -8,16 +8,20 @@ The native layout is an implementation ABI, not source-level control over addres
 | Profile | Control and memory | Host boundary |
 | --- | --- | --- |
 | Interpreter | Explicit evaluator state; Rust-owned values and environments | CLI/REPL I/O; returning C imports on Unix |
-| Native AMD64 | Machine control stack; growable retained environments; two fixed 1 MiB copying semispaces | Supplied runtime, Linux/macOS toolchain, returning C imports and scalar exports |
-| `wasm-sps` | Block trampoline and persistent stack frames; growing non-collecting heap | Imports from a `zydeco` embedding |
+| Native AMD64 | Machine control stack; growable retained environments; geometrically growing copying semispaces from 64 KiB | Supplied runtime, Linux/macOS toolchain, returning C imports and scalar exports |
+| `wasm-sps` | Direct Wasm tail calls (`return_call` / `return_call_indirect`) and persistent stack frames; growing non-collecting linear-memory arena | Linked standalone `wasi_snapshot_preview1` executable with `zydeco-host` (`wasmtime`, or `node:wasi` fallback) |
 
 ## Memory, Cost, and Host Boundaries
 
-Native managed live values must fit in one semispace, including headers.
-Host-owned strings and byte buffers remain allocated within their runtime instance, independently of managed collection.
+Native managed live values occupy two geometrically growing copying semispaces starting
+at 64 KiB and doubling on demand; reusable C FFI instances reset and cache spaces up to 4 MiB across calls.
+Dynamic strings are managed heap objects reclaimed on collection, while static literals sit
+in `.rodata` and CLI arguments stay outside the managed heap.
+Host-owned byte buffers remain retained within their runtime instance independently of managed collection.
 Environment growth and managed-heap capacity are distinct limits.
-Native tail transfers reclaim dead activations, but live continuations and escaping values can retain storage.
-The Wasm trampoline avoids growth of the host call stack without guaranteeing constant heap use.
+Native tail transfers reclaim dead activations, and Wasm tail calls (`return_call`
+and `return_call_indirect`) execute unbounded source recursion in constant Wasm call-stack depth,
+though live continuations and escaping values can retain frame or heap storage.
 
 Static value-function application expands residual bodies and can increase code size.
 Product and thunk allocation depends on optimization.
@@ -25,8 +29,9 @@ Source byte slicing shares retained immutable storage on every backend.
 Repeated concatenation can be quadratic.
 Immutability guarantees observations, not identical costs on every backend.
 
-The supplied Node host implements I/O, checked resources, and random integers for CLI execution and tests.
-It reads stdin on demand and shares the supplied argument sequence with the program.
+Both native and Wasm executables share `zydeco-host` implementations for I/O, checked resources, and OS random integers.
+Standalone `.sps.wasm` binaries execute directly on WASI runtimes (`wasmtime` or Node.js `node:wasi`),
+reading stdin on demand and receiving forwarded CLI arguments.
 Native FFI requires installed libraries; Wasm does not support native C imports.
 Source memory capabilities support checked allocation, addresses,
 and the explicit storage contracts in [Primitive Values and Capabilities](primitives-and-capabilities.md)
