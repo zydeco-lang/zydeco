@@ -446,6 +446,22 @@ impl Display for Tok<'_> {
     }
 }
 
+fn next_syntax_token<'source>(
+    inner: &mut SourceTokens<'source>, mut on_text_block: impl FnMut(Range<usize>),
+) -> Option<Result<(usize, Tok<'source>, usize), Sp<LexicalError>>> {
+    loop {
+        let (range, token) = inner.next()?;
+        match token {
+            | SourceToken::Trivia { role: LexicalRole::TextBlock, .. } => on_text_block(range),
+            | SourceToken::Trivia { .. } => continue,
+            | SourceToken::Syntax(token) => return Some(Ok((range.start, token, range.end))),
+            | SourceToken::Invalid(error) => {
+                return Some(Err(Span::new(range.start, range.end).make(error)));
+            }
+        }
+    }
+}
+
 /// Streaming lexer that skips trivia and retains malformed source as typed errors.
 /// An error consumes its range; subsequent calls continue after that range.
 pub struct Lexer<'source> {
@@ -463,16 +479,31 @@ impl<'source> Iterator for Lexer<'source> {
     type Item = Result<(usize, Tok<'source>, usize), Sp<LexicalError>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            let (range, token) = self.inner.next()?;
-            match token {
-                | SourceToken::Trivia { .. } => continue,
-                | SourceToken::Syntax(token) => return Some(Ok((range.start, token, range.end))),
-                | SourceToken::Invalid(error) => {
-                    return Some(Err(Span::new(range.start, range.end).make(error)));
-                }
-            }
-        }
+        next_syntax_token(&mut self.inner, |_| {})
+    }
+}
+
+/// Parser-facing lexer that skips trivia while recording `--|` line ranges in one pass.
+pub(crate) struct ParsingLexer<'source> {
+    inner: SourceTokens<'source>,
+    text_lines: Vec<Range<usize>>,
+}
+
+impl<'source> ParsingLexer<'source> {
+    pub(crate) fn new(source: &'source str) -> Self {
+        Self { inner: SourceTokens::new(source), text_lines: Vec::new() }
+    }
+
+    pub(crate) fn into_text_lines(self) -> Vec<Range<usize>> {
+        self.text_lines
+    }
+}
+
+impl<'source> Iterator for ParsingLexer<'source> {
+    type Item = Result<(usize, Tok<'source>, usize), Sp<LexicalError>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        next_syntax_token(&mut self.inner, |range| self.text_lines.push(range))
     }
 }
 

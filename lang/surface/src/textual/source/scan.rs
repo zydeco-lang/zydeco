@@ -188,7 +188,7 @@ impl SourceScan {
             }
         }
         if interest.trivia {
-            for text in source.arena.trivia.text_blocks() {
+            for text in source.arena.text_blocks.iter() {
                 analyzer.observe(&SourceEvent::Text(text), source);
             }
         }

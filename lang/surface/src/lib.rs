@@ -20,12 +20,9 @@ pub mod diagnostic;
 pub mod textual {
     #![doc = include_str!("textual/README.md")]
 
-    /// Author-selected layout attached to canonical textual IDs.
-    pub mod intention;
-    pub use intention::*;
-    /// Comments and other source material retained outside canonical syntax.
-    pub mod trivia;
-    pub use trivia::*;
+    /// Contiguous `--|` text blocks retained outside canonical syntax.
+    pub mod text_block;
+    pub use text_block::*;
     /// Surface AST, IDs, and parser allocation helpers.
     pub mod syntax;
     /// Textual arenas and span storage.
@@ -50,15 +47,6 @@ pub mod textual {
     mod discovery;
     pub use discovery::*;
 
-    /// Configurable pretty printing over canonical textual syntax.
-    mod pretty;
-
-    /// A wrapper for the formatters.
-    pub mod fmt {
-        pub use super::pretty::{
-            IndentWidth, LayoutIntentions, Parentheses, PrettyFormatter, PrettyOptions,
-        };
-    }
     /// Span lookup and cursor/region utilities.
     mod span;
 

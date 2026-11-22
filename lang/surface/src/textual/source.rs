@@ -300,7 +300,7 @@ impl DocumentationSite {
             .specialize::<DocMeta>()
             .expect("documentation metadata specialization is infallible")?;
         let span = spans[&EntityId::Term(term)];
-        let comment = arena.trivia.attached_text(term.into()).cloned();
+        let comment = arena.text_blocks.attached_text(term.into()).cloned();
         Some(Self { term, payload, directive: DocumentationDirective { meta, comment, span } })
     }
 }
@@ -314,7 +314,7 @@ impl LiteralSite {
             | Ok(Some(_)) => {
                 let span = spans[&EntityId::Term(term)];
                 Some(if matches!(arena.terms[&payload], Term::Hole(Hole)) {
-                    match arena.trivia.attached_text(term.into()).cloned() {
+                    match arena.text_blocks.attached_text(term.into()).cloned() {
                         | Some(text) => {
                             Ok(Self { term, payload, directive: LiteralDirective { text, span } })
                         }

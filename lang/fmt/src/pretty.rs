@@ -1,20 +1,22 @@
 //! Configurable pretty printing for canonical textual syntax.
 
-mod config;
 mod context;
 mod punning;
 #[cfg(test)]
 mod corpus;
 
-use super::syntax::*;
-pub use config::{IndentWidth, LayoutIntentions, Parentheses, PrettyOptions};
+use crate::{
+    config::{LayoutIntentions, Parentheses, PrettyOptions},
+    intention::*,
+    presentation::FormatPresentation,
+    trivia::*,
+};
 use context::{GrammarContext, PatternRequirement, TermPrecedence, TermRequirement};
 use pretty::{DocAllocator, RcAllocator, RcDoc};
 use punning::{PunnedPatternPayload, PunnedTermPayload, Punning};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use zydeco_surface::{metadata::FormatMeta, textual::syntax::*};
 use zydeco_syntax::{Pretty, ViewSpine};
-
-use crate::metadata::FormatMeta;
 
 static DOC_ALLOCATOR: RcAllocator = RcAllocator;
 
@@ -22,6 +24,7 @@ static DOC_ALLOCATOR: RcAllocator = RcAllocator;
 pub struct PrettyFormatter<'arena> {
     arena: &'arena TextArena,
     spans: &'arena SpanArena,
+    presentation: &'arena FormatPresentation,
     source: Option<&'arena str>,
     grammar: GrammarContext<'arena>,
     punning: Punning<'arena>,
@@ -128,12 +131,12 @@ impl BoundaryIntent {
         }
     }
 
-    fn resolve(self, arena: &TextArena) -> Option<BreakIntent> {
+    fn resolve(self, intentions: &SurfaceIntentions) -> Option<BreakIntent> {
         match self {
             | Self::Canonical => None,
-            | Self::Preserve(boundary) => arena.intentions.at(boundary),
+            | Self::Preserve(boundary) => intentions.at(boundary),
             | Self::PreserveBlankLine(boundary) => {
-                arena.intentions.at(boundary).filter(|intent| *intent == BreakIntent::BlankLine)
+                intentions.at(boundary).filter(|intent| *intent == BreakIntent::BlankLine)
             }
         }
     }
@@ -368,40 +371,47 @@ impl DelimiterSpacing {
 }
 
 impl<'arena> PrettyFormatter<'arena> {
-    pub fn new(arena: &'arena TextArena, spans: &'arena SpanArena) -> Self {
-        Self::with_options(arena, spans, PrettyOptions::default())
+    pub fn new(
+        arena: &'arena TextArena, spans: &'arena SpanArena,
+        presentation: &'arena FormatPresentation,
+    ) -> Self {
+        Self::with_options(arena, spans, presentation, PrettyOptions::default())
     }
 
     pub fn with_options(
-        arena: &'arena TextArena, spans: &'arena SpanArena, options: PrettyOptions,
+        arena: &'arena TextArena, spans: &'arena SpanArena,
+        presentation: &'arena FormatPresentation, options: PrettyOptions,
     ) -> Self {
         Self {
             arena,
             spans,
+            presentation,
             source: None,
             grammar: GrammarContext::new(arena),
-            punning: Punning::new(arena),
+            punning: Punning::new(arena, &presentation.trivia),
             options,
             documents: Rc::default(),
         }
     }
 
     pub fn with_source(
-        arena: &'arena TextArena, spans: &'arena SpanArena, source: &'arena str,
+        arena: &'arena TextArena, spans: &'arena SpanArena,
+        presentation: &'arena FormatPresentation, source: &'arena str,
     ) -> Self {
-        Self::with_options_source(arena, spans, PrettyOptions::default(), source)
+        Self::with_options_source(arena, spans, presentation, PrettyOptions::default(), source)
     }
 
     pub fn with_options_source(
-        arena: &'arena TextArena, spans: &'arena SpanArena, options: PrettyOptions,
-        source: &'arena str,
+        arena: &'arena TextArena, spans: &'arena SpanArena,
+        presentation: &'arena FormatPresentation, options: PrettyOptions, source: &'arena str,
     ) -> Self {
         Self {
             arena,
             spans,
+            presentation,
             source: Some(source),
             grammar: GrammarContext::new(arena),
-            punning: Punning::new(arena),
+            punning: Punning::new(arena, &presentation.trivia),
             options,
             documents: Rc::default(),
         }
@@ -412,9 +422,10 @@ impl<'arena> PrettyFormatter<'arena> {
         Self {
             arena: self.arena,
             spans: self.spans,
+            presentation: self.presentation,
             source: self.source,
             grammar: GrammarContext::new(self.arena),
-            punning: Punning::new(self.arena),
+            punning: Punning::new(self.arena, &self.presentation.trivia),
             options,
             documents: self.documents.clone(),
         }
@@ -437,23 +448,23 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn with_leading_comments(&self, entity: EntityId, document: RcDoc<'arena>) -> RcDoc<'arena> {
-        self.with_comments(self.arena.trivia.leading_comments(entity), document)
+        self.with_comments(self.presentation.trivia.leading_comments(entity), document)
     }
 
     fn with_before_arm_comments(&self, entity: EntityId, document: RcDoc<'arena>) -> RcDoc<'arena> {
-        self.with_comments(self.arena.trivia.before_arm_comments(entity), document)
+        self.with_comments(self.presentation.trivia.before_arm_comments(entity), document)
     }
 
     fn with_before_metadata_comments(
         &self, entity: EntityId, document: RcDoc<'arena>,
     ) -> RcDoc<'arena> {
-        self.with_comments(self.arena.trivia.before_metadata_comments(entity), document)
+        self.with_comments(self.presentation.trivia.before_metadata_comments(entity), document)
     }
 
     fn with_before_existential_comments(
         &self, entity: EntityId, document: RcDoc<'arena>,
     ) -> RcDoc<'arena> {
-        self.with_comments(self.arena.trivia.before_existential_comments(entity), document)
+        self.with_comments(self.presentation.trivia.before_existential_comments(entity), document)
     }
 
     fn with_comments(
@@ -522,13 +533,17 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn with_trailing_comments(&self, entity: EntityId, document: RcDoc<'arena>) -> RcDoc<'arena> {
-        self.arena.trivia.trailing_comments(entity).iter().fold(document, |document, comment| {
-            let separation =
-                comment.separation_before().max(Self::least_separation_before(comment.comment()));
-            document
-                .append(self.line_separation(separation))
-                .append(self.comment(comment.comment()))
-        })
+        self.presentation.trivia.trailing_comments(entity).iter().fold(
+            document,
+            |document, comment| {
+                let separation = comment
+                    .separation_before()
+                    .max(Self::least_separation_before(comment.comment()));
+                document
+                    .append(self.line_separation(separation))
+                    .append(self.comment(comment.comment()))
+            },
+        )
     }
 
     fn comment(&self, comment: &'arena SurfaceComment) -> RcDoc<'arena> {
@@ -605,7 +620,7 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn retained_placement(&self, intent: BoundaryIntent) -> BoundaryPlacement {
-        let intention = intent.resolve(self.arena);
+        let intention = intent.resolve(&self.presentation.intentions);
         if self.preserves_blank_line(intention) {
             return BoundaryPlacement::BlankLine;
         }
@@ -616,7 +631,7 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn expanded_placement(&self, intent: BoundaryIntent) -> BoundaryPlacement {
-        let intention = intent.resolve(self.arena);
+        let intention = intent.resolve(&self.presentation.intentions);
         if self.preserves_blank_line(intention) {
             BoundaryPlacement::BlankLine
         } else {
@@ -659,7 +674,7 @@ impl<'arena> PrettyFormatter<'arena> {
     /// documentation comments always do; a block comment does when a line
     /// break follows it.
     fn leading_comments_end_line(&self, entity: EntityId) -> bool {
-        self.arena
+        self.presentation
             .trivia
             .leading_comments(entity)
             .iter()
@@ -704,7 +719,7 @@ impl<'arena> PrettyFormatter<'arena> {
         right: LayoutFragment<'arena>, continuation_indent: isize,
     ) -> LayoutFragment<'arena> {
         let intent = BoundaryIntent::between(left.anchors.last, right.anchors.first);
-        let intention = intent.resolve(self.arena);
+        let intention = intent.resolve(&self.presentation.intentions);
         let anchors = LayoutAnchors { first: left.anchors.first, last: right.anchors.last };
         let preserve_break = self.forces_break(intention);
         let separator =
@@ -812,7 +827,8 @@ impl<'arena> PrettyFormatter<'arena> {
             ));
         // A blank line between the type and the bindee belongs before the
         // separator, so it excludes the attached form.
-        let attachable = !matches!(intent.resolve(self.arena), Some(BreakIntent::BlankLine));
+        let attachable =
+            !matches!(intent.resolve(&self.presentation.intentions), Some(BreakIntent::BlankLine));
         let attached = if attachable {
             ty.document
                 .clone()
@@ -914,17 +930,20 @@ impl<'arena> PrettyFormatter<'arena> {
             };
             let mut document = self.term_through(operand, precedence);
             let mut starts_with_comment =
-                !self.arena.trivia.leading_comments(operand.into()).is_empty();
+                !self.presentation.trivia.leading_comments(operand.into()).is_empty();
             let mut comments_end_line = self.leading_comments_end_line(operand.into());
             if let Some(site) = comment_site {
-                starts_with_comment |= !self.arena.trivia.leading_comments(site.into()).is_empty();
+                starts_with_comment |=
+                    !self.presentation.trivia.leading_comments(site.into()).is_empty();
                 comments_end_line |= self.leading_comments_end_line(site.into());
                 document = self.with_leading_comments(site.into(), document);
             }
             operands.push(InfixOperand { document, starts_with_comment, comments_end_line });
             if index < last {
-                boundaries
-                    .push(BoundaryIntent::between(operand, sites[index + 1].0).resolve(self.arena));
+                boundaries.push(
+                    BoundaryIntent::between(operand, sites[index + 1].0)
+                        .resolve(&self.presentation.intentions),
+                );
             }
         }
 
@@ -978,7 +997,7 @@ impl<'arena> PrettyFormatter<'arena> {
             table = table.append(boundary);
         }
         let begins_after_same_line_comment = self
-            .arena
+            .presentation
             .trivia
             .leading_comments(root.into())
             .last()
@@ -1254,10 +1273,11 @@ impl<'arena> PrettyFormatter<'arena> {
     /// Elide a transparent group unless its delimiters carry a preserved
     /// multiline layout boundary.
     fn should_elide_parentheses(&self, entity: EntityId, inner: EntityId) -> bool {
-        let carries_break = self
-            .forces_break(self.arena.intentions.at(LayoutBoundary::after_start(entity, inner)))
-            || self
-                .forces_break(self.arena.intentions.at(LayoutBoundary::before_end(inner, entity)));
+        let carries_break = self.forces_break(
+            self.presentation.intentions.at(LayoutBoundary::after_start(entity, inner)),
+        ) || self.forces_break(
+            self.presentation.intentions.at(LayoutBoundary::before_end(inner, entity)),
+        );
         self.options.parentheses == Parentheses::Minimal && !carries_break
     }
 
@@ -1447,19 +1467,42 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn copattern_parameters(&self, pattern: CoPatId) -> Vec<LayoutFragment<'arena>> {
+        let mut parameters = Vec::new();
+        self.collect_copattern_parameters(pattern, &mut parameters);
+        parameters
+    }
+
+    fn collect_copattern_parameters(
+        &self, pattern: CoPatId, out: &mut Vec<LayoutFragment<'arena>>,
+    ) {
         zydeco_foundation::stack::maybe_grow(|| {
-            let CoPattern::App(Appli(patterns)) = &self.arena.copats[&pattern] else {
-                return vec![LayoutFragment::entity(pattern.into(), self.copattern(pattern))];
+            let mut chain = Vec::new();
+            let mut right_reversed = Vec::new();
+            let mut current = pattern;
+            let leaf = loop {
+                match &self.arena.copats[&current] {
+                    | CoPattern::App(Appli(patterns)) => {
+                        let Some((&first, rest)) = patterns.split_first() else {
+                            unreachable!("copattern applications are nonempty");
+                        };
+                        chain.push(current);
+                        right_reversed.extend(rest.iter().copied().rev());
+                        current = first;
+                    }
+                    | _ => break current,
+                }
             };
-            let mut parameters =
-                patterns.iter().flat_map(|pattern| self.copattern_parameters(*pattern));
-            let first = parameters.next().expect("copattern applications are nonempty");
-            let LayoutFragment { document, anchors } = first;
-            let first = LayoutFragment {
-                document: self.with_leading_comments(pattern.into(), document),
-                anchors: LayoutAnchors { first: pattern.into(), last: anchors.last },
-            };
-            std::iter::once(first).chain(parameters).collect()
+            let first_index = out.len();
+            out.push(LayoutFragment::entity(leaf.into(), self.copattern(leaf)));
+            for app in chain.into_iter().rev() {
+                let first = &mut out[first_index];
+                let document = std::mem::replace(&mut first.document, RcDoc::nil());
+                first.document = self.with_leading_comments(app.into(), document);
+                first.anchors.first = app.into();
+            }
+            for item in right_reversed.into_iter().rev() {
+                self.collect_copattern_parameters(item, out);
+            }
         })
     }
 
@@ -1524,9 +1567,13 @@ impl<'arena> PrettyFormatter<'arena> {
                         // A commentless hole payload collapses into the parenthesized sugar.
                         // A commented hole keeps the bracket form so its comments survive.
                         | Term::Hole(_)
-                            if self.arena.trivia.leading_comments((*inner).into()).is_empty()
+                            if self
+                                .presentation
+                                .trivia
+                                .leading_comments((*inner).into())
+                                .is_empty()
                                 && self
-                                    .arena
+                                    .presentation
                                     .trivia
                                     .trailing_comments((*inner).into())
                                     .is_empty() =>
@@ -1818,7 +1865,7 @@ impl<'arena> PrettyFormatter<'arena> {
         &self, open: &'static str, close: &'static str, meta: MetaId,
     ) -> RcDoc<'arena> {
         let metadata = self.metadata(meta);
-        if self.arena.trivia.leading_comments(meta.into()).is_empty() {
+        if self.presentation.trivia.leading_comments(meta.into()).is_empty() {
             RcDoc::text(open).append(metadata).append(RcDoc::text(close))
         } else {
             RcDoc::text(open)
@@ -2033,8 +2080,10 @@ impl<'arena> PrettyFormatter<'arena> {
     fn scope_boundary_allows_merging(
         &self, parameter: impl Into<EntityId>, nested: TermId,
     ) -> bool {
-        self.arena.trivia.leading_comments(nested.into()).is_empty()
-            && !self.forces_break(BoundaryIntent::between(parameter, nested).resolve(self.arena))
+        self.presentation.trivia.leading_comments(nested.into()).is_empty()
+            && !self.forces_break(
+                BoundaryIntent::between(parameter, nested).resolve(&self.presentation.intentions),
+            )
     }
 
     fn scoped_telescope(&self, root: TermId, form: ScopedForm) -> ScopeTelescope<CoPatId> {
@@ -2190,7 +2239,8 @@ impl<'arena> PrettyFormatter<'arena> {
         let mut current = pattern;
         loop {
             current = self.transparent_pattern_group(current);
-            if current != pattern && !self.arena.trivia.leading_comments(current.into()).is_empty()
+            if current != pattern
+                && !self.presentation.trivia.leading_comments(current.into()).is_empty()
             {
                 return None;
             }
@@ -2207,7 +2257,7 @@ impl<'arena> PrettyFormatter<'arena> {
                         return None;
                     };
                     if manifest != pattern
-                        && !self.arena.trivia.leading_comments(manifest.into()).is_empty()
+                        && !self.presentation.trivia.leading_comments(manifest.into()).is_empty()
                     {
                         return None;
                     }
@@ -2235,7 +2285,7 @@ impl<'arena> PrettyFormatter<'arena> {
         if let Pattern::Paren(Paren(patterns)) = &self.arena.pats[&pattern]
             && let [inner] = patterns.as_slice()
             && self.should_elide_parentheses(pattern.into(), (*inner).into())
-            && self.arena.trivia.leading_comments(pattern.into()).is_empty()
+            && self.presentation.trivia.leading_comments(pattern.into()).is_empty()
         {
             self.transparent_pattern_group(*inner)
         } else {
@@ -2304,6 +2354,7 @@ impl<'arena> PrettyFormatter<'arena> {
     ) -> RcDoc<'arena> {
         let arena = self.arena;
         let spans = self.spans;
+        let presentation = self.presentation;
         let source = self.source;
         let options = self.options;
         // Cached documents can contain this deferred layout; avoid an ownership cycle.
@@ -2314,9 +2365,10 @@ impl<'arena> PrettyFormatter<'arena> {
                 let formatter = PrettyFormatter {
                     arena,
                     spans,
+                    presentation,
                     source,
                     grammar: GrammarContext::new(arena),
-                    punning: Punning::new(arena),
+                    punning: Punning::new(arena, &presentation.trivia),
                     options,
                     documents: documents.upgrade().unwrap_or_default(),
                 };
@@ -2378,8 +2430,10 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn sequence_tail(&self, before: EntityId, tail: TermId) -> RcDoc<'arena> {
-        self.mandatory_line_break(BoundaryIntent::between(before, tail).resolve(self.arena))
-            .append(self.term_through(tail, TermPrecedence::Binder))
+        self.mandatory_line_break(
+            BoundaryIntent::between(before, tail).resolve(&self.presentation.intentions),
+        )
+        .append(self.term_through(tail, TermPrecedence::Binder))
     }
 
     /// Block constructs — sequence bindings, whose tail marker always
@@ -2398,7 +2452,7 @@ impl<'arena> PrettyFormatter<'arena> {
             )
         })
         .append(self.with_separated_comments(
-            self.arena.trivia.leading_comments(term.into()),
+            self.presentation.trivia.leading_comments(term.into()),
             LineSeparation::NextLine,
             document,
         ))
@@ -2454,13 +2508,14 @@ impl<'arena> PrettyFormatter<'arena> {
         RcDoc::text(keyword)
             .append(
                 self.mandatory_line_break(
-                    BoundaryIntent::after_start(enclosing, body).resolve(self.arena),
+                    BoundaryIntent::after_start(enclosing, body)
+                        .resolve(&self.presentation.intentions),
                 )
                 .append(self.annotated_term(body))
                 .nest(self.indent()),
             )
             .append(self.mandatory_line_break(
-                BoundaryIntent::before_end(body, enclosing).resolve(self.arena),
+                BoundaryIntent::before_end(body, enclosing).resolve(&self.presentation.intentions),
             ))
             .append(RcDoc::text(end))
     }
@@ -2477,13 +2532,13 @@ impl<'arena> PrettyFormatter<'arena> {
                 | Some(previous) => BoundaryIntent::between(previous, arm.anchors.first),
             };
             document = document
-                .append(self.mandatory_line_break(gap.resolve(self.arena)))
+                .append(self.mandatory_line_break(gap.resolve(&self.presentation.intentions)))
                 .append(self.with_before_arm_comments(arm.anchors.first, arm.document));
             previous = Some(arm.anchors.last);
         }
         let before_end = previous.map_or_else(RcDoc::hardline, |last| {
             self.mandatory_line_break(
-                BoundaryIntent::before_end(last, enclosing).resolve(self.arena),
+                BoundaryIntent::before_end(last, enclosing).resolve(&self.presentation.intentions),
             )
         });
         document.append(before_end).append(RcDoc::text("end"))
@@ -2628,14 +2683,16 @@ impl<'a> Pretty<'a, PrettyFormatter<'a>> for TermId {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bitter::{SourceUnitDesugarer, fmt::Formatter as BitterFormatter};
-    use crate::textual::{LexicalRole, LexicalTokens, StrictParser};
+    use crate::{FormattedSource, IndentWidth};
     use zydeco_foundation::pass::CompilerPass;
+    use zydeco_surface::{
+        bitter::{SourceUnitDesugarer, fmt::Formatter as BitterFormatter},
+        textual::{LexicalRole, LexicalTokens, StrictParser},
+    };
     use zydeco_syntax::Ugly;
 
     struct ParsedSource {
-        unit: SourceUnit,
-        parser: Parser,
+        formatted: FormattedSource,
         source: String,
     }
 
@@ -2661,10 +2718,9 @@ mod tests {
         }
 
         fn named(source: &str, name: &str) -> Self {
-            let mut parser = Parser::new();
-            let unit = StrictParser::source(source, &mut parser)
+            let formatted = FormattedSource::parse(source)
                 .unwrap_or_else(|error| panic!("failed to parse {name}: {error:?}\n{source}"));
-            Self { unit, parser, source: source.to_owned() }
+            Self { formatted, source: source.to_owned() }
         }
 
         fn render(&self, layout_intentions: LayoutIntentions) -> String {
@@ -2676,20 +2732,16 @@ mod tests {
         }
 
         fn render_with_options(&self, options: PrettyOptions) -> String {
-            PrettyFormatter::with_options_source(
-                &self.parser.arena,
-                &self.parser.spans,
-                options,
-                &self.source,
-            )
-            .render_unit(self.unit)
+            self.formatted.render(&self.source, options)
         }
 
         fn desugared_shape(&self) -> String {
-            let output =
-                SourceUnitDesugarer { spans: &self.parser.spans, textual: &self.parser.arena }
-                    .run(self.unit)
-                    .unwrap();
+            let output = SourceUnitDesugarer {
+                spans: &self.formatted.spans,
+                textual: &self.formatted.arena,
+            }
+            .run(self.formatted.unit)
+            .unwrap();
             output.root.ugly(&BitterFormatter::new(&output.arena))
         }
     }
@@ -2699,15 +2751,18 @@ mod tests {
         let source = "(#field = field,\n= kept)";
         let parsed = ParsedSource::new(source);
         assert_eq!(
-            parsed.parser.arena.intentions.line_extent(parsed.unit.root.into()),
+            parsed.formatted.presentation.intentions.line_extent(parsed.formatted.unit.root.into()),
             Some(LineExtent::new(0, 1))
         );
-        let Term::Paren(Paren(fields)) = &parsed.parser.arena.terms[&parsed.unit.root] else {
+        let Term::Paren(Paren(fields)) = &parsed.formatted.arena.terms[&parsed.formatted.unit.root]
+        else {
             panic!("expected a tuple")
         };
         assert_eq!(fields.len(), 2);
         assert!(
-            fields.iter().all(|field| matches!(parsed.parser.arena.terms[field], Term::Named(_)))
+            fields
+                .iter()
+                .all(|field| matches!(parsed.formatted.arena.terms[field], Term::Named(_)))
         );
     }
 
@@ -2816,11 +2871,12 @@ mod tests {
         ] {
             let parsed = ParsedSource::new(&source);
             let formatter = PrettyFormatter::with_source(
-                &parsed.parser.arena,
-                &parsed.parser.spans,
+                &parsed.formatted.arena,
+                &parsed.formatted.spans,
+                &parsed.formatted.presentation,
                 &parsed.source,
             );
-            assert_eq!(formatter.render_unit(parsed.unit), expected);
+            assert_eq!(formatter.render_unit(parsed.formatted.unit), expected);
             assert!(formatter.documents.terms.borrow().len() <= 3 * (depth + 10));
             assert!(formatter.documents.patterns.borrow().len() <= 2 * (depth + 1));
         }
@@ -3079,14 +3135,18 @@ mod tests {
     fn keeps_empty_line_intentions_local_to_each_parsed_source() {
         let first = concat!("begin\n", "  let a = 1 in\n", "\n", "\n", "  a\n", "end");
         let second = concat!("begin\n", "  let b =\n", "    value\n", "  in\n", "  b\n", "end");
-        let mut parser = Parser::new();
+        let mut parser = Parser::for_formatting();
+        let mut presentation = FormatPresentation::default();
         StrictParser::source(first, &mut parser).expect("the first source should parse");
+        presentation.capture(first, &parser);
         let second_unit =
             StrictParser::source(second, &mut parser).expect("the second source should parse");
+        presentation.capture(second, &parser);
 
         let formatted = PrettyFormatter::with_options(
             &parser.arena,
             &parser.spans,
+            &presentation,
             PrettyOptions::default().with_line_width(120),
         )
         .render_unit(second_unit);
@@ -5340,8 +5400,10 @@ mod tests {
             assert_eq!(formatted, expected);
 
             let reparsed = ParsedSource::new(&formatted);
-            let documentation =
-                reparsed.unit.documentation(&reparsed.parser.arena, &reparsed.parser.spans);
+            let documentation = reparsed
+                .formatted
+                .unit
+                .documentation(&reparsed.formatted.arena, &reparsed.formatted.spans);
             let [site] = documentation.as_slice() else {
                 panic!("expected one documentation annotation")
             };
@@ -5357,8 +5419,10 @@ mod tests {
         assert_eq!(formatted, "--| Attached text.\n@(doc)\n");
 
         let reparsed = ParsedSource::new(&formatted);
-        let documentation =
-            reparsed.unit.documentation(&reparsed.parser.arena, &reparsed.parser.spans);
+        let documentation = reparsed
+            .formatted
+            .unit
+            .documentation(&reparsed.formatted.arena, &reparsed.formatted.spans);
         let [site] = documentation.as_slice() else {
             panic!("expected one documentation annotation")
         };
@@ -5500,13 +5564,13 @@ mod tests {
     #[test]
     fn standard_library_pretty_printing_reparses_idempotently() {
         [
-            ("builtin.zy", include_str!("../../../../lib/std/builtin.zy")),
-            ("data-package.zy", include_str!("../../../../lib/std/data/package.zy")),
-            ("monad.zy", include_str!("../../../../lib/std/effect/monad.zy")),
-            ("numeric-package.zy", include_str!("../../../../lib/std/numeric/package.zy")),
-            ("std.zy", include_str!("../../../../lib/std/std.zy")),
-            ("system-package.zy", include_str!("../../../../lib/std/system/package.zy")),
-            ("text-package.zy", include_str!("../../../../lib/std/text/package.zy")),
+            ("builtin.zy", include_str!("../../../lib/std/builtin.zy")),
+            ("data-package.zy", include_str!("../../../lib/std/data/package.zy")),
+            ("monad.zy", include_str!("../../../lib/std/effect/monad.zy")),
+            ("numeric-package.zy", include_str!("../../../lib/std/numeric/package.zy")),
+            ("std.zy", include_str!("../../../lib/std/std.zy")),
+            ("system-package.zy", include_str!("../../../lib/std/system/package.zy")),
+            ("text-package.zy", include_str!("../../../lib/std/text/package.zy")),
         ]
         .into_iter()
         .for_each(|(name, source)| {

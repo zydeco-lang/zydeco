@@ -6,6 +6,7 @@ members = [
     "lang/machine",
     "lang/syntax",
     "lang/surface",
+    "lang/fmt",
     "lang/statics",
     "lang/ir",
     "lang/dynamics",
@@ -45,6 +46,7 @@ zydeco-derive = { path = "lang/derive" }
 zydeco-machine = { path = "lang/machine" }
 zydeco-syntax = { path = "lang/syntax" }
 zydeco-surface = { path = "lang/surface" }
+zydeco-fmt = { path = "lang/fmt" }
 zydeco-statics = { path = "lang/statics" }
 zydeco-ir = { path = "lang/ir" }
 zydeco-dynamics = { path = "lang/dynamics" }

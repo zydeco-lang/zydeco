@@ -1,5 +1,5 @@
+use super::TextBlocks;
 use super::syntax::*;
-use super::{SurfaceIntentions, SurfaceTrivia};
 use std::{collections::HashSet, sync::Arc};
 
 /* ---------------------------------- Arena --------------------------------- */
@@ -37,10 +37,8 @@ pub struct TextArena {
     pub copats: ArenaSparse<TextualScope, CoPatId>,
     pub metas: ArenaSparse<TextualScope, MetaId>,
     pub terms: ArenaSparse<TextualScope, TermId>,
-    /// Author-selected layout that does not change canonical syntax.
-    pub intentions: SurfaceIntentions,
-    /// Source content retained without adding syntax variants.
-    pub trivia: SurfaceTrivia,
+    /// Contiguous `--|` documentation and literal text blocks retained for semantic analysis.
+    pub text_blocks: TextBlocks,
     /// Compiler-inserted projection groups supplying fallback lexical names.
     pub default_prelude_binders: HashSet<PatId>,
     /// Generated definitions point at their owning projection group, not an identifier token.
@@ -259,12 +257,18 @@ mod impl_span_arena {
         }
         /// Iterate over stored spans with their IDs.
         pub fn iter(&self) -> impl Iterator<Item = (EntityId, &Span)> {
+            self.iter_from(0)
+        }
+        /// Iterate over stored spans starting at raw index `start`.
+        pub fn iter_from(&self, start: usize) -> impl Iterator<Item = (EntityId, &Span)> {
             debug_assert_eq!(self.categories.len(), self.spans.len());
+            let start = start.min(self.spans.len());
             let key_space = self.key_space;
-            self.categories.iter().copied().zip(&self.spans).enumerate().map(
-                move |(raw, (category, span))| {
+            self.categories[start..].iter().copied().zip(&self.spans[start..]).enumerate().map(
+                move |(offset, (category, span))| {
                     let key_space = key_space.expect("a nonempty span arena has a key space");
-                    let raw = u32::try_from(raw).expect("span arena exceeded the raw ID range");
+                    let raw = u32::try_from(start + offset)
+                        .expect("span arena exceeded the raw ID range");
                     (category.restore(key_space, RawIdx::from_u32(raw)), span)
                 },
             )

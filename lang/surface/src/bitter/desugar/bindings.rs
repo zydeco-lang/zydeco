@@ -120,16 +120,18 @@ impl DesugarFolder<'_> {
             let mut run = Vec::new();
             for parameter in params.into_iter().rev() {
                 match parameter {
-                    | b::CoPatternItem::Pat(pattern) => run.insert(0, pattern),
+                    | b::CoPatternItem::Pat(pattern) => run.push(pattern),
                     | b::CoPatternItem::Dtor(dtor) => {
                         if flavor == t::BindingFlavor::Value {
                             return Err(self.value_parameter_error(
                                 parameter_origin.expect("a parameter telescope"),
                             ));
                         }
+                        let mut group = std::mem::take(&mut run);
+                        group.reverse();
                         abstraction = abstraction.parameters(
                             &mut self.builder,
-                            std::mem::take(&mut run),
+                            group,
                             parameter_flavor,
                             source,
                         );
@@ -143,6 +145,7 @@ impl DesugarFolder<'_> {
                     }
                 }
             }
+            run.reverse();
             abstraction = abstraction.parameters(&mut self.builder, run, parameter_flavor, source);
         }
         if flavor == t::BindingFlavor::Recursive {
@@ -181,11 +184,13 @@ impl DesugarFolder<'_> {
         let mut run = Vec::new();
         for parameter in params.into_iter().rev() {
             match parameter {
-                | b::CoPatternItem::Pat(pattern) => run.insert(0, pattern),
+                | b::CoPatternItem::Pat(pattern) => run.push(pattern),
                 | b::CoPatternItem::Dtor(dtor) => {
+                    let mut group = std::mem::take(&mut run);
+                    group.reverse();
                     abstraction = abstraction.parameters(
                         &mut self.builder,
-                        std::mem::take(&mut run),
+                        group,
                         t::ParameterFlavor::Plain,
                         id.into(),
                     );
@@ -194,6 +199,7 @@ impl DesugarFolder<'_> {
                 }
             }
         }
+        run.reverse();
         abstraction =
             abstraction.parameters(&mut self.builder, run, t::ParameterFlavor::Plain, id.into());
         Ok(abstraction.finish(&mut self.builder, id.into()))

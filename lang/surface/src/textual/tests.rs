@@ -1983,6 +1983,99 @@ fn parses_chained_dot_elimination() {
     assert_eq!(x.plain(), "x");
 }
 
+#[test]
+fn default_parser_skips_format_prefixes_while_formatting_parser_retains_them() {
+    let source = "exists @[builtin(os)] (OS : CType) . data | +C : Int end";
+
+    let mut plain = Parser::new();
+    StrictParser::source(source, &mut plain).unwrap();
+    assert!(plain.format_prefixes().is_none());
+
+    let mut formatting = Parser::for_formatting();
+    StrictParser::source(source, &mut formatting).unwrap();
+    let prefixes = formatting.format_prefixes().expect("formatting parser retains prefixes");
+    assert!(!prefixes.arms.is_empty());
+    assert!(!prefixes.existentials.is_empty());
+    assert!(!prefixes.metadata.is_empty());
+}
+
+#[test]
+fn ordinary_comments_without_text_blocks_do_not_allocate_text_blocks() {
+    let source = "-- line comment\n/- nested /- block -/ -/\nret ()\n";
+    let mut parser = Parser::new();
+    let unit = StrictParser::source(source, &mut parser).unwrap();
+    assert_eq!(parser.arena.text_blocks.iter().count(), 0);
+    assert!(unit.unattached_text(&parser.arena, &parser.spans).is_empty());
+}
+
+#[test]
+fn text_block_attachment_stops_at_blank_lines_comments_arms_and_eof() {
+    let source = concat!(
+        "(\n",
+        "  --| Attached\n",
+        "  @[doc] _,\n",
+        "  --| Detached blank\n",
+        "\n",
+        "  @[doc] _,\n",
+        "  --| Detached comment\n",
+        "  -- barrier\n",
+        "  @[doc] _,\n",
+        "  data\n",
+        "    --| Detached before arm\n",
+        "    | +C : @[doc] Int\n",
+        "  end\n",
+        ")\n",
+        "--| Trailing EOF\n",
+    );
+    let mut parser = Parser::new();
+    let unit = StrictParser::source(source, &mut parser).unwrap();
+
+    let docs = unit.documentation(&parser.arena, &parser.spans);
+    assert_eq!(docs.len(), 4);
+    assert_eq!(docs[0].directive.comment.as_ref().unwrap().text.as_ref(), "Attached");
+    assert!(docs[1].directive.comment.is_none());
+    assert!(docs[2].directive.comment.is_none());
+    assert!(docs[3].directive.comment.is_none());
+
+    let warnings = unit
+        .unattached_text(&parser.arena, &parser.spans)
+        .iter()
+        .map(|warning| source[warning.range.clone()].trim_end().to_owned())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        warnings,
+        [
+            "--| Detached blank",
+            "--| Detached comment",
+            "--| Detached before arm",
+            "--| Trailing EOF",
+        ]
+    );
+}
+
+#[test]
+fn extend_product_flattens_chains_without_disturbing_parenthesized_left() {
+    let long = (0..200).map(|idx| format!("T{idx}")).collect::<Vec<_>>().join(" * ");
+    let mut parser = Parser::new();
+    let root = StrictParser::source(&long, &mut parser).unwrap().root;
+    let Term::Prod(Prod(components)) = &parser.arena.terms[&root] else {
+        panic!("expected flat product");
+    };
+    assert_eq!(components.len(), 200);
+
+    let mut nested_parser = Parser::new();
+    let nested_root = StrictParser::source("(A * B) * C", &mut nested_parser).unwrap().root;
+    let Term::Prod(Prod(outer)) = &nested_parser.arena.terms[&nested_root] else {
+        panic!("expected outer product");
+    };
+    assert_eq!(outer.len(), 2);
+    let Term::Paren(Paren(inner_terms)) = &nested_parser.arena.terms[&outer[0]] else {
+        panic!("expected parenthesized left component to stay nested");
+    };
+    assert_eq!(inner_terms.len(), 1);
+    assert!(matches!(nested_parser.arena.terms[&inner_terms[0]], Term::Prod(_)));
+}
+
 pub(super) fn only_error<E>(errors: crate::diagnostic::Diagnostics<E>) -> E {
     assert_eq!(errors.len(), 1);
     errors.into_iter().next().unwrap()

@@ -1,11 +1,11 @@
 //! Author-selected layout retained alongside canonical syntax.
 
-use super::syntax::{EntityId, PatId};
 use std::{
     collections::BTreeSet,
     ops::{Bound::Excluded, Range},
 };
 use zydeco_foundation::arena::{ArenaAccess, ArenaAssoc};
+use zydeco_surface::textual::syntax::{EntityId, PatId};
 
 /// A zero-based source line used only for relative layout comparisons.
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -96,6 +96,20 @@ struct SourceLayout {
 
 impl SourceLayout {
     fn new(source: &str, exclusions: &[Range<usize>]) -> Self {
+        let mut sorted =
+            exclusions.iter().filter(|range| !range.is_empty()).cloned().collect::<Vec<_>>();
+        sorted.sort_unstable_by_key(|range| (range.start, range.end));
+        let mut merged: Vec<Range<usize>> = Vec::with_capacity(sorted.len());
+        for range in sorted {
+            if let Some(last) = merged.last_mut()
+                && range.start <= last.end
+            {
+                last.end = last.end.max(range.end);
+            } else {
+                merged.push(range);
+            }
+        }
+        let mut cursor = 0usize;
         let blank_lines = source
             .split('\n')
             .enumerate()
@@ -105,9 +119,11 @@ impl SourceLayout {
                 Some((SourceLine(line), line_start, contents))
             })
             .filter_map(|(line, start, contents)| {
-                (contents.trim().is_empty()
-                    && !exclusions.iter().any(|range| range.contains(&start)))
-                .then_some(line)
+                while cursor < merged.len() && merged[cursor].end <= start {
+                    cursor += 1;
+                }
+                let excluded = merged.get(cursor).is_some_and(|range| range.start <= start);
+                (contents.trim().is_empty() && !excluded).then_some(line)
             })
             .collect();
         Self { blank_lines }

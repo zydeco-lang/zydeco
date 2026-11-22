@@ -1,7 +1,7 @@
 use super::{
     LexicalRole, LexicalTokens,
     escape::{EscapeError, LiteralEscapes},
-    lexer::{Lexer, LexicalError, Tok, TokenKind},
+    lexer::{LexicalError, ParsingLexer, Tok, TokenKind},
     syntax::{
         EntityId, FloatLiteral, Hole, IntegerLiteral, Parser, PatId, Pattern, SourceUnit, Sp, Term,
         TermId,
@@ -432,12 +432,12 @@ pub struct StrictParser;
 impl StrictParser {
     pub fn source(source: &str, syntax: &mut Parser) -> Result<SourceUnit, ParseFailure> {
         let mut recovery = RecoveryAccumulator::default();
-        let parsed = generated::SourceUnitParser::new().parse(
-            source,
-            syntax,
-            &mut recovery,
-            ParseTokens::ordinary(source),
-        );
+        let start_entity = syntax.spans.len();
+        let mut tokens = ParserLexer::new(source);
+        let parsed = generated::SourceUnitParser::new().parse(syntax, &mut recovery, &mut tokens);
+        if parsed.is_ok() {
+            syntax.record_text_blocks(source, start_entity, tokens.into_text_lines());
+        }
         Self::finish(parsed, syntax, recovery)
     }
 
@@ -480,13 +480,45 @@ impl<'source> RecoveringParser<'source> {
 
     pub fn source(&self, syntax: &mut Parser) -> RecoveringParse {
         let mut recovery = RecoveryAccumulator::default();
-        let parsed = generated::SourceUnitParser::new().parse(
-            self.source,
-            syntax,
-            &mut recovery,
-            ParseTokens::new(self.source, self.completion.as_ref()),
-        );
+        let start_entity = syntax.spans.len();
+        let (parsed, text_lines) = match &self.completion {
+            | None => {
+                let mut tokens = ParserLexer::new(self.source);
+                let parsed =
+                    generated::SourceUnitParser::new().parse(syntax, &mut recovery, &mut tokens);
+                (parsed, tokens.into_text_lines())
+            }
+            | Some(completion) => {
+                let (tokens, text_lines) = Self::completion_tokens(self.source, completion);
+                let parsed =
+                    generated::SourceUnitParser::new().parse(syntax, &mut recovery, tokens);
+                (parsed, text_lines)
+            }
+        };
+        if parsed.is_ok() {
+            syntax.record_text_blocks(self.source, start_entity, text_lines);
+        }
         Self::finish(parsed, syntax, recovery, self.completion.as_ref())
+    }
+
+    fn completion_tokens(
+        source: &'source str, completion: &CompletionCursor<'_>,
+    ) -> (std::vec::IntoIter<(usize, ParserToken<'source>, usize)>, Vec<Range<usize>>) {
+        let replacement = completion.replacement();
+        let mut lexer = ParserLexer::new(source);
+        let mut tokens = lexer
+            .by_ref()
+            .filter(|(start, _, end)| {
+                replacement.is_empty() || *end <= replacement.start || replacement.end <= *start
+            })
+            .collect::<Vec<_>>();
+        let insertion = tokens
+            .iter()
+            .position(|(start, _, _)| *start >= completion.offset())
+            .unwrap_or(tokens.len());
+        tokens
+            .insert(insertion, (completion.offset(), ParserToken::Completion, completion.offset()));
+        (tokens.into_iter(), lexer.into_text_lines())
     }
 
     fn finish(
@@ -535,11 +567,15 @@ impl<'source> RecoveringParser<'source> {
     }
 }
 
-struct ParserLexer<'source>(Lexer<'source>);
+struct ParserLexer<'source>(ParsingLexer<'source>);
 
 impl<'source> ParserLexer<'source> {
     fn new(source: &'source str) -> Self {
-        Self(Lexer::new(source))
+        Self(ParsingLexer::new(source))
+    }
+
+    fn into_text_lines(self) -> Vec<Range<usize>> {
+        self.0.into_text_lines()
     }
 }
 
@@ -554,47 +590,6 @@ impl<'source> Iterator for ParserLexer<'source> {
                 (range.start, ParserToken::Invalid(error.inner), range.end)
             }
         })
-    }
-}
-
-enum ParseTokens<'source> {
-    Ordinary(ParserLexer<'source>),
-    Completion(std::vec::IntoIter<(usize, ParserToken<'source>, usize)>),
-}
-
-impl<'source> ParseTokens<'source> {
-    fn ordinary(source: &'source str) -> ParserLexer<'source> {
-        ParserLexer::new(source)
-    }
-
-    fn new(source: &'source str, completion: Option<&CompletionCursor<'_>>) -> Self {
-        let Some(completion) = completion else {
-            return Self::Ordinary(Self::ordinary(source));
-        };
-        let replacement = completion.replacement();
-        let mut tokens = ParserLexer::new(source)
-            .filter(|(start, _, end)| {
-                replacement.is_empty() || *end <= replacement.start || replacement.end <= *start
-            })
-            .collect::<Vec<_>>();
-        let insertion = tokens
-            .iter()
-            .position(|(start, _, _)| *start >= completion.offset())
-            .unwrap_or(tokens.len());
-        tokens
-            .insert(insertion, (completion.offset(), ParserToken::Completion, completion.offset()));
-        Self::Completion(tokens.into_iter())
-    }
-}
-
-impl<'source> Iterator for ParseTokens<'source> {
-    type Item = (usize, ParserToken<'source>, usize);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            | Self::Ordinary(tokens) => tokens.next(),
-            | Self::Completion(tokens) => tokens.next(),
-        }
     }
 }
 

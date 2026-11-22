@@ -1,4 +1,4 @@
-//! Independent policy choices for textual pretty printing.
+//! Formatting policy types shared with the metadata catalog and formatter.
 
 /// A positive indentation width representable by the document renderer.
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
@@ -19,7 +19,7 @@ impl IndentWidth {
         self.0 as usize
     }
 
-    pub(super) const fn nesting(self) -> isize {
+    pub const fn nesting(self) -> isize {
         self.0
     }
 }
@@ -97,59 +97,6 @@ impl Parentheses {
 
     pub fn from_source_name(name: &str) -> Option<Self> {
         name.parse().ok()
-    }
-}
-
-/// Independent policy choices used by the textual pretty printer.
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub struct PrettyOptions {
-    pub indent: IndentWidth,
-    pub line_width: usize,
-    pub layout_intentions: LayoutIntentions,
-    pub parentheses: Parentheses,
-}
-
-impl Default for PrettyOptions {
-    fn default() -> Self {
-        Self {
-            indent: IndentWidth::DEFAULT,
-            line_width: 100,
-            layout_intentions: LayoutIntentions::Preserve,
-            parentheses: Parentheses::Minimal,
-        }
-    }
-}
-
-impl PrettyOptions {
-    pub fn with_indent(mut self, indent: IndentWidth) -> Self {
-        self.indent = indent;
-        self
-    }
-
-    pub fn with_line_width(mut self, line_width: usize) -> Self {
-        self.line_width = line_width;
-        self
-    }
-
-    pub fn with_layout_intentions(mut self, layout_intentions: LayoutIntentions) -> Self {
-        self.layout_intentions = layout_intentions;
-        self
-    }
-
-    pub fn with_parentheses(mut self, parentheses: Parentheses) -> Self {
-        self.parentheses = parentheses;
-        self
-    }
-
-    /// Override the options that a format directive names, leaving the
-    /// remaining options unchanged.
-    pub(super) fn with_format_meta(self, meta: &crate::metadata::FormatMeta) -> Self {
-        Self {
-            line_width: meta.width.unwrap_or(self.line_width),
-            indent: meta.indent.unwrap_or(self.indent),
-            layout_intentions: meta.layout.unwrap_or(self.layout_intentions),
-            parentheses: meta.parentheses.unwrap_or(self.parentheses),
-        }
     }
 }
 

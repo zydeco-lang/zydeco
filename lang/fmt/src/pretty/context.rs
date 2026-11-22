@@ -1,6 +1,6 @@
 //! Typed descriptions of the parser grammar accepted at child positions.
 
-use super::super::syntax::*;
+use zydeco_surface::textual::syntax::*;
 
 /// The parser-side grammar facts needed while reconstructing parentheses.
 pub(super) struct GrammarContext<'arena> {

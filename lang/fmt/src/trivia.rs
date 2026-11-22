@@ -1,18 +1,17 @@
-//! Source content retained outside canonical textual syntax.
+//! Comments and other source material retained outside canonical textual syntax.
 
 mod comment;
 
-use super::syntax::EntityId;
 pub use comment::{
-    BlockComment, LeadingComment, LineComment, LineSeparation, SurfaceComment, TextBlock,
-    TrailingComment,
+    BlockComment, LeadingComment, LineComment, LineSeparation, SurfaceComment, TrailingComment,
 };
 pub(crate) use comment::{CommentCapture, SpannedEntity};
 use zydeco_foundation::arena::{ArenaAccess, ArenaAssoc};
+use zydeco_surface::textual::{TextBlock, syntax::EntityId};
 
 /// Comments and other source material anchored to canonical textual IDs.
 ///
-/// Trivia is separate from [`super::SurfaceIntentions`]: comments carry source
+/// Trivia is separate from [`crate::SurfaceIntentions`]: comments carry source
 /// content and are therefore always printed, while intentions are optional
 /// author choices that a printer may ignore.
 #[derive(Clone, Default, Debug)]
@@ -60,7 +59,7 @@ impl SurfaceTrivia {
             .and_then(|comment| comment.comment().as_text())
     }
 
-    /// Every text block retained from this source arena.
+    /// Every text block retained from this source presentation.
     pub fn text_blocks(&self) -> impl Iterator<Item = &TextBlock> {
         self.leading_comments
             .iter()

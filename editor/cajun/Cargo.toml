@@ -12,6 +12,7 @@ readme = { workspace = true }
 zydeco-foundation = { workspace = true }
 zydeco-syntax = { workspace = true }
 zydeco-surface = { workspace = true }
+zydeco-fmt = { workspace = true }
 zydeco-statics = { workspace = true }
 zydeco-session = { workspace = true }
 clap = { workspace = true }

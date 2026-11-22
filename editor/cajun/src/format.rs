@@ -1,6 +1,6 @@
 use tower_lsp::lsp_types::{Position, Range, TextEdit};
+use zydeco_fmt::{PrettyOptions, format_source};
 use zydeco_foundation::span::{FileMap, LineCol};
-use zydeco_surface::textual::{StrictParser, fmt::PrettyFormatter, syntax::Parser};
 
 /// One complete outcome of a whole-document formatting request.
 #[derive(Clone, Debug, PartialEq)]
@@ -34,13 +34,9 @@ pub(crate) struct DocumentFormatter;
 
 impl DocumentFormatter {
     pub(crate) fn format(&self, source: &str) -> FormattingOutcome {
-        let mut parser = Parser::new();
-        let unit = match StrictParser::source(source, &mut parser) {
-            | Ok(unit) => unit,
-            | Err(_) => return FormattingOutcome::Skipped(FormattingSkip::InvalidSyntax),
+        let Ok(formatted) = format_source(source, PrettyOptions::default()) else {
+            return FormattingOutcome::Skipped(FormattingSkip::InvalidSyntax);
         };
-        let formatted =
-            PrettyFormatter::with_source(&parser.arena, &parser.spans, source).render_unit(unit);
         if formatted == source {
             return FormattingOutcome::Unchanged;
         }

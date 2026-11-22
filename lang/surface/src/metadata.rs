@@ -6,7 +6,8 @@ use zydeco_syntax::{
     Meta, SpecializeMeta,
 };
 
-use crate::textual::fmt::{IndentWidth, LayoutIntentions, Parentheses};
+mod format;
+pub use format::*;
 
 mod package;
 mod path;

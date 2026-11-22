@@ -1,8 +1,7 @@
 //! The surface syntax of zydeco.
 
 pub use super::arena::*;
-pub use super::intention::*;
-pub use super::trivia::*;
+pub use super::text_block::*;
 pub use crate::{arena::*, syntax::*};
 pub use zydeco_foundation::span::{FileMap, SourceMap, Sp, Span};
 pub use zydeco_syntax::*;
@@ -371,33 +370,40 @@ pub struct SourceUnit {
 
 /* --------------------------------- Parser --------------------------------- */
 
-#[derive(Copy, Clone)]
-struct ArmPrefix {
-    first: EntityId,
-    payload: EntityId,
-    start: usize,
+/// Source boundary markers retained only when parsing for formatting.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct ArmPrefix {
+    pub first: EntityId,
+    pub payload: EntityId,
+    pub start: usize,
 }
 
-#[derive(Copy, Clone)]
-struct ExistentialPrefix {
-    parameter: PatId,
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct ExistentialPrefix {
+    pub parameter: PatId,
     /// Byte offset where the whole parameter begins, before its annotations.
-    start: usize,
+    pub start: usize,
     /// Byte offset of the grammar-owned `(` that opens the binder.
-    open: usize,
+    pub open: usize,
 }
 
-#[derive(Copy, Clone)]
-struct MetadataPrefix {
-    metadata: MetaId,
-    start: usize,
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct MetadataPrefix {
+    pub metadata: MetaId,
+    pub start: usize,
+}
+
+/// Optional structural prefixes collected when parsing for formatting.
+#[derive(Clone, Default, Debug)]
+pub struct FormatPrefixes {
+    pub arms: Vec<ArmPrefix>,
+    pub existentials: Vec<ExistentialPrefix>,
+    pub metadata: Vec<MetadataPrefix>,
 }
 
 pub struct Parser {
     allocator: IdAllocator<TextualScope>,
-    arm_prefixes: Vec<ArmPrefix>,
-    existential_prefixes: Vec<ExistentialPrefix>,
-    metadata_prefixes: Vec<MetadataPrefix>,
+    format_prefixes: Option<FormatPrefixes>,
     pub spans: SpanArena,
     pub arena: TextArena,
 }
@@ -413,12 +419,18 @@ impl Parser {
     pub fn new() -> Self {
         Self {
             allocator: IdAllocator::new(),
-            arm_prefixes: Vec::new(),
-            existential_prefixes: Vec::new(),
-            metadata_prefixes: Vec::new(),
+            format_prefixes: None,
             spans: SpanArena::new(),
             arena: TextArena::default(),
         }
+    }
+    /// Create a parser that retains structural prefix offsets for formatting.
+    pub fn for_formatting() -> Self {
+        Self { format_prefixes: Some(FormatPrefixes::default()), ..Self::new() }
+    }
+    /// Structural prefix offsets recorded when [`Parser::for_formatting`] is used.
+    pub fn format_prefixes(&self) -> Option<&FormatPrefixes> {
+        self.format_prefixes.as_ref()
     }
     /// Finish parsing, dropping the issuer and returning only durable storage.
     pub fn finish(mut self) -> (SpanArena, TextArena) {
@@ -468,9 +480,9 @@ impl Parser {
     /// flat product, while a parenthesized left operand stays a distinct
     /// nested component because parentheses allocate their own node kind.
     pub fn extend_product(&mut self, left: TermId, right: TermId) -> Prod<TermId> {
-        let components = match &self.arena.terms[&left] {
+        let components = match &mut self.arena.terms[&left] {
             | Term::Prod(prod) => {
-                let mut components = prod.0.clone();
+                let mut components = std::mem::take(&mut prod.0);
                 components.push(right);
                 components
             }
@@ -483,124 +495,28 @@ impl Parser {
     pub fn arm_prefix(
         &mut self, first: impl Into<EntityId>, payload: impl Into<EntityId>, start: usize,
     ) {
-        self.arm_prefixes.push(ArmPrefix { first: first.into(), payload: payload.into(), start });
+        if let Some(prefixes) = &mut self.format_prefixes {
+            prefixes.arms.push(ArmPrefix { first: first.into(), payload: payload.into(), start });
+        }
     }
     /// Record the first token of an existential parameter together with its
     /// grammar-owned open delimiter, neither of which is represented by the
     /// binder.
     pub fn existential_prefix(&mut self, parameter: PatId, start: usize, open: usize) {
-        self.existential_prefixes.push(ExistentialPrefix { parameter, start, open });
+        if let Some(prefixes) = &mut self.format_prefixes {
+            prefixes.existentials.push(ExistentialPrefix { parameter, start, open });
+        }
     }
     /// Record the `@` that prefixes standalone metadata attached to a pattern.
     pub fn metadata_prefix(&mut self, metadata: MetaId, start: usize) {
-        self.metadata_prefixes.push(MetadataPrefix { metadata, start });
+        if let Some(prefixes) = &mut self.format_prefixes {
+            prefixes.metadata.push(MetadataPrefix { metadata, start });
+        }
     }
-    /// Retain source presentation after one public parser entry point succeeds.
-    ///
-    /// Existing spans let printers reuse selected layout decisions without
-    /// introducing layout-only variants into the textual AST.
-    pub fn capture_source_information(&mut self, source: &str) {
-        let file_map = FileMap::local(source, None);
-        let entities = self
-            .spans
-            .iter()
-            .filter(|(entity, _)| self.arena.intentions.line_extent(*entity).is_none())
-            .filter_map(|(entity, span)| {
-                let span = span.range();
-                source.get(span.start..span.end)?;
-                Some(SpannedEntity::new(entity, span.start, span.end))
-            })
-            .collect::<Vec<_>>();
-        let arm_prefixes = self
-            .arm_prefixes
-            .iter()
-            .copied()
-            .filter(|prefix| self.arena.intentions.line_extent(prefix.payload).is_none())
-            .collect::<Vec<_>>();
-        let existential_prefixes = self
-            .existential_prefixes
-            .iter()
-            .copied()
-            .filter(|prefix| self.arena.intentions.line_extent(prefix.parameter.into()).is_none())
-            .collect::<Vec<_>>();
-        let metadata_prefixes = self
-            .metadata_prefixes
-            .iter()
-            .copied()
-            .filter(|prefix| self.arena.intentions.line_extent(prefix.metadata.into()).is_none())
-            .collect::<Vec<_>>();
-        let comments = CommentCapture::new(source, &entities)
-            .with_arm_prefixes(arm_prefixes.iter().map(|prefix| (prefix.first, prefix.start)))
-            .with_metadata_prefixes(
-                metadata_prefixes.iter().map(|prefix| (prefix.metadata, prefix.start)),
-            )
-            .with_existential_prefixes(
-                existential_prefixes.iter().map(|prefix| (prefix.parameter, prefix.open)),
-            );
-        let layouts = entities
-            .iter()
-            .map(|entity| {
-                // A recovered node can end immediately after an unrecognized Unicode
-                // character. Its last occupied byte is not necessarily a character boundary.
-                let occupied_end =
-                    source.floor_char_boundary(entity.end().saturating_sub(1)).max(entity.start());
-                let first = file_map.line_col(entity.start()).line as usize;
-                let last = file_map.line_col(occupied_end).line as usize;
-                let presentation_start =
-                    comments.presentation_start(entity.entity(), entity.start());
-                let presentation_start =
-                    SourceLine(file_map.line_col(presentation_start).line as usize);
-                (entity.entity(), LineExtent::new(first, last), presentation_start)
-            })
-            .collect::<Vec<_>>();
-        let arm_layouts = arm_prefixes
-            .iter()
-            .filter_map(|prefix| {
-                let payload = self.spans[&prefix.payload].range();
-                let (payload_start, payload_end) = (payload.start, payload.end);
-                source.get(payload_start..payload_end)?;
-                let prefix_line = SourceLine(file_map.line_col(prefix.start).line as usize);
-                let presentation_start = comments.payload_start(prefix.payload, payload_start);
-                let presentation_line =
-                    SourceLine(file_map.line_col(presentation_start).line as usize);
-                Some((prefix.payload, prefix_line, presentation_line))
-            })
-            .collect::<Vec<_>>();
-        let existential_layouts = existential_prefixes
-            .iter()
-            .filter_map(|prefix| {
-                let parameter = self.spans[&EntityId::Pat(prefix.parameter)].range();
-                let (parameter_start, parameter_end) = (parameter.start, parameter.end);
-                source.get(parameter_start..parameter_end)?;
-                let presentation_start =
-                    comments.presentation_start(prefix.parameter.into(), parameter_start);
-                let prefix_start = prefix.start.min(presentation_start);
-                Some((prefix.parameter, SourceLine(file_map.line_col(prefix_start).line as usize)))
-            })
-            .collect::<Vec<_>>();
-        let existential_open_layouts = existential_prefixes
-            .iter()
-            .filter_map(|prefix| {
-                let parameter = self.spans[&EntityId::Pat(prefix.parameter)].range();
-                let (parameter_start, parameter_end) = (parameter.start, parameter.end);
-                source.get(parameter_start..parameter_end)?;
-                let open_line = SourceLine(file_map.line_col(prefix.open).line as usize);
-                let presentation_start =
-                    comments.payload_start(prefix.parameter.into(), parameter_start);
-                let presentation_line =
-                    SourceLine(file_map.line_col(presentation_start).line as usize);
-                Some((prefix.parameter, open_line, presentation_line))
-            })
-            .collect::<Vec<_>>();
-        self.arena.intentions.record_source_layout(
-            source,
-            comments.layout_exclusions(),
-            layouts,
-            arm_layouts,
-            existential_layouts,
-            existential_open_layouts,
-        );
-        self.arena.trivia.record_comments(comments);
+    pub(crate) fn record_text_blocks(
+        &mut self, source: &str, start_entity: usize, text_lines: Vec<std::ops::Range<usize>>,
+    ) {
+        self.arena.text_blocks.record(source, text_lines, self.spans.iter_from(start_entity));
     }
     /// Expand `= field` into a named term whose payload is the same-spelled
     /// variable, optionally annotated.

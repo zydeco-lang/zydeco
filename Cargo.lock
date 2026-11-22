@@ -205,6 +205,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tower-lsp",
+ "zydeco-fmt",
  "zydeco-foundation",
  "zydeco-session",
  "zydeco-statics",
@@ -2621,6 +2622,7 @@ dependencies = [
  "zydeco-amd64",
  "zydeco-assembly",
  "zydeco-dynamics",
+ "zydeco-fmt",
  "zydeco-foundation",
  "zydeco-ir",
  "zydeco-machine",
@@ -2658,6 +2660,18 @@ dependencies = [
  "zydeco-foundation",
  "zydeco-ir",
  "zydeco-machine",
+ "zydeco-syntax",
+]
+
+[[package]]
+name = "zydeco-fmt"
+version = "0.3.0"
+dependencies = [
+ "pretty",
+ "rustc-hash",
+ "walkdir",
+ "zydeco-foundation",
+ "zydeco-surface",
  "zydeco-syntax",
 ]
 

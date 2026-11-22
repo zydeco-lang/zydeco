@@ -4,8 +4,9 @@ use std::{
     sync::Arc,
 };
 use thiserror::Error;
+use zydeco_fmt::{PrettyOptions, format_source};
 use zydeco_foundation::span::FileMap;
-use zydeco_surface::textual::{ParseError, StrictParser, fmt::PrettyFormatter, syntax::Parser};
+use zydeco_surface::textual::ParseError;
 
 /// Whether formatting changed the source file on disk.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -65,11 +66,9 @@ impl SourceFormatter {
     }
 
     fn render(&self, path: &Path, source: &str) -> Result<String, SourceFormatError> {
-        let file = FileMap::local(source, Some(Arc::new(path.to_path_buf())));
-        let mut parser = Parser::new();
-        let unit = StrictParser::source(source, &mut parser).map_err(|error| {
-            SourceFormatError::Parse(Box::new(ParseError { error, file_map: file }))
-        })?;
-        Ok(PrettyFormatter::with_source(&parser.arena, &parser.spans, source).render_unit(unit))
+        format_source(source, PrettyOptions::default()).map_err(|error| {
+            let file_map = FileMap::local(source, Some(Arc::new(path.to_path_buf())));
+            SourceFormatError::Parse(Box::new(ParseError { error, file_map }))
+        })
     }
 }

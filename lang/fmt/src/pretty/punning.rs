@@ -1,6 +1,7 @@
 //! Canonical pun recognition for terms and patterns.
 
-use crate::textual::syntax::*;
+use crate::trivia::SurfaceTrivia;
+use zydeco_surface::textual::syntax::*;
 
 #[derive(Copy, Clone)]
 pub(super) enum PunnedTermPayload {
@@ -16,11 +17,12 @@ pub(super) enum PunnedPatternPayload {
 
 pub(super) struct Punning<'arena> {
     arena: &'arena TextArena,
+    trivia: &'arena SurfaceTrivia,
 }
 
 impl<'arena> Punning<'arena> {
-    pub(super) fn new(arena: &'arena TextArena) -> Self {
-        Self { arena }
+    pub(super) fn new(arena: &'arena TextArena, trivia: &'arena SurfaceTrivia) -> Self {
+        Self { arena, trivia }
     }
 
     pub(super) fn term_payload(
@@ -67,6 +69,6 @@ impl<'arena> Punning<'arena> {
     }
 
     fn is_trivia_free(&self, entity: impl Into<EntityId>) -> bool {
-        self.arena.trivia.leading_comments(entity.into()).is_empty()
+        self.trivia.leading_comments(entity.into()).is_empty()
     }
 }

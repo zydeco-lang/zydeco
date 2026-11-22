@@ -2,6 +2,7 @@
 
 use super::{super::*, RejectionAssertions};
 use crate::textual::{
+    Lexer,
     syntax::Span,
     tests::{SyntaxProjection, corpus::ZydecoCorpus},
 };

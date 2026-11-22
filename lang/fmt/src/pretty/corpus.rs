@@ -1,42 +1,68 @@
 //! Repository-wide formatter law checks.
 
-use super::{PrettyFormatter, PrettyOptions};
-use crate::{
-    bitter::{SourceUnitDesugarer, fmt::Formatter as BitterFormatter},
-    textual::{LexicalRole, LexicalTokens, StrictParser, syntax::*, tests::corpus::ZydecoCorpus},
+use crate::{FormattedSource, PrettyOptions};
+use std::{
+    collections::BTreeSet,
+    ffi::OsStr,
+    fs,
+    path::{Path, PathBuf},
 };
-use std::fs;
+use walkdir::WalkDir;
 use zydeco_foundation::pass::CompilerPass;
+use zydeco_surface::{
+    bitter::{SourceUnitDesugarer, fmt::Formatter as BitterFormatter},
+    textual::{LexicalRole, LexicalTokens},
+};
 use zydeco_syntax::Ugly;
 
+struct ZydecoCorpus;
+
+impl ZydecoCorpus {
+    fn files() -> BTreeSet<PathBuf> {
+        let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let files = ["lib", "docs/spell", "lang/tests/cases"]
+            .into_iter()
+            .flat_map(|root| Self::files_below(&workspace.join(root)))
+            .collect::<BTreeSet<_>>();
+        assert!(!files.is_empty(), "repository corpus contains no Zydeco programs");
+        files
+    }
+
+    fn files_below(root: &Path) -> BTreeSet<PathBuf> {
+        WalkDir::new(root)
+            .into_iter()
+            .map(|entry| {
+                entry.unwrap_or_else(|error| {
+                    panic!("cannot walk corpus below {}: {error}", root.display())
+                })
+            })
+            .filter(|entry| entry.path().extension() == Some(OsStr::new("zy")))
+            .map(|entry| entry.path().to_path_buf())
+            .collect()
+    }
+}
+
 struct ParsedSource {
-    unit: SourceUnit,
-    parser: Parser,
+    formatted: FormattedSource,
     source: String,
 }
 
 impl ParsedSource {
     /// Parse strictly, mapping a parse failure onto `None`.
     fn try_new(source: &str) -> Option<Self> {
-        let mut parser = Parser::new();
-        let unit = StrictParser::source(source, &mut parser).ok()?;
-        Some(Self { unit, parser, source: source.to_owned() })
+        let formatted = FormattedSource::parse(source).ok()?;
+        Some(Self { formatted, source: source.to_owned() })
     }
 
     fn format(&self) -> String {
-        PrettyFormatter::with_options_source(
-            &self.parser.arena,
-            &self.parser.spans,
-            PrettyOptions::default(),
-            &self.source,
-        )
-        .render_unit(self.unit)
+        self.formatted.render(&self.source, PrettyOptions::default())
     }
 
     fn desugared_shape(&self) -> String {
-        let output = SourceUnitDesugarer { spans: &self.parser.spans, textual: &self.parser.arena }
-            .run(self.unit)
-            .expect("repository sources should desugar");
+        let output =
+            SourceUnitDesugarer { spans: &self.formatted.spans, textual: &self.formatted.arena }
+                .run(self.formatted.unit)
+                .expect("repository sources should desugar");
         output.root.ugly(&BitterFormatter::new(&output.arena))
     }
 }

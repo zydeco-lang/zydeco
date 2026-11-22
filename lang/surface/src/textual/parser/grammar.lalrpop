@@ -5,7 +5,6 @@ use crate::textual::{
 
 // LALRPOP grammar for the textual surface syntax.
 grammar<'input, 'arena, 'recovery>(
-    input: &'input str,
     parser: &'arena mut Parser,
     recovery: &'recovery mut RecoveryAccumulator<'input>,
 );
@@ -574,8 +573,5 @@ Term: ParsedNode<Term> = {
 };
 
 pub SourceUnit: SourceUnit = {
-    <root:TermId> => {
-        parser.capture_source_information(input);
-        SourceUnit { root }
-    },
+    <root:TermId> => SourceUnit { root },
 };

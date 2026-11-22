@@ -171,16 +171,45 @@ impl DesugarFolder<'_> {
         patterns.into_iter().map(|pattern| self.pattern(pattern)).collect_reported()
     }
     fn copattern(&mut self, id: t::CoPatId) -> Result<b::Appli<b::CoPatternItem>> {
-        zydeco_foundation::stack::maybe_grow(|| match self.lookup_copat(id) {
-            | t::CoPattern::Pat(pattern) => Ok(b::Appli(vec![self.pattern(pattern)?.into()])),
-            | t::CoPattern::Dtor(name) => Ok(b::Appli(vec![name.into()])),
-            | t::CoPattern::App(t::Appli(items)) => {
-                let items = items
-                    .into_iter()
-                    .map(|item| self.copattern(item))
-                    .collect_reported::<Vec<_>>()?;
-                Ok(b::Appli(items.into_iter().flat_map(|b::Appli(items)| items).collect()))
+        let mut items = Vec::new();
+        self.collect_copattern(id, &mut items)?;
+        Ok(b::Appli(items))
+    }
+
+    fn collect_copattern(&mut self, id: t::CoPatId, out: &mut Vec<b::CoPatternItem>) -> Result<()> {
+        zydeco_foundation::stack::maybe_grow(|| {
+            let mut current_id = id;
+            let mut right_reversed = Vec::new();
+            let leaf = loop {
+                match self.lookup_copat(current_id) {
+                    | t::CoPattern::App(t::Appli(mut items)) => {
+                        while items.len() > 1 {
+                            right_reversed.push(items.pop().unwrap());
+                        }
+                        if let Some(first) = items.pop() {
+                            current_id = first;
+                        } else {
+                            break None;
+                        }
+                    }
+                    | other => break Some(other),
+                }
+            };
+            let mut failed = None;
+            match leaf {
+                | Some(t::CoPattern::Pat(pattern)) => match self.pattern(pattern) {
+                    | Ok(pattern) => out.push(pattern.into()),
+                    | Err(err) => failed = Some(err),
+                },
+                | Some(t::CoPattern::Dtor(name)) => out.push(name.into()),
+                | Some(t::CoPattern::App(_)) | None => {}
             }
+            for item in right_reversed.into_iter().rev() {
+                if let Err(err) = self.collect_copattern(item, out) {
+                    failed = Some(err);
+                }
+            }
+            failed.map_or(Ok(()), Err)
         })
     }
 }
@@ -252,31 +281,36 @@ impl DesugarFolder<'_> {
             }
             | Tm::Abs(term) => self.abstraction(term, id)?,
             | Tm::ValAbs(term) => self.value_abstraction(term, id)?,
-            | Tm::App(term) => {
-                let t::Appli(terms) = term;
+            | Tm::App(t::Appli(mut current)) => {
                 // Juxtaposition nests to the left while parsing, and all of it
                 // is one application. Parentheses end the spine.
-                let mut inputs = terms;
-                while let Some(Tm::App(t::Appli(inner))) =
-                    inputs.first().map(|head| self.lookup_term(*head))
-                {
-                    inputs.splice(0..1, inner);
-                }
-                let terms = self.terms(inputs)?;
-                match terms.len() {
-                    // app with no term is invalid
-                    | 0 => unreachable!(),
-                    // app with one term is just the term itself
-                    | 1 => terms.into_iter().next().unwrap(),
-                    // otherwise the head and its arguments stay together
-                    | _ => {
-                        let mut iter = terms.into_iter();
-                        let head = iter.next().unwrap();
-                        Alloc::alloc(
-                            &mut self.builder,
-                            b::App(head, iter.collect()).into(),
-                            id.into(),
-                        )
+                let mut reversed_tail = Vec::new();
+                loop {
+                    while current.len() > 1 {
+                        reversed_tail.push(current.pop().unwrap());
+                    }
+                    let Some(first) = current.pop() else {
+                        unreachable!();
+                    };
+                    match self.lookup_term(first) {
+                        | Tm::App(t::Appli(inner)) => current = inner,
+                        | _ => {
+                            let mut inputs = Vec::with_capacity(1 + reversed_tail.len());
+                            inputs.push(first);
+                            inputs.extend(reversed_tail.into_iter().rev());
+                            let terms = self.terms(inputs)?;
+                            let mut iter = terms.into_iter();
+                            let head = iter.next().unwrap();
+                            break if iter.len() == 0 {
+                                head
+                            } else {
+                                Alloc::alloc(
+                                    &mut self.builder,
+                                    b::App(head, iter.collect()).into(),
+                                    id.into(),
+                                )
+                            };
+                        }
                     }
                 }
             }

@@ -1,51 +1,10 @@
-use super::super::{
+use rustc_hash::FxHashMap;
+use std::{cmp::Reverse, ops::Range, sync::Arc};
+use zydeco_surface::textual::{
+    TextBlock,
     lexer::{LexicalRole, LexicalToken, LexicalTokens},
     syntax::{EntityId, MetaId, PatId},
 };
-use std::{cmp::Reverse, collections::BTreeMap, ops::Range, sync::Arc};
-
-/// Text recovered from one contiguous `--|` source block.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TextBlock {
-    pub text: Arc<str>,
-    pub range: Range<usize>,
-}
-
-impl TextBlock {
-    /// Map offsets in stripped prose back to the original comment lines.
-    /// A changed source block or an invalid UTF-8 boundary has no mapping.
-    pub fn source_range(&self, source: &str, range: Range<usize>) -> Option<Range<usize>> {
-        if range.start > range.end
-            || !self.text.is_char_boundary(range.start)
-            || !self.text.is_char_boundary(range.end)
-        {
-            return None;
-        }
-        let block = source.get(self.range.clone())?;
-        let comments = CommentBlocks::new(block);
-        let lines = LexicalTokens::new(block)
-            .filter(|token| token.role == LexicalRole::TextBlock)
-            .map(|token| comments.line_content_range(&token, "--|"))
-            .scan(0usize, |offset, source| {
-                let start = *offset;
-                *offset += source.len() + 1;
-                Some((start, source))
-            })
-            .collect::<Vec<_>>();
-        let reconstructed =
-            lines.iter().map(|(_, range)| &block[range.clone()]).collect::<Vec<_>>().join("\n");
-        if reconstructed != self.text.as_ref() {
-            return None;
-        }
-        let locate = |offset| {
-            lines.iter().find_map(|(start, source)| {
-                (*start <= offset && offset <= *start + source.len())
-                    .then(|| self.range.start + source.start + offset - start)
-            })
-        };
-        Some(locate(range.start)?..locate(range.end)?)
-    }
-}
 
 /// Text recovered from one contiguous block of ordinary `--` lines.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -244,6 +203,24 @@ impl SpannedEntity {
     }
 }
 
+pub(crate) struct CommentStarts {
+    presentation: FxHashMap<EntityId, usize>,
+    payload: FxHashMap<EntityId, usize>,
+}
+
+impl CommentStarts {
+    /// Include an entity's leading trivia in the start used for boundary layout.
+    pub(crate) fn presentation(&self, entity: EntityId, syntax_start: usize) -> usize {
+        self.presentation.get(&entity).copied().unwrap_or(syntax_start)
+    }
+
+    /// Start of the entity payload including comments written after a structural
+    /// prefix, excluding comments that precede the structure.
+    pub(crate) fn payload(&self, entity: EntityId, syntax_start: usize) -> usize {
+        self.payload.get(&entity).copied().unwrap_or(syntax_start)
+    }
+}
+
 pub(crate) struct CommentCapture {
     pub(super) leading: Vec<(EntityId, LeadingComment)>,
     pub(super) before_arms: Vec<(EntityId, LeadingComment)>,
@@ -256,9 +233,15 @@ pub(crate) struct CommentCapture {
 impl CommentCapture {
     pub(crate) fn new(source: &str, entities: &[SpannedEntity]) -> Self {
         let comments = CommentBlocks::new(source).collect();
+        let mut sorted_entities = entities.to_vec();
+        sorted_entities.sort_unstable_by_key(|entity| entity.leading_key());
         let anchors = comments
             .iter()
-            .map(|comment| Self::leading_anchor(comment, entities))
+            .map(|comment| {
+                let pos =
+                    sorted_entities.partition_point(|entity| entity.start < comment.range().end);
+                sorted_entities.get(pos).copied()
+            })
             .collect::<Vec<_>>();
         let first_trailing = anchors.iter().position(Option::is_none).unwrap_or(comments.len());
 
@@ -328,7 +311,7 @@ impl CommentCapture {
     pub(crate) fn with_arm_prefixes(
         mut self, prefixes: impl IntoIterator<Item = (EntityId, usize)>,
     ) -> Self {
-        let prefixes = prefixes.into_iter().collect::<BTreeMap<_, _>>();
+        let prefixes = prefixes.into_iter().collect::<FxHashMap<_, _>>();
         let (before_arms, leading) = self.leading.into_iter().partition(|(entity, comment)| {
             prefixes.get(entity).is_some_and(|prefix| comment.comment().range().start < *prefix)
         });
@@ -345,7 +328,7 @@ impl CommentCapture {
         let prefixes = prefixes
             .into_iter()
             .map(|(metadata, start)| (EntityId::Meta(metadata), start))
-            .collect::<BTreeMap<_, _>>();
+            .collect::<FxHashMap<_, _>>();
         let (before_metadata, leading) = self.leading.into_iter().partition(|(entity, comment)| {
             prefixes.get(entity).is_some_and(|prefix| comment.comment().range().start < *prefix)
         });
@@ -363,7 +346,7 @@ impl CommentCapture {
         let prefixes = prefixes
             .into_iter()
             .map(|(parameter, open)| (EntityId::Pat(parameter), open))
-            .collect::<BTreeMap<_, _>>();
+            .collect::<FxHashMap<_, _>>();
         let (before_existentials, leading) =
             self.leading.into_iter().partition(|(entity, comment)| {
                 prefixes.get(entity).is_some_and(|open| comment.comment().range().start < *open)
@@ -379,30 +362,27 @@ impl CommentCapture {
         &self.layout_exclusions
     }
 
-    /// Include an entity's leading trivia in the start used for boundary
-    /// layout. The comment content remains owned by `SurfaceTrivia`.
-    pub(crate) fn presentation_start(&self, entity: EntityId, syntax_start: usize) -> usize {
-        self.leading
-            .iter()
-            .chain(self.before_arms.iter())
-            .chain(self.before_metadata.iter())
-            .chain(self.before_existentials.iter())
-            .filter(|(anchor, _)| *anchor == entity)
-            .map(|(_, comment)| comment.comment().range().start)
-            .min()
-            .unwrap_or(syntax_start)
-    }
-
-    /// Start of the entity payload including comments written after a
-    /// structural prefix such as an arm marker or an existential parameter's
-    /// grammar-owned `(`, but excluding comments that precede the structure.
-    pub(crate) fn payload_start(&self, entity: EntityId, syntax_start: usize) -> usize {
-        self.leading
-            .iter()
-            .filter(|(anchor, _)| *anchor == entity)
-            .map(|(_, comment)| comment.comment().range().start)
-            .min()
-            .unwrap_or(syntax_start)
+    /// Precompute earliest leading comment start offsets per entity for `O(1)` lookup.
+    pub(crate) fn comment_starts(&self) -> CommentStarts {
+        let mut payload = FxHashMap::default();
+        for (entity, comment) in &self.leading {
+            let start = comment.comment().range().start;
+            payload
+                .entry(*entity)
+                .and_modify(|prev: &mut usize| *prev = (*prev).min(start))
+                .or_insert(start);
+        }
+        let mut presentation = payload.clone();
+        for (entity, comment) in
+            self.before_arms.iter().chain(&self.before_metadata).chain(&self.before_existentials)
+        {
+            let start = comment.comment().range().start;
+            presentation
+                .entry(*entity)
+                .and_modify(|prev: &mut usize| *prev = (*prev).min(start))
+                .or_insert(start);
+        }
+        CommentStarts { presentation, payload }
     }
 
     fn leading_next_start(
@@ -414,16 +394,6 @@ impl CommentCapture {
             .zip(anchors.get(index + 1))
             .filter(|(_, next_anchor)| **next_anchor == Some(anchor))
             .map_or(anchor.start, |(next, _)| next.range().start)
-    }
-
-    fn leading_anchor(
-        comment: &SurfaceComment, entities: &[SpannedEntity],
-    ) -> Option<SpannedEntity> {
-        entities
-            .iter()
-            .copied()
-            .filter(|entity| entity.start >= comment.range().end)
-            .min_by_key(|entity| entity.leading_key())
     }
 
     fn trailing_anchor(entities: &[SpannedEntity]) -> Option<SpannedEntity> {

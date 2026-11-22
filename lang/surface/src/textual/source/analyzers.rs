@@ -62,7 +62,8 @@ impl SourceAnalyzer for UnattachedTextAnalyzer {
                             .specialize::<LiteralMeta>()
                             .is_ok_and(|meta| meta.is_some()));
                 if consumes
-                    && let Some(text) = source.arena.trivia.attached_text(annotation.term.into())
+                    && let Some(text) =
+                        source.arena.text_blocks.attached_text(annotation.term.into())
                 {
                     self.attached.insert(text.range.clone());
                 }
