@@ -6,10 +6,11 @@ and continuations explicit while preserving a close mapping to Zydeco terms.
 ## Role in the pipeline
 
 ```markdown
-textual -> bitter -> scoped -> tyck -> stack
+textual -> bitter -> scoped -> tyck -> ir -> stack
 ```
 
-The stack IR is built from one checked typed expression.
+The stack IR is lowered by `RootLowerer` from one borrowed `zydeco_ir::CoreProgram`
+and an optional `zydeco_ir::BuiltinPackagePlan`.
 High-level lowering is indexed by the consuming stack and constructs the fragment of its scheme directly:
 under branch-join, stack lets occur exactly around value-coproduct matches and scalar comparisons;
 under duplicating, no stack let occurs and every arm consumes its own copy of the stack; under full,
@@ -34,8 +35,9 @@ Both representations have one computation root rather than a top-level declarati
 - `scheme` defines where stack-passing compilation names the current stack and the placement rule
   of each scheme's fragment, which `high::check` and `low::check` both apply;
   it also classifies each computation's stack use for both phases.
-- `high::syntax` and `high::arena` define lexical SPS; `high::lower` constructs a validated `FragmentProgram` directly
-  from checked syntax.
+- `high::syntax` and `high::arena` define lexical SPS;
+  `high::lower` (`RootLowerer`) constructs a validated `FragmentProgram` directly
+  from `&zydeco_ir::CoreProgram` (plus an optional `BuiltinPackagePlan`).
 - `high::copy` deep-copies a stack so that every arm of a duplicating branch owns its consumer.
 - `high::traverse`, `high::variables`, and `high::fmt` instantiate the shared traversal,
   summaries, and printer for lexical SPS; `high::check` validates closed roots, lexical ownership,
@@ -45,10 +47,9 @@ Both representations have one computation root rather than a top-level declarati
 - `low::syntax` and `low::arena` define first-order SPS with typed package forms; `low::traverse`,
   `low::variables`, and `low::fmt` instantiate the shared analyses and printer for it.
 - `low::entry` defines the explicit environment/result word roles consumed by block entries and supplied by jumps.
-- `protocol` extracts partial source value/stack protocols.
+- `protocol` re-exports `zydeco_ir::protocol` (partial source value/stack protocols extracted
+  in `zydeco-statics` and stored on `CoreProgram`).
   A shared graph retains recursive codata observations and owns their canonical tag numbering.
-  Its source interpreter retains regular type-family instances using captured checked arguments.
-  Scoped value/computation parameters preserve relationships for checking each polymorphic transfer.
   High rebuilding preserves retained evidence; closure conversion records it at low entries.
   `low::protocols` checks known call components against those partial source protocols,
   keeping continuation stack extent opaque.

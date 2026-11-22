@@ -12,8 +12,9 @@ flowchart TD
     Sources[Source graph and parsing] --> Frontend[Desugaring and resolution]
     Frontend --> Statics[Checking, finalization, coverage, static elaboration]
     Statics --> Queries[Static queries and editor analysis]
-    Statics --> Entry[Executable selection and completeness]
-    Entry --> Dynamics[Builtin linking and interpreter]
+    Statics --> Core[CoreProgram: typed residual CBPV IR]
+    Core --> Entry[Builtin planning and execution readiness]
+    Entry --> Dynamics[Reference interpreter]
     Entry --> Sps[FragmentProgram: SPS]
     Sps --> Normalize[Selected SPS passes: normalization by default]
     Normalize --> Low[SpsLowProgram: closure conversion]
@@ -30,11 +31,11 @@ The main boundaries are concrete program types:
 | `TextualProgram`, `BitterProgram`, `ScopedProgram` | [Source assembly and surface pipeline](../../../../lang/session/src/source/pipeline.rs) | The next frontend phase |
 | `ProgramAnalysis` | `CompilerSession::analyze` | Diagnostics and tooling facts |
 | `CheckedProgram` | `CompilerSession::checked_program` | Full typed-tree inspection |
-| `ExecutableProgram` | `CompilerSession::executable_program` | Builtin root linking or lowering |
-| `DynamicsProgram` | [BuiltinRootLinker](../../../../lang/dynamics/src/link.rs) | Reference interpreter |
-| `FragmentProgram` | [BuiltinRootLowerer](../../../../lang/stackir/src/high/lower.rs) | Selected SPS transformations, then closure conversion |
-| `SpsLowProgram` | [SpsLowPipeline::run](../../../../lang/stackir/src/pipeline.rs) | Structured Wasm or assembly lowering |
-| `AssemblyProgram` | [LoweringPipeline::run](../../../../lang/assembly/src/pipeline.rs) | ZASM rendering and representation analysis |
+| `CoreProgram` | [Static elaborator](../../../../lang/statics/src/elaborate/static_values/mod.rs) via `StaticsArena::core` | Readiness validation, Builtin planning, interpretation, and SPS lowering |
+| `ExecutableProgram` | `CompilerSession::executable_program` | Reference interpreter (`Runtime::new`) or `RootLowerer` |
+| `FragmentProgram` | [`RootLowerer`](../../../../lang/stackir/src/high/lower.rs) | Selected SPS transformations, then closure conversion |
+| `SpsLowProgram` | [`SpsLowPipeline`](../../../../lang/stackir/src/pipeline.rs) | Structured Wasm or assembly lowering |
+| `AssemblyProgram` | [`LoweringPipeline::run`](../../../../lang/assembly/src/pipeline.rs) | ZASM rendering and representation analysis |
 | `NativeProgram` | Native pipeline from `LoweringPipeline::with_native_frames` | AMD64 emitter |
 
 Checked-root lowering, SPSLow conversion, and assembly lowering compose through typed compiler passes;
@@ -99,15 +100,14 @@ of the selected stages and their validated program types.
 Stages in a sequence share an error type. `map_err` translates domain errors at a composition boundary;
 `with_error` gives an infallible pass the enclosing pipeline's error type.
 `run_infallible` removes the unreachable error case when executing an entirely infallible sequence.
-For an SPS program `sps` and its naming arenas, a Rust caller can select repeated normalization:
+For an SPS program `sps`, a Rust caller can select repeated normalization without front-end arenas:
 
 ```rust
 use zydeco_stackir::{SpsLowPipeline, high::normalize::Normalizer};
 use zydeco_foundation::{pass::CompilerPass, pipeline};
 
 let optimizations = pipeline![Normalizer, Normalizer];
-let mut lowering = SpsLowPipeline { scoped: &scoped, statics: &statics }
-    .with_optimizations(optimizations);
+let mut lowering = SpsLowPipeline.with_optimizations(optimizations);
 let sps_low = lowering.run_infallible(sps);
 ```
 

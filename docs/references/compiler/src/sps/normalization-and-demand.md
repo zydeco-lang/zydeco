@@ -36,7 +36,7 @@ along with empty and wide product, match, and comatch child sequences.
 [Depth tests](../../../../../lang/stackir/src/high/normalize/depth_tests.rs) use a 512 KiB stack for discarded
 and retained bindings, suspended bodies, ambient substitutions, argument stacks, alias parameters, and unknown branches.
 The [CLI regression](../../../../../cli/tests/source_build.rs) builds the factorial source through the Wasm backend
-without a compiler worker or Cargo's `RUST_MIN_STACK` environment setting.
+with dynamic `stacker` growth and no Cargo `RUST_MIN_STACK` override.
 These tests cover reconstruction depth; recursively structured semantic facts, demands, and protocol evidence,
 as well as later compiler passes, remain separate concerns.
 

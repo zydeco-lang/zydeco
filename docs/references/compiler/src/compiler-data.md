@@ -4,7 +4,9 @@ An ID's Rust type identifies its node category.
 Surface and stack-IR identifiers carry an opaque key space and raw index, while static syntax identifiers (`AbstId`,
 `FillId`, `KindId`, `TypeId`, `KPatId`, `TPatId`, `VPatId`, `ValueId`, `CompuId`,
 `DataId`, and `CoDataId`) use four-byte dense [`DenseId`](../../../../lang/foundation/src/dense.rs) indices
-into [`StaticsArena`](../../../../lang/statics/src/arena.rs).
+into [`StaticsArena`](../../../../lang/statics/src/arena.rs),
+and residual [`CoreArena`](../../../../lang/ir/src/syntax.rs) nodes use their own module-local
+four-byte dense indices (`VarId`, `VPatId`, `ValueId`, `CompuId`, and `DataId`).
 Identifier names (`VarName`, `CtorName`, `DtorName`, `FieldName`) are backed
 by global [`Sym`](../../../../lang/foundation/src/symbol.rs) handles in `SymbolInterner`,
 reducing clones and equality comparisons to integer copies.
@@ -87,8 +89,8 @@ The implemented interfaces serve different questions and therefore expose differ
 | Resolved syntax analysis | [Scoped traversal](#scoped-structural-traversal) | Borrowed nodes; choose unique identities or path occurrences; cycles reject the traversal |
 | Raw inferred classifiers | [Classifier folders](checking-and-inference.md#classifier-folders) | Owned child reconstruction; preserve unchanged IDs; clients select substitution environments and reductions |
 | Raw checked terms and static evidence | [`CheckedNode` children](elaboration-and-validation.md#nominal-algebra-construction) | Include classifier, pattern, and static-argument edges; clients select declaration expansion and use `TypeFolder` for classifiers |
-| Executable typed terms | [Residual runtime traversal](elaboration-and-validation.md#residual-runtime-traversal) | Borrowed runtime nodes from the residual root; visit each identity once and exclude static evidence |
-| Typed terms to lexical SPS | [Residual lowering folder](sps.md#residual-lowering-folder) | Explicit reconstruction frames; inherited continuation stacks; fresh output syntax for every input occurrence |
+| Executable residual terms | [Residual runtime traversal](elaboration-and-validation.md#residual-runtime-traversal) | Borrowed `&CoreArena` nodes from `CoreProgram::root()` and `retained_holes`; visit each identity once |
+| Residual `CoreProgram` to lexical SPS | [Residual lowering folder](sps.md#residual-lowering-folder) | Explicit reconstruction frames; inherited continuation stacks; fresh stack-IR syntax for every input occurrence |
 | Lexical SPS analysis | [SPS traversal and analyzers](sps.md#sps-analysis-traversal) | Observe every incoming edge for ownership, but expand children and compute exit summaries once |
 | Lexical SPS normalization | [Normalization reconstruction](sps/normalization-and-demand.md#normalization-reconstruction) | Explicit frames retain forward producer scopes and resume rebuilding with backward consumer demands |
 | Lexical SPS to first-order SPSLow | [Closure conversion folders](closure-conversion.md#closure-conversion-folders) | Occurrence-local renaming and ordered captures; fresh syntax with preserved allocation and publication order |
@@ -127,10 +129,11 @@ or memory claims additionally require measurements that include callback work an
 ## Resumable Folder Execution
 
 A folder that rebuilds a parent after visiting its children must retain the unfinished parent.
-Statics judgments, normalizers, substitutions, unifiers, and elaborators run as natural recursive Rust functions guarded
+Front-end passes, statics judgments, normalizers, substitutions, unifiers, elaborators,
+formatters, and code emitters run as natural recursive Rust functions guarded
 by [`zydeco_foundation::stack::maybe_grow`](../../../../lang/foundation/src/stack.rs),
-which grows heap stack segments dynamically past the 64 KiB red zone instead
-of building explicit state-machine frames or relying solely on `RUST_MIN_STACK`.
+which grows heap stack segments dynamically past the 64 KiB red zone
+without requiring a workspace `RUST_MIN_STACK` override or custom large worker stacks.
 For middle-end and backend transformations,
 the shared [folder execution interface](../../../../lang/foundation/src/fold.rs) stores continuations
 in an explicit vector, so input depth does not consume the native stack.
@@ -147,8 +150,8 @@ Frames contain owned local state, arena IDs, or references to stable external in
 they cannot borrow the mutable folder itself.
 
 The driver, `Explicit::run(&mut folder, root)`, stores unfinished parents in a vector and executes through a loop.
-Residual lowering, Builtin packed value materialization, SPS normalization, closure conversion,
-SPSLow traversal, and CPS assembly lowering all run through it.
+Residual SPS lowering (`CoreProgram -> FragmentProgram`), Builtin stack-IR frame materialization,
+SPS normalization, closure conversion, SPSLow traversal, and CPS assembly lowering all run through it.
 The driver introduces no boxed callbacks or individual heap allocation for each continuation.
 Frame payloads and outputs may allocate according to the folder's representation.
 

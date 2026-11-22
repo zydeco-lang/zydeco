@@ -63,10 +63,11 @@ This description follows [Ret and stack extent](../../../language/src/computatio
 an installed continuation hides its saved residual stack, and there is no end-of-frame constructor.
 In particular, an argument prefix followed by `cont(A)` does not bound the stack extent or allocation lifetime.
 
-[ValueProtocol and StackProtocol](../../../../../lang/stackir/src/protocol.rs) are owned IR data extracted
-from checked classifiers.
+[ValueProtocol and StackProtocol](../../../../../lang/ir/src/protocol.rs) are owned IR data extracted
+from checked classifiers in `zydeco-statics` and stored on `CoreArena` (re-exported by `zydeco-stackir::protocol`).
 Values retain unit, primitive, product, and thunk structure when known.
-Codata interfaces retain observation alternatives in an owned `ProtocolGraph` shared by the SPS and SPSLow arenas.
+Codata interfaces retain observation alternatives in an owned `ProtocolGraph` shared
+across `CoreArena`, SPS, and SPSLow arenas.
 Disclosed seals and applied type functions can lead back to existing graph instances.
 Unresolved first-order value and computation witnesses retain program-local parameter names and their kinds.
 Universal binders retain their scope in the descriptor, while captured parameters can occur freely in local entries.
@@ -88,8 +89,8 @@ including cycles through argument prefixes or thunk components.
 This keeps a finite description even when executions accumulate an unbounded number of observations and arguments.
 The graph records no physical stack extent.
 
-The [source extractor](../../../../../lang/stackir/src/protocol/source.rs) interprets disclosed type-function
-applications against the frozen checked arena, without allocating substituted types or rerunning the checker.
+The [source extractor](../../../../../lang/statics/src/elaborate/protocols.rs) interprets disclosed type-function
+applications during static elaboration without allocating substituted types or rerunning the checker.
 A source expression carries lexical bindings for the witnesses that its supported structure uses freely.
 Applying a checked type abstraction binds the argument to its witness;
 a named binder projects its payload, while a plain binder keeps the whole argument.
@@ -147,7 +148,7 @@ and checks each branch against the selected observation's protocol.
 This branch evidence remains available even when the ambient stack became opaque at a continuation opening.
 SPSLow publication validates graph and parameter references, including parameter kinds, before examining transfers.
 
-The [agreement checker](../../../../../lang/stackir/src/protocol/agreement.rs) compares the whole transfer
+The [agreement checker](../../../../../lang/ir/src/protocol/agreement.rs) compares the whole transfer
 with a fresh constraint set.
 Each side has its own parameter namespace, and each universal occurrence gets a fresh scope.
 Within a scope, repeated occurrences of a parameter share constraints.

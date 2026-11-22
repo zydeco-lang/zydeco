@@ -1,15 +1,16 @@
 # C7. Linking and the Reference Interpreter
 
-[Linking](../../../../lang/dynamics/src/link.rs) selects residual syntax,
-erases types and witnesses, and constructs `DynamicsProgram`.
-Builtin root linking materializes the host-provided packed value from its validated typed signature;
-foreign declarations remain checked call plans until their runtime loader is used.
-Named routes become structural tuple access, and aliases preserve a shared bindee.
+Static elaboration in `zydeco-statics` erases types and witnesses, resolves structural projections
+and tags, and produces a self-contained [`CoreProgram`](../../../../lang/ir/src/syntax.rs)
+alongside any validated `BuiltinPackagePlan`.
+Builtins materialize lazily from each `BuiltinPackagePlan` supplied via `Runtime::with_packages`,
+while foreign declarations remain checked call plans until their runtime loader is used.
+The interpreter depends directly on `zydeco-ir` and `zydeco-syntax` rather than surface or statics arenas.
 
-[Runtime syntax](../../../../lang/dynamics/src/syntax.rs) separates dynamic terms from semantic values,
-environments, suspended computations, and continuation state.
-The [stepper](../../../../lang/dynamics/src/eval.rs) evaluates values, forces thunks,
-consumes arguments and destructor observations, matches data, and resumes return continuations.
+[Runtime syntax](../../../../lang/dynamics/src/syntax.rs) defines semantic values (`SemValue`),
+persistent lexical environments (`env::EvalEnv` keyed by `zydeco_ir::VarId`), suspended thunks, and continuation state.
+The [stepper](../../../../lang/dynamics/src/eval.rs) (`Runtime`) borrows `&CoreProgram` directly to evaluate values,
+force thunks, consume arguments and destructor observations, match data, and resume return continuations.
 A thunk captures its lexical environment; `fix` supplies explicit computation recursion.
 No backend-specific demand or frame optimization changes this reference evaluation path.
 

@@ -558,6 +558,7 @@ the control-flow graph explicit for assembly-derived targets.
 | Source graph, overlays, and shared analysis | [C3](docs/references/compiler/src/sessions-and-queries.md) | `lang/session/src/source` |
 | Parsing, desugaring, and resolution | [C4](docs/references/compiler/src/parsing-and-resolution.md) | `lang/surface/src/{textual,bitter,scoped}` |
 | Typing, finalization, elaboration, and validation | [C5–C6](docs/references/compiler/src/checking-and-inference.md) | `lang/statics/src` |
+| Core IR, protocols, and readiness | [C6–C8](docs/references/compiler/src/elaboration-and-validation.md) | `lang/ir/src` |
 | Linking and interpretation | [C7](docs/references/compiler/src/reference-interpreter.md) | `lang/dynamics/src` |
 | SPS, demand, and closure conversion | [C8–C9](docs/references/compiler/src/sps.md) | `lang/stackir/src/{high,low}` |
 | ZASM and representation analysis | [C10](docs/references/compiler/src/zasm.md) | `lang/assembly/src` |
@@ -675,8 +676,9 @@ explains its lifecycle, and the [CLI guide](cli/README.md#interactive-repl) list
 ### Arena and ID invariants
 
 Surface and stack-IR compiler IDs carry a `KeySpaceId` and a raw arena index; static identifiers (`AbstId`,
-`FillId`, `KindId`, `TypeId`, `KPatId`, `TPatId`, `VPatId`, `ValueId`, `CompuId`,
-`DataId`, and `CoDataId`) use four-byte dense indices (`DenseId`) into `StaticsArena`,
+`FillId`, `KindId`, `TypeId`, `KPatId`, `TPatId`, `VPatId`, `ValueId`, `CompuId`, `DataId`,
+and `CoDataId`) use four-byte dense indices (`DenseId`) into `StaticsArena`, residual identifiers (`VarId`,
+`VPatId`, `ValueId`, `CompuId`, and `DataId`) use module-local four-byte dense indices into `CoreArena`,
 while source and generated `DefId`s share keyed allocation alongside global `Sym` identifier interning.
 There are two allocation strategies for keyed IDs.
 `IdAllocator<Scope>` is a non-cloneable sequential issuer: construction claims one process-unique key space,
@@ -969,7 +971,8 @@ and `memory`, but the embedding must supply the imports before invoking either f
 
 - Value-function application inlines each body at its use, so emitted code and compiler recursion depth grow
   with the unfolded program, dominated by multiply-instantiated library functors.
-  The workspace raises its test-stack minimum accordingly; factoring repeated residual code remains future work recorded
+  Recursive passes grow heap stack segments dynamically on demand via `stacker` rather
+  than raising a workspace `RUST_MIN_STACK`; factoring repeated residual code remains future work recorded
   in [deferred residual-code sharing](docs/ideas/README.md#residual-code-sharing).
 - Static reduction has the documented [resource bounds](docs/references/language/src/static-elimination.md) and does not
   enter computations to discover static functions or witnesses. Demand does not yet flow through runtime

@@ -93,12 +93,6 @@ not a missing positivity guarantee to add to the reference.
 
 ## Component and client accounts
 
-- [ ] **Dynamics module map.**
-  [C7 linking and the reference interpreter](../references/compiler/src/reference-interpreter.md) makes
-  the [dynamics guide](../../lang/dynamics/src/README.md) the runtime module map at `compiler.md:1468`,
-  but the guide's key-components list omits `host` and `foreign` and the `memory`
-  and `representation` support modules declared in [lib.rs:8-28](../../lang/dynamics/src/lib.rs).
-  Add the omitted modules to the guide and mark which are public; no behavior changes.
 - [ ] **Cajun package relationships.** The retired 2026-10-21 cleanup audit claimed
   that Cajun completions surface package relationships.
   In this checkout only document links consume the resolved `relations`:

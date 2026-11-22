@@ -184,9 +184,15 @@ The interpreter and compiled backends have no runtime case for these static oper
 
 `StaticShape` supports witness inspection during dependent checking, including packed value and product structure.
 It exposes only caller-visible witnesses and returns opaque evidence when reduction cannot establish them.
-`StaticElaboration` records the original source root and an optional residual root:
+[`StaticElaborator`](../../../../lang/statics/src/elaborate/static_values/mod.rs) stores an optional
+residual [`CoreProgram`](../../../../lang/ir/src/syntax.rs) in `StaticsArena::core`:
 an unapplied static library export can be checked without having a runtime representation of its own.
-Reification creates fresh typed residual nodes, preserving runtime sharing and effect order.
+Reification builds self-contained residual nodes into `CoreArena`, erasing static evidence,
+resolving projections and tags, memoizing repeated thunks by `(CompuId, Arc<EnvKey>)`,
+extracting partial source protocols in [protocol extraction](../../../../lang/statics/src/elaborate/protocols.rs),
+and preserving runtime sharing and effect order.
+[`BuiltinPackagePlanner`](../../../../lang/statics/src/builtin.rs) validates host package contracts
+into a separate `BuiltinPackagePlan`.
 Representability checks cover surviving values, thunk bodies, and computation classifiers after instantiation.
 Export selection defers thunk-body residualization until the selected value is reified.
 This permits private static helpers and unselected holes
@@ -196,8 +202,8 @@ The source elimination requirements and reducer resource limits are specified
 in [L10](../../language/src/static-elimination.md).
 A residualization failure reports `tyck.static-elimination` at its source site;
 exhausted witness inspection supplies no evidence.
-Both linking and SPS lowering select the stored residual root.
-[ExecutionReadiness](../../../../lang/statics/src/validate) rejects reachable executable holes before effects;
+Both runtime execution and SPS lowering consume the published `CoreProgram`.
+[`ExecutionReadiness`](../../../../lang/ir/src/validate.rs) rejects reachable executable holes before effects;
 typed holes may still be inspected during ordinary checking.
 [Static-elimination fixtures](../../../../lang/tests/cases/static-elimination) distinguish erased library structure,
 runtime payloads, and failed evidence recovery.
@@ -207,17 +213,17 @@ retain invariant and lowering assertions, and generate boundary and reduction-li
 ## Residual Runtime Traversal
 
 Execution readiness asks which remaining values and computations can reach execution.
-The [runtime graph view](../../../../lang/statics/src/traverse.rs) starts from the shared residual root selected
-by `StaticsArena::execution_value` or `execution_compu`, then follows runtime children in the typed arena.
-It excludes classifiers, static witnesses, and pattern annotations.
+The [runtime graph view](../../../../lang/ir/src/traverse.rs) (`RuntimeGraph`) traverses `&CoreArena` starting
+from `CoreProgram::root()` and `CoreArena::retained_holes`, following runtime children in the residual IR.
+Static types, witnesses, and pattern annotations have already been erased before this stage.
 A checked foreign implementation is an opaque leaf whose authored hole payload is supplied externally.
-Static source nodes remain available to tooling.
+Static source nodes remain available to tooling in `StaticsArena`.
 
-`RuntimeGraph::nodes` yields borrowed nodes and visits each runtime identity once per invocation.
+`RuntimeGraph::nodes` yields borrowed `RuntimeNode` items and visits each residual term identity once per invocation.
 The iterator owns its pending stack and visited set, making sharing and cycle termination explicit
 without retaining a cache across arena changes.
 Clients can combine independent observations over this same stream.
-`ExecutionReadiness` collects every distinct reachable value or computation hole into `ExecutableHoles`;
+`ExecutionReadiness::check` collects every distinct reachable value or computation hole into `ExecutableHoles`;
 execution, library export checking, and the REPL reject the complete collection before lowering or running.
 [Runtime traversal tests](../../../../lang/statics/tests/runtime_traversal.rs) pair shared reachable holes
 with the accepted residual root that erases them; foreign-interface tests cover supplied implementations.
