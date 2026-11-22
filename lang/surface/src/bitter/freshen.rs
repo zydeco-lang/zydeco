@@ -27,17 +27,21 @@ impl Folder for FreshenFolder<'_> {
     }
 
     fn fold_pat(&mut self, id: PatId) -> Result<PatId, Self::Error> {
-        let pattern = self.builder.arena.pats[&id].clone();
-        let origin = self.builder.arena.origins.source(&id.into()).unwrap();
-        let pattern = pattern.fold_with(self)?;
-        Ok(Alloc::alloc(self.builder, pattern, origin))
+        zydeco_foundation::stack::maybe_grow(|| {
+            let pattern = self.builder.arena.pats[&id].clone();
+            let origin = self.builder.arena.origins.source(&id.into()).unwrap();
+            let pattern = pattern.fold_with(self)?;
+            Ok(Alloc::alloc(self.builder, pattern, origin))
+        })
     }
 
     fn fold_term(&mut self, id: TermId) -> Result<TermId, Self::Error> {
-        let term = self.builder.arena.terms[&id].clone();
-        let origin = self.builder.arena.origins.source(&id.into()).unwrap();
-        let term = term.fold_with(self)?;
-        Ok(Alloc::alloc(self.builder, term, origin))
+        zydeco_foundation::stack::maybe_grow(|| {
+            let term = self.builder.arena.terms[&id].clone();
+            let origin = self.builder.arena.origins.source(&id.into()).unwrap();
+            let term = term.fold_with(self)?;
+            Ok(Alloc::alloc(self.builder, term, origin))
+        })
     }
 }
 

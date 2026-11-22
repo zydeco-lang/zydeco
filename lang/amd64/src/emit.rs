@@ -801,20 +801,22 @@ impl JumpTable {
 impl<'a> Emit<'a> for ProgId {
     type Env = ();
     fn emit(&self, (): Self::Env, em: &mut Emitter) {
-        // Avoid infinite loops
-        assert!(!em.visited.contains(self), "infinite loop detected");
-        em.visited.insert(*self);
+        zydeco_foundation::stack::maybe_grow(|| {
+            // Avoid infinite loops
+            assert!(!em.visited.contains(self), "infinite loop detected");
+            em.visited.insert(*self);
 
-        em.emit_frame_entry(*self);
+            em.emit_frame_entry(*self);
 
-        // Emit the program
-        match &em.assembly.programs[self] {
-            | Program::Terminator(terminator) => terminator.emit(*self, em),
-            | Program::Instruction(instr, next) => {
-                instr.emit(*self, em);
-                next.emit((), em);
+            // Emit the program
+            match &em.assembly.programs[self] {
+                | Program::Terminator(terminator) => terminator.emit(*self, em),
+                | Program::Instruction(instr, next) => {
+                    instr.emit(*self, em);
+                    next.emit((), em);
+                }
             }
-        }
+        })
     }
 }
 

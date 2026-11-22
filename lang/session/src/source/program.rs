@@ -122,31 +122,33 @@ impl<'graph> TextualProgramBuilder<'graph> {
         if let Some(root) = self.roots.get(&source) {
             return Ok(*root);
         }
-        let file = &self.graph.sources[&source];
-        let root = file.root;
-        let kind = file.kind();
-        let signature = file.signature;
-        let body = self.term(source, root)?;
-        let body = self.default_prelude(source, body)?;
-        let body = match kind {
-            | SourceKind::Signature => self
-                .parser
-                .term(self.span(source, root.into()).make(t::SignatureBoundary(body).into())),
-            | SourceKind::Implementation | SourceKind::Program => body,
-        };
-        let root = match signature {
-            | None => body,
-            | Some(signature) => {
-                let ty = self.source(signature)?;
-                let signature_root = self.graph.sources[&signature].root;
-                self.parser.term(
-                    self.span(signature, signature_root.into())
-                        .make(t::Ann { tm: body, ty }.into()),
-                )
-            }
-        };
-        self.roots.insert(source, root);
-        Ok(root)
+        zydeco_foundation::stack::maybe_grow(|| {
+            let file = &self.graph.sources[&source];
+            let root = file.root;
+            let kind = file.kind();
+            let signature = file.signature;
+            let body = self.term(source, root)?;
+            let body = self.default_prelude(source, body)?;
+            let body = match kind {
+                | SourceKind::Signature => self
+                    .parser
+                    .term(self.span(source, root.into()).make(t::SignatureBoundary(body).into())),
+                | SourceKind::Implementation | SourceKind::Program => body,
+            };
+            let root = match signature {
+                | None => body,
+                | Some(signature) => {
+                    let ty = self.source(signature)?;
+                    let signature_root = self.graph.sources[&signature].root;
+                    self.parser.term(
+                        self.span(signature, signature_root.into())
+                            .make(t::Ann { tm: body, ty }.into()),
+                    )
+                }
+            };
+            self.roots.insert(source, root);
+            Ok(root)
+        })
     }
 
     /// Lower the source's closed default view to an ordinary static projection group.
@@ -216,85 +218,94 @@ impl<'graph> TextualProgramBuilder<'graph> {
     }
 
     fn metadata(&mut self, source: SourceId, metadata: t::MetaId) -> t::MetaId {
-        let syntax = self.graph.sources[&source].arena.metas[&metadata].clone();
-        let syntax = match syntax {
-            | t::MetaNode::Ident(name) => t::MetaNode::Ident(name),
-            | t::MetaNode::String(value) => t::MetaNode::String(value),
-            | t::MetaNode::Integer(value) => t::MetaNode::Integer(value),
-            | t::MetaNode::Apply { callee, args } => t::MetaNode::Apply {
-                callee,
-                args: args.into_iter().map(|argument| self.metadata(source, argument)).collect(),
-            },
-        };
-        self.parser.meta(self.span(source, metadata.into()).make(syntax))
+        zydeco_foundation::stack::maybe_grow(|| {
+            let syntax = self.graph.sources[&source].arena.metas[&metadata].clone();
+            let syntax = match syntax {
+                | t::MetaNode::Ident(name) => t::MetaNode::Ident(name),
+                | t::MetaNode::String(value) => t::MetaNode::String(value),
+                | t::MetaNode::Integer(value) => t::MetaNode::Integer(value),
+                | t::MetaNode::Apply { callee, args } => t::MetaNode::Apply {
+                    callee,
+                    args: args
+                        .into_iter()
+                        .map(|argument| self.metadata(source, argument))
+                        .collect(),
+                },
+            };
+            self.parser.meta(self.span(source, metadata.into()).make(syntax))
+        })
     }
 
     fn pattern(
         &mut self, source: SourceId, pattern: t::PatId,
     ) -> Result<t::PatId, TextualProgramError> {
-        let syntax = self.graph.sources[&source].arena.pats[&pattern].clone();
-        let syntax = match syntax {
-            | t::Pattern::Ann(t::Ann { tm, ty }) => {
-                t::Ann { tm: self.pattern(source, tm)?, ty: self.term(source, ty)? }.into()
-            }
-            | t::Pattern::Manifest(t::ManifestPattern { binder, definition }) => {
-                t::ManifestPattern {
-                    binder: self.pattern(source, binder)?,
-                    definition: self.term(source, definition)?,
+        zydeco_foundation::stack::maybe_grow(|| {
+            let syntax = self.graph.sources[&source].arena.pats[&pattern].clone();
+            let syntax = match syntax {
+                | t::Pattern::Ann(t::Ann { tm, ty }) => {
+                    t::Ann { tm: self.pattern(source, tm)?, ty: self.term(source, ty)? }.into()
                 }
-                .into()
-            }
-            | t::Pattern::Hole(_) => t::Hole.into(),
-            | t::Pattern::Lit(literal) => t::Pattern::Lit(literal),
-            | t::Pattern::Var(definition) => self.definition(source, definition).into(),
-            | t::Pattern::Named(t::Named(name, inner)) => {
-                t::Named(name, self.pattern(source, inner)?).into()
-            }
-            | t::Pattern::Ctor(t::Ctor(name, inner)) => {
-                t::Ctor(name, self.pattern(source, inner)?).into()
-            }
-            | t::Pattern::Project(t::ProjectionPattern(field, inner)) => {
-                t::ProjectionPattern(field, self.pattern(source, inner)?).into()
-            }
-            | t::Pattern::View(t::ViewPattern { function, pattern }) => t::ViewPattern {
-                function: self.term(source, function)?,
-                pattern: self.pattern(source, pattern)?,
-            }
-            .into(),
-            | t::Pattern::Alias(t::Alias(patterns)) => {
-                let patterns = patterns
-                    .into_iter()
-                    .map(|pattern| self.pattern(source, pattern))
-                    .collect::<Result<Vec<_>, _>>()?;
-                t::Alias(t::ConsN::from_vec(patterns).unwrap()).into()
-            }
-            | t::Pattern::Paren(t::Paren(patterns)) => t::Paren(
-                patterns
-                    .into_iter()
-                    .map(|pattern| self.pattern(source, pattern))
-                    .collect::<Result<Vec<_>, _>>()?,
-            )
-            .into(),
-        };
-        Ok(self.parser.pat(self.span(source, pattern.into()).make(syntax)))
+                | t::Pattern::Manifest(t::ManifestPattern { binder, definition }) => {
+                    t::ManifestPattern {
+                        binder: self.pattern(source, binder)?,
+                        definition: self.term(source, definition)?,
+                    }
+                    .into()
+                }
+                | t::Pattern::Hole(_) => t::Hole.into(),
+                | t::Pattern::Lit(literal) => t::Pattern::Lit(literal),
+                | t::Pattern::Var(definition) => self.definition(source, definition).into(),
+                | t::Pattern::Named(t::Named(name, inner)) => {
+                    t::Named(name, self.pattern(source, inner)?).into()
+                }
+                | t::Pattern::Ctor(t::Ctor(name, inner)) => {
+                    t::Ctor(name, self.pattern(source, inner)?).into()
+                }
+                | t::Pattern::Project(t::ProjectionPattern(field, inner)) => {
+                    t::ProjectionPattern(field, self.pattern(source, inner)?).into()
+                }
+                | t::Pattern::View(t::ViewPattern { function, pattern }) => t::ViewPattern {
+                    function: self.term(source, function)?,
+                    pattern: self.pattern(source, pattern)?,
+                }
+                .into(),
+                | t::Pattern::Alias(t::Alias(patterns)) => {
+                    let patterns = patterns
+                        .into_iter()
+                        .map(|pattern| self.pattern(source, pattern))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    t::Alias(t::ConsN::from_vec(patterns).unwrap()).into()
+                }
+                | t::Pattern::Paren(t::Paren(patterns)) => t::Paren(
+                    patterns
+                        .into_iter()
+                        .map(|pattern| self.pattern(source, pattern))
+                        .collect::<Result<Vec<_>, _>>()?,
+                )
+                .into(),
+            };
+            Ok(self.parser.pat(self.span(source, pattern.into()).make(syntax)))
+        })
     }
 
     fn copattern(
         &mut self, source: SourceId, pattern: t::CoPatId,
     ) -> Result<t::CoPatId, TextualProgramError> {
-        let syntax = self.graph.sources[&source].arena.copats[&pattern].clone();
-        let syntax = match syntax {
-            | t::CoPattern::Pat(pattern) => self.pattern(source, pattern)?.into(),
-            | t::CoPattern::Dtor(name) => name.into(),
-            | t::CoPattern::App(t::Appli(patterns)) => t::Appli(
-                patterns
-                    .into_iter()
-                    .map(|pattern| self.copattern(source, pattern))
-                    .collect::<Result<Vec<_>, _>>()?,
-            )
-            .into(),
-        };
-        Ok(self.parser.copat(self.span(source, pattern.into()).make(syntax)))
+        zydeco_foundation::stack::maybe_grow(|| {
+            let syntax = self.graph.sources[&source].arena.copats[&pattern].clone();
+            let syntax = match syntax {
+                | t::CoPattern::Pat(pattern) => self.pattern(source, pattern)?.into(),
+                | t::CoPattern::Dtor(name) => name.into(),
+                | t::CoPattern::App(t::Appli(patterns)) => t::Appli(
+                    patterns
+                        .into_iter()
+                        .map(|pattern| self.copattern(source, pattern))
+                        .collect::<Result<Vec<_>, _>>()?,
+                )
+                .into(),
+            };
+            Ok(self.parser.copat(self.span(source, pattern.into()).make(syntax)))
+        })
     }
 
     fn existential_parameter(
@@ -340,200 +351,209 @@ impl<'graph> TextualProgramBuilder<'graph> {
     fn term(
         &mut self, source: SourceId, term: t::TermId,
     ) -> Result<t::TermId, TextualProgramError> {
-        let file = &self.graph.sources[&source];
-        let syntax = file.arena.terms[&term].clone();
-        if let t::Term::Meta(t::MetaTerm(meta, _)) = &syntax
-            && file.arena.metas[meta].is(MetadataKind::Import.name())
-        {
-            return self.import(source, term);
-        }
-        if let t::Term::Meta(t::MetaTerm(meta, _)) = &syntax
-            && file.arena.metas[meta].is(MetadataKind::Literal.name())
-        {
-            return self.literal(source, term);
-        }
+        zydeco_foundation::stack::maybe_grow(|| {
+            let file = &self.graph.sources[&source];
+            let syntax = file.arena.terms[&term].clone();
+            if let t::Term::Meta(t::MetaTerm(meta, _)) = &syntax
+                && file.arena.metas[meta].is(MetadataKind::Import.name())
+            {
+                return self.import(source, term);
+            }
+            if let t::Term::Meta(t::MetaTerm(meta, _)) = &syntax
+                && file.arena.metas[meta].is(MetadataKind::Literal.name())
+            {
+                return self.literal(source, term);
+            }
 
-        let syntax = match syntax {
-            | t::Term::Meta(t::MetaTerm(meta, inner)) => {
-                t::MetaTerm(self.metadata(source, meta), self.term(source, inner)?).into()
-            }
-            | t::Term::SourceBoundary(t::SourceBoundary(inner)) => {
-                t::SourceBoundary(self.term(source, inner)?).into()
-            }
-            | t::Term::SignatureBoundary(t::SignatureBoundary(inner)) => {
-                t::SignatureBoundary(self.term(source, inner)?).into()
-            }
-            | t::Term::Ann(t::Ann { tm, ty }) => {
-                t::Ann { tm: self.term(source, tm)?, ty: self.term(source, ty)? }.into()
-            }
-            | t::Term::Hole(_) => t::Hole.into(),
-            | t::Term::Var(name) => name.into(),
-            | t::Term::Named(t::Named(name, inner)) => {
-                t::Named(name, self.term(source, inner)?).into()
-            }
-            | t::Term::Label(t::Label(name, inner)) => {
-                t::Label(name, self.term(source, inner)?).into()
-            }
-            | t::Term::Paren(t::Paren(terms)) => t::Paren(
-                terms
-                    .into_iter()
-                    .map(|term| self.term(source, term))
-                    .collect::<Result<Vec<_>, _>>()?,
-            )
-            .into(),
-            | t::Term::Abs(t::Abs(pattern, body)) => {
-                t::Abs(self.copattern(source, pattern)?, self.term(source, body)?).into()
-            }
-            | t::Term::ValAbs(t::Abs(pattern, body)) => {
-                t::Term::ValAbs(t::Abs(self.copattern(source, pattern)?, self.term(source, body)?))
-            }
-            | t::Term::App(t::Appli(terms)) => t::Appli(
-                terms
-                    .into_iter()
-                    .map(|term| self.term(source, term))
-                    .collect::<Result<Vec<_>, _>>()?,
-            )
-            .into(),
-            | t::Term::Fix(t::Fix(pattern, body)) => {
-                t::Fix(self.pattern(source, pattern)?, self.term(source, body)?).into()
-            }
-            | t::Term::Pi(t::Pi(pattern, body)) => {
-                t::Pi(self.copattern(source, pattern)?, self.term(source, body)?).into()
-            }
-            | t::Term::ValPi(t::ValPi(pattern, body)) => {
-                t::ValPi(self.copattern(source, pattern)?, self.term(source, body)?).into()
-            }
-            | t::Term::Forall(t::Forall(pattern, body)) => {
-                t::Forall(self.copattern(source, pattern)?, self.term(source, body)?).into()
-            }
-            | t::Term::Arrow(t::Arrow(input, output)) => {
-                t::Arrow(self.term(source, input)?, self.term(source, output)?).into()
-            }
-            | t::Term::Sigma(t::Sigma(pattern, body)) => {
-                t::Sigma(self.copattern(source, pattern)?, self.term(source, body)?).into()
-            }
-            | t::Term::Exists(t::Exists { parameters, body }) => t::Exists {
-                parameters: parameters
-                    .into_iter()
-                    .map(|parameter| self.existential_parameter(source, parameter))
-                    .collect::<Result<Vec<_>, _>>()?,
-                body: self.term(source, body)?,
-            }
-            .into(),
-            | t::Term::Pack(t::Pack { parameters, body }) => t::Pack {
-                parameters: parameters
-                    .into_iter()
-                    .map(|parameter| self.pack_parameter(source, parameter))
-                    .collect::<Result<Vec<_>, _>>()?,
-                body: self.term(source, body)?,
-            }
-            .into(),
-            | t::Term::Prod(t::Prod(components)) => {
-                let components = components
-                    .into_iter()
-                    .map(|component| self.term(source, component))
-                    .collect::<Result<Vec<_>, _>>()?;
-                t::Prod(components).into()
-            }
-            | t::Term::Thunk(t::Thunk(body)) => t::Thunk(self.term(source, body)?).into(),
-            | t::Term::Force(t::Force(body)) => t::Force(self.term(source, body)?).into(),
-            | t::Term::Ret(t::Return(body)) => t::Return(self.term(source, body)?).into(),
-            | t::Term::Do(t::Bind { binder, bindee, tail }) => t::Bind {
-                binder: self.pattern(source, binder)?,
-                bindee: self.term(source, bindee)?,
-                tail: self.term(source, tail)?,
-            }
-            .into(),
-            | t::Term::Let(t::GenLet { binding, tail }) => t::GenLet {
-                binding: self.binding(source, binding)?,
-                tail: self.term(source, tail)?,
-            }
-            .into(),
-            | t::Term::Param(t::Param { flavor, binder, placement, tail }) => t::Param {
-                flavor,
-                binder: self.pattern(source, binder)?,
-                placement,
-                tail: self.term(source, tail)?,
-            }
-            .into(),
-            | t::Term::Pipeline(t::Pipeline { direction, subject, function }) => t::Pipeline {
-                direction,
-                subject: self.term(source, subject)?,
-                function: self.term(source, function)?,
-            }
-            .into(),
-            | t::Term::ContextBind(t::ContextBind { mode, binding, placement, tail }) => {
-                t::ContextBind {
-                    mode,
+            let syntax = match syntax {
+                | t::Term::Meta(t::MetaTerm(meta, inner)) => {
+                    t::MetaTerm(self.metadata(source, meta), self.term(source, inner)?).into()
+                }
+                | t::Term::SourceBoundary(t::SourceBoundary(inner)) => {
+                    t::SourceBoundary(self.term(source, inner)?).into()
+                }
+                | t::Term::SignatureBoundary(t::SignatureBoundary(inner)) => {
+                    t::SignatureBoundary(self.term(source, inner)?).into()
+                }
+                | t::Term::Ann(t::Ann { tm, ty }) => {
+                    t::Ann { tm: self.term(source, tm)?, ty: self.term(source, ty)? }.into()
+                }
+                | t::Term::Hole(_) => t::Hole.into(),
+                | t::Term::Var(name) => name.into(),
+                | t::Term::Named(t::Named(name, inner)) => {
+                    t::Named(name, self.term(source, inner)?).into()
+                }
+                | t::Term::Label(t::Label(name, inner)) => {
+                    t::Label(name, self.term(source, inner)?).into()
+                }
+                | t::Term::Paren(t::Paren(terms)) => t::Paren(
+                    terms
+                        .into_iter()
+                        .map(|term| self.term(source, term))
+                        .collect::<Result<Vec<_>, _>>()?,
+                )
+                .into(),
+                | t::Term::Abs(t::Abs(pattern, body)) => {
+                    t::Abs(self.copattern(source, pattern)?, self.term(source, body)?).into()
+                }
+                | t::Term::ValAbs(t::Abs(pattern, body)) => t::Term::ValAbs(t::Abs(
+                    self.copattern(source, pattern)?,
+                    self.term(source, body)?,
+                )),
+                | t::Term::App(t::Appli(terms)) => t::Appli(
+                    terms
+                        .into_iter()
+                        .map(|term| self.term(source, term))
+                        .collect::<Result<Vec<_>, _>>()?,
+                )
+                .into(),
+                | t::Term::Fix(t::Fix(pattern, body)) => {
+                    t::Fix(self.pattern(source, pattern)?, self.term(source, body)?).into()
+                }
+                | t::Term::Pi(t::Pi(pattern, body)) => {
+                    t::Pi(self.copattern(source, pattern)?, self.term(source, body)?).into()
+                }
+                | t::Term::ValPi(t::ValPi(pattern, body)) => {
+                    t::ValPi(self.copattern(source, pattern)?, self.term(source, body)?).into()
+                }
+                | t::Term::Forall(t::Forall(pattern, body)) => {
+                    t::Forall(self.copattern(source, pattern)?, self.term(source, body)?).into()
+                }
+                | t::Term::Arrow(t::Arrow(input, output)) => {
+                    t::Arrow(self.term(source, input)?, self.term(source, output)?).into()
+                }
+                | t::Term::Sigma(t::Sigma(pattern, body)) => {
+                    t::Sigma(self.copattern(source, pattern)?, self.term(source, body)?).into()
+                }
+                | t::Term::Exists(t::Exists { parameters, body }) => t::Exists {
+                    parameters: parameters
+                        .into_iter()
+                        .map(|parameter| self.existential_parameter(source, parameter))
+                        .collect::<Result<Vec<_>, _>>()?,
+                    body: self.term(source, body)?,
+                }
+                .into(),
+                | t::Term::Pack(t::Pack { parameters, body }) => t::Pack {
+                    parameters: parameters
+                        .into_iter()
+                        .map(|parameter| self.pack_parameter(source, parameter))
+                        .collect::<Result<Vec<_>, _>>()?,
+                    body: self.term(source, body)?,
+                }
+                .into(),
+                | t::Term::Prod(t::Prod(components)) => {
+                    let components = components
+                        .into_iter()
+                        .map(|component| self.term(source, component))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    t::Prod(components).into()
+                }
+                | t::Term::Thunk(t::Thunk(body)) => t::Thunk(self.term(source, body)?).into(),
+                | t::Term::Force(t::Force(body)) => t::Force(self.term(source, body)?).into(),
+                | t::Term::Ret(t::Return(body)) => t::Return(self.term(source, body)?).into(),
+                | t::Term::Do(t::Bind { binder, bindee, tail }) => t::Bind {
+                    binder: self.pattern(source, binder)?,
+                    bindee: self.term(source, bindee)?,
+                    tail: self.term(source, tail)?,
+                }
+                .into(),
+                | t::Term::Let(t::GenLet { binding, tail }) => t::GenLet {
                     binding: self.binding(source, binding)?,
+                    tail: self.term(source, tail)?,
+                }
+                .into(),
+                | t::Term::Param(t::Param { flavor, binder, placement, tail }) => t::Param {
+                    flavor,
+                    binder: self.pattern(source, binder)?,
                     placement,
                     tail: self.term(source, tail)?,
                 }
-                .into()
-            }
-            | t::Term::Block(t::Block(body)) => t::Block(self.term(source, body)?).into(),
-            | t::Term::Data(t::Data { arms }) => t::Data {
-                arms: arms
-                    .into_iter()
-                    .map(|t::DataArm { name, param }| {
-                        Ok(t::DataArm { name, param: self.term(source, param)? })
-                    })
-                    .collect::<Result<Vec<_>, TextualProgramError>>()?,
-            }
-            .into(),
-            | t::Term::CoData(t::CoData { arms }) => t::CoData {
-                arms: arms
-                    .into_iter()
-                    .map(|t::CoDataArm { name, params, out }| {
-                        Ok(t::CoDataArm {
-                            name,
-                            params: params
-                                .map(|params| self.copattern(source, params))
-                                .transpose()?,
-                            out: self.term(source, out)?,
+                .into(),
+                | t::Term::Pipeline(t::Pipeline { direction, subject, function }) => t::Pipeline {
+                    direction,
+                    subject: self.term(source, subject)?,
+                    function: self.term(source, function)?,
+                }
+                .into(),
+                | t::Term::ContextBind(t::ContextBind { mode, binding, placement, tail }) => {
+                    t::ContextBind {
+                        mode,
+                        binding: self.binding(source, binding)?,
+                        placement,
+                        tail: self.term(source, tail)?,
+                    }
+                    .into()
+                }
+                | t::Term::Block(t::Block(body)) => t::Block(self.term(source, body)?).into(),
+                | t::Term::Data(t::Data { arms }) => t::Data {
+                    arms: arms
+                        .into_iter()
+                        .map(|t::DataArm { name, param }| {
+                            Ok(t::DataArm { name, param: self.term(source, param)? })
                         })
-                    })
-                    .collect::<Result<Vec<_>, TextualProgramError>>()?,
-            }
-            .into(),
-            | t::Term::Ctor(t::Ctor(name, body)) => t::Ctor(name, self.term(source, body)?).into(),
-            | t::Term::Match(t::Match { scrut, arms }) => t::Match {
-                scrut: self.term(source, scrut)?,
-                arms: arms
-                    .into_iter()
-                    .map(|t::Matcher { binder, tail }| {
-                        Ok(t::Matcher {
-                            binder: self.pattern(source, binder)?,
-                            tail: self.term(source, tail)?,
+                        .collect::<Result<Vec<_>, TextualProgramError>>()?,
+                }
+                .into(),
+                | t::Term::CoData(t::CoData { arms }) => t::CoData {
+                    arms: arms
+                        .into_iter()
+                        .map(|t::CoDataArm { name, params, out }| {
+                            Ok(t::CoDataArm {
+                                name,
+                                params: params
+                                    .map(|params| self.copattern(source, params))
+                                    .transpose()?,
+                                out: self.term(source, out)?,
+                            })
                         })
-                    })
-                    .collect::<Result<Vec<_>, TextualProgramError>>()?,
-            }
-            .into(),
-            | t::Term::CoMatch(t::CoMatchParam { arms }) => t::CoMatchParam {
-                arms: arms
-                    .into_iter()
-                    .map(|t::CoMatcherParam { params, tail }| {
-                        Ok(t::CoMatcherParam {
-                            params: self.copattern(source, params)?,
-                            tail: self.term(source, tail)?,
+                        .collect::<Result<Vec<_>, TextualProgramError>>()?,
+                }
+                .into(),
+                | t::Term::Ctor(t::Ctor(name, body)) => {
+                    t::Ctor(name, self.term(source, body)?).into()
+                }
+                | t::Term::Match(t::Match { scrut, arms }) => t::Match {
+                    scrut: self.term(source, scrut)?,
+                    arms: arms
+                        .into_iter()
+                        .map(|t::Matcher { binder, tail }| {
+                            Ok(t::Matcher {
+                                binder: self.pattern(source, binder)?,
+                                tail: self.term(source, tail)?,
+                            })
                         })
-                    })
-                    .collect::<Result<Vec<_>, TextualProgramError>>()?,
+                        .collect::<Result<Vec<_>, TextualProgramError>>()?,
+                }
+                .into(),
+                | t::Term::CoMatch(t::CoMatchParam { arms }) => t::CoMatchParam {
+                    arms: arms
+                        .into_iter()
+                        .map(|t::CoMatcherParam { params, tail }| {
+                            Ok(t::CoMatcherParam {
+                                params: self.copattern(source, params)?,
+                                tail: self.term(source, tail)?,
+                            })
+                        })
+                        .collect::<Result<Vec<_>, TextualProgramError>>()?,
+                }
+                .into(),
+                | t::Term::Dtor(t::Dtor(body, name)) => {
+                    t::Dtor(self.term(source, body)?, name).into()
+                }
+                | t::Term::Proj(t::Proj(body, name)) => {
+                    t::Proj(self.term(source, body)?, name).into()
+                }
+                | t::Term::Lit(literal) => literal.into(),
+            };
+            let copied = self.parser.term(self.span(source, term.into()).make(syntax));
+            if let Some(completion) = &mut self.completion
+                && file.path == self.graph.sources[&self.graph.root].path
+                && term == completion.target
+            {
+                completion.copied = Some(copied);
             }
-            .into(),
-            | t::Term::Dtor(t::Dtor(body, name)) => t::Dtor(self.term(source, body)?, name).into(),
-            | t::Term::Proj(t::Proj(body, name)) => t::Proj(self.term(source, body)?, name).into(),
-            | t::Term::Lit(literal) => literal.into(),
-        };
-        let copied = self.parser.term(self.span(source, term.into()).make(syntax));
-        if let Some(completion) = &mut self.completion
-            && file.path == self.graph.sources[&self.graph.root].path
-            && term == completion.target
-        {
-            completion.copied = Some(copied);
-        }
-        Ok(copied)
+            Ok(copied)
+        })
     }
 
     fn import(

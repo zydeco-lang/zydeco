@@ -1330,7 +1330,8 @@ impl<'arena> PrettyFormatter<'arena> {
         if let Some(document) = self.documents.patterns.borrow().get(&key) {
             return document.clone();
         }
-        let document = self.pattern_document(pattern, requirement);
+        let document =
+            zydeco_foundation::stack::maybe_grow(|| self.pattern_document(pattern, requirement));
         self.documents.patterns.borrow_mut().insert(key, document.clone());
         document
     }
@@ -1430,7 +1431,7 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn copattern(&self, pattern: CoPatId) -> RcDoc<'arena> {
-        match &self.arena.copats[&pattern] {
+        zydeco_foundation::stack::maybe_grow(|| match &self.arena.copats[&pattern] {
             | CoPattern::Pat(inner) => {
                 self.with_leading_comments(pattern.into(), self.pattern(*inner))
             }
@@ -1442,22 +1443,24 @@ impl<'arena> PrettyFormatter<'arena> {
                 self.select_group_layout(self.separated_group_layout(&parameters, ""))
                     .nest(self.indent())
             }
-        }
+        })
     }
 
     fn copattern_parameters(&self, pattern: CoPatId) -> Vec<LayoutFragment<'arena>> {
-        let CoPattern::App(Appli(patterns)) = &self.arena.copats[&pattern] else {
-            return vec![LayoutFragment::entity(pattern.into(), self.copattern(pattern))];
-        };
-        let mut parameters =
-            patterns.iter().flat_map(|pattern| self.copattern_parameters(*pattern));
-        let first = parameters.next().expect("copattern applications are nonempty");
-        let LayoutFragment { document, anchors } = first;
-        let first = LayoutFragment {
-            document: self.with_leading_comments(pattern.into(), document),
-            anchors: LayoutAnchors { first: pattern.into(), last: anchors.last },
-        };
-        std::iter::once(first).chain(parameters).collect()
+        zydeco_foundation::stack::maybe_grow(|| {
+            let CoPattern::App(Appli(patterns)) = &self.arena.copats[&pattern] else {
+                return vec![LayoutFragment::entity(pattern.into(), self.copattern(pattern))];
+            };
+            let mut parameters =
+                patterns.iter().flat_map(|pattern| self.copattern_parameters(*pattern));
+            let first = parameters.next().expect("copattern applications are nonempty");
+            let LayoutFragment { document, anchors } = first;
+            let first = LayoutFragment {
+                document: self.with_leading_comments(pattern.into(), document),
+                anchors: LayoutAnchors { first: pattern.into(), last: anchors.last },
+            };
+            std::iter::once(first).chain(parameters).collect()
+        })
     }
 
     fn term(&self, term: TermId) -> RcDoc<'arena> {
@@ -1497,7 +1500,8 @@ impl<'arena> PrettyFormatter<'arena> {
         if let Some(document) = self.documents.terms.borrow().get(&key) {
             return document.clone();
         }
-        let document = self.term_document(term, requirement);
+        let document =
+            zydeco_foundation::stack::maybe_grow(|| self.term_document(term, requirement));
         self.documents.terms.borrow_mut().insert(key, document.clone());
         document
     }

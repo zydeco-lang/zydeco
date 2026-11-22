@@ -2839,6 +2839,7 @@ dependencies = [
  "thiserror",
  "wasm-encoder",
  "wasmparser",
+ "zydeco-foundation",
  "zydeco-stackir",
  "zydeco-syntax",
  "zydeco-wasm-common",

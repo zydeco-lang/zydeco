@@ -87,76 +87,80 @@ impl DesugarFolder<'_> {
 }
 impl DesugarFolder<'_> {
     fn pattern(&mut self, id: t::PatId) -> Result<b::PatId> {
-        let pat = self.lookup_pat(id);
-        use t::Pattern as Pat;
-        let res = match pat {
-            | Pat::Ann(pat) => {
-                let t::Ann { tm, ty } = pat;
-                let (tm, ty) = (self.pattern(tm), self.term(ty));
-                let (tm, ty) = (tm?, ty?);
-                Alloc::alloc(&mut self.builder, b::Ann { tm, ty }.into(), id.into())
-            }
-            | Pat::Manifest(_) => {
-                let pattern = id.span(self.spans).clone().make(id);
-                return self.err(DesugarError::ManifestPatternOutsideExistential(pattern));
-            }
-            | Pat::Hole(pat) => {
-                let t::Hole = pat;
-                Alloc::alloc(&mut self.builder, b::Hole.into(), id.into())
-            }
-            | Pat::Var(name) => {
-                let name = self.definition(name)?.into();
-                Alloc::alloc(&mut self.builder, name, id.into())
-            }
-            | Pat::Named(pat) => {
-                let t::Named(name, inner) = pat;
-                let inner = self.pattern(inner)?;
-                Alloc::alloc(&mut self.builder, b::Named(name, inner).into(), id.into())
-            }
-            | Pat::Ctor(pat) => {
-                let t::Ctor(name, pat) = pat;
-                let pat = self.pattern(pat)?;
-                Alloc::alloc(&mut self.builder, b::Ctor(name, pat).into(), id.into())
-            }
-            | Pat::Lit(literal) => {
-                Alloc::alloc(&mut self.builder, b::Pattern::Lit(literal), id.into())
-            }
-            | Pat::Project(t::ProjectionPattern(field, pattern)) => {
-                let pattern = self.pattern(pattern)?;
-                Alloc::alloc(
-                    &mut self.builder,
-                    b::ProjectionPattern(field, pattern).into(),
-                    id.into(),
-                )
-            }
-            | Pat::View(t::ViewPattern { function, pattern }) => {
-                let (function, pattern) = (self.term(function), self.pattern(pattern));
-                let (function, pattern) = (function?, pattern?);
-                Alloc::alloc(
-                    &mut self.builder,
-                    b::ViewPattern { function, pattern }.into(),
-                    id.into(),
-                )
-            }
-            | Pat::Alias(t::Alias(patterns)) => {
-                let patterns =
-                    patterns.into_iter().map(|pattern| self.pattern(pattern)).collect_reported()?;
-                let patterns = b::ConsN::from_vec(patterns).unwrap();
-                Alloc::alloc(&mut self.builder, b::Alias(patterns).into(), id.into())
-            }
-            | Pat::Paren(pat) => {
-                let t::Paren(pats) = pat;
-                let pats = self.patterns(pats)?;
-                match pats.len() {
-                    | 0 => Alloc::alloc(&mut self.builder, b::Triv.into(), id.into()),
-                    // if there is only one pat like `(p)`, remove the redundant paren
-                    | 1 => pats.into_iter().next().unwrap(),
-                    // Multi-element parens are preserved as one n-ary cons.
-                    | _ => Alloc::alloc(&mut self.builder, b::Pattern::Cons(pats), id.into()),
+        zydeco_foundation::stack::maybe_grow(|| {
+            let pat = self.lookup_pat(id);
+            use t::Pattern as Pat;
+            let res = match pat {
+                | Pat::Ann(pat) => {
+                    let t::Ann { tm, ty } = pat;
+                    let (tm, ty) = (self.pattern(tm), self.term(ty));
+                    let (tm, ty) = (tm?, ty?);
+                    Alloc::alloc(&mut self.builder, b::Ann { tm, ty }.into(), id.into())
                 }
-            }
-        };
-        Ok(res)
+                | Pat::Manifest(_) => {
+                    let pattern = id.span(self.spans).clone().make(id);
+                    return self.err(DesugarError::ManifestPatternOutsideExistential(pattern));
+                }
+                | Pat::Hole(pat) => {
+                    let t::Hole = pat;
+                    Alloc::alloc(&mut self.builder, b::Hole.into(), id.into())
+                }
+                | Pat::Var(name) => {
+                    let name = self.definition(name)?.into();
+                    Alloc::alloc(&mut self.builder, name, id.into())
+                }
+                | Pat::Named(pat) => {
+                    let t::Named(name, inner) = pat;
+                    let inner = self.pattern(inner)?;
+                    Alloc::alloc(&mut self.builder, b::Named(name, inner).into(), id.into())
+                }
+                | Pat::Ctor(pat) => {
+                    let t::Ctor(name, pat) = pat;
+                    let pat = self.pattern(pat)?;
+                    Alloc::alloc(&mut self.builder, b::Ctor(name, pat).into(), id.into())
+                }
+                | Pat::Lit(literal) => {
+                    Alloc::alloc(&mut self.builder, b::Pattern::Lit(literal), id.into())
+                }
+                | Pat::Project(t::ProjectionPattern(field, pattern)) => {
+                    let pattern = self.pattern(pattern)?;
+                    Alloc::alloc(
+                        &mut self.builder,
+                        b::ProjectionPattern(field, pattern).into(),
+                        id.into(),
+                    )
+                }
+                | Pat::View(t::ViewPattern { function, pattern }) => {
+                    let (function, pattern) = (self.term(function), self.pattern(pattern));
+                    let (function, pattern) = (function?, pattern?);
+                    Alloc::alloc(
+                        &mut self.builder,
+                        b::ViewPattern { function, pattern }.into(),
+                        id.into(),
+                    )
+                }
+                | Pat::Alias(t::Alias(patterns)) => {
+                    let patterns = patterns
+                        .into_iter()
+                        .map(|pattern| self.pattern(pattern))
+                        .collect_reported()?;
+                    let patterns = b::ConsN::from_vec(patterns).unwrap();
+                    Alloc::alloc(&mut self.builder, b::Alias(patterns).into(), id.into())
+                }
+                | Pat::Paren(pat) => {
+                    let t::Paren(pats) = pat;
+                    let pats = self.patterns(pats)?;
+                    match pats.len() {
+                        | 0 => Alloc::alloc(&mut self.builder, b::Triv.into(), id.into()),
+                        // if there is only one pat like `(p)`, remove the redundant paren
+                        | 1 => pats.into_iter().next().unwrap(),
+                        // Multi-element parens are preserved as one n-ary cons.
+                        | _ => Alloc::alloc(&mut self.builder, b::Pattern::Cons(pats), id.into()),
+                    }
+                }
+            };
+            Ok(res)
+        })
     }
 }
 impl DesugarFolder<'_> {
@@ -167,7 +171,7 @@ impl DesugarFolder<'_> {
         patterns.into_iter().map(|pattern| self.pattern(pattern)).collect_reported()
     }
     fn copattern(&mut self, id: t::CoPatId) -> Result<b::Appli<b::CoPatternItem>> {
-        match self.lookup_copat(id) {
+        zydeco_foundation::stack::maybe_grow(|| match self.lookup_copat(id) {
             | t::CoPattern::Pat(pattern) => Ok(b::Appli(vec![self.pattern(pattern)?.into()])),
             | t::CoPattern::Dtor(name) => Ok(b::Appli(vec![name.into()])),
             | t::CoPattern::App(t::Appli(items)) => {
@@ -177,7 +181,7 @@ impl DesugarFolder<'_> {
                     .collect_reported::<Vec<_>>()?;
                 Ok(b::Appli(items.into_iter().flat_map(|b::Appli(items)| items).collect()))
             }
-        }
+        })
     }
 }
 impl Report<DesugarError> for DesugarFolder<'_> {
@@ -192,7 +196,7 @@ impl DesugarFolder<'_> {
         if let Some(result) = self.terms.get(&id) {
             return *result;
         }
-        let result = self.term_node(id);
+        let result = zydeco_foundation::stack::maybe_grow(|| self.term_node(id));
         self.terms.insert(id, result);
         result
     }

@@ -115,16 +115,8 @@ impl Experiment {
 
 fn main() {
     let experiment = Experiment::parse();
-    std::thread::Builder::new()
-        .name("pipeline-experiment".into())
-        .stack_size(32 * 1024 * 1024)
-        .spawn(move || {
-            if let Err(error) = experiment.run() {
-                eprintln!("{error}");
-                std::process::exit(1);
-            }
-        })
-        .expect("start pipeline experiment worker")
-        .join()
-        .expect("pipeline experiment panicked");
+    if let Err(error) = experiment.run() {
+        eprintln!("{error}");
+        std::process::exit(1);
+    }
 }

@@ -46,7 +46,7 @@ impl TermChecker<'_> {
     pub(super) fn cbv_kind_bindee<'db>(
         &self, tycker: &mut Tycker<'db>, scope: &CbvScope, bindee: su::TermId,
     ) -> Result<Option<ss::KindId>> {
-        match tycker.scoped.terms[&bindee].to_owned() {
+        zydeco_foundation::stack::maybe_grow(|| match tycker.scoped.terms[&bindee].to_owned() {
             | su::Term::Ann(su::Ann { tm, ty })
                 if matches!(tycker.scoped.terms[&ty], su::Term::Hole(_)) =>
             {
@@ -61,7 +61,7 @@ impl TermChecker<'_> {
                 self.cbv_annotation_kind(tycker, scope, bindee)
             }
             | _ => Ok(None),
-        }
+        })
     }
 
     /// The kind-binding clause: `[[let K = κ in M]]v = [[M]]v[κ/K]`.

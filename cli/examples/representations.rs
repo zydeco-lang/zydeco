@@ -66,18 +66,10 @@ impl Measurement {
 }
 
 fn main() {
-    std::thread::Builder::new()
-        .name("representation-experiment".into())
-        .stack_size(32 * 1024 * 1024)
-        .spawn(|| {
-            if let Err(error) = Experiment::run() {
-                eprintln!("{error}");
-                std::process::exit(1);
-            }
-        })
-        .expect("start experiment worker")
-        .join()
-        .expect("representation experiment panicked");
+    if let Err(error) = Experiment::run() {
+        eprintln!("{error}");
+        std::process::exit(1);
+    }
 }
 
 struct Experiment;

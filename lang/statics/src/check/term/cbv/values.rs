@@ -336,219 +336,232 @@ impl TermChecker<'_> {
         &self, tycker: &mut Tycker<'db>, scope: &CbvScope, term: su::TermId,
         expected: Option<ss::TypeId>,
     ) -> Result<(ss::ValueId, ss::TypeId)> {
-        use su::Term as Tm;
-        match tycker.scoped.terms[&term].to_owned() {
-            // [[fn (x : A) => M]]v = { fn (x : [[A]]v) => [[M]]v_term }
-            // [[Λ(X : K) . M]]v = { fn (X : K) => [[M]]v_term }
-            //
-            // Written `fn (X : K) => M`, the same `fn` as a value lambda: the
-            // binder's *sort* is what distinguishes them, which is how the host
-            // reads `pi` as well. With the kind written the clause synthesizes,
-            // so it needs no expectation; `{ fn X => ret 0 }` fails for want of
-            // the kind, not of an expectation.
-            | Tm::Abs(su::Abs(source_binders, source_body)) => {
-                let wanted = expected.and_then(|expected| expected.destruct_thk_app(tycker));
-                let abs =
-                    self.cbv_abstraction(tycker, scope, &source_binders, source_body, wanted)?;
-                let thunk = Thunk(abs).build(tycker, &scope.env);
-                let ty = tycker.statics.annotations_value[&thunk];
-                Ok((thunk, ty))
-            }
-            // [[#f = V]]v_value = #f = [[V]]v
-            //
-            // A field name is not a type former, so this row commutes: the
-            // label moves through the translation untouched and only the
-            // payload is translated. The expectation is peeled the same way,
-            // when it is a label of the same name — a label of a *different*
-            // name pushes nothing, and the net refuses the result, which keeps
-            // the mismatch one diagnostic rather than two.
-            | Tm::Named(su::Named(name, inner)) => {
-                let wanted = expected.and_then(|expected| {
-                    match tycker.type_filled(&expected).ok().map(|ty| ty.to_owned()) {
-                        | Some(ss::Type::Label(Label(found, payload))) if found == name => {
-                            Some(payload)
+        zydeco_foundation::stack::maybe_grow(|| {
+            use su::Term as Tm;
+            match tycker.scoped.terms[&term].to_owned() {
+                // [[fn (x : A) => M]]v = { fn (x : [[A]]v) => [[M]]v_term }
+                // [[Λ(X : K) . M]]v = { fn (X : K) => [[M]]v_term }
+                //
+                // Written `fn (X : K) => M`, the same `fn` as a value lambda: the
+                // binder's *sort* is what distinguishes them, which is how the host
+                // reads `pi` as well. With the kind written the clause synthesizes,
+                // so it needs no expectation; `{ fn X => ret 0 }` fails for want of
+                // the kind, not of an expectation.
+                | Tm::Abs(su::Abs(source_binders, source_body)) => {
+                    let wanted = expected.and_then(|expected| expected.destruct_thk_app(tycker));
+                    let abs =
+                        self.cbv_abstraction(tycker, scope, &source_binders, source_body, wanted)?;
+                    let thunk = Thunk(abs).build(tycker, &scope.env);
+                    let ty = tycker.statics.annotations_value[&thunk];
+                    Ok((thunk, ty))
+                }
+                // [[#f = V]]v_value = #f = [[V]]v
+                //
+                // A field name is not a type former, so this row commutes: the
+                // label moves through the translation untouched and only the
+                // payload is translated. The expectation is peeled the same way,
+                // when it is a label of the same name — a label of a *different*
+                // name pushes nothing, and the net refuses the result, which keeps
+                // the mismatch one diagnostic rather than two.
+                | Tm::Named(su::Named(name, inner)) => {
+                    let wanted = expected.and_then(|expected| {
+                        match tycker.type_filled(&expected).ok().map(|ty| ty.to_owned()) {
+                            | Some(ss::Type::Label(Label(found, payload))) if found == name => {
+                                Some(payload)
+                            }
+                            | _ => None,
                         }
-                        | _ => None,
+                    });
+                    let (value, value_ty) = self.cbv_value_at(tycker, scope, inner, wanted)?;
+                    let vtype = ss::VType.build(tycker, &scope.env);
+                    let ty = Alloc::alloc(tycker, ss::Label(name, value_ty), vtype, &());
+                    let value = Alloc::alloc(tycker, ss::Named(name, value), ty, &());
+                    Ok((value, ty))
+                }
+                // [[(V1, …, Vn)]]v_value = ([[V1]]v, …, [[Vn]]v)
+                //
+                // The value clause. A tuple whose components are all source values
+                // is itself a source value, so no sequencing is needed. When a
+                // component is not a value the term judgment's clause applies
+                // instead, which is the first source form to land in both
+                // judgments.
+                | Tm::Cons(components) => {
+                    // [[(T, V)]]v_value = ([[T]]v, [[V]]v)
+                    //
+                    // A **pack**, which is this same node: the expected type is
+                    // what says a leading component is a type and not a value, so
+                    // the dispatch is on the expectation rather than on the syntax.
+                    // A pack cannot synthesize — nothing in `(Int, 7)` says which
+                    // existential it inhabits — so with no expectation this falls
+                    // through to the product clause and is refused there, by its
+                    // first component failing as a value.
+                    if let Some((witnesses, body_ty, index)) =
+                        self.cbv_pack_telescope(tycker, scope, &components, expected)?
+                    {
+                        let payload =
+                            self.cbv_pack_payload(tycker, scope, &components[index..], body_ty)?;
+                        let expected =
+                            expected.expect("a telescope was peeled from an expectation");
+                        let witnesses =
+                            witnesses.into_iter().map(ss::StaticTermId::from).collect::<Vec<_>>();
+                        let value = Alloc::alloc(tycker, ConsN(witnesses, payload), expected, &());
+                        return Ok((value, expected));
                     }
-                });
-                let (value, value_ty) = self.cbv_value_at(tycker, scope, inner, wanted)?;
-                let vtype = ss::VType.build(tycker, &scope.env);
-                let ty = Alloc::alloc(tycker, ss::Label(name, value_ty), vtype, &());
-                let value = Alloc::alloc(tycker, ss::Named(name, value), ty, &());
-                Ok((value, ty))
-            }
-            // [[(V1, …, Vn)]]v_value = ([[V1]]v, …, [[Vn]]v)
-            //
-            // The value clause. A tuple whose components are all source values
-            // is itself a source value, so no sequencing is needed. When a
-            // component is not a value the term judgment's clause applies
-            // instead, which is the first source form to land in both
-            // judgments.
-            | Tm::Cons(components) => {
-                // [[(T, V)]]v_value = ([[T]]v, [[V]]v)
-                //
-                // A **pack**, which is this same node: the expected type is
-                // what says a leading component is a type and not a value, so
-                // the dispatch is on the expectation rather than on the syntax.
-                // A pack cannot synthesize — nothing in `(Int, 7)` says which
-                // existential it inhabits — so with no expectation this falls
-                // through to the product clause and is refused there, by its
-                // first component failing as a value.
-                if let Some((witnesses, body_ty, index)) =
-                    self.cbv_pack_telescope(tycker, scope, &components, expected)?
-                {
-                    let payload =
-                        self.cbv_pack_payload(tycker, scope, &components[index..], body_ty)?;
-                    let expected = expected.expect("a telescope was peeled from an expectation");
-                    let witnesses =
-                        witnesses.into_iter().map(ss::StaticTermId::from).collect::<Vec<_>>();
-                    let value = Alloc::alloc(tycker, ConsN(witnesses, payload), expected, &());
-                    return Ok((value, expected));
-                }
-                let wanted = self.cbv_expected_components(tycker, expected, components.len());
-                let mut values = Vec::with_capacity(components.len());
-                let mut types = Vec::with_capacity(components.len());
-                for (component, wanted) in components.into_iter().zip(wanted) {
-                    let (value, ty) = self.cbv_value_at(tycker, scope, component, wanted)?;
-                    values.push(value);
-                    types.push(ty);
-                }
-                let ty = Prod(types).build(tycker, &scope.env);
-                let value = Alloc::alloc(tycker, ss::Value::VCons(values), ty, &());
-                Ok((value, ty))
-            }
-            // [[+C V]]v = +C [[V]]v
-            //
-            // A constructor cannot synthesize: nothing about `+On` says which
-            // declaration it belongs to, so the expectation is what names the
-            // data type. This is the first row that *requires* the analysis
-            // direction rather than merely using it.
-            | Tm::Ctor(su::Ctor(name, payload)) => {
-                let Some(expected) = expected else { tycker.err(TyckError::MissingAnnotation)? };
-                let (data_id, arm) = self.cbv_data_arm(tycker, scope, expected, &name)?;
-                let (payload, _) = self.cbv_value_at(tycker, scope, payload, Some(arm))?;
-                let value =
-                    Alloc::alloc(tycker, ss::Value::Ctor(ss::Ctor(name, payload)), expected, &());
-                // The declaration a constructor belongs to, which the ordinary
-                // judgment records and the backend reads to find the tag's
-                // index. Without it the stack-IR lowering of a well-typed term
-                // aborts, and neither the checker nor the arena invariants
-                // notice.
-                let _ = tycker.statics.data_hints.upsert(value, data_id);
-                Ok((value, expected))
-            }
-            // [[comatch {.di => Mi}]]v = { comatch {.di => [[Mi]]v_term} }
-            //
-            // A comatch cannot synthesize, for the same reason a constructor
-            // cannot: nothing in the arms says which declaration they answer.
-            // The thunk is where the by-name corner comes from — each field is
-            // a suspended computation, so it runs when observed and runs again
-            // on the next observation.
-            | Tm::CoMatchClauses(su::CoMatchClauses { clauses }) => {
-                let Some(expected) = expected else { tycker.err(TyckError::MissingAnnotation)? };
-                let (codata_id, fields, payload) = self.cbv_codata(tycker, scope, expected)?;
-                let mut comatchers = Vec::with_capacity(clauses.len());
-                for su::CoPatternClause { spine, tail } in clauses {
-                    // One observation per clause. An **interleaved** spine,
-                    // `.route n .result`, is the same clause written with its
-                    // arguments pushed into the copattern; un-interleaving it
-                    // into `.route => ret { fn n => … }` is mechanical and is
-                    // deferred rather than guessed at here.
-                    let su::CoPatternItem::Dtor(dtor) = spine.head else {
-                        tycker.err(TyckError::Expressivity(
-                            "a call-by-value comatch clause must begin with an observation",
-                        ))?
-                    };
-                    if !spine.tail.is_empty() {
-                        tycker.err(TyckError::Expressivity(
-                            "an interleaved call-by-value copattern is not translated yet",
-                        ))?
+                    let wanted = self.cbv_expected_components(tycker, expected, components.len());
+                    let mut values = Vec::with_capacity(components.len());
+                    let mut types = Vec::with_capacity(components.len());
+                    for (component, wanted) in components.into_iter().zip(wanted) {
+                        let (value, ty) = self.cbv_value_at(tycker, scope, component, wanted)?;
+                        values.push(value);
+                        types.push(ty);
                     }
-                    let Some(field) = fields.get(&dtor) else {
-                        tycker.err(TyckError::UnknownCoDataDestructor(dtor))?
-                    };
-                    let Some(field) = field.destruct_ret_app(tycker) else {
-                        tycker.err(TyckError::Expressivity(
-                            "a call-by-value codata field must be a translated source type",
-                        ))?
-                    };
-                    let (tail, _) = self.cbv_term(tycker, scope, tail, Some(field))?;
-                    comatchers.push(ss::CoMatcher { dtor, tail });
+                    let ty = Prod(types).build(tycker, &scope.env);
+                    let value = Alloc::alloc(tycker, ss::Value::VCons(values), ty, &());
+                    Ok((value, ty))
                 }
-                let compu = Alloc::alloc(
-                    tycker,
-                    ss::Computation::CoMatch(ss::CoMatch { arms: comatchers }),
-                    payload,
-                    &(),
-                );
-                let _ = tycker.statics.codata_hints.upsert(compu, codata_id);
-                // The thunk carries `Thk` of what the comatch carries, and the
-                // clause reports exactly that rather than the expectation it
-                // was given. For a `def` codata the comatch carries the seal
-                // applied to its arguments, which `cbv_codata` found inside the
-                // expectation's thunk, so the seal stays inside the thunk, where
-                // the declaration's name puts it.
-                let value = Thunk(compu).build(tycker, &scope.env);
-                let ty = tycker.statics.annotations_value[&value];
-                Ok((value, ty))
-            }
-            // [[x]]v = x, [[n]]v = n, [[()]]v = ()
-            //
-            // These rows are the identity, so ordinary synthesis computes them.
-            // Reusing it is not a shortcut: it is what resolves a literal's
-            // representation and checks its range, and what gives a
-            // lambda-bound variable the translated type it was bound at.
-            | Tm::Var(def) => {
-                // The closed-term restriction, and the only place it bites a term.
+                // [[+C V]]v = +C [[V]]v
                 //
-                // A variable the block did not bind resolves successfully to an
-                // outer definition, and ordinary synthesis would hand back its
-                // *host* type as though it were a translated one. Nothing
-                // downstream would notice, which is why this is checked here and
-                // not left to a later pass.
+                // A constructor cannot synthesize: nothing about `+On` says which
+                // declaration it belongs to, so the expectation is what names the
+                // data type. This is the first row that *requires* the analysis
+                // direction rather than merely using it.
+                | Tm::Ctor(su::Ctor(name, payload)) => {
+                    let Some(expected) = expected else {
+                        tycker.err(TyckError::MissingAnnotation)?
+                    };
+                    let (data_id, arm) = self.cbv_data_arm(tycker, scope, expected, &name)?;
+                    let (payload, _) = self.cbv_value_at(tycker, scope, payload, Some(arm))?;
+                    let value = Alloc::alloc(
+                        tycker,
+                        ss::Value::Ctor(ss::Ctor(name, payload)),
+                        expected,
+                        &(),
+                    );
+                    // The declaration a constructor belongs to, which the ordinary
+                    // judgment records and the backend reads to find the tag's
+                    // index. Without it the stack-IR lowering of a well-typed term
+                    // aborts, and neither the checker nor the arena invariants
+                    // notice.
+                    let _ = tycker.statics.data_hints.upsert(value, data_id);
+                    Ok((value, expected))
+                }
+                // [[comatch {.di => Mi}]]v = { comatch {.di => [[Mi]]v_term} }
                 //
-                // This is the rule for term position. A type or kind name is
-                // closed over by its twin, `cbv_require_block_name`, which
-                // the leaf rule and the kind judgment run.
-                if !scope.bound.contains(&def) {
-                    // A name denoting a type reaches here when a binding meant
-                    // to be a type binding did not declare its kind, as in
-                    // `let MyInt = Int that …`: with no kind the binding is a
-                    // term binding, and `Int` is then a term-position use of a
-                    // type, bound in the block or outside it. The rejection
-                    // is right either way, and resolving a bare name is a leaf
-                    // lookup that reaches nothing, so it is worth doing to say
-                    // which of the two the author ran into.
-                    let checked =
-                        TyEnvT::new(scope.env.clone(), term).tyck(tycker, Action::syn())?;
-                    let message = match checked {
-                        | TermAnnId::Type(_, _) | TermAnnId::Kind(_) => {
-                            "a call-by-value block may not use a type as a term; a type binding is written `let X : VType = A`"
+                // A comatch cannot synthesize, for the same reason a constructor
+                // cannot: nothing in the arms says which declaration they answer.
+                // The thunk is where the by-name corner comes from — each field is
+                // a suspended computation, so it runs when observed and runs again
+                // on the next observation.
+                | Tm::CoMatchClauses(su::CoMatchClauses { clauses }) => {
+                    let Some(expected) = expected else {
+                        tycker.err(TyckError::MissingAnnotation)?
+                    };
+                    let (codata_id, fields, payload) = self.cbv_codata(tycker, scope, expected)?;
+                    let mut comatchers = Vec::with_capacity(clauses.len());
+                    for su::CoPatternClause { spine, tail } in clauses {
+                        // One observation per clause. An **interleaved** spine,
+                        // `.route n .result`, is the same clause written with its
+                        // arguments pushed into the copattern; un-interleaving it
+                        // into `.route => ret { fn n => … }` is mechanical and is
+                        // deferred rather than guessed at here.
+                        let su::CoPatternItem::Dtor(dtor) = spine.head else {
+                            tycker.err(TyckError::Expressivity(
+                                "a call-by-value comatch clause must begin with an observation",
+                            ))?
+                        };
+                        if !spine.tail.is_empty() {
+                            tycker.err(TyckError::Expressivity(
+                                "an interleaved call-by-value copattern is not translated yet",
+                            ))?
                         }
-                        | _ => "a call-by-value block may not refer to a variable bound outside it",
-                    };
-                    tycker.err(TyckError::Expressivity(message))?
+                        let Some(field) = fields.get(&dtor) else {
+                            tycker.err(TyckError::UnknownCoDataDestructor(dtor))?
+                        };
+                        let Some(field) = field.destruct_ret_app(tycker) else {
+                            tycker.err(TyckError::Expressivity(
+                                "a call-by-value codata field must be a translated source type",
+                            ))?
+                        };
+                        let (tail, _) = self.cbv_term(tycker, scope, tail, Some(field))?;
+                        comatchers.push(ss::CoMatcher { dtor, tail });
+                    }
+                    let compu = Alloc::alloc(
+                        tycker,
+                        ss::Computation::CoMatch(ss::CoMatch { arms: comatchers }),
+                        payload,
+                        &(),
+                    );
+                    let _ = tycker.statics.codata_hints.upsert(compu, codata_id);
+                    // The thunk carries `Thk` of what the comatch carries, and the
+                    // clause reports exactly that rather than the expectation it
+                    // was given. For a `def` codata the comatch carries the seal
+                    // applied to its arguments, which `cbv_codata` found inside the
+                    // expectation's thunk, so the seal stays inside the thunk, where
+                    // the declaration's name puts it.
+                    let value = Thunk(compu).build(tycker, &scope.env);
+                    let ty = tycker.statics.annotations_value[&value];
+                    Ok((value, ty))
                 }
-                self.cbv_reuse_check(tycker, scope, term, expected)
+                // [[x]]v = x, [[n]]v = n, [[()]]v = ()
+                //
+                // These rows are the identity, so ordinary synthesis computes them.
+                // Reusing it is not a shortcut: it is what resolves a literal's
+                // representation and checks its range, and what gives a
+                // lambda-bound variable the translated type it was bound at.
+                | Tm::Var(def) => {
+                    // The closed-term restriction, and the only place it bites a term.
+                    //
+                    // A variable the block did not bind resolves successfully to an
+                    // outer definition, and ordinary synthesis would hand back its
+                    // *host* type as though it were a translated one. Nothing
+                    // downstream would notice, which is why this is checked here and
+                    // not left to a later pass.
+                    //
+                    // This is the rule for term position. A type or kind name is
+                    // closed over by its twin, `cbv_require_block_name`, which
+                    // the leaf rule and the kind judgment run.
+                    if !scope.bound.contains(&def) {
+                        // A name denoting a type reaches here when a binding meant
+                        // to be a type binding did not declare its kind, as in
+                        // `let MyInt = Int that …`: with no kind the binding is a
+                        // term binding, and `Int` is then a term-position use of a
+                        // type, bound in the block or outside it. The rejection
+                        // is right either way, and resolving a bare name is a leaf
+                        // lookup that reaches nothing, so it is worth doing to say
+                        // which of the two the author ran into.
+                        let checked =
+                            TyEnvT::new(scope.env.clone(), term).tyck(tycker, Action::syn())?;
+                        let message = match checked {
+                            | TermAnnId::Type(_, _) | TermAnnId::Kind(_) => {
+                                "a call-by-value block may not use a type as a term; a type binding is written `let X : VType = A`"
+                            }
+                            | _ => {
+                                "a call-by-value block may not refer to a variable bound outside it"
+                            }
+                        };
+                        tycker.err(TyckError::Expressivity(message))?
+                    }
+                    self.cbv_reuse_check(tycker, scope, term, expected)
+                }
+                | Tm::Lit(_) | Tm::Triv(_) => self.cbv_reuse_check(tycker, scope, term, expected),
+                // A term hole, `_`, is what the host makes of one: a typed hole,
+                // reported with the type it stands at when the program is checked and
+                // refused when it is run. That type is the translation of the source
+                // type expected, so a hole where `Int -> Int` is expected reports
+                // `Thk (Int -> Ret Int)`. Analysis only: with nothing expected the
+                // report would be a fresh unknown, which says nothing, so a hole needs
+                // an expectation as a constructor does. It is a leaf, so ordinary
+                // checking reaches nothing outside the block.
+                | Tm::Hole(_) => match expected {
+                    | Some(_) => self.cbv_reuse_check(tycker, scope, term, expected),
+                    | None => tycker.err(TyckError::MissingAnnotation),
+                },
+                | Tm::SourceBoundary(_) => self.cbv_reject_import(tycker),
+                | _ => tycker.err(TyckError::Expressivity(
+                    "this form is not supported inside a call-by-value block yet",
+                )),
             }
-            | Tm::Lit(_) | Tm::Triv(_) => self.cbv_reuse_check(tycker, scope, term, expected),
-            // A term hole, `_`, is what the host makes of one: a typed hole,
-            // reported with the type it stands at when the program is checked and
-            // refused when it is run. That type is the translation of the source
-            // type expected, so a hole where `Int -> Int` is expected reports
-            // `Thk (Int -> Ret Int)`. Analysis only: with nothing expected the
-            // report would be a fresh unknown, which says nothing, so a hole needs
-            // an expectation as a constructor does. It is a leaf, so ordinary
-            // checking reaches nothing outside the block.
-            | Tm::Hole(_) => match expected {
-                | Some(_) => self.cbv_reuse_check(tycker, scope, term, expected),
-                | None => tycker.err(TyckError::MissingAnnotation),
-            },
-            | Tm::SourceBoundary(_) => self.cbv_reject_import(tycker),
-            | _ => tycker.err(TyckError::Expressivity(
-                "this form is not supported inside a call-by-value block yet",
-            )),
-        }
+        })
     }
 
     /// The value judgment at a component's own source site.

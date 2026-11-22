@@ -147,30 +147,32 @@ impl<'a> Pretty<'a, Formatter<'a>> for DefId {
 
 impl<'a> Pretty<'a, Formatter<'a>> for KindId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let kd = &f.statics.kinds_pre[self];
-        match kd {
-            | Fillable::Fill(_) => RcDoc::text("_"),
-            | Fillable::Done(kind) => match kind {
-                | Kind::VType(VType) => RcDoc::text("VType"),
-                | Kind::CType(CType) => RcDoc::text("CType"),
-                | Kind::Arrow(kd) => {
-                    // Kind arrows associate to the right and print as one
-                    // chain, mirroring type arrows.
-                    let Arrow(func, arg) = kd;
-                    let mut operands = vec![func.pretty(f)];
-                    let mut tail = *arg;
-                    while let Some(Fillable::Done(Kind::Arrow(Arrow(domain, codomain)))) =
-                        f.statics.kinds_pre.get(tail)
-                    {
-                        operands.push(domain.pretty(f));
-                        tail = *codomain;
+        zydeco_foundation::stack::maybe_grow(|| {
+            let kd = &f.statics.kinds_pre[self];
+            match kd {
+                | Fillable::Fill(_) => RcDoc::text("_"),
+                | Fillable::Done(kind) => match kind {
+                    | Kind::VType(VType) => RcDoc::text("VType"),
+                    | Kind::CType(CType) => RcDoc::text("CType"),
+                    | Kind::Arrow(kd) => {
+                        // Kind arrows associate to the right and print as one
+                        // chain, mirroring type arrows.
+                        let Arrow(func, arg) = kd;
+                        let mut operands = vec![func.pretty(f)];
+                        let mut tail = *arg;
+                        while let Some(Fillable::Done(Kind::Arrow(Arrow(domain, codomain)))) =
+                            f.statics.kinds_pre.get(tail)
+                        {
+                            operands.push(domain.pretty(f));
+                            tail = *codomain;
+                        }
+                        operands.push(tail.pretty(f));
+                        infix_chain(f, operands, "->")
                     }
-                    operands.push(tail.pretty(f));
-                    infix_chain(f, operands, "->")
-                }
-                | Kind::Label(kd) => kd.pretty(f),
-            },
-        }
+                    | Kind::Label(kd) => kd.pretty(f),
+                },
+            }
+        })
     }
 }
 
@@ -185,66 +187,70 @@ impl<'a> Pretty<'a, Formatter<'a>> for KPatId {
 
 impl<'a> Pretty<'a, Formatter<'a>> for TPatId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let tpat = &f.statics.tpats[self];
-        match tpat {
-            | TypePattern::Hole(tpat) => tpat.pretty(f),
-            | TypePattern::Var(def) => def.pretty(f),
-            | TypePattern::Named(tpat) => tpat.pretty(f),
-        }
+        zydeco_foundation::stack::maybe_grow(|| {
+            let tpat = &f.statics.tpats[self];
+            match tpat {
+                | TypePattern::Hole(tpat) => tpat.pretty(f),
+                | TypePattern::Var(def) => def.pretty(f),
+                | TypePattern::Named(tpat) => tpat.pretty(f),
+            }
+        })
     }
 }
 
 impl<'a> Pretty<'a, Formatter<'a>> for TypeId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let ty = &f.statics.types_pre[self];
-        match ty {
-            | Fillable::Fill(_) => RcDoc::text("_"),
-            | Fillable::Done(ty) => match ty {
-                | Type::Var(def) => def.pretty(f),
-                | Type::Abst(abst) => abst.pretty(f),
-                | Type::Abs(ty) => ty.pretty(f),
-                | Type::App(App(func, arg)) => RcDoc::concat([
-                    tight_type(f, func),
-                    RcDoc::concat([RcDoc::line(), atom_type(f, arg)]).group().nest(f.indent),
-                ]),
-                | Type::Named(ty) => ty.pretty(f),
-                | Type::Label(ty) => ty.pretty(f),
-                | Type::Proj(ty) => ty.pretty(f),
-                | Type::Thk(ThkTy) => RcDoc::text("Thk"),
-                | Type::Ret(RetTy) => RcDoc::text("Ret"),
-                | Type::Unit(UnitTy) => RcDoc::text("Unit"),
-                | Type::Opaque(OpaqueTy) => RcDoc::text("Opaque"),
-                | Type::Primitive(PrimitiveTy(primitive)) => RcDoc::text(primitive.type_name()),
-                | Type::OS(OSTy) => RcDoc::text("OS"),
-                | Type::ValPi(ty) => ty.pretty(f),
-                | Type::Arrow(Arrow(func, arg)) => {
-                    // Arrows associate to the right; printing the whole spine as
-                    // one chain lets the renderer decide every `->` boundary as a
-                    // single grammatical group.
-                    let mut operands = vec![tight_type(f, func)];
-                    let mut tail = *arg;
-                    while let Some(Fillable::Done(Type::Arrow(Arrow(domain, codomain)))) =
-                        f.statics.types_pre.get(tail)
-                    {
-                        operands.push(tight_type(f, domain));
-                        tail = *codomain;
+        zydeco_foundation::stack::maybe_grow(|| {
+            let ty = &f.statics.types_pre[self];
+            match ty {
+                | Fillable::Fill(_) => RcDoc::text("_"),
+                | Fillable::Done(ty) => match ty {
+                    | Type::Var(def) => def.pretty(f),
+                    | Type::Abst(abst) => abst.pretty(f),
+                    | Type::Abs(ty) => ty.pretty(f),
+                    | Type::App(App(func, arg)) => RcDoc::concat([
+                        tight_type(f, func),
+                        RcDoc::concat([RcDoc::line(), atom_type(f, arg)]).group().nest(f.indent),
+                    ]),
+                    | Type::Named(ty) => ty.pretty(f),
+                    | Type::Label(ty) => ty.pretty(f),
+                    | Type::Proj(ty) => ty.pretty(f),
+                    | Type::Thk(ThkTy) => RcDoc::text("Thk"),
+                    | Type::Ret(RetTy) => RcDoc::text("Ret"),
+                    | Type::Unit(UnitTy) => RcDoc::text("Unit"),
+                    | Type::Opaque(OpaqueTy) => RcDoc::text("Opaque"),
+                    | Type::Primitive(PrimitiveTy(primitive)) => RcDoc::text(primitive.type_name()),
+                    | Type::OS(OSTy) => RcDoc::text("OS"),
+                    | Type::ValPi(ty) => ty.pretty(f),
+                    | Type::Arrow(Arrow(func, arg)) => {
+                        // Arrows associate to the right; printing the whole spine as
+                        // one chain lets the renderer decide every `->` boundary as a
+                        // single grammatical group.
+                        let mut operands = vec![tight_type(f, func)];
+                        let mut tail = *arg;
+                        while let Some(Fillable::Done(Type::Arrow(Arrow(domain, codomain)))) =
+                            f.statics.types_pre.get(tail)
+                        {
+                            operands.push(tight_type(f, domain));
+                            tail = *codomain;
+                        }
+                        operands.push(tail.pretty(f));
+                        infix_chain(f, operands, "->")
                     }
-                    operands.push(tail.pretty(f));
-                    infix_chain(f, operands, "->")
-                }
-                | Type::Forall(ty) => ty.pretty(f),
-                | Type::PackPi(ty) => ty.pretty(f),
-                | Type::Prod(Prod(components)) => infix_chain(
-                    f,
-                    components.iter().map(|component| tight_type(f, component)).collect(),
-                    "*",
-                ),
-                | Type::Exists(ty) => ty.pretty(f),
-                | Type::ManifestKind(ty) => ty.pretty(f),
-                | Type::Data(ty) => ty.pretty(f),
-                | Type::CoData(ty) => ty.pretty(f),
-            },
-        }
+                    | Type::Forall(ty) => ty.pretty(f),
+                    | Type::PackPi(ty) => ty.pretty(f),
+                    | Type::Prod(Prod(components)) => infix_chain(
+                        f,
+                        components.iter().map(|component| tight_type(f, component)).collect(),
+                        "*",
+                    ),
+                    | Type::Exists(ty) => ty.pretty(f),
+                    | Type::ManifestKind(ty) => ty.pretty(f),
+                    | Type::Data(ty) => ty.pretty(f),
+                    | Type::CoData(ty) => ty.pretty(f),
+                },
+            }
+        })
     }
 }
 
@@ -268,87 +274,95 @@ impl<'a> Pretty<'a, Formatter<'a>> for StaticTermId {
 
 impl<'a> Pretty<'a, Formatter<'a>> for VPatId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let vpat = &f.statics.vpats[self];
-        use ValuePattern as VPat;
-        match vpat {
-            | VPat::Hole(vpat) => vpat.pretty(f),
-            | VPat::Var(vpat) => vpat.pretty(f),
-            | VPat::Named(vpat) => vpat.pretty(f),
-            | VPat::Ctor(vpat) => vpat.pretty(f),
-            | VPat::Lit(literal) => literal.pretty(f),
-            | VPat::Alias(vpat) => vpat.pretty(f),
-            | VPat::Triv(vpat) => vpat.pretty(f),
-            | VPat::VCons(vpat) => vpat.pretty(f),
-            | VPat::SCons(vpat) => vpat.pretty(f),
-            | VPat::View(view) => RcDoc::concat([
-                view.function.pretty(f),
-                RcDoc::text(" ~> "),
-                view.pattern.pretty(f),
-            ]),
-        }
+        zydeco_foundation::stack::maybe_grow(|| {
+            let vpat = &f.statics.vpats[self];
+            use ValuePattern as VPat;
+            match vpat {
+                | VPat::Hole(vpat) => vpat.pretty(f),
+                | VPat::Var(vpat) => vpat.pretty(f),
+                | VPat::Named(vpat) => vpat.pretty(f),
+                | VPat::Ctor(vpat) => vpat.pretty(f),
+                | VPat::Lit(literal) => literal.pretty(f),
+                | VPat::Alias(vpat) => vpat.pretty(f),
+                | VPat::Triv(vpat) => vpat.pretty(f),
+                | VPat::VCons(vpat) => vpat.pretty(f),
+                | VPat::SCons(vpat) => vpat.pretty(f),
+                | VPat::View(view) => RcDoc::concat([
+                    view.function.pretty(f),
+                    RcDoc::text(" ~> "),
+                    view.pattern.pretty(f),
+                ]),
+            }
+        })
     }
 }
 
 impl<'a> Pretty<'a, Formatter<'a>> for ValueId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let value = &f.statics.values[self];
-        match value {
-            | Value::Hole(value) => value.pretty(f),
-            | Value::Var(value) => value.pretty(f),
-            | Value::Named(value) => value.pretty(f),
-            | Value::Let(value) => value.pretty(f),
-            | Value::Match(value) => value.pretty(f),
-            | Value::IntOp(IntValueOp { operation, operands: [left, right] }) => RcDoc::concat([
-                RcDoc::text(operation.intrinsic_name()),
-                RcDoc::space(),
-                left.pretty(f),
-                RcDoc::space(),
-                right.pretty(f),
-            ]),
-            | Value::ValAbs(Abs(binder, body)) => RcDoc::concat([
-                RcDoc::text("val"),
-                RcDoc::space(),
-                binder.pretty(f),
-                RcDoc::space(),
-                RcDoc::text("=>"),
-                RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent),
-            ]),
-            | Value::ValApp(App(function, argument)) => RcDoc::concat([
-                RcDoc::text("("),
-                function.pretty(f),
-                RcDoc::concat([RcDoc::line(), argument.pretty(f)]).group().nest(f.indent),
-                RcDoc::text(")"),
-            ]),
-            | Value::Thunk(value) => value.pretty(f),
-            | Value::Ctor(value) => value.pretty(f),
-            | Value::Triv(value) => value.pretty(f),
-            | Value::VCons(value) => value.pretty(f),
-            | Value::SCons(value) => value.pretty(f),
-            | Value::Proj(value) => value.pretty(f),
-            | Value::Lit(value) => value.pretty(f),
-        }
+        zydeco_foundation::stack::maybe_grow(|| {
+            let value = &f.statics.values[self];
+            match value {
+                | Value::Hole(value) => value.pretty(f),
+                | Value::Var(value) => value.pretty(f),
+                | Value::Named(value) => value.pretty(f),
+                | Value::Let(value) => value.pretty(f),
+                | Value::Match(value) => value.pretty(f),
+                | Value::IntOp(IntValueOp { operation, operands: [left, right] }) => {
+                    RcDoc::concat([
+                        RcDoc::text(operation.intrinsic_name()),
+                        RcDoc::space(),
+                        left.pretty(f),
+                        RcDoc::space(),
+                        right.pretty(f),
+                    ])
+                }
+                | Value::ValAbs(Abs(binder, body)) => RcDoc::concat([
+                    RcDoc::text("val"),
+                    RcDoc::space(),
+                    binder.pretty(f),
+                    RcDoc::space(),
+                    RcDoc::text("=>"),
+                    RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent),
+                ]),
+                | Value::ValApp(App(function, argument)) => RcDoc::concat([
+                    RcDoc::text("("),
+                    function.pretty(f),
+                    RcDoc::concat([RcDoc::line(), argument.pretty(f)]).group().nest(f.indent),
+                    RcDoc::text(")"),
+                ]),
+                | Value::Thunk(value) => value.pretty(f),
+                | Value::Ctor(value) => value.pretty(f),
+                | Value::Triv(value) => value.pretty(f),
+                | Value::VCons(value) => value.pretty(f),
+                | Value::SCons(value) => value.pretty(f),
+                | Value::Proj(value) => value.pretty(f),
+                | Value::Lit(value) => value.pretty(f),
+            }
+        })
     }
 }
 
 impl<'a> Pretty<'a, Formatter<'a>> for CompuId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let compu = &f.statics.compus[self];
-        use Computation as Compu;
-        match compu {
-            | Compu::Hole(compu) => compu.pretty(f),
-            | Compu::VAbs(compu) => compu.pretty(f),
-            | Compu::VApp(compu) => compu.pretty(f),
-            | Compu::TAbs(compu) => compu.pretty(f),
-            | Compu::TApp(compu) => compu.pretty(f),
-            | Compu::Fix(compu) => compu.pretty(f),
-            | Compu::Force(compu) => compu.pretty(f),
-            | Compu::Ret(compu) => compu.pretty(f),
-            | Compu::Do(compu) => compu.pretty(f),
-            | Compu::Let(compu) => compu.pretty(f),
-            | Compu::Match(compu) => compu.pretty(f),
-            | Compu::CoMatch(compu) => compu.pretty(f),
-            | Compu::Dtor(compu) => compu.pretty(f),
-        }
+        zydeco_foundation::stack::maybe_grow(|| {
+            let compu = &f.statics.compus[self];
+            use Computation as Compu;
+            match compu {
+                | Compu::Hole(compu) => compu.pretty(f),
+                | Compu::VAbs(compu) => compu.pretty(f),
+                | Compu::VApp(compu) => compu.pretty(f),
+                | Compu::TAbs(compu) => compu.pretty(f),
+                | Compu::TApp(compu) => compu.pretty(f),
+                | Compu::Fix(compu) => compu.pretty(f),
+                | Compu::Force(compu) => compu.pretty(f),
+                | Compu::Ret(compu) => compu.pretty(f),
+                | Compu::Do(compu) => compu.pretty(f),
+                | Compu::Let(compu) => compu.pretty(f),
+                | Compu::Match(compu) => compu.pretty(f),
+                | Compu::CoMatch(compu) => compu.pretty(f),
+                | Compu::Dtor(compu) => compu.pretty(f),
+            }
+        })
     }
 }
 
@@ -408,47 +422,51 @@ impl<'a> Pretty<'a, Formatter<'a>> for SealedTypeEquation {
 
 impl<'a> Pretty<'a, Formatter<'a>> for DataId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let data = &f.statics.datas[self];
-        RcDoc::concat([
-            RcDoc::text("data"),
-            RcDoc::concat(data.iter().map(|(ctor, ty)| {
-                RcDoc::concat([
-                    RcDoc::hardline(),
-                    RcDoc::text("|"),
-                    RcDoc::space(),
-                    ctor.pretty(f),
-                    RcDoc::space(),
-                    RcDoc::text(":"),
-                    RcDoc::concat([RcDoc::line(), ty.pretty(f)]).group().nest(f.indent),
-                ])
-            })),
-            RcDoc::hardline(),
-            RcDoc::text("end"),
-        ])
-        .group()
+        zydeco_foundation::stack::maybe_grow(|| {
+            let data = &f.statics.datas[self];
+            RcDoc::concat([
+                RcDoc::text("data"),
+                RcDoc::concat(data.iter().map(|(ctor, ty)| {
+                    RcDoc::concat([
+                        RcDoc::hardline(),
+                        RcDoc::text("|"),
+                        RcDoc::space(),
+                        ctor.pretty(f),
+                        RcDoc::space(),
+                        RcDoc::text(":"),
+                        RcDoc::concat([RcDoc::line(), ty.pretty(f)]).group().nest(f.indent),
+                    ])
+                })),
+                RcDoc::hardline(),
+                RcDoc::text("end"),
+            ])
+            .group()
+        })
     }
 }
 
 impl<'a> Pretty<'a, Formatter<'a>> for CoDataId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let codata = &f.statics.codatas[self];
-        RcDoc::concat([
-            RcDoc::text("codata"),
-            RcDoc::concat(codata.iter().map(|(dtor, ty)| {
-                RcDoc::concat([
-                    RcDoc::hardline(),
-                    RcDoc::text("|"),
-                    RcDoc::space(),
-                    dtor.pretty(f),
-                    RcDoc::space(),
-                    RcDoc::text(":"),
-                    RcDoc::concat([RcDoc::line(), ty.pretty(f)]).group().nest(f.indent),
-                ])
-            })),
-            RcDoc::hardline(),
-            RcDoc::text("end"),
-        ])
-        .group()
+        zydeco_foundation::stack::maybe_grow(|| {
+            let codata = &f.statics.codatas[self];
+            RcDoc::concat([
+                RcDoc::text("codata"),
+                RcDoc::concat(codata.iter().map(|(dtor, ty)| {
+                    RcDoc::concat([
+                        RcDoc::hardline(),
+                        RcDoc::text("|"),
+                        RcDoc::space(),
+                        dtor.pretty(f),
+                        RcDoc::space(),
+                        RcDoc::text(":"),
+                        RcDoc::concat([RcDoc::line(), ty.pretty(f)]).group().nest(f.indent),
+                    ])
+                })),
+                RcDoc::hardline(),
+                RcDoc::text("end"),
+            ])
+            .group()
+        })
     }
 }
 

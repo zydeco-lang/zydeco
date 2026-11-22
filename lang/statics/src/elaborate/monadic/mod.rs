@@ -283,17 +283,19 @@ mod syntax_impl {
 /// + `T: CType` -> `Algebra M T`
 /// + `T: K_1 -> K_2` -> `forall X: K_1 . Thk (Sig_K_1(X)) -> Sig_K_2(T X)`
 fn signature_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(MonEnv, TypeId)> {
-    let key = (env.monad_ty, env.basis.algebra, ty);
-    if let Some(cached) =
-        tycker.monadic_memo.as_ref().and_then(|memo| memo.signatures.get(&key).copied())
-    {
-        return Ok((env, cached));
-    }
-    let (env, res) = signature_translation_inner(tycker, env, ty)?;
-    if let Some(memo) = &mut tycker.monadic_memo {
-        memo.signatures.insert(key, res);
-    }
-    Ok((env, res))
+    zydeco_foundation::stack::maybe_grow(|| {
+        let key = (env.monad_ty, env.basis.algebra, ty);
+        if let Some(cached) =
+            tycker.monadic_memo.as_ref().and_then(|memo| memo.signatures.get(&key).copied())
+        {
+            return Ok((env, cached));
+        }
+        let (env, res) = signature_translation_inner(tycker, env, ty)?;
+        if let Some(memo) = &mut tycker.monadic_memo {
+            memo.signatures.insert(key, res);
+        }
+        Ok((env, res))
+    })
 }
 
 fn signature_translation_inner(
@@ -418,38 +420,42 @@ impl<'a> PackPiWitnessLayoutState<'a> {
     fn collect(
         self, tycker: &mut Tycker<'_>, env: &TyEnv,
     ) -> Result<Vec<PackPiWitnessLayoutEntry>> {
-        let view = self.domain.unroll(tycker)?.subst_env(tycker, env)?;
-        match tycker.type_filled(&view)?.to_owned() {
-            | Type::ManifestKind(ManifestKind { body, .. }) => {
-                let tail = Self { domain: body, ..self }.collect(tycker, env)?;
-                Ok(std::iter::once(PackPiWitnessLayoutEntry::KindManifest).chain(tail).collect())
+        zydeco_foundation::stack::maybe_grow(|| {
+            let view = self.domain.unroll(tycker)?.subst_env(tycker, env)?;
+            match tycker.type_filled(&view)?.to_owned() {
+                | Type::ManifestKind(ManifestKind { body, .. }) => {
+                    let tail = Self { domain: body, ..self }.collect(tycker, env)?;
+                    Ok(std::iter::once(PackPiWitnessLayoutEntry::KindManifest)
+                        .chain(tail)
+                        .collect())
+                }
+                | Type::Exists(exists) => {
+                    let Exists { binder, mode, body } = *exists;
+                    let (entry, witnesses, payload) = match mode {
+                        | ExistsMode::Abstract => {
+                            let Some((&witness, witnesses)) = self.witnesses.split_first() else {
+                                return self.mismatch(tycker);
+                            };
+                            let kind = tycker.statics.annotations_abst[witness];
+                            (
+                                PackPiWitnessLayoutEntry::Abstract(witness),
+                                witnesses,
+                                Alloc::alloc(tycker, witness, kind, &()),
+                            )
+                        }
+                        | ExistsMode::Manifest(definition) => {
+                            (PackPiWitnessLayoutEntry::TypeManifest, self.witnesses, definition)
+                        }
+                    };
+                    let domain = body.subst_abst(tycker, (binder.witness, payload))?;
+                    let tail =
+                        Self { domain, witnesses, expected: self.expected }.collect(tycker, env)?;
+                    Ok(std::iter::once(entry).chain(tail).collect())
+                }
+                | _ if self.witnesses.is_empty() => Ok(Vec::new()),
+                | _ => self.mismatch(tycker),
             }
-            | Type::Exists(exists) => {
-                let Exists { binder, mode, body } = *exists;
-                let (entry, witnesses, payload) = match mode {
-                    | ExistsMode::Abstract => {
-                        let Some((&witness, witnesses)) = self.witnesses.split_first() else {
-                            return self.mismatch(tycker);
-                        };
-                        let kind = tycker.statics.annotations_abst[witness];
-                        (
-                            PackPiWitnessLayoutEntry::Abstract(witness),
-                            witnesses,
-                            Alloc::alloc(tycker, witness, kind, &()),
-                        )
-                    }
-                    | ExistsMode::Manifest(definition) => {
-                        (PackPiWitnessLayoutEntry::TypeManifest, self.witnesses, definition)
-                    }
-                };
-                let domain = body.subst_abst(tycker, (binder.witness, payload))?;
-                let tail =
-                    Self { domain, witnesses, expected: self.expected }.collect(tycker, env)?;
-                Ok(std::iter::once(entry).chain(tail).collect())
-            }
-            | _ if self.witnesses.is_empty() => Ok(Vec::new()),
-            | _ => self.mismatch(tycker),
-        }
+        })
     }
     fn mismatch<T>(&self, tycker: &mut Tycker<'_>) -> Result<T> {
         tycker.err(TyckError::PackageWitnessArityMismatch {
@@ -490,67 +496,74 @@ impl<'a> PackPiPatternLayoutState<'a> {
     fn collect(
         &mut self, tycker: &mut Tycker<'_>, env: &TyEnv, pattern: VPatId, domain: TypeId,
     ) -> Result<Vec<PackPiWitnessLayoutEntry>> {
-        let view = domain.unroll(tycker)?.subst_env(tycker, env)?;
-        match (tycker.statics.vpats[&pattern].to_owned(), tycker.type_filled(&view)?.to_owned()) {
-            | (ValuePattern::Named(Named(_, inner)), Type::Label(Label(_, payload))) => {
-                self.collect(tycker, env, inner, payload)
-            }
-            | (ValuePattern::SCons(ConsN(witnesses, body)), _) => {
-                let mut entries = Vec::new();
-                let mut domain = view;
-                for witness in witnesses {
-                    match (witness, tycker.type_filled(&domain)?.to_owned()) {
-                        | (StaticPatId::Kind(_), Type::ManifestKind(ManifestKind { body, .. })) => {
-                            entries.push(PackPiWitnessLayoutEntry::KindManifest);
-                            domain = body;
-                        }
-                        | (StaticPatId::Type(_), Type::Exists(exists)) => {
-                            let Exists { binder, mode, body } = *exists;
-                            match mode {
-                                | ExistsMode::Abstract => {
-                                    let Some((&witness, rest)) = self.witnesses.split_first()
-                                    else {
-                                        return self.mismatch(tycker);
-                                    };
-                                    let kind = tycker.statics.annotations_abst[witness];
-                                    let payload = Alloc::alloc(tycker, witness, kind, &());
-                                    entries.push(PackPiWitnessLayoutEntry::Abstract(witness));
-                                    domain = body.subst_abst(tycker, (binder.witness, payload))?;
-                                    self.witnesses = rest;
-                                }
-                                | ExistsMode::Manifest(definition) => {
-                                    entries.push(PackPiWitnessLayoutEntry::TypeManifest);
-                                    domain =
-                                        body.subst_abst(tycker, (binder.witness, definition))?;
+        zydeco_foundation::stack::maybe_grow(|| {
+            let view = domain.unroll(tycker)?.subst_env(tycker, env)?;
+            match (tycker.statics.vpats[&pattern].to_owned(), tycker.type_filled(&view)?.to_owned())
+            {
+                | (ValuePattern::Named(Named(_, inner)), Type::Label(Label(_, payload))) => {
+                    self.collect(tycker, env, inner, payload)
+                }
+                | (ValuePattern::SCons(ConsN(witnesses, body)), _) => {
+                    let mut entries = Vec::new();
+                    let mut domain = view;
+                    for witness in witnesses {
+                        match (witness, tycker.type_filled(&domain)?.to_owned()) {
+                            | (
+                                StaticPatId::Kind(_),
+                                Type::ManifestKind(ManifestKind { body, .. }),
+                            ) => {
+                                entries.push(PackPiWitnessLayoutEntry::KindManifest);
+                                domain = body;
+                            }
+                            | (StaticPatId::Type(_), Type::Exists(exists)) => {
+                                let Exists { binder, mode, body } = *exists;
+                                match mode {
+                                    | ExistsMode::Abstract => {
+                                        let Some((&witness, rest)) = self.witnesses.split_first()
+                                        else {
+                                            return self.mismatch(tycker);
+                                        };
+                                        let kind = tycker.statics.annotations_abst[witness];
+                                        let payload = Alloc::alloc(tycker, witness, kind, &());
+                                        entries.push(PackPiWitnessLayoutEntry::Abstract(witness));
+                                        domain =
+                                            body.subst_abst(tycker, (binder.witness, payload))?;
+                                        self.witnesses = rest;
+                                    }
+                                    | ExistsMode::Manifest(definition) => {
+                                        entries.push(PackPiWitnessLayoutEntry::TypeManifest);
+                                        domain =
+                                            body.subst_abst(tycker, (binder.witness, definition))?;
+                                    }
                                 }
                             }
+                            | _ => return self.mismatch(tycker),
                         }
-                        | _ => return self.mismatch(tycker),
                     }
+                    let mut tail = self.collect(tycker, env, body, domain)?;
+                    entries.append(&mut tail);
+                    Ok(entries)
                 }
-                let mut tail = self.collect(tycker, env, body, domain)?;
-                entries.append(&mut tail);
-                Ok(entries)
+                | (ValuePattern::VCons(components), Type::Prod(Prod(domains))) => {
+                    if components.len() != domains.len() {
+                        return self.mismatch(tycker);
+                    }
+                    let mut entries = Vec::new();
+                    for (component, domain) in components.into_iter().zip(domains) {
+                        entries.extend(self.collect(tycker, env, component, domain)?);
+                    }
+                    Ok(entries)
+                }
+                | (ValuePattern::Alias(Alias(patterns)), _) => {
+                    let mut entries = Vec::new();
+                    for member in patterns {
+                        entries.extend(self.collect(tycker, env, member, domain)?);
+                    }
+                    Ok(entries)
+                }
+                | (_, _) => Ok(Vec::new()),
             }
-            | (ValuePattern::VCons(components), Type::Prod(Prod(domains))) => {
-                if components.len() != domains.len() {
-                    return self.mismatch(tycker);
-                }
-                let mut entries = Vec::new();
-                for (component, domain) in components.into_iter().zip(domains) {
-                    entries.extend(self.collect(tycker, env, component, domain)?);
-                }
-                Ok(entries)
-            }
-            | (ValuePattern::Alias(Alias(patterns)), _) => {
-                let mut entries = Vec::new();
-                for member in patterns {
-                    entries.extend(self.collect(tycker, env, member, domain)?);
-                }
-                Ok(entries)
-            }
-            | (_, _) => Ok(Vec::new()),
-        }
+        })
     }
     fn mismatch<T>(&self, tycker: &mut Tycker<'_>) -> Result<T> {
         tycker.err(TyckError::PackageWitnessArityMismatch {

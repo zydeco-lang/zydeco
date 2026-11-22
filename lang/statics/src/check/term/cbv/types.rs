@@ -13,7 +13,7 @@ impl TermChecker<'_> {
     pub(super) fn cbv_type_binder_kind<'db>(
         &self, tycker: &mut Tycker<'db>, scope: &CbvScope, binder: su::PatId,
     ) -> Result<Option<ss::KindId>> {
-        match tycker.scoped.pats[&binder].to_owned() {
+        zydeco_foundation::stack::maybe_grow(|| match tycker.scoped.pats[&binder].to_owned() {
             | su::Pattern::Ann(su::Ann { ty, .. }) => self.cbv_annotation_kind(tycker, scope, ty),
             | su::Pattern::Named(su::Named(name, inner)) => {
                 let Some(payload) = self.cbv_type_binder_kind(tycker, scope, inner)? else {
@@ -22,7 +22,7 @@ impl TermChecker<'_> {
                 Ok(Some(Alloc::alloc(tycker, ss::Label(name, payload), (), &())))
             }
             | _ => Ok(None),
-        }
+        })
     }
 
     /// The kind an annotation denotes, when it denotes one: a name for a kind,
@@ -89,29 +89,31 @@ impl TermChecker<'_> {
     pub(super) fn cbv_composite_kind<'db>(
         &self, tycker: &mut Tycker<'db>, scope: &CbvScope, annotation: su::TermId,
     ) -> Result<Option<ss::KindId>> {
-        use su::Term as Tm;
-        match tycker.scoped.terms[&annotation].to_owned() {
-            // The binder may be named: `def List (X : VType) : VType = …`
-            // declares its kind as `pi (X : VType) . VType`. A kind mentions
-            // no type, so a named binder makes a kind arrow only when its
-            // codomain does not mention it — and that is decided before the
-            // codomain is read, since reading `forall (X : VType) . X -> X`
-            // as a kind would synthesize `X` ahead of its binder, which the
-            // checker refuses by panicking.
-            | Tm::Pi(su::Pi(binders, codomain)) => {
-                self.cbv_kind_telescope(tycker, scope, &binders, codomain)
+        zydeco_foundation::stack::maybe_grow(|| {
+            use su::Term as Tm;
+            match tycker.scoped.terms[&annotation].to_owned() {
+                // The binder may be named: `def List (X : VType) : VType = …`
+                // declares its kind as `pi (X : VType) . VType`. A kind mentions
+                // no type, so a named binder makes a kind arrow only when its
+                // codomain does not mention it — and that is decided before the
+                // codomain is read, since reading `forall (X : VType) . X -> X`
+                // as a kind would synthesize `X` ahead of its binder, which the
+                // checker refuses by panicking.
+                | Tm::Pi(su::Pi(binders, codomain)) => {
+                    self.cbv_kind_telescope(tycker, scope, &binders, codomain)
+                }
+                // `#C :: K`, a named kind, recognized by its payload as an arrow is
+                // by its sides: `#f :: A` writes a field *type* with the same node,
+                // and is a kind exactly when its payload is one.
+                | Tm::Label(su::Label(name, inner)) => {
+                    let Some(payload) = self.cbv_annotation_kind(tycker, scope, inner)? else {
+                        return Ok(None);
+                    };
+                    Ok(Some(Alloc::alloc(tycker, ss::Label(name, payload), (), &())))
+                }
+                | _ => Ok(None),
             }
-            // `#C :: K`, a named kind, recognized by its payload as an arrow is
-            // by its sides: `#f :: A` writes a field *type* with the same node,
-            // and is a kind exactly when its payload is one.
-            | Tm::Label(su::Label(name, inner)) => {
-                let Some(payload) = self.cbv_annotation_kind(tycker, scope, inner)? else {
-                    return Ok(None);
-                };
-                Ok(Some(Alloc::alloc(tycker, ss::Label(name, payload), (), &())))
-            }
-            | _ => Ok(None),
-        }
+        })
     }
 
     /// The kind arrows of a telescope, or `None` if it does not read as one.
@@ -439,67 +441,75 @@ impl TermChecker<'_> {
     pub(super) fn cbv_type_against<'db>(
         &self, tycker: &mut Tycker<'db>, scope: &CbvScope, ty: su::TermId, expected: ss::KindId,
     ) -> Result<ss::TypeId> {
-        if let su::Term::Named(su::Named(name, inner)) = tycker.scoped.terms[&ty].to_owned()
-            && let ss::Kind::Label(Label(label, payload)) =
-                tycker.kind_filled(&expected)?.to_owned()
-            && label == name
-        {
-            let translated = self.cbv_sourced(
-                tycker,
-                ty,
-                |tycker| {
-                    let inner = self.cbv_type_against(tycker, scope, inner, payload)?;
-                    self.cbv_named_type(tycker, scope, ty, inner)
-                },
-                |tycker, translated| {
-                    let kind = tycker.statics.type_kind(*translated);
-                    Some(TermAnnId::Type(*translated, kind))
-                },
-            )?;
+        zydeco_foundation::stack::maybe_grow(|| {
+            if let su::Term::Named(su::Named(name, inner)) = tycker.scoped.terms[&ty].to_owned()
+                && let ss::Kind::Label(Label(label, payload)) =
+                    tycker.kind_filled(&expected)?.to_owned()
+                && label == name
+            {
+                let translated = self.cbv_sourced(
+                    tycker,
+                    ty,
+                    |tycker| {
+                        let inner = self.cbv_type_against(tycker, scope, inner, payload)?;
+                        self.cbv_named_type(tycker, scope, ty, inner)
+                    },
+                    |tycker, translated| {
+                        let kind = tycker.statics.type_kind(*translated);
+                        Some(TermAnnId::Type(*translated, kind))
+                    },
+                )?;
+                let actual = tycker.statics.type_kind(translated);
+                Lub::lub(expected, actual, tycker)?;
+                return Ok(translated);
+            }
+            let operator = match tycker.scoped.terms[&ty].to_owned() {
+                | su::Term::Abs(su::Abs(binders, body)) => {
+                    let binder = binders[0];
+                    match tycker.kind_filled(&expected)? {
+                        | ss::Kind::Arrow(Arrow(domain, codomain))
+                            if self.cbv_optional_binder_annotation(tycker, binder).is_none()
+                                || self.cbv_type_binder_kind(tycker, scope, binder)?.is_some() =>
+                        {
+                            Some((binders, body, domain, codomain))
+                        }
+                        // A binder that declares nothing makes this an operator, and the
+                        // expectation is not an arrow kind: an operator stands where a
+                        // non-operator is expected. That is a kind error; synthesizing it
+                        // instead reported a binder missing its kind, which was not what
+                        // went wrong.
+                        | _ if self.cbv_optional_binder_annotation(tycker, binder).is_none() => {
+                            return tycker.err(TyckError::KindMismatch);
+                        }
+                        | _ => None,
+                    }
+                }
+                | _ => None,
+            };
+            let translated = match operator {
+                | Some((binders, body, domain, codomain)) => self.cbv_sourced(
+                    tycker,
+                    ty,
+                    |tycker| {
+                        self.cbv_type_operator(
+                            tycker,
+                            scope,
+                            &binders,
+                            body,
+                            Some((domain, codomain)),
+                        )
+                    },
+                    |tycker, translated| {
+                        let kind = tycker.statics.type_kind(*translated);
+                        Some(TermAnnId::Type(*translated, kind))
+                    },
+                )?,
+                | None => self.cbv_type(tycker, scope, ty)?,
+            };
             let actual = tycker.statics.type_kind(translated);
             Lub::lub(expected, actual, tycker)?;
-            return Ok(translated);
-        }
-        let operator = match tycker.scoped.terms[&ty].to_owned() {
-            | su::Term::Abs(su::Abs(binders, body)) => {
-                let binder = binders[0];
-                match tycker.kind_filled(&expected)? {
-                    | ss::Kind::Arrow(Arrow(domain, codomain))
-                        if self.cbv_optional_binder_annotation(tycker, binder).is_none()
-                            || self.cbv_type_binder_kind(tycker, scope, binder)?.is_some() =>
-                    {
-                        Some((binders, body, domain, codomain))
-                    }
-                    // A binder that declares nothing makes this an operator, and the
-                    // expectation is not an arrow kind: an operator stands where a
-                    // non-operator is expected. That is a kind error; synthesizing it
-                    // instead reported a binder missing its kind, which was not what
-                    // went wrong.
-                    | _ if self.cbv_optional_binder_annotation(tycker, binder).is_none() => {
-                        return tycker.err(TyckError::KindMismatch);
-                    }
-                    | _ => None,
-                }
-            }
-            | _ => None,
-        };
-        let translated = match operator {
-            | Some((binders, body, domain, codomain)) => self.cbv_sourced(
-                tycker,
-                ty,
-                |tycker| {
-                    self.cbv_type_operator(tycker, scope, &binders, body, Some((domain, codomain)))
-                },
-                |tycker, translated| {
-                    let kind = tycker.statics.type_kind(*translated);
-                    Some(TermAnnId::Type(*translated, kind))
-                },
-            )?,
-            | None => self.cbv_type(tycker, scope, ty)?,
-        };
-        let actual = tycker.statics.type_kind(translated);
-        Lub::lub(expected, actual, tycker)?;
-        Ok(translated)
+            Ok(translated)
+        })
     }
 
     /// `#l = S'` from a translated payload, built by the host's own judgment.

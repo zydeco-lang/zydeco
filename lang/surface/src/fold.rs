@@ -26,30 +26,32 @@ pub trait Folder: Sized {
 
 impl Pattern {
     pub fn fold_with<F: Folder>(self, folder: &mut F) -> Result<Self, F::Error> {
-        Ok(match self {
-            | Self::Ann(Ann { tm, ty }) => {
-                let tm = folder.fold_pat(tm);
-                let ty = folder.fold_term(ty);
-                Ann { tm: tm?, ty: ty? }.into()
-            }
-            | Self::Var(def) => folder.fold_def(def)?.into(),
-            | Self::Named(Named(name, pat)) => Named(name, folder.fold_pat(pat)?).into(),
-            | Self::Ctor(Ctor(name, pat)) => Ctor(name, folder.fold_pat(pat)?).into(),
-            | Self::Project(ProjectionPattern(field, pat)) => {
-                ProjectionPattern(field, folder.fold_pat(pat)?).into()
-            }
-            | Self::View(ViewPattern { function, pattern }) => {
-                let function = folder.fold_term(function);
-                let pattern = folder.fold_pat(pattern);
-                ViewPattern { function: function?, pattern: pattern? }.into()
-            }
-            | Self::Alias(Alias(ConsN(patterns, tail))) => {
-                let patterns = folder.fold_items(patterns, F::fold_pat);
-                let tail = folder.fold_pat(tail);
-                Alias(ConsN(patterns?, tail?)).into()
-            }
-            | Self::Cons(patterns) => Self::Cons(folder.fold_items(patterns, F::fold_pat)?),
-            | Self::Hole(_) | Self::Triv(_) | Self::Lit(_) => self,
+        zydeco_foundation::stack::maybe_grow(|| {
+            Ok(match self {
+                | Self::Ann(Ann { tm, ty }) => {
+                    let tm = folder.fold_pat(tm);
+                    let ty = folder.fold_term(ty);
+                    Ann { tm: tm?, ty: ty? }.into()
+                }
+                | Self::Var(def) => folder.fold_def(def)?.into(),
+                | Self::Named(Named(name, pat)) => Named(name, folder.fold_pat(pat)?).into(),
+                | Self::Ctor(Ctor(name, pat)) => Ctor(name, folder.fold_pat(pat)?).into(),
+                | Self::Project(ProjectionPattern(field, pat)) => {
+                    ProjectionPattern(field, folder.fold_pat(pat)?).into()
+                }
+                | Self::View(ViewPattern { function, pattern }) => {
+                    let function = folder.fold_term(function);
+                    let pattern = folder.fold_pat(pattern);
+                    ViewPattern { function: function?, pattern: pattern? }.into()
+                }
+                | Self::Alias(Alias(ConsN(patterns, tail))) => {
+                    let patterns = folder.fold_items(patterns, F::fold_pat);
+                    let tail = folder.fold_pat(tail);
+                    Alias(ConsN(patterns?, tail?)).into()
+                }
+                | Self::Cons(patterns) => Self::Cons(folder.fold_items(patterns, F::fold_pat)?),
+                | Self::Hole(_) | Self::Triv(_) | Self::Lit(_) => self,
+            })
         })
     }
 }
@@ -64,9 +66,11 @@ impl CoPatternItem {
 }
 impl CoPatternSpine {
     pub fn fold_with<F: Folder>(self, folder: &mut F) -> Result<Self, F::Error> {
-        let head = self.head.fold_with(folder);
-        let tail = folder.fold_items(self.tail, |folder, item| item.fold_with(folder));
-        Ok(Self { head: head?, tail: tail? })
+        zydeco_foundation::stack::maybe_grow(|| {
+            let head = self.head.fold_with(folder);
+            let tail = folder.fold_items(self.tail, |folder, item| item.fold_with(folder));
+            Ok(Self { head: head?, tail: tail? })
+        })
     }
 }
 
@@ -78,178 +82,183 @@ impl<R> Term<R> {
     pub fn fold_with<F: Folder<InputRef = R>>(
         self, folder: &mut F,
     ) -> Result<Term<F::OutputRef>, F::Error> {
-        Ok(match self {
-            | Self::Meta(term) => {
-                let MetaT(meta, term) = *term;
-                MetaT(meta, folder.fold_term(term)?).into()
-            }
-            | Self::TypeOf(TypeOf(term)) => TypeOf(folder.fold_term(term)?).into(),
-            | Self::SourceBoundary(SourceBoundary(term)) => {
-                SourceBoundary(folder.fold_term(term)?).into()
-            }
-            | Self::SignatureBoundary(SignatureBoundary(term)) => {
-                SignatureBoundary(folder.fold_term(term)?).into()
-            }
-            | Self::Sealed(Sealed(term)) => Sealed(folder.fold_term(term)?).into(),
-            | Self::Ann(Ann { tm, ty }) => {
-                let tm = folder.fold_term(tm);
-                let ty = folder.fold_term(ty);
-                Ann { tm: tm?, ty: ty? }.into()
-            }
-            | Self::Var(reference) => folder.fold_var(reference)?,
-            | Self::Named(Named(name, term)) => Named(name, folder.fold_term(term)?).into(),
-            | Self::Label(Label(name, term)) => Label(name, folder.fold_term(term)?).into(),
-            | Self::Cons(terms) => Term::Cons(folder.fold_items(terms, F::fold_term)?),
-            | Self::Abs(Abs(pats, body)) => {
-                let pats = folder.fold_items(pats, F::fold_pat);
-                let body = folder.fold_term(body);
-                Abs(pats?, body?).into()
-            }
-            | Self::ValAbs(Abs(pat, body)) => {
-                let pat = folder.fold_pat(pat);
-                let body = folder.fold_term(body);
-                Term::ValAbs(Abs(pat?, body?))
-            }
-            | Self::App(App(head, arguments)) => {
-                let head = folder.fold_term(head);
-                let arguments = folder.fold_items(arguments, F::fold_term);
-                App(head?, arguments?).into()
-            }
-            | Self::Fix(Fix(pat, body)) => {
-                let pat = folder.fold_pat(pat);
-                let body = folder.fold_term(body);
-                Fix(pat?, body?).into()
-            }
-            | Self::Pi(Pi(pats, body)) => {
-                let pats = folder.fold_items(pats, F::fold_pat);
-                let body = folder.fold_term(body);
-                Pi(pats?, body?).into()
-            }
-            | Self::ValPi(ValPi(pat, body)) => {
-                let pat = folder.fold_pat(pat);
-                let body = folder.fold_term(body);
-                ValPi(pat?, body?).into()
-            }
-            | Self::Sigma(Sigma(pat, body)) => {
-                let pat = folder.fold_pat(pat);
-                let body = folder.fold_term(body);
-                Sigma(pat?, body?).into()
-            }
-            | Self::ManifestExists(term) => {
-                let ManifestExists { binder, definition, body } = *term;
-                let binder = folder.fold_pat(binder);
-                let definition = folder.fold_term(definition);
-                let body = folder.fold_term(body);
-                ManifestExists { binder: binder?, definition: definition?, body: body? }.into()
-            }
-            | Self::Pack(term) => {
-                let Pack { mode, binder, definition, body } = *term;
-                let binder = folder.fold_pat(binder);
-                let definition = folder.fold_term(definition);
-                let body = folder.fold_term(body);
-                Pack { mode, binder: binder?, definition: definition?, body: body? }.into()
-            }
-            | Self::Thunk(Thunk(term)) => Thunk(folder.fold_term(term)?).into(),
-            | Self::Force(Force(term)) => Force(folder.fold_term(term)?).into(),
-            | Self::Ret(Return(term)) => Return(folder.fold_term(term)?).into(),
-            | Self::Do(term) => {
-                let Bind { binder, bindee, tail } = *term;
-                let binder = folder.fold_pat(binder);
-                let bindee = folder.fold_term(bindee);
-                let tail = folder.fold_term(tail);
-                Bind { binder: binder?, bindee: bindee?, tail: tail? }.into()
-            }
-            | Self::Let(term) => {
-                let Let { binder, bindee, tail } = *term;
-                let binder = folder.fold_pat(binder);
-                let bindee = folder.fold_term(bindee);
-                let tail = folder.fold_term(tail);
-                Let { binder: binder?, bindee: bindee?, tail: tail? }.into()
-            }
-            | Self::MobileParam(MobileParam { flavor, binder, tail }) => {
-                let binder = folder.fold_pat(binder);
-                let tail = folder.fold_term(tail);
-                MobileParam { flavor, binder: binder?, tail: tail? }.into()
-            }
-            | Self::MobileBind(term) => {
-                let MobileBind { binder, bindee, tail } = *term;
-                let binder = folder.fold_pat(binder);
-                let bindee = folder.fold_term(bindee);
-                let tail = folder.fold_term(tail);
-                MobileBind { binder: binder?, bindee: bindee?, tail: tail? }.into()
-            }
-            | Self::Residual(Residual(term)) => Residual(folder.fold_term(term)?).into(),
-            | Self::Block(Block(term)) => Block(folder.fold_term(term)?).into(),
-            | Self::RecGroup(RecGroup { definitions, tail }) => {
-                let definitions = folder.fold_items(
-                    definitions,
-                    |folder, RecursiveDefinition { binder, bindee }| {
-                        let binder = folder.fold_pat(binder);
-                        let bindee = folder.fold_term(bindee);
-                        Ok(RecursiveDefinition { binder: binder?, bindee: bindee? })
-                    },
-                );
-                let tail = folder.fold_term(tail);
-                RecGroup { definitions: definitions?, tail: tail? }.into()
-            }
-            | Self::MoBlock(term) => {
-                let MoBlock { body, basis } = *term;
-                let body = folder.fold_term(body);
-                let monad = folder.fold_term(basis.monad);
-                let algebra = folder.fold_term(basis.algebra);
-                MoBlock { body: body?, basis: MonadicBasis { monad: monad?, algebra: algebra? } }
-                    .into()
-            }
-            | Self::CbvBlock(term) => {
-                let CbvBlock { body } = term;
-                let body = folder.fold_term(body);
-                CbvBlock { body: body? }.into()
-            }
-            | Self::Data(Data { arms }) => Data {
-                arms: folder.fold_items(arms, |folder, DataArm { name, param }| {
-                    Ok(DataArm { name, param: folder.fold_term(param)? })
-                })?,
-            }
-            .into(),
-            | Self::CoData(CoData { arms }) => CoData {
-                arms: folder.fold_items(arms, |folder, CoDataArm { name, out }| {
-                    Ok(CoDataArm { name, out: folder.fold_term(out)? })
-                })?,
-            }
-            .into(),
-            | Self::Ctor(Ctor(name, term)) => Ctor(name, folder.fold_term(term)?).into(),
-            | Self::Match(Match { scrut, arms }) => {
-                let scrut = folder.fold_term(scrut);
-                let arms = folder.fold_items(arms, |folder, Matcher { binder, tail }| {
+        zydeco_foundation::stack::maybe_grow(|| {
+            Ok(match self {
+                | Self::Meta(term) => {
+                    let MetaT(meta, term) = *term;
+                    MetaT(meta, folder.fold_term(term)?).into()
+                }
+                | Self::TypeOf(TypeOf(term)) => TypeOf(folder.fold_term(term)?).into(),
+                | Self::SourceBoundary(SourceBoundary(term)) => {
+                    SourceBoundary(folder.fold_term(term)?).into()
+                }
+                | Self::SignatureBoundary(SignatureBoundary(term)) => {
+                    SignatureBoundary(folder.fold_term(term)?).into()
+                }
+                | Self::Sealed(Sealed(term)) => Sealed(folder.fold_term(term)?).into(),
+                | Self::Ann(Ann { tm, ty }) => {
+                    let tm = folder.fold_term(tm);
+                    let ty = folder.fold_term(ty);
+                    Ann { tm: tm?, ty: ty? }.into()
+                }
+                | Self::Var(reference) => folder.fold_var(reference)?,
+                | Self::Named(Named(name, term)) => Named(name, folder.fold_term(term)?).into(),
+                | Self::Label(Label(name, term)) => Label(name, folder.fold_term(term)?).into(),
+                | Self::Cons(terms) => Term::Cons(folder.fold_items(terms, F::fold_term)?),
+                | Self::Abs(Abs(pats, body)) => {
+                    let pats = folder.fold_items(pats, F::fold_pat);
+                    let body = folder.fold_term(body);
+                    Abs(pats?, body?).into()
+                }
+                | Self::ValAbs(Abs(pat, body)) => {
+                    let pat = folder.fold_pat(pat);
+                    let body = folder.fold_term(body);
+                    Term::ValAbs(Abs(pat?, body?))
+                }
+                | Self::App(App(head, arguments)) => {
+                    let head = folder.fold_term(head);
+                    let arguments = folder.fold_items(arguments, F::fold_term);
+                    App(head?, arguments?).into()
+                }
+                | Self::Fix(Fix(pat, body)) => {
+                    let pat = folder.fold_pat(pat);
+                    let body = folder.fold_term(body);
+                    Fix(pat?, body?).into()
+                }
+                | Self::Pi(Pi(pats, body)) => {
+                    let pats = folder.fold_items(pats, F::fold_pat);
+                    let body = folder.fold_term(body);
+                    Pi(pats?, body?).into()
+                }
+                | Self::ValPi(ValPi(pat, body)) => {
+                    let pat = folder.fold_pat(pat);
+                    let body = folder.fold_term(body);
+                    ValPi(pat?, body?).into()
+                }
+                | Self::Sigma(Sigma(pat, body)) => {
+                    let pat = folder.fold_pat(pat);
+                    let body = folder.fold_term(body);
+                    Sigma(pat?, body?).into()
+                }
+                | Self::ManifestExists(term) => {
+                    let ManifestExists { binder, definition, body } = *term;
+                    let binder = folder.fold_pat(binder);
+                    let definition = folder.fold_term(definition);
+                    let body = folder.fold_term(body);
+                    ManifestExists { binder: binder?, definition: definition?, body: body? }.into()
+                }
+                | Self::Pack(term) => {
+                    let Pack { mode, binder, definition, body } = *term;
+                    let binder = folder.fold_pat(binder);
+                    let definition = folder.fold_term(definition);
+                    let body = folder.fold_term(body);
+                    Pack { mode, binder: binder?, definition: definition?, body: body? }.into()
+                }
+                | Self::Thunk(Thunk(term)) => Thunk(folder.fold_term(term)?).into(),
+                | Self::Force(Force(term)) => Force(folder.fold_term(term)?).into(),
+                | Self::Ret(Return(term)) => Return(folder.fold_term(term)?).into(),
+                | Self::Do(term) => {
+                    let Bind { binder, bindee, tail } = *term;
+                    let binder = folder.fold_pat(binder);
+                    let bindee = folder.fold_term(bindee);
+                    let tail = folder.fold_term(tail);
+                    Bind { binder: binder?, bindee: bindee?, tail: tail? }.into()
+                }
+                | Self::Let(term) => {
+                    let Let { binder, bindee, tail } = *term;
+                    let binder = folder.fold_pat(binder);
+                    let bindee = folder.fold_term(bindee);
+                    let tail = folder.fold_term(tail);
+                    Let { binder: binder?, bindee: bindee?, tail: tail? }.into()
+                }
+                | Self::MobileParam(MobileParam { flavor, binder, tail }) => {
                     let binder = folder.fold_pat(binder);
                     let tail = folder.fold_term(tail);
-                    Ok(Matcher { binder: binder?, tail: tail? })
-                });
-                Match { scrut: scrut?, arms: arms? }.into()
-            }
-            | Self::CoMatchClauses(CoMatchClauses { clauses }) => CoMatchClauses {
-                clauses: folder.fold_items(
-                    clauses,
-                    |folder, CoPatternClause { spine, tail }| {
-                        let spine = spine.fold_with(folder);
+                    MobileParam { flavor, binder: binder?, tail: tail? }.into()
+                }
+                | Self::MobileBind(term) => {
+                    let MobileBind { binder, bindee, tail } = *term;
+                    let binder = folder.fold_pat(binder);
+                    let bindee = folder.fold_term(bindee);
+                    let tail = folder.fold_term(tail);
+                    MobileBind { binder: binder?, bindee: bindee?, tail: tail? }.into()
+                }
+                | Self::Residual(Residual(term)) => Residual(folder.fold_term(term)?).into(),
+                | Self::Block(Block(term)) => Block(folder.fold_term(term)?).into(),
+                | Self::RecGroup(RecGroup { definitions, tail }) => {
+                    let definitions = folder.fold_items(
+                        definitions,
+                        |folder, RecursiveDefinition { binder, bindee }| {
+                            let binder = folder.fold_pat(binder);
+                            let bindee = folder.fold_term(bindee);
+                            Ok(RecursiveDefinition { binder: binder?, bindee: bindee? })
+                        },
+                    );
+                    let tail = folder.fold_term(tail);
+                    RecGroup { definitions: definitions?, tail: tail? }.into()
+                }
+                | Self::MoBlock(term) => {
+                    let MoBlock { body, basis } = *term;
+                    let body = folder.fold_term(body);
+                    let monad = folder.fold_term(basis.monad);
+                    let algebra = folder.fold_term(basis.algebra);
+                    MoBlock {
+                        body: body?,
+                        basis: MonadicBasis { monad: monad?, algebra: algebra? },
+                    }
+                    .into()
+                }
+                | Self::CbvBlock(term) => {
+                    let CbvBlock { body } = term;
+                    let body = folder.fold_term(body);
+                    CbvBlock { body: body? }.into()
+                }
+                | Self::Data(Data { arms }) => Data {
+                    arms: folder.fold_items(arms, |folder, DataArm { name, param }| {
+                        Ok(DataArm { name, param: folder.fold_term(param)? })
+                    })?,
+                }
+                .into(),
+                | Self::CoData(CoData { arms }) => CoData {
+                    arms: folder.fold_items(arms, |folder, CoDataArm { name, out }| {
+                        Ok(CoDataArm { name, out: folder.fold_term(out)? })
+                    })?,
+                }
+                .into(),
+                | Self::Ctor(Ctor(name, term)) => Ctor(name, folder.fold_term(term)?).into(),
+                | Self::Match(Match { scrut, arms }) => {
+                    let scrut = folder.fold_term(scrut);
+                    let arms = folder.fold_items(arms, |folder, Matcher { binder, tail }| {
+                        let binder = folder.fold_pat(binder);
                         let tail = folder.fold_term(tail);
-                        Ok(CoPatternClause { spine: spine?, tail: tail? })
-                    },
-                )?,
-            }
-            .into(),
-            | Self::CoMatch(CoMatch { arms }) => CoMatch {
-                arms: folder.fold_items(arms, |folder, CoMatcher { dtor, tail }| {
-                    Ok(CoMatcher { dtor, tail: folder.fold_term(tail)? })
-                })?,
-            }
-            .into(),
-            | Self::Dtor(Dtor(term, name)) => Dtor(folder.fold_term(term)?, name).into(),
-            | Self::Proj(Proj(term, name)) => Proj(folder.fold_term(term)?, name).into(),
-            | Self::Internal(term) => Term::Internal(term),
-            | Self::Hole(term) => Term::Hole(term),
-            | Self::Triv(term) => Term::Triv(term),
-            | Self::Lit(term) => Term::Lit(term),
+                        Ok(Matcher { binder: binder?, tail: tail? })
+                    });
+                    Match { scrut: scrut?, arms: arms? }.into()
+                }
+                | Self::CoMatchClauses(CoMatchClauses { clauses }) => CoMatchClauses {
+                    clauses: folder.fold_items(
+                        clauses,
+                        |folder, CoPatternClause { spine, tail }| {
+                            let spine = spine.fold_with(folder);
+                            let tail = folder.fold_term(tail);
+                            Ok(CoPatternClause { spine: spine?, tail: tail? })
+                        },
+                    )?,
+                }
+                .into(),
+                | Self::CoMatch(CoMatch { arms }) => CoMatch {
+                    arms: folder.fold_items(arms, |folder, CoMatcher { dtor, tail }| {
+                        Ok(CoMatcher { dtor, tail: folder.fold_term(tail)? })
+                    })?,
+                }
+                .into(),
+                | Self::Dtor(Dtor(term, name)) => Dtor(folder.fold_term(term)?, name).into(),
+                | Self::Proj(Proj(term, name)) => Proj(folder.fold_term(term)?, name).into(),
+                | Self::Internal(term) => Term::Internal(term),
+                | Self::Hole(term) => Term::Hole(term),
+                | Self::Triv(term) => Term::Triv(term),
+                | Self::Lit(term) => Term::Lit(term),
+            })
         })
     }
 }

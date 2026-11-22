@@ -278,7 +278,7 @@ enum MatrixPattern {
 
 impl MatrixPattern {
     fn from_typed(pattern: VPatId, statics: &StaticsArena) -> Self {
-        match &statics.vpats[&pattern] {
+        zydeco_foundation::stack::maybe_grow(|| match &statics.vpats[&pattern] {
             | ValuePattern::Hole(_) | ValuePattern::Var(_) | ValuePattern::Alias(_) => {
                 Self::Wildcard
             }
@@ -306,7 +306,7 @@ impl MatrixPattern {
                 if matches!(nested, Self::Wildcard) { Self::Wildcard } else { Self::Opaque }
             }
             | ValuePattern::Lit(_) => Self::Opaque,
-        }
+        })
     }
 
     fn head_space(&self) -> Option<HeadSpace> {
@@ -424,21 +424,24 @@ impl<'a> CoverageMatrix<'a> {
     fn uncovered(
         &self, matrix: Vec<Vec<MatrixPattern>>, columns: usize, expected: Option<HeadSpace>,
     ) -> Vec<Vec<CoveragePattern>> {
-        if columns == 0 {
-            return matrix.is_empty().then_some(Vec::new()).into_iter().collect();
-        }
-        if matrix.is_empty() {
-            return match expected {
-                | Some(space) => self.uncovered_finite(matrix, columns, space),
-                | None => vec![vec![CoveragePattern::Wildcard; columns]],
-            };
-        }
+        zydeco_foundation::stack::maybe_grow(|| {
+            if columns == 0 {
+                return matrix.is_empty().then_some(Vec::new()).into_iter().collect();
+            }
+            if matrix.is_empty() {
+                return match expected {
+                    | Some(space) => self.uncovered_finite(matrix, columns, space),
+                    | None => vec![vec![CoveragePattern::Wildcard; columns]],
+                };
+            }
 
-        match expected.or_else(|| matrix.iter().filter_map(|row| row.first()?.head_space()).next())
-        {
-            | Some(space) => self.uncovered_finite(matrix, columns, space),
-            | None => self.uncovered_default(matrix, columns),
-        }
+            match expected
+                .or_else(|| matrix.iter().filter_map(|row| row.first()?.head_space()).next())
+            {
+                | Some(space) => self.uncovered_finite(matrix, columns, space),
+                | None => self.uncovered_default(matrix, columns),
+            }
+        })
     }
 
     fn uncovered_finite(

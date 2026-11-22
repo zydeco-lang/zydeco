@@ -161,40 +161,42 @@ impl<O: ResolutionObserver> ResolveFolder<'_, O> {
     pub(super) fn pattern<'e>(
         &mut self, id: PatId, mut env: ResolveEnv<'e>,
     ) -> FoldResult<ResolvedPattern<'e>> {
-        let pat = self.bitter.pats[&id].clone();
-        match &pat {
-            | Pattern::Ann(Ann { tm, ty }) => {
-                self.term(*ty, env.clone())?;
-                env = self.pattern(*tm, env)?.env;
-            }
-            | Pattern::Var(def) => {
-                let name = self.bitter.defs[def];
-                self.builder.defs.insert_new(*def, name);
-                env.local = env.local.bind_group([(name, *def)]);
-            }
-            | Pattern::Named(Named(_, inner))
-            | Pattern::Ctor(Ctor(_, inner))
-            | Pattern::Project(ProjectionPattern(_, inner)) => {
-                env = self.pattern(*inner, env)?.env;
-            }
-            | Pattern::View(ViewPattern { function, pattern }) => {
-                self.term(*function, env.clone())?;
-                env = self.pattern(*pattern, env)?.env;
-            }
-            | Pattern::Alias(Alias(patterns)) => {
-                for pat in patterns {
-                    env = self.pattern(*pat, env)?.env;
+        zydeco_foundation::stack::maybe_grow(|| {
+            let pat = self.bitter.pats[&id].clone();
+            match &pat {
+                | Pattern::Ann(Ann { tm, ty }) => {
+                    self.term(*ty, env.clone())?;
+                    env = self.pattern(*tm, env)?.env;
                 }
-            }
-            | Pattern::Cons(patterns) => {
-                for pat in patterns {
-                    env = self.pattern(*pat, env)?.env;
+                | Pattern::Var(def) => {
+                    let name = self.bitter.defs[def];
+                    self.builder.defs.insert_new(*def, name);
+                    env.local = env.local.bind_group([(name, *def)]);
                 }
+                | Pattern::Named(Named(_, inner))
+                | Pattern::Ctor(Ctor(_, inner))
+                | Pattern::Project(ProjectionPattern(_, inner)) => {
+                    env = self.pattern(*inner, env)?.env;
+                }
+                | Pattern::View(ViewPattern { function, pattern }) => {
+                    self.term(*function, env.clone())?;
+                    env = self.pattern(*pattern, env)?.env;
+                }
+                | Pattern::Alias(Alias(patterns)) => {
+                    for pat in patterns {
+                        env = self.pattern(*pat, env)?.env;
+                    }
+                }
+                | Pattern::Cons(patterns) => {
+                    for pat in patterns {
+                        env = self.pattern(*pat, env)?.env;
+                    }
+                }
+                | Pattern::Hole(_) | Pattern::Lit(_) | Pattern::Triv(_) => {}
             }
-            | Pattern::Hole(_) | Pattern::Lit(_) | Pattern::Triv(_) => {}
-        }
-        self.builder.pats.insert_new(id, pat);
-        Ok(ResolvedPattern { pattern: id, env })
+            self.builder.pats.insert_new(id, pat);
+            Ok(ResolvedPattern { pattern: id, env })
+        })
     }
 
     fn provider(&mut self, id: TermId) -> FoldResult<()> {
@@ -215,201 +217,203 @@ impl<O: ResolutionObserver> ResolveFolder<'_, O> {
     // Remaining worklist: split term resolution by scope behavior.
     #[allow(clippy::too_many_lines)]
     pub(super) fn term(&mut self, id: TermId, env: ResolveEnv<'_>) -> FoldResult<TermId> {
-        let term = self.bitter.terms[&id].clone();
-        // This classification is exhaustive: new constructors require a scope review.
-        let term = match term {
-            | Term::Meta(term) => {
-                let mut env = env;
-                if matches!(
-                    term.0.specialize::<crate::metadata::PreludeMeta>(),
-                    Ok(Some(crate::metadata::PreludeMeta::None))
-                ) {
-                    env.local.prelude.enabled = false;
+        zydeco_foundation::stack::maybe_grow(|| {
+            let term = self.bitter.terms[&id].clone();
+            // This classification is exhaustive: new constructors require a scope review.
+            let term = match term {
+                | Term::Meta(term) => {
+                    let mut env = env;
+                    if matches!(
+                        term.0.specialize::<crate::metadata::PreludeMeta>(),
+                        Ok(Some(crate::metadata::PreludeMeta::None))
+                    ) {
+                        env.local.prelude.enabled = false;
+                    }
+                    self.term(term.1, env)?;
+                    term.into()
                 }
-                self.term(term.1, env)?;
-                term.into()
-            }
-            | Term::Hole(hole) => {
-                self.scope_event(id, &env);
-                hole.into()
-            }
-            | Term::SourceBoundary(SourceBoundary(inner)) => {
-                self.provider(inner)?;
-                SourceBoundary(inner).into()
-            }
-            | Term::SignatureBoundary(SignatureBoundary(inner)) => {
-                self.provider(inner)?;
-                SignatureBoundary(inner).into()
-            }
-            | Term::Ann(Ann { tm, ty }) => {
-                let ty = self.term(ty, env.clone());
-                let tm = self.term(tm, env);
-                Ann { tm: tm?, ty: ty? }.into()
-            }
-            | Term::Abs(Abs(binders, body)) => {
-                let (binders, env) = self.telescope(binders, env)?;
-                self.term(body, env)?;
-                Abs(binders, body).into()
-            }
-            | Term::ValAbs(Abs(binder, body)) => {
-                let binder = self.pattern(binder, env)?;
-                self.term(body, binder.env)?;
-                Term::ValAbs(Abs(binder.pattern, body))
-            }
-            | Term::Fix(Fix(binder, body)) => {
-                let binder = self.pattern(binder, env)?;
-                self.term(body, binder.env)?;
-                Fix(binder.pattern, body).into()
-            }
-            | Term::Pi(Pi(binders, body)) => {
-                let (binders, env) = self.telescope(binders, env)?;
-                self.term(body, env)?;
-                Pi(binders, body).into()
-            }
-            | Term::ValPi(ValPi(binder, body)) => {
-                let binder = self.pattern(binder, env)?;
-                self.term(body, binder.env)?;
-                ValPi(binder.pattern, body).into()
-            }
-            | Term::Sigma(Sigma(binder, body)) => {
-                let binder = self.pattern(binder, env)?;
-                self.term(body, binder.env)?;
-                Sigma(binder.pattern, body).into()
-            }
-            | Term::ManifestExists(term) => {
-                let definition = self.term(term.definition, env.clone());
-                let binder = self.pattern(term.binder, env);
-                definition?;
-                let binder = binder?;
-                self.term(term.body, binder.env)?;
-                term.into()
-            }
-            | Term::Pack(term) => {
-                let definition = self.term(term.definition, env.clone());
-                let binder = self.pattern(term.binder, env);
-                definition?;
-                let binder = binder?;
-                self.term(term.body, binder.env)?;
-                term.into()
-            }
-            | Term::Do(term) => {
-                let bindee = self.term(term.bindee, env.clone());
-                let binder = self.pattern(term.binder, env);
-                bindee?;
-                let binder = binder?;
-                self.term(term.tail, binder.env)?;
-                term.into()
-            }
-            | Term::Let(term) => {
-                let bindee = self.term(term.bindee, env.clone());
-                let binder = self.pattern(term.binder, env.clone());
-                bindee?;
-                let mut binder = binder?;
-                if self.builder.origins.source(&term.binder.into()).is_some_and(|origin| {
-                    matches!(origin, crate::textual::syntax::EntityId::Pat(pattern)
+                | Term::Hole(hole) => {
+                    self.scope_event(id, &env);
+                    hole.into()
+                }
+                | Term::SourceBoundary(SourceBoundary(inner)) => {
+                    self.provider(inner)?;
+                    SourceBoundary(inner).into()
+                }
+                | Term::SignatureBoundary(SignatureBoundary(inner)) => {
+                    self.provider(inner)?;
+                    SignatureBoundary(inner).into()
+                }
+                | Term::Ann(Ann { tm, ty }) => {
+                    let ty = self.term(ty, env.clone());
+                    let tm = self.term(tm, env);
+                    Ann { tm: tm?, ty: ty? }.into()
+                }
+                | Term::Abs(Abs(binders, body)) => {
+                    let (binders, env) = self.telescope(binders, env)?;
+                    self.term(body, env)?;
+                    Abs(binders, body).into()
+                }
+                | Term::ValAbs(Abs(binder, body)) => {
+                    let binder = self.pattern(binder, env)?;
+                    self.term(body, binder.env)?;
+                    Term::ValAbs(Abs(binder.pattern, body))
+                }
+                | Term::Fix(Fix(binder, body)) => {
+                    let binder = self.pattern(binder, env)?;
+                    self.term(body, binder.env)?;
+                    Fix(binder.pattern, body).into()
+                }
+                | Term::Pi(Pi(binders, body)) => {
+                    let (binders, env) = self.telescope(binders, env)?;
+                    self.term(body, env)?;
+                    Pi(binders, body).into()
+                }
+                | Term::ValPi(ValPi(binder, body)) => {
+                    let binder = self.pattern(binder, env)?;
+                    self.term(body, binder.env)?;
+                    ValPi(binder.pattern, body).into()
+                }
+                | Term::Sigma(Sigma(binder, body)) => {
+                    let binder = self.pattern(binder, env)?;
+                    self.term(body, binder.env)?;
+                    Sigma(binder.pattern, body).into()
+                }
+                | Term::ManifestExists(term) => {
+                    let definition = self.term(term.definition, env.clone());
+                    let binder = self.pattern(term.binder, env);
+                    definition?;
+                    let binder = binder?;
+                    self.term(term.body, binder.env)?;
+                    term.into()
+                }
+                | Term::Pack(term) => {
+                    let definition = self.term(term.definition, env.clone());
+                    let binder = self.pattern(term.binder, env);
+                    definition?;
+                    let binder = binder?;
+                    self.term(term.body, binder.env)?;
+                    term.into()
+                }
+                | Term::Do(term) => {
+                    let bindee = self.term(term.bindee, env.clone());
+                    let binder = self.pattern(term.binder, env);
+                    bindee?;
+                    let binder = binder?;
+                    self.term(term.tail, binder.env)?;
+                    term.into()
+                }
+                | Term::Let(term) => {
+                    let bindee = self.term(term.bindee, env.clone());
+                    let binder = self.pattern(term.binder, env.clone());
+                    bindee?;
+                    let mut binder = binder?;
+                    if self.builder.origins.source(&term.binder.into()).is_some_and(|origin| {
+                        matches!(origin, crate::textual::syntax::EntityId::Pat(pattern)
                         if self.bitter.default_prelude_binders.contains(&pattern))
-                }) {
-                    let definitions = binder
-                        .env
-                        .local
-                        .var_to_def
+                    }) {
+                        let definitions = binder
+                            .env
+                            .local
+                            .var_to_def
+                            .iter()
+                            .filter(|(_, binding)| binding.depth > env.local.depth)
+                            .map(|(name, binding)| (*name, binding.definition))
+                            .collect();
+                        binder.env.local = env.local;
+                        binder.env.local.prelude.definitions = definitions;
+                    }
+                    self.term(term.tail, binder.env)?;
+                    term.into()
+                }
+                | Term::MobileParam(MobileParam { tail, .. }) => {
+                    if env.local.boundary.is_none() {
+                        return self.err(ResolveError::UnenclosedThat(*id.span(self)));
+                    }
+                    self.term(tail, env)?;
+                    Residual(tail).into()
+                }
+                | Term::MobileBind(term) => {
+                    if env.local.boundary.is_none() {
+                        return self.err(ResolveError::UnenclosedThat(*id.span(self)));
+                    }
+                    self.term(term.tail, env)?;
+                    Residual(term.tail).into()
+                }
+                | Term::Block(Block(body)) => self.resolve_block(id, body, env)?,
+                | Term::CbvBlock(term) => {
+                    let body = self.term(term.body, env);
+                    body?;
+                    term.into()
+                }
+                | Term::MoBlock(term) => {
+                    let monad = self.term(term.basis.monad, env.clone());
+                    let algebra = self.term(term.basis.algebra, env.clone());
+                    let body = self.term(term.body, env);
+                    monad?;
+                    algebra?;
+                    body?;
+                    term.into()
+                }
+                | Term::Match(term) => {
+                    let scrut = self.term(term.scrut, env.clone());
+                    let arms = term
+                        .arms
                         .iter()
-                        .filter(|(_, binding)| binding.depth > env.local.depth)
-                        .map(|(name, binding)| (*name, binding.definition))
-                        .collect();
-                    binder.env.local = env.local;
-                    binder.env.local.prelude.definitions = definitions;
+                        .map(|arm| {
+                            let binder = self.pattern(arm.binder, env.clone())?;
+                            self.term(arm.tail, binder.env)
+                        })
+                        .collect_reported::<Vec<_>>();
+                    scrut?;
+                    arms?;
+                    term.into()
                 }
-                self.term(term.tail, binder.env)?;
-                term.into()
-            }
-            | Term::MobileParam(MobileParam { tail, .. }) => {
-                if env.local.boundary.is_none() {
-                    return self.err(ResolveError::UnenclosedThat(*id.span(self)));
-                }
-                self.term(tail, env)?;
-                Residual(tail).into()
-            }
-            | Term::MobileBind(term) => {
-                if env.local.boundary.is_none() {
-                    return self.err(ResolveError::UnenclosedThat(*id.span(self)));
-                }
-                self.term(term.tail, env)?;
-                Residual(term.tail).into()
-            }
-            | Term::Block(Block(body)) => self.resolve_block(id, body, env)?,
-            | Term::CbvBlock(term) => {
-                let body = self.term(term.body, env);
-                body?;
-                term.into()
-            }
-            | Term::MoBlock(term) => {
-                let monad = self.term(term.basis.monad, env.clone());
-                let algebra = self.term(term.basis.algebra, env.clone());
-                let body = self.term(term.body, env);
-                monad?;
-                algebra?;
-                body?;
-                term.into()
-            }
-            | Term::Match(term) => {
-                let scrut = self.term(term.scrut, env.clone());
-                let arms = term
-                    .arms
-                    .iter()
-                    .map(|arm| {
-                        let binder = self.pattern(arm.binder, env.clone())?;
-                        self.term(arm.tail, binder.env)
-                    })
-                    .collect_reported::<Vec<_>>();
-                scrut?;
-                arms?;
-                term.into()
-            }
-            | Term::CoMatchClauses(term) => {
-                term.clauses
-                    .iter()
-                    .map(|clause| {
-                        let mut clause_env = env.clone();
-                        for item in clause.spine.iter() {
-                            if let CoPatternItem::Pat(pattern) = item {
-                                clause_env = self.pattern(*pattern, clause_env)?.env;
+                | Term::CoMatchClauses(term) => {
+                    term.clauses
+                        .iter()
+                        .map(|clause| {
+                            let mut clause_env = env.clone();
+                            for item in clause.spine.iter() {
+                                if let CoPatternItem::Pat(pattern) = item {
+                                    clause_env = self.pattern(*pattern, clause_env)?.env;
+                                }
                             }
-                        }
-                        self.term(clause.tail, clause_env)
-                    })
-                    .collect_reported::<Vec<_>>()?;
-                term.into()
-            }
-            | Term::Residual(_) | Term::RecGroup(_) => {
-                unreachable!("generated context syntax is not a resolver input")
-            }
-            | ordinary @ (Term::Var(_)
-            | Term::TypeOf(_)
-            | Term::Internal(_)
-            | Term::Sealed(_)
-            | Term::Named(_)
-            | Term::Label(_)
-            | Term::Triv(_)
-            | Term::Cons(_)
-            | Term::App(_)
-            | Term::Thunk(_)
-            | Term::Force(_)
-            | Term::Ret(_)
-            | Term::Data(_)
-            | Term::CoData(_)
-            | Term::Ctor(_)
-            | Term::CoMatch(_)
-            | Term::Dtor(_)
-            | Term::Proj(_)
-            | Term::Lit(_)) => ordinary.fold_with(&mut OrdinaryFolder {
-                resolver: self,
-                occurrence: id,
-                env: &env,
-            })?,
-        };
-        self.builder.terms.insert_new(id, term);
-        Ok(id)
+                            self.term(clause.tail, clause_env)
+                        })
+                        .collect_reported::<Vec<_>>()?;
+                    term.into()
+                }
+                | Term::Residual(_) | Term::RecGroup(_) => {
+                    unreachable!("generated context syntax is not a resolver input")
+                }
+                | ordinary @ (Term::Var(_)
+                | Term::TypeOf(_)
+                | Term::Internal(_)
+                | Term::Sealed(_)
+                | Term::Named(_)
+                | Term::Label(_)
+                | Term::Triv(_)
+                | Term::Cons(_)
+                | Term::App(_)
+                | Term::Thunk(_)
+                | Term::Force(_)
+                | Term::Ret(_)
+                | Term::Data(_)
+                | Term::CoData(_)
+                | Term::Ctor(_)
+                | Term::CoMatch(_)
+                | Term::Dtor(_)
+                | Term::Proj(_)
+                | Term::Lit(_)) => ordinary.fold_with(&mut OrdinaryFolder {
+                    resolver: self,
+                    occurrence: id,
+                    env: &env,
+                })?,
+            };
+            self.builder.terms.insert_new(id, term);
+            Ok(id)
+        })
     }
 }
 
