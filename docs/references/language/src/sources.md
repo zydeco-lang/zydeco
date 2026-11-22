@@ -64,9 +64,6 @@ param (/stdio; /process) : @(import("../../lib/std/builtin.zy")) in
 ! stdio/write_line "hello, world!" { ! process/exit 0 }
 ```
 
-The REPL stores complete terms as numbered inputs; `@(import(1))` imports input 1,
-while `@(import("1"))` addresses a file.
-Its root commands are `@[type] e`, `@[run] e`, `@(help)`, and `@(quit)`.
-By default it inspects kinds/types and evaluates values or directly returning computations.
-Explicit execution can supply Builtin.
-REPL evaluation captures output and uses empty stdin and arguments.
+In the interactive REPL, numbered inputs are complete terms addressed by integer imports such
+as `@(import(1))`, distinct from quoted file imports such as `@(import("1"))`;
+see the [CLI guide](../../../../cli/README.md#interactive-repl) for REPL commands and execution behavior.

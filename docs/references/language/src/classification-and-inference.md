@@ -1,14 +1,20 @@
 # Classification and Inference
 
+## Kinds and Type Equality
+
 Kinds are `VType`, `CType`, kind arrows, and named kinds `#field :: K`.
 Type functions use `fn (X : K) => T` and ordinary application.
 Type application reduces by substitution; transparent aliases and manifest witness equations participate in equality.
 Products retain order, arity, and explicit nesting; labels retain their names.
 
+## Nominal Seals
+
 A nominal `def` keeps its identity distinct from its implementation and other definitions.
 Typing may expose a sealed data or codata shape to introduce or eliminate it without equating distinct seals.
 Repeated uses of one definition share its identity; copying a term freshens its bound nominal definitions. Identity
 across imported source copies follows the [package-resolution model](sources/packages.md#copy-resolve-merge-analyze).
+
+## Bidirectional Checking and Inference
 
 Checking is bidirectional. Annotations supply expected classifiers; synthesis determines them from a term.
 A bare unannotated variable in a synthesizing binder position defaults to a value binder with a flexible value type.
@@ -37,7 +43,10 @@ It does not guess constructor ownership, nominal definitions, or existential tel
 Solutions must satisfy occurs and witness-scope checks.
 Constructors and openings of packed values generally require an expected type;
 type and kind binders remain annotation-directed.
-Sources close their inference independently before an import-site expectation is compared (§12).
+Sources close their inference independently
+before an import-site expectation is compared ([Source Boundaries](sources.md#source-boundaries)).
+
+## Classifier Queries
 
 `@[typeof] e` reuses the synthesized classifier of `e` as a static term:
 
@@ -56,10 +65,11 @@ Thus `@[typeof] (1 : Int8)` yields `Int8`, and a bare constructor still needs an
 A kind operand is rejected with `tyck.typeof-kind` because its classifier is `Set`.
 
 The query preserves seals, witnesses, and local inference variables; it creates no inference boundary or generalization.
-An extracted classifier must remain in the scope of its witnesses (§9),
+An extracted classifier must remain in the scope
+of its [witnesses](polymorphism-and-packed-values.md#opening-and-witness-scope),
 including witnesses in later inference solutions.
 The operand is checked, including name resolution and coverage, but never executes.
-Its imports remain source dependencies (§12).
+Its imports remain [source dependencies](sources.md#source-boundaries).
 
 Value-let staging still applies: the complete value may be queried,
 while a runtime value binding cannot have a static body.

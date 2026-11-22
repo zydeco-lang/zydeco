@@ -24,8 +24,8 @@
 | Packed value / witness | Existential introduction: a value hiding a type with evidence; opened by a pattern. | [L9](../../references/language/src/polymorphism-and-packed-values.md) |
 | Package / source package | A named group of source definitions, discovered from `package.zy`/`workspace.zy`; distinct from packed values. | [L12](../../references/language/src/sources/packages.md#source-packages) |
 | Core prelude | Default kind and type names injected into every source; provider choice stays explicit. | [L12](../../references/language/src/sources/core-prelude.md) |
-| Relative monad | A monad-like structure whose values and computations may have different carriers; models stack-manipulating computation. | [L11](../../references/language/src/translations/relative-monads.md#relative-monads) |
-| Monadic block | `@[monadic]` annotation that reinterprets CBPV code under a relative monad, including transformer derivation. | [L11](../../references/language/src/translations/relative-monads.md#monadic-blocks) |
+| Relative monad | A monad-like structure whose values and computations may have different carriers; models stack-manipulating computation. | [Relative Monads](../../references/library/src/effects/relative-monads.md#relative-monads) |
+| Monadic block | `@[monadic]` annotation that reinterprets CBPV code under a relative monad, including transformer derivation. | [Monadic Blocks](../../references/language/src/translations/monadic-blocks.md) |
 | Effect module / capability dictionary | Library pattern: an effect interface plus a dictionary (record of operations) passed explicitly. | [tutorial §§9–10](../../tutorial/zydeco-guide.md#9-effect-modules) |
 | Meta annotation | Compile-time metadata written `@[name(args)]`; runtime metadata is different (carried with a runtime value). | [Meta annotations](../../references/language/src/meta-annotations.md) |
 | Execution profile | Selected backend and host contract for running a program: interpreter, native exe, Wasm. | [L15](../../references/language/src/execution-profiles.md) |
@@ -63,11 +63,12 @@
 
 Three pairs cause most confusion when reading this repository:
 
-- **Package** is overloaded. A *source package* is a named unit of files; a *packed value* is an
-  existential; a *closure package* is an SPSLow runtime record. The qualifier is always present in
-  careful prose, but not always in code identifiers.
-- **Static** is the checker's world (types, witnesses, elaboration), not "compile-time constant"
-  in the C sense and not `static` in Rust. "Static values" are type-level values.
-- **ZIR** in code and older prose covers the Stack IR family (high SPS and SPSLow). The current
-  compiler reference names the products instead: `FragmentProgram`, `SpsLowProgram`. When a file
-  says `zir`, check whether it means the rendering target (`-t zir` prints SPSLow) or the crate.
+- **Package** is overloaded. A *source package* is a named unit of files;
+  a *packed value* is an existential; a *closure package* is an SPSLow runtime record.
+  The qualifier is always present in careful prose, but not always in code identifiers.
+- **Static** is the checker's world (types, witnesses, elaboration),
+  not "compile-time constant" in the C sense and not `static` in Rust.
+  "Static values" are type-level values.
+- **ZIR** in code and older prose covers the Stack IR family (high SPS and SPSLow).
+  The current compiler reference names the products instead: `FragmentProgram`, `SpsLowProgram`.
+  When a file says `zir`, check whether it means the rendering target (`-t zir` prints SPSLow) or the crate.

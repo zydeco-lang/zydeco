@@ -20,10 +20,11 @@ into a native struct or every computation into a returning function.
 The minimal [native unit profile](../references/language/src/foreign-interfaces.md#native-zydeco-units) is implemented.
 It permits source-free composition through explicit initializers and closed structural interfaces;
 its [artifact contract](../references/compiler/src/native-emission.md#native-unit-artifacts) is canonical.
-This proposal owns the remaining richer type interfaces and host-language bindings.
-The existing [word entries](../references/compiler/src/closure-conversion/word-contracts-and-protocols.md#word-entry-contracts),
+This proposal owns the remaining richer type interfaces and host-language bindings. The existing
+[word entries](../references/compiler/src/closure-conversion/word-contracts-and-protocols.md#word-entry-contracts),
 [runtime model](../references/compiler/src/native-runtime.md),
-and [native activation rules](../references/compiler/src/native-emission.md#activation-lifetime) supply its runtime foundation.
+and [native activation rules](../references/compiler/src/native-emission.md#activation-lifetime)
+supply its runtime foundation.
 Compiled libraries also support a separate
 [scalar C entry profile](../references/language/src/foreign-interfaces.md#compiled-libraries-and-c-exports).
 Persistent host instances, external root handles, and the binding APIs below require implementation.
@@ -50,7 +51,8 @@ A worker compiled at `forall (A : VType) . A -> Ret A` can forward its argument
 without learning its size, layout, or concrete type.
 That works because the argument is one ordinary value word and type arguments erase.
 Giving each instantiation a different number of argument slots would need a different calling contract.
-The current [representation policies](../references/compiler/src/zasm.md#policy-selection) do not select such a contract.
+The current [representation policies](../references/compiler/src/zasm.md#policy-selection) do not
+select such a contract.
 
 The proposal has two access levels to this same model:
 
@@ -99,8 +101,8 @@ The low bit distinguishes an immediate from a pointer-shaped word, not `Int` fro
 The [word model](../../lang/machine/src/word.rs), [native scalar helpers](../../runtime/stub.rs),
 and [literal emission](../../lang/amd64/src/emit.rs) implement these encodings today.
 Scalar boxes are opaque to tracing; their bits must never be scanned as managed references.
-The [scalar value boundary](../references/compiler/src/native-runtime.md#scalar-value-boundaries) owns exact-width boxing
-and local raw transport.
+The [scalar value boundary](../references/compiler/src/native-runtime.md#scalar-value-boundaries) owns
+exact-width boxing and local raw transport.
 
 ### Products, sums, and closures
 
@@ -159,7 +161,8 @@ An opaque payload may occupy one word even when its hidden implementation is a l
 These private source-library representations need not become stable public layouts just
 because their present implementations are small products.
 The source interface owns which representation facts it discloses.
-The [memory reference](../references/language/src/primitives-and-capabilities/manual-memory.md#manual-memory) owns their current meanings and obligations.
+The [memory reference](../references/library/src/memory/manual-memory.md#manual-memory) owns their current meanings
+and obligations.
 Keeping a handle to a `Ptr` or `Slice` does not keep manually managed storage alive;
 keeping an instance alive does protect that instance's retained immutable byte allocations.
 Initialization states are type parameters, not flags stored beside every pointer.
@@ -236,11 +239,10 @@ A binding can offer method-like syntax, but a nonreturning observation does not 
 to hand control back to the host immediately.
 It prepares more of the source stack until a complete invocation is supplied.
 
-Current codata observation tags use lexicographic order of complete destructor names;
-the interface publishes this map and its branch classifiers.
-For the example, `.done` has index 0 and `.item` index 1.
-The [protocol reference](../references/compiler/src/closure-conversion/word-contracts-and-protocols.md#partial-source-protocols) owns that ordering.
-Generated bindings should use the published map instead of duplicating an ordering algorithm.
+Current codata observation tags use lexicographic order of complete destructor names; the interface publishes this map
+and its branch classifiers. For the example, `.done` has index 0 and `.item` index 1. The
+[protocol reference](../references/compiler/src/closure-conversion/word-contracts-and-protocols.md#partial-source-protocols)
+owns that ordering. Generated bindings should use the published map instead of duplicating an ordering algorithm.
 
 Computation polymorphism makes this useful for effectful APIs.
 For `forall (R : CType) . A -> Thk (B -> R) -> R`, the caller provides an `A`,
@@ -256,12 +258,12 @@ It records exported classifiers, product structure and named routes, data and co
 abstract and manifest entries, type binders, and supported type-level definitions.
 This is interface metadata, not an extra field on every runtime value.
 
-The current SPS [partial protocols](../references/compiler/src/closure-conversion/word-contracts-and-protocols.md#partial-source-protocols) are insufficient for this job.
-They intentionally admit unknowns, lose some existential and higher-kinded evidence,
-and use an agreement relation that is not type equality.
-Export preparation must retain a complete interface from the checked source arena.
-Unsupported interface forms must reject binding generation explicitly;
-a partial descriptor containing `?` cannot certify an external call.
+The current SPS
+[partial protocols](../references/compiler/src/closure-conversion/word-contracts-and-protocols.md#partial-source-protocols)
+are insufficient for this job. They intentionally admit unknowns, lose some existential and higher-kinded evidence, and
+use an agreement relation that is not type equality. Export preparation must retain a complete interface from the
+checked source arena. Unsupported interface forms must reject binding generation explicitly; a partial descriptor
+containing `?` cannot certify an external call.
 
 ### Polymorphism
 
@@ -366,8 +368,8 @@ param val (/Thk; /Ret; /Int; /numeric) : @(import("../../lib/std/builtin.zy")) i
 ```
 
 The implemented `library(zydeco)` role publishes the complete prepared runtime value.
-The [native unit rules](../references/language/src/foreign-interfaces.md#native-zydeco-units) describe its factory preparation
-and current public type subset.
+The [native unit rules](../references/language/src/foreign-interfaces.md#native-zydeco-units)
+describe its factory preparation and current public type subset.
 A future selection form such as `library(zydeco, export(field(make_adder)))` could narrow the public interface;
 its logical export name would come from that selection, while linker symbol names remain generated details.
 Public type definitions would additionally contribute manifest entries once richer interfaces are supported.
@@ -469,8 +471,8 @@ These are driver operations with associated protocol checks, not source construc
 Returning a transfer description from the host function is an ordinary platform return;
 the driver then performs the indicated Zydeco transfer without accumulating host call frames for a tail chain.
 The existing [HostTransfer](../../lang/machine/src/native.rs)
-and [Wasm host transfers](../references/compiler/src/webassembly.md#module-and-host-abi) are bounded examples of this pattern,
-not implementations of the general interface proposed here.
+and [Wasm host transfers](../references/compiler/src/webassembly.md#module-and-host-abi) are bounded examples
+of this pattern, not implementations of the general interface proposed here.
 
 For a returning `Int -> Ret Int` worker, the host reads one integer and a return port,
 computes the result, and returns `Deliver(port, encoded_result)`.
@@ -504,15 +506,15 @@ A general returning `call` operation does not admit it.
 
 ### Preserve the interface before erasure
 
-The [implemented unit preparation](../references/compiler/src/native-emission.md#native-unit-artifacts) retains a complete closed
-structural classifier before erasure and publishes a versioned initializer manifest.
+The [implemented unit preparation](../references/compiler/src/native-emission.md#native-unit-artifacts)
+retains a complete closed structural classifier before erasure and publishes a versioned initializer manifest.
 Extend that schema with scoped binders, nominal definitions, and public witness relationships.
 Export selection, if introduced, must preserve shared captures and apply the same static-readiness checks.
 Preparation must not execute exported computations to discover their interface.
 
 The runtime binding interface additionally registers module exports in its external-root table.
-Artifact selection stays explicit
-under the existing [compilation-unit contract](../references/compiler/src/native-emission.md#compilation-unit-preparation-and-artifacts).
+Artifact selection stays explicit under the existing
+[compilation-unit contract](../references/compiler/src/native-emission.md#compilation-unit-preparation-and-artifacts).
 Modules loaded into one instance must agree on the runtime model, value representation, and resource provider.
 Values from unrelated instances cannot be passed as words between them; explicit copying is possible
 for transferable data, while closures and abstract resources remain with their owner.
@@ -557,8 +559,9 @@ and observable source semantics remain shared.
 ## 9. Compilation-unit extensions
 
 Separately compiled Zydeco code needs the native agreement in section 1, but does not need a foreign-language SDK.
-The implemented [native units](../references/language/src/foreign-interfaces.md#native-zydeco-units) supply independently compiled objects,
-typed initializer imports, exact compatibility checks, and source-free transitive linking.
+The implemented [native units](../references/language/src/foreign-interfaces.md#native-zydeco-units) supply
+independently compiled objects, typed initializer imports, exact compatibility checks,
+and source-free transitive linking.
 The [workflow](../../cli/README.md#native-zydeco-units) demonstrates this minimum.
 The remaining questions concern richer public types and optional shared dependency initialization.
 
@@ -767,7 +770,8 @@ Staging the generator does not turn those forms into C signatures or change thei
 Direct compiler integrations can use the checked native profile where they implement its full obligations.
 
 The richer compilation-unit profile has its own acceptance gate before bindings expose its additional types.
-Current structural-unit coverage belongs to the [implemented contract](../references/compiler/src/native-emission.md#native-unit-artifacts):
+Current structural-unit coverage belongs
+to the [implemented contract](../references/compiler/src/native-emission.md#native-unit-artifacts):
 
 | Accepted case | Rejected counterpart | Required evidence |
 | --- | --- | --- |

@@ -6,15 +6,17 @@ A **call-by-value block**, `@[cbv] e`, reads `e` as a call-by-value expression
 and elaborates it into the core, following Levy's call-by-value translation.
 Evaluation order is written into the result rather than chosen by a separate strategy,
 which is what the core's separation of values from computations buys.
-That order is observed once a call-by-value block sits inside a monadic block that supplies effects, as set out below.
-In the examples, `Int`, `Unit` and `VType` stand for the built-in types, which a block binds for itself,
-as set out below.
+That order is observed once a call-by-value block sits inside a monadic block that supplies effects,
+as set out under [Composing with Monadic Blocks](#composing-with-monadic-blocks).
+In the examples below, `Int`, `Unit`, and `VType` stand for the built-in types, which a block binds for itself.
 
 A block's classifier is `Ret A'`, where `A'` translates the source type `A`.
 That holds for a value body too: `@[cbv] (fn (x : Int) => x)` has type `Ret (Thk (Int -> Ret Int))`,
 not `Thk (Int -> Ret Int)`.
 A source value does have its own translation, but selecting between the two by whether a body happens
 to be a value would make a block's type depend on a local edit inside it.
+
+### Source Kinds and Types
 
 Types translate by sending each source arrow to a suspended computation arrow that returns.
 A product passes through unchanged, because the core's product is already a value type.
@@ -24,15 +26,15 @@ so a former that is already positive passes through and a **negative** one is wr
 That much decides the outside. What decides the inside is the core's own kinding:
 each position the core former requires to be a **computation** type receives `Ret A'`,
 since a source term there translates at that type, and each position it requires to be a value type receives `A'`.
-So an arrow's codomain, a quantifier's body and a codata field carry a returner, and an arrow's **domain** does not.
+So an arrow's codomain, a quantifier's body, and a codata field carry a returner, and an arrow's **domain** does not.
 Taking only the first half gives `Thk (A' -> B')` for an arrow, which is ill-kinded,
 because an arrow's codomain must be a computation type.
 
-A block writes a source type with an arrow, a product, a quantifier, an existential, abstract or manifest,
+A block writes a source type with an arrow, a product, a quantifier, an existential (abstract or manifest),
 a type operator, type application, a `data` or `codata` type, a field type, a named type,
 a type projection, an ascription, or a **name**; those are the only forms it translates.
 A name is one the block bound, or an intrinsic for a primitive source type, such as `@(intrinsic(int))`
-or `@(intrinsic(unit))`, which translates to itself; a block is closed over types, as set out below.
+or `@(intrinsic(unit))`, which translates to itself; a block is closed over types.
 A source arrow's sides and a product's components are value-type positions, so a type operator in one is a kind error.
 
 A **source kind** is `VType`, an arrow between source kinds, or a named kind over one;
@@ -40,7 +42,7 @@ the kind translation is the identity.
 `CType` is not one, so a quantifier over a computation kind is refused: no source type is a computation.
 A block writes `VType` with its intrinsic, `@(intrinsic(vtype))`, or by a kind name it bound,
 since the host's `VType` is a name bound outside the block.
-A type binding's declared kind, a type binder's annotation and an ascription's classifier are all read
+A type binding's declared kind, a type binder's annotation, and an ascription's classifier are all read
 by one kind judgment, so each place a block writes a kind admits the same kinds.
 
 | Source type | Core |
@@ -61,6 +63,21 @@ by one kind judgment, so each place a block writes a kind admits the same kinds.
 | `(A : K)` | `A'`, with `K` checked against its kind |
 | a name the block bound | what the name stands for |
 | an intrinsic for a primitive `P` or `unit` | `P`, or `Unit` |
+
+Each form a source type is written with is translated compositionally:
+an ascription checks its declared kind against the translation, and `F A` translates to `F' A'`,
+so an operator and its argument are both source types rather than host ones.
+What a name stands for needs no test of its own.
+A type binding's name stands for its translated bindee, a declaration's name for its seal, a type variable for itself,
+and an intrinsic for its primitive, so every type a block writes is the translation of a source type by construction.
+A shift is refused where it would be written: `Thk (Int -> Ret Int)` names `Thk` and `Ret`,
+which the block did not bind, and written with intrinsics it is refused because they name no source primitive.
+
+Which *expressions* a classifier may be written from is decided separately.
+A classifier given by an expression outside the forms above, such as a `@[typeof]` query,
+is rejected rather than resolved, because resolving one would reach past the closure restriction.
+
+### Source Values and Terms
 
 Terms translate by producing the source value, so an application evaluates both operands first,
 the function before the argument, and a binding evaluates its bindee before its body.
@@ -104,18 +121,20 @@ A value has its own translation:
 | `let p = e1 that e2` | the `let` row above; name resolution lifts the binding and leaves a residual |
 | `param p : A that e` | `ret { fn (p : A') => e' }` |
 
-**Four source forms have both a value row and a term row** — a tuple, a named field, a constructor and a package.
+**Four source forms have both a value row and a term row** — a tuple, a named field, a constructor, and a package.
 Which applies is decided by whether the form is a source *value*, which holds for a variable, a literal,
 `()`, a hole `_`, either abstraction, and for the other four exactly when their components or payloads are.
 A `comatch` has a value row but is not counted as a source value here, so a tuple containing one is sequenced.
 The two rows agree up to `do x <- ret v; e` being `e` with `v` substituted for `x`,
 so the choice shows in the elaborated term rather than in what it computes.
 
-A block is **closed**, over terms, types and kinds alike: a term that refers
+### Closure Boundary and Host Interoperability
+
+A block is **closed**, over terms, types, and kinds alike: a term that refers
 to a variable bound outside it is rejected, so is a type or kind name the block did not bind,
 and so is an import boundary anywhere within it, including in a parameter's classifier.
 What a block uses from outside arrives as a parameter it abstracts over: an operation or an effect as a value,
-and a type by type abstraction, which the host instantiates, as set out below.
+and a type by type abstraction, which the host instantiates.
 The built-in types are no exception, since the host's `Int` and `VType` are names bound outside the block.
 A block writes a primitive with its intrinsic, usually behind a binding of its own:
 
@@ -129,86 +148,8 @@ do answer <- @[cbv] (
 ```
 
 An intrinsic names nothing outside the block, but it is admitted only for a primitive source type, `unit`,
-`vtype` or `ctype`: `@(intrinsic(thk))` is a shift, which no source type translates to.
-The other examples in this section leave these bindings out.
-
-The smallest blocks use primitive source types and `Unit`, arrows and products over them, and source terms built
-from variables, literals, `()`, abstraction, application, tuples, and `let`; the paragraphs below add the rest.
-A binder may be a variable, a wildcard, `()`, a named field `(#f = p)` or `(= f)`,
-or a product of those, since the core's abstraction rule requires an irrefutable binder.
-A `let`'s or a parameter's binder may also be a constructor tag over one, as in `let +Box x = b in M`,
-when the tag cannot fail: its declaration has no other constructor.
-The host's own check decides that, so a tag that can fail is refused with `tyck.refutable-binding`,
-as it is outside a block.
-Any part of a binder may carry an annotation, `(p : A)`, as in `let (f : Int -> Int, n) = M in N`.
-`A` is a source type, which ordinary pattern checking cannot read, so the block translates it
-before the binder is checked, and it is then compared with the type its position expects.
-Since that happens before the binder binds anything,
-an annotation may not mention a variable the same binder introduces, as `X` in `(X, (x : X))`.
-A parameter needs its type: from an annotation around it, from an expected type as below,
-or from the annotations inside it when they give the type of every part,
-so `fn ((x : Int), (y : Int)) => x` takes `Int * Int`.
-A part with no annotation would need inference, which a block does not do.
-A function type's binder may name its parameter, but no source type mentions a term: `A -> B`, `pi (_ : A) . B`
-and `pi (x : A) . B` denote one type, and a type that mentions `x`, as `pi (x : A) . x` would, is refused by sort.
-So a function may be bound with the host's header, `let f (x : A) : B = e`,
-whose desugared signature names the parameter.
-
-Consecutive parameters are one function.
-`fn (x : A) (y : B) => e` takes both arguments in one call, at `pi (_ : A) (_ : B) . C`,
-while `fn (x : A) => fn (y : B) => e` takes one and returns a function, at `A -> B -> C`, and the two types differ.
-A call passes all of a telescope's arguments together: `f a b` is one call, and `(f a) b` applies what `f a` returns,
-which for a function of two parameters is refused as too few arguments.
-Likewise, a function checked against an expected type groups its parameters as the type does:
-the grouped function at `A -> B -> C` is refused for taking more parameters at once than its type,
-and the nested one at `pi (_ : A) (_ : B) . C` for taking fewer.
-Every argument is evaluated, left to right, before the body runs,
-whereas a curried function runs what lies between its parameters as soon as the first arrives.
-The grouped form is the shape a call-by-push-value library has, so such a function crosses the block's boundary
-in either direction without an adapter.
-
-An authored classifier is **pushed inward** rather than compared with what the body produced.
-That is what a source ascription is for: `(5 : Int64)` has to reach the literal,
-because a literal's representation is resolved when it is checked and cannot be corrected afterwards.
-The same expectation supplies an abstraction's domain, so `((fn x => x) : Int -> Int)` needs no binder annotation,
-while `fn x => x` alone still does — there is nothing to take the domain from.
-A type binder's kind is supplied the same way: an expected quantifier gives a type abstraction its kind,
-and a kind known first — a binding's declared kind, a quantifier's binder at an instantiation,
-an existential's binder at a pack, a manifest existential's binder at its definition, an operator's domain —
-gives a type operator its own, so `let F : VType -> VType = fn X => X * X` is read as the host reads it.
-An expectation that no clause could use is checked against the whole term instead,
-so `((fn (x : Int) => x) : Int)` is a mismatch rather than an unchecked abstraction.
-An application's expectation describes its *result*: recovering a function's type from its argument
-and its result is inference, not analysis, so `(((fn x => x) 5) : Int)` is refused.
-
-A term hole `_` is a typed hole, as in the host: checking reports the type it stands at, and running refuses it.
-That type is the translation of the source type expected, so a hole
-where `Int -> Int` is expected reports `Thk (Int -> Ret Int)`; a hole needs an expectation,
-since with none its report would say nothing.
-`@[doc]`, `@[debug]` and `@[format]` are transparent inside a block,
-and `@[debug]` prints the core term the part it annotates became, rather than the whole block's;
-every other annotation is refused.
-
-**Analysis stops at the block's boundary.** Every expectation comes from inside,
-and the host's own expectation is reconciled with what the block synthesized:
-`(@[cbv] (fn x => x) : Ret (Thk (Int -> Ret Int)))` does not reach the binder,
-although the same ascription written inside the block does.
-A block synthesizes independently and the host compares afterwards, which is one direction in types
-as the translation is one direction in terms, and it is what makes a block's classifier a consequence
-of its body rather than of its position.
-
-Each form a source type is written with is translated compositionally:
-an ascription checks its declared kind against the translation, and `F A` translates to `F' A'`,
-so an operator and its argument are both source types rather than host ones.
-What a name stands for needs no test of its own.
-A type binding's name stands for its translated bindee, a declaration's name for its seal, a type variable for itself,
-and an intrinsic for its primitive, so every type a block writes is the translation of a source type by construction.
-A shift is refused where it would be written: `Thk (Int -> Ret Int)` names `Thk` and `Ret`,
-which the block did not bind, and written with intrinsics it is refused because they name no source primitive.
-
-Which *expressions* a classifier may be written from is decided separately.
-A classifier given by an expression outside the forms above, such as a `@[typeof]` query,
-is rejected rather than resolved, because resolving one would reach past the closure restriction.
+`vtype`, or `ctype`: `@(intrinsic(thk))` is a shift, which no source type translates to.
+The other examples in this chapter leave these bindings out.
 
 An outside type reaches a block the way an outside value does: the block abstracts
 over it, and the host instantiates it.
@@ -252,9 +193,78 @@ The block's meaning depends on no host declaration.
 The cost is the host's: the block above is a few lines, and the instantiation and adapted operations are more.
 No sugar for instantiating a block and adapting its operations is provided.
 
+### Binders, Telescopes, and Bidirectional Analysis
+
+The smallest blocks use primitive source types and `Unit`, arrows and products over them,
+and source terms built from variables, literals, `()`, abstraction, application, tuples, and `let`.
+A binder may be a variable, a wildcard, `()`, a named field `(#f = p)` or `(= f)`,
+or a product of those, since the core's abstraction rule requires an irrefutable binder.
+A `let`'s or a parameter's binder may also be a constructor tag over one, as in `let +Box x = b in M`,
+when the tag cannot fail: its declaration has no other constructor.
+The host's own check decides that, so a tag that can fail is refused with `tyck.refutable-binding`,
+as it is outside a block.
+
+Any part of a binder may carry an annotation, `(p : A)`, as in `let (f : Int -> Int, n) = M in N`.
+`A` is a source type, which ordinary pattern checking cannot read, so the block translates it
+before the binder is checked, and it is then compared with the type its position expects.
+Since that happens before the binder binds anything,
+an annotation may not mention a variable the same binder introduces, as `X` in `(X, (x : X))`.
+A parameter needs its type: from an annotation around it, from an expected type, or from the annotations inside it
+when they give the type of every part, so `fn ((x : Int), (y : Int)) => x` takes `Int * Int`.
+A part with no annotation would need inference, which a block does not do.
+A function type's binder may name its parameter, but no source type mentions a term: `A -> B`, `pi (_ : A) . B`,
+and `pi (x : A) . B` denote one type, and a type that mentions `x`, as `pi (x : A) . x` would, is refused by sort.
+So a function may be bound with the host's header, `let f (x : A) : B = e`,
+whose desugared signature names the parameter.
+
+Consecutive parameters are one function.
+`fn (x : A) (y : B) => e` takes both arguments in one call, at `pi (_ : A) (_ : B) . C`,
+while `fn (x : A) => fn (y : B) => e` takes one and returns a function, at `A -> B -> C`, and the two types differ.
+A call passes all of a telescope's arguments together: `f a b` is one call, and `(f a) b` applies what `f a` returns,
+which for a function of two parameters is refused as too few arguments.
+Likewise, a function checked against an expected type groups its parameters as the type does:
+the grouped function at `A -> B -> C` is refused for taking more parameters at once than its type,
+and the nested one at `pi (_ : A) (_ : B) . C` for taking fewer.
+Every argument is evaluated, left to right, before the body runs,
+whereas a curried function runs what lies between its parameters as soon as the first arrives.
+The grouped form is the shape a call-by-push-value library has, so such a function crosses the block's boundary
+in either direction without an adapter.
+
+An authored classifier is **pushed inward** rather than compared with what the body produced.
+That is what a source ascription is for: `(5 : Int64)` has to reach the literal,
+because a literal's representation is resolved when it is checked and cannot be corrected afterwards.
+The same expectation supplies an abstraction's domain, so `((fn x => x) : Int -> Int)` needs no binder annotation,
+while `fn x => x` alone still does — there is nothing to take the domain from.
+A type binder's kind is supplied the same way: an expected quantifier gives a type abstraction its kind,
+and a kind known first — a binding's declared kind, a quantifier's binder at an instantiation,
+an existential's binder at a pack, a manifest existential's binder at its definition, an operator's domain —
+gives a type operator its own, so `let F : VType -> VType = fn X => X * X` is read as the host reads it.
+An expectation that no clause could use is checked against the whole term instead,
+so `((fn (x : Int) => x) : Int)` is a mismatch rather than an unchecked abstraction.
+An application's expectation describes its *result*: recovering a function's type from its argument
+and its result is inference, not analysis, so `(((fn x => x) 5) : Int)` is refused.
+
+A term hole `_` is a typed hole, as in the host: checking reports the type it stands at, and running refuses it.
+That type is the translation of the source type expected, so a hole
+where `Int -> Int` is expected reports `Thk (Int -> Ret Int)`; a hole needs an expectation,
+since with none its report would say nothing.
+`@[doc]`, `@[debug]`, and `@[format]` are transparent inside a block,
+and `@[debug]` prints the core term the part it annotates became, rather than the whole block's;
+every other annotation is refused.
+
+**Analysis stops at the block's boundary.** Every expectation comes from inside,
+and the host's own expectation is reconciled with what the block synthesized:
+`(@[cbv] (fn x => x) : Ret (Thk (Int -> Ret Int)))` does not reach the binder,
+although the same ascription written inside the block does.
+A block synthesizes independently and the host compares afterwards, which is one direction in types
+as the translation is one direction in terms, and it is what makes a block's classifier a consequence
+of its body rather than of its position.
+
+### Block Scoping, Type Aliases, and Kind Aliases
+
 A call-by-value block is also a block in the host's sense,
-so a [`that` binding](../bindings-and-scope.md) written inside one contributes to it
-and not to the block around it, and the names it introduces end at its boundary.
+so a [`that` binding](../bindings-and-scope.md#mobile-bindings-and-blocks) written inside one contributes
+to it and not to the block around it, and the names it introduces end at its boundary.
 That is what lets a call-by-value block be read as one closed source term.
 Inside it the host's rule still holds: a `that` binding belongs to the nearest enclosing block,
 the call-by-value block itself unless a `begin … end` is nearer, and name resolution lifts it there.
@@ -273,7 +283,7 @@ A type binding emits nothing — the name is inlined, so the block's computation
 This is also how a block names a source arrow in its own spelling.
 `Int -> Int` is ill-kinded in the host, so no host binding can stand for it as written,
 while `let Fn : VType = Int -> Int` makes `Fn` denote `Thk (Int -> Ret Int)`.
-A classifier may then use `Fn`; `Thk` written by hand stays refused, as above.
+A classifier may then use `Fn`; `Thk` written by hand stays refused.
 
 A block names a **kind** as the host does, `let K = VType -> VType`,
 and binds `VType` itself the same way, `let VType = @(intrinsic(vtype))`.
@@ -281,42 +291,45 @@ A kind has no classifier to declare, and none is needed: no kind is a source ter
 when it is an intrinsic for `VType` or `CType`, a kind arrow, a named kind, or a kind name the block bound.
 A kind binding emits nothing either.
 
+### Data, Codata, and Recursion
+
 A block may use a **data type**, and construct and match on its values.
 It may write one in place and bind it with a kind, `let Opt : VType = data | +None : Unit | +Some : Int end`,
 and its arms are then source types, translated like any other.
 The result is transparent, and the host compares transparent data by structure,
 so a host value of the same declaration is a value of the block's type.
 A `let` is not recursive, so a declaration that mentions itself is an unbound name;
-a recursive data type is a sealed declaration, `def`, as below.
+a recursive data type is a sealed declaration, `def`, as described
+in [Sealed Declarations and Mutual Recursion](#sealed-declarations-and-mutual-recursion).
 A constructor cannot synthesize — nothing about `+On` says which declaration it belongs to — so it takes its type
 from the expectation, and an application pushes its domain into its argument for exactly that reason.
 A match evaluates its scrutinee before examining it, which is what every positive elimination does
 in the core: `do s <- e'; match s …`.
 An arm's binder is a constructor tag over a plain binder, which is the one refutable shape the source language has,
-or a plain binder alone, which catches what the earlier arms did not; exhaustiveness and the rest of §7 apply unchanged.
+or a plain binder alone, which catches what the earlier arms did not; exhaustiveness and the other rules
+in [Patterns and Coverage](../patterns-and-coverage.md) apply unchanged.
 
 A block may also use a **codata type**, build one with `comatch`, and observe it.
 It may write one in place, `let P : VType = codata | .fst : Int | .snd : Int end`, or declare a sealed and possibly
-recursive one with `def`, as below. A codata type is negative, so its translation keeps the shift outside
+recursive one with `def`. A codata type is negative, so its translation keeps the shift outside
 and gives every field a returner: `codata {.d : A}` becomes `Thk (codata {.d : Ret A'})`.
 A source codata type is therefore a value type, and an ascription `: CType` written around one is refused.
 Two consequences follow, and both are visible to an author.
 
-What a declaration may seal is the **codata type**, not the thunk of it, because the translation
-of a codata value is a thunk and a thunk cannot be given a seal's identity.
+First, what a declaration may seal is the **codata type**, not the thunk of it,
+because the translation of a codata value is a thunk and a thunk cannot be given a seal's identity.
 Where `data` works behind `def` — a constructor's own type *is* the seal —
-a codata needs the seal one layer in, and a block's own `def` puts it there, as below.
+a codata needs the seal one layer in, and a block's own `def` puts it there.
 One observation per clause is admitted, and an interleaved copattern such as `.at n` is refused rather
 than un-interleaved.
 
-The other consequence is semantic.
-A field is a suspended computation, so it runs when observed and runs again on the next observation:
+Second, a field is a suspended computation, so it runs when observed and runs again on the next observation:
 admitting codata puts a **by-name** corner inside a call-by-value source language.
 A field that diverges and is never observed never runs, which is what makes the choice observable without effects.
 
 A block may define a **recursive function**, with the host's existing `let fix` header:
 `let fix f (x : A) : B = M in N`, where `A` and `B` are source types and a recursive call is written `f x`.
-The `Thk`, the `Ret` and the force are the translation's, and no coercion is needed anywhere:
+The `Thk`, the `Ret`, and the force are the translation's, and no coercion is needed anywhere:
 `A -> B` already translates to a thunk type and the core's `fix` binds a thunk,
 so the source's recursive name maps straight onto the `fix` binder.
 The signature is settled before the body is read, and the body is checked against the declared return type rather
@@ -333,6 +346,11 @@ so it is read as one.
 Its signature is checked against its parameter, so the spelling cannot declare a type it does not have;
 distinguishing the two entries would mean carrying the binding's flavor past desugaring, which erases it.
 
+Functions that call one another are not a group of `let fix` bindings, which would be a value cycle,
+but a single `let fix` returning a record of them, as the host takes a fixed point of codata.
+A call between them goes through the record, and the header's parameter is the one every `let fix` has:
+`let fix parity (u : Unit) : Parity = comatch | .even => fn (n : Nat) => … (parity ()).odd m … end`.
+
 Data and recursion together are what let a block compute: a declaration
 with a decreasing structure makes a terminating recursive function writable with nothing else.
 Arithmetic, like any host operation, is not reachable from inside, so a block takes it as a parameter:
@@ -340,41 +358,12 @@ Arithmetic, like any host operation, is not reachable from inside, so a block ta
 to `int/add` directly, since the parameter's type translates to `Thk (Int -> Int -> Ret Int)`.
 A curried `add : Int -> Int -> Int` would instead need `int/add` curried to `Thk (Int -> Ret (Thk (Int -> Ret Int)))`.
 
-Effects arrive the same way, as parameters, and a monadic block is what supplies them.
-A returner is observably pure by the core's [convention](../computations-and-control.md#ret-and-explicit-cps),
-so a call-by-value block alone has no effect but divergence, which cannot tell the function-before-argument
-and left-to-right orders of the term rows from any other.
-Nested in [`@[monadic]`](relative-monads.md#relative-monads), a call-by-value block is translated twice:
-the monadic block reinterprets every `Ret` and `do` the call-by-value block emitted through its carrier,
-so an arrow's `Thk (A' -> Ret B')` becomes a thunk of a function returning through the carrier,
-with no row of the call-by-value translation changed.
-The call-by-value block abstracts over the operations it uses, and the monadic block supplies them:
-
-```zydeco
-@[monadic] begin
-  fn (put : Thk (Int -> Ret Unit)) =>
-    do h <- @[cbv] (fn (a : Unit -> Int) => fn (b : Unit -> Int) => (a (), b ()));
-    do h <- ! h { fn (u : Unit) => do _ <- ! put 1; ret 0 };
-    do _ <- ! h { fn (u : Unit) => do _ <- ! put 2; ret 0 };
-    ret 0
-end
-```
-
-Under `State Int` this ends in state `2`, because the tuple runs `a` before `b`;
-with the tuple written `(b (), a ())` it ends in `1`, and an application likewise runs its function before its argument.
-Quantifiers, packages, type operators, records, codata, transparent data and `let fix` compose the same way.
-So does a sealed type the call-by-value block declares, which the monadic block's
-[applicative nominal translation](algebra-translation.md#applicative-nominal-translation) carries along,
-so a call-by-value block nested in a monadic block can recurse over a data type it declares.
-[`lib/tests/cbv/effects.zy`](../../../../../lib/tests/cbv/effects.zy) runs each of these with the carrier supplied,
-and each order beside its counterfactual, the same two calls written the other way round;
-[`lib/tests/cbv/effects-on-data.zy`](../../../../../lib/tests/cbv/effects-on-data.zy) does the same
-for recursive declarations.
+### Sealed Declarations and Mutual Recursion
 
 A block declares a **sealed** type with the host's `def X : K = D`, for `D` a `data` or `codata` declaration,
 possibly under type parameters: `def List (X : VType) : VType = data | +Nil : Unit | +Cons : X * List X end`.
 A seal is nominal, so the only way into or out of one is the `data`
-or `codata` shape [its typing exposes](../classification-and-inference.md),
+or `codata` shape [its typing exposes](../classification-and-inference.md#nominal-seals),
 and a `def` whose body declares neither is refused.
 Two sealed declarations of one shape are two types, where two transparent `let` declarations are one.
 
@@ -411,8 +400,6 @@ def Forest : VType = data | +Nil : Unit | +Cons : Tree * Forest end that
 Binding a name needs only its kind and whether it declares `data` or `codata`,
 never what the declaration says, which is why a whole group can be bound first.
 Each member is its own seal, so two members of one shape are two types, and none may appear in the type of the tail.
-[`lib/tests/cbv/interpreter.zy`](../../../../../lib/tests/cbv/interpreter.zy) runs an interpreter
-whose environment holds values and whose closures hold environments.
 
 The host admits a binding cycle only among seals with known kinds,
 and for these cases a block gives the host's diagnostics, in the host's order:
@@ -424,15 +411,12 @@ for every member before applying what it alone requires of a member, such as a b
 The host checks each member's binder before it reaches the next member, so a group at fault
 in both ways can report a different error first in a block than in the host.
 
-Functions that call one another are not a group of `let fix` bindings, which would be a value cycle,
-but a single `let fix` returning a record of them, as the host takes a fixed point of codata.
-A call between them goes through the record, and the header's parameter is the one every `let fix` has:
-`let fix parity (u : Unit) : Parity = comatch | .even => fn (n : Nat) => … (parity ()).odd m … end`.
-
 A declaration's scope is the rest of its block, so the block's type may not mention it,
 as an unpack's witness may not escape; the refusal is `tyck.escaping-declaration`.
 An abstract package exports it, `((Opt, +Some 7) : exists (X : VType) . X)`, and a manifest one,
 which would disclose it, is refused.
+
+### Existentials, Records, and Named Fields
 
 A block may use an **existential package**. The abstract form `exists (X : K) . A`
 and the manifest form `exists (X as T : K) . A` may each be written where they are used or bound to a name,
@@ -484,6 +468,35 @@ A record type is written in place as a product of field types, `(#fst :: Int, #s
 and is structural: a host record and the same type written in a block are one type.
 A pack's witness is written in place too, so `(((#Counter = Int), #zero = 0) : Pkg)` needs no outside name
 for `(#Counter = Int)`.
+
+### Composing with Monadic Blocks
+
+Effects arrive the same way as host operations, as parameters, and a monadic block is what supplies them.
+A returner is observably pure by the core's [convention](../computations-and-control.md#ret-and-explicit-cps),
+so a call-by-value block alone has no effect but divergence, which cannot tell the function-before-argument
+and left-to-right orders of the term rows from any other.
+Nested in [`@[monadic]`](monadic-blocks.md), a call-by-value block is translated twice:
+the monadic block reinterprets every `Ret` and `do` the call-by-value block emitted through its carrier,
+so an arrow's `Thk (A' -> Ret B')` becomes a thunk of a function returning through the carrier,
+with no row of the call-by-value translation changed.
+The call-by-value block abstracts over the operations it uses, and the monadic block supplies them:
+
+```zydeco
+@[monadic] begin
+  fn (put : Thk (Int -> Ret Unit)) =>
+    do h <- @[cbv] (fn (a : Unit -> Int) => fn (b : Unit -> Int) => (a (), b ()));
+    do h <- ! h { fn (u : Unit) => do _ <- ! put 1; ret 0 };
+    do _ <- ! h { fn (u : Unit) => do _ <- ! put 2; ret 0 };
+    ret 0
+end
+```
+
+Under `State Int` this ends in state `2`, because the tuple runs `a` before `b`;
+with the tuple written `(b (), a ())` it ends in `1`, and an application likewise runs its function before its argument.
+Quantifiers, packages, type operators, records, codata, transparent data, and `let fix` compose the same way.
+So does a sealed type the call-by-value block declares, which the monadic block's
+[applicative nominal translation](monadic-blocks.md#applicative-nominal-translation) carries along,
+so a call-by-value block nested in a monadic block can recurse over a data type it declares.
 
 ## Call-by-Name Blocks
 

@@ -4,8 +4,9 @@
 
 A package is a term selected for distribution and reuse.
 It may be supplied as source or, when its external contract supports independent emission, as compiled artifacts.
-This distribution role is independent of the term's language-level structure:
-a source package can supply a type term, a packed value (§9), or a function that constructs one.
+This distribution role is independent of the term's language-level structure: a source package can supply a type term,
+a [packed value](../polymorphism-and-packed-values.md#existentials-and-packed-values),
+or a function that constructs one.
 A package-definition meta annotation selects a term and records its role:
 
 ```zydeco
@@ -48,8 +49,8 @@ Relationships associate packages with tests and other subjects:
 
 Relationship targets follow the shared [package-path rules](#paths-and-package-context).
 Relationship-driven test selection remains an [open idea](../../../../ideas/README.md#project-context-inspection).
-The [execution contract](../execution-profiles.md#selecting-an-execution-backend) governs backend preparation
-and test results.
+The [CLI execution workflow](../../../../../cli/README.md#run-and-test-programs) governs backend selection
+and test execution, while [Execution Profiles](../execution-profiles.md) define backend runtime contracts.
 
 ## Package Hierarchy
 

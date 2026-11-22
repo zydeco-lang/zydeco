@@ -39,25 +39,24 @@ debug build
 
 The split is contractual, and the references assign it explicitly.
 
-- **The session owns revisioned source state.** `CompilerSession` manages source revisions,
-  snapshots, and cached queries; it expands a project's discovery rules,
-  records editor overlays as `SourceInput` fields, resolves packages, and publishes analysis snapshots
-  ([C3](../../../references/compiler/src/sessions-and-queries.md),
+- **The session owns revisioned source state.** `CompilerSession` manages source revisions, snapshots,
+  and cached queries; it expands a project's discovery rules, records editor overlays as `SourceInput` fields,
+  resolves packages, and publishes analysis snapshots ([C3](../../../references/compiler/src/sessions-and-queries.md),
   `docs/references/compiler.md:589-600`).
   It never chooses a backend, writes an artifact, or parses command-line text.
 - **The CLI owns command policy and the boundary outward.** It selects `package.zy` / `workspace.zy` roots,
   parses options into phase-owned plan types, renders diagnostics, lowers an already checked program,
   writes or links artifacts, and executes backends ([cli/README.md](../../../../cli/README.md#run-and-test-programs)).
-  The execution runner consumes checked `ExecutableProgram` snapshots, shares immutable arenas across targets,
-  lowers once for compiled backends, and owns temporary artifacts (`docs/references/compiler.md:651-654`);
-  backend execution policy itself is [L15](../../../references/language/src/execution-profiles.md#selecting-an-execution-backend).
-- **The TUI, Cajun, and the test harness are consumers.** The TUI is the interactive front end
-  for the same session ([C15 §Interactive Engine](../../../references/compiler/src/tooling/interactive-and-docs.md#interactive-engine));
-  Cajun adapts session facts to LSP and discards superseded results
-  ([C15](../../../references/compiler/src/tooling.md),
+  The execution runner consumes checked `ExecutableProgram` snapshots,
+  shares immutable arenas across targets, lowers once for compiled backends,
+  and owns temporary artifacts (`docs/references/compiler.md:651-654`); backend execution policy itself is
+  in [CLI backend selection](../../../../cli/README.md#selecting-an-execution-backend).
+- **The TUI, Cajun, and the test harness are consumers.** The TUI is the interactive front end for the same session
+  ([C15 §Interactive Engine](../../../references/compiler/src/tooling/interactive-and-docs.md#interactive-engine));
+  Cajun adapts session facts to LSP and discards superseded results ([C15](../../../references/compiler/src/tooling.md),
   [editor/README.md](../../../../editor/README.md)).
-  `lang/tests` drives CLI types, not a second compiler. Everything lands
-  in [C15](../../../references/compiler/src/tooling.md)
+  `lang/tests` drives CLI types, not a second compiler.
+  Everything lands in [C15](../../../references/compiler/src/tooling.md)
   and [C16](../../../references/compiler/src/validation-and-extending.md);
   the [rule-ownership map](../../../../docs/references/README.md#rule-ownership) says where a change belongs.
 
@@ -97,8 +96,8 @@ They are local checkout leftovers, not architecture; treat them as noise (see §
 - **Inputs are revisioned, and an overlay is not a disk write.** `set_overlay` stores text beside `disk_text`;
   `refresh_disk` replaces only the disk input while an overlay stays effective;
   `clear_overlay` drops the overlay and re-reads disk (`lang/session/src/source/query.rs:430-476`).
-  Every analysis is paired with the session state it was computed from, so a consumer that mixes revisions is wrong by
-  construction ([C3](../../../references/compiler/src/sessions-and-queries.md)).
+  Every analysis is paired with the session state it was computed from, so a consumer that mixes revisions is wrong
+  by construction ([C3](../../../references/compiler/src/sessions-and-queries.md)).
 - **An analysis is a fact snapshot, not a typed tree.** `ProgramAnalysis` retains keyed indexes; full occurrence payload
   is recovered by re-running the coarse check (`materialize_arena`, `checked_program`, `executable_program`;
   `lang/session/src/source/query.rs:497-552`), whose memo keeps only the latest root (`lru = 1`). Calling these on a
@@ -107,9 +106,8 @@ They are local checkout leftovers, not architecture; treat them as noise (see §
 - **Package identity is structural.** The merge pass interns each file's shape — syntax variants, scalar data,
   attached text, relevant meta annotations, signatures, prelude edge, and resolved import targets —
   and reuses an existing merged source when the key matches (`lang/session/src/source/package/resolution.rs:196-242`,
-  `lang/session/src/source/package/shape.rs:48-109`).
-  Copy identity
-  therefore follows [copy/resolve/merge/analyze](../../../references/language/src/sources/packages.md#copy-resolve-merge-analyze),
+  `lang/session/src/source/package/shape.rs:48-109`). Copy identity therefore follows
+  [copy/resolve/merge/analyze](../../../references/language/src/sources/packages.md#copy-resolve-merge-analyze),
   not file paths.
 - **Diagnostics are complete collections, but their order is not an API.** Parsing retains every issue;
   the session concatenates typed collections per phase;
@@ -119,7 +117,7 @@ They are local checkout leftovers, not architecture; treat them as noise (see §
 - **Execution shares one checked snapshot and one lowering per command.** `ExecutionRunner::prepare` validates first,
   lowers only if a compiled target was requested, and reuses that lowering for all selected backends;
   preparation never executes (`cli/src/execution.rs:110-178`).
-  Backend policy stays in [L15](../../../references/language/src/execution-profiles.md#selecting-an-execution-backend).
+  Backend policy stays in [CLI backend selection](../../../../cli/README.md#selecting-an-execution-backend).
 - **The harness is declaration-driven.** A `.zy` case states stage, prelude, and expectation in leading comments;
   `case_fixtures()` discovers one trial per file without Rust registration (`lang/tests/src/lib.rs:790-808`,
   `lang/tests/tests/cases.rs:12-16`). Whole-program execution moves to the directive runner only when a fixture declares
@@ -188,8 +186,8 @@ The `test-resume` probe reads an older saved state, not a fresh run.
 
 ## 7. Reading Order
 
-1. [C3](../../../references/compiler/src/sessions-and-queries.md):
-   session responsibilities, loading, package selection, facts, retention.
+1. [C3](../../../references/compiler/src/sessions-and-queries.md): session responsibilities, loading,
+   package selection, facts, retention.
 2. `lang/session/src/lib.rs` → `source/mod.rs` → the public half of `lang/session/src/source/query.rs` (`:240-673`):
    types, snapshots, overlays, materialization.
 3. `loader.rs` → `graph.rs` → `package/{context,discovery,resolution,shape}.rs`: how routes, shapes,
@@ -198,7 +196,7 @@ The `test-resume` probe reads an older saved state, not a fresh run.
 5. `cli/src/cli.rs` → `main.rs` → `compile.rs` → `execution.rs` → `diagnostics.rs`: command policy,
    adaptation, lowering, execution, rendering.
 6. [`cli/README.md`](../../../../cli/README.md)
-   and [L15](../../../references/language/src/execution-profiles.md#selecting-an-execution-backend):
+   and [Execution Profiles](../../../references/language/src/execution-profiles.md):
    user-facing behavior and backend policy.
 7. `editor/cajun/src/lib.rs` (capabilities,
    revision gate) → `analysis.rs` (project state) → `completion.rs` / `document_links.rs` (semantic projections).
@@ -215,8 +213,8 @@ The `test-resume` probe reads an older saved state, not a fresh run.
    → §4 bullet 1; [C3](../../../references/compiler/src/sessions-and-queries.md).
 2. Why can a `ProgramAnalysis` not answer an arbitrary typed query directly? → §4 bullet 2;
    [C3 §Analysis Facts and Materialization](../../../references/compiler/src/sessions-and-queries.md#analysis-facts-and-materialization).
-3. What makes two package copies merge or stay distinct?
-   → §4 bullet 3; [copy/resolve/merge/analyze](../../../references/language/src/sources/packages.md#copy-resolve-merge-analyze).
+3. What makes two package copies merge or stay distinct? → §4 bullet 3;
+   [copy/resolve/merge/analyze](../../../references/language/src/sources/packages.md#copy-resolve-merge-analyze).
 4. Where does a `.zy` file enter the pipeline, and how many times is it parsed?
    → §5 steps 1–2; `lang/session/src/source/loader.rs:428-526` caches `SourceTemplate` per canonical path.
 5. Which runner executes `-- stage: run` fixtures, and what does the other one reject?

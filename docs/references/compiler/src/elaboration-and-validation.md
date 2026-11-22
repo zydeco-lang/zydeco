@@ -17,9 +17,9 @@ The outer wrapper is a carrier-parameterized type abstraction, a carrier-and-dic
 or the existing carrier-and-dictionary computation abstraction, respectively.
 Kinds are rejected before nominal preparation.
 It translates the retained checked payload rather than rechecking its source under unrelated expectations.
-[L11](../../language/src/translations/relative-monads.md#relative-monads) specifies the source translation and basis;
+[Monadic Blocks](../../language/src/translations/monadic-blocks.md) specifies the source translation and basis;
 generated code must satisfy the same finalization and residual representation boundaries as ordinary terms.
-The [closed translation boundary](../../language/src/translations/algebra-translation.md#closed-translation-boundary)
+The [closed translation boundary](../../language/src/translations/monadic-blocks.md#closed-translation-boundary)
 requires explicit function and type parameters for external dependencies.
 `TyEnv::monadic_new` still retains lexical type bindings;
 the remaining [closure-validation repair](../../../todos/compiler-boundaries.md#monadic-closure-validation)
@@ -27,7 +27,7 @@ must distinguish closed definitions from captured witnesses before translation.
 [Nominal translation](#nominal-algebra-construction) operates within that boundary.
 
 [Value-function translation](../../../../lang/statics/src/elaborate/monadic/value_functions.rs) implements
-[L11's structure-passing rules](../../language/src/translations/algebra-translation.md#polymorphic-value-functions)
+[the structure-passing rules](../../language/src/translations/monadic-blocks.md#polymorphic-value-functions)
 for `ValPi`, `ValAbs`, and `ValApp`.
 Type binders introduce fresh witnesses, preserve named-pattern shape,
 and scope witness renaming separately from structure lookup.
@@ -60,7 +60,7 @@ through the interpreter and the Wasm backend.
 ### Nominal Algebra Construction
 
 [Nominal translation](../../../../lang/statics/src/elaborate/monadic/nominal.rs) implements
-[L11's applicative families](../../language/src/translations/algebra-translation.md#applicative-nominal-translation).
+[applicative nominal families](../../language/src/translations/monadic-blocks.md#applicative-nominal-translation).
 Ownership comes from declaration identities bound in the resolved payload and its admitted closed source expansions.
 A declaration's recorded source identity survives in its translated family.
 An external seal or a local declaration capturing an external witness is rejected when translation reaches it;

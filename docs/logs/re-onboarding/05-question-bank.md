@@ -33,7 +33,8 @@
 11. How does a packed value introduce a witness, and how does a pattern open it?
     → [L9](../../references/language/src/polymorphism-and-packed-values.md)
 12. What is a relative monad, and what does a monadic block reinterpret?
-    → [L11](../../references/language/src/translations/relative-monads.md#relative-monads),
+    → [Monadic Blocks](../../references/language/src/translations/monadic-blocks.md),
+    [Relative Monads](../../references/library/src/effects/relative-monads.md#relative-monads),
     [tutorial §7](../../tutorial/zydeco-guide.md#7-relative-monads)
 13. What are source packages, and how are library/binary/test roles declared?
     → [L12 §Source packages](../../references/language/src/sources/packages.md#source-packages)
@@ -48,12 +49,12 @@
 16. Which three representations does the front end pass through, and what does each add?
     → [Card 01](cards/01-frontend.md), [C4](../../references/compiler/src/parsing-and-resolution.md)
 17. How are comments and layout preserved for the formatter, and what does the parser record for it?
-    → [Card 01](cards/01-frontend.md),
-    [C15](../../references/compiler/src/tooling.md)
+    → [Card 01](cards/01-frontend.md), [C15](../../references/compiler/src/tooling.md)
 18. What does name resolution bind, and what does the scoped representation still not know?
     → [C4](../../references/compiler/src/parsing-and-resolution.md)
 19. Where are meta annotations decoded, and where is `intrinsic` decoded more than once?
-    → [Card 01](cards/01-frontend.md), [C4 §source analysis](../../references/compiler/src/sessions-and-queries.md#shared-source-analysis)
+    → [Card 01](cards/01-frontend.md),
+    [C4 §source analysis](../../references/compiler/src/sessions-and-queries.md#shared-source-analysis)
 20. What is the difference between strict and recovering parsing, and what does each retain on failure?
     → [C15 §recovering parsing](../../references/compiler/src/parsing-and-resolution.md#recovering-parsing)
 21. How does completion use a cursor hole without running a strict analysis on it?
@@ -97,8 +98,8 @@
     → [C8](../../references/compiler/src/sps.md)
 36. What does closure conversion produce, and how are closure and continuation packages represented?
     → [C9](../../references/compiler/src/closure-conversion.md)
-37. What are protocol descriptors and word entry contracts checking, and who reads the extracted protocol tables?
-    → [C8 §partial protocols](../../references/compiler/src/closure-conversion/word-contracts-and-protocols.md#partial-source-protocols),
+37. What are protocol descriptors and word entry contracts checking, and who reads the extracted protocol tables? →
+    [C8 §partial protocols](../../references/compiler/src/closure-conversion/word-contracts-and-protocols.md#partial-source-protocols),
     [C9 §word entry](../../references/compiler/src/closure-conversion/word-contracts-and-protocols.md#word-entry-contracts)
 38. Why do the SPSLow validators present a choice rather than pure scaffolding?
     → [Audit §validators](../../proposals/artifact-boundary.md#backend-translation-validators)
@@ -112,8 +113,7 @@
 41. What is a local representation policy, and what evidence permits changing a cell's representation?
     → [C10 §policy selection](../../references/compiler/src/zasm.md#policy-selection)
 42. How do activation frames and GC root maps reach the runtime?
-    → [C11](../../references/compiler/src/native-emission.md),
-    [C12](../../references/compiler/src/native-runtime.md)
+    → [C11](../../references/compiler/src/native-emission.md), [C12](../../references/compiler/src/native-runtime.md)
 43. What does a native build put under `build/`, and why does it invoke Cargo for the runtime?
     → [Card 04](cards/04-native-backend.md), [cli guide](../../../cli/README.md#native-executables)
 44. Which targets require `--target-arch x86-64` on this host, and what happens without it?
@@ -137,8 +137,7 @@
 ## H. Tooling and Tests
 
 51. What does the session own that the CLI does not, and which frontends share it?
-    → [C3](../../references/compiler/src/sessions-and-queries.md),
-    [Card 06](cards/06-tooling.md)
+    → [C3](../../references/compiler/src/sessions-and-queries.md), [Card 06](cards/06-tooling.md)
 52. What are revisions, overlays, and queries in the session, and what invalidates a memo?
     → [C3](../../references/compiler/src/sessions-and-queries.md),
     [C3 §analysis facts](../../references/compiler/src/sessions-and-queries.md#analysis-facts-and-materialization)

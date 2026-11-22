@@ -17,8 +17,8 @@ tagged `i64` words, a bump allocator, the host-call ABI, and the core module sec
 `wasm-sps` emits structured `wasm32` modules directly from `SpsLowProgram`.
 `cli/wasm/wasm-host.mjs` is the Node host implementing the `zydeco` import namespace:
 process I/O, host resources, random integers, and the unmanaged-memory emulation.
-The CLI bundles those three `.mjs` files for `run -t wasm-sps`. C13 owns the backend
-and embedding account ([compiler.md](../../../references/compiler/src/webassembly.md)).
+The CLI bundles those three `.mjs` files for `run -t wasm-sps`.
+C13 owns the backend and embedding account ([compiler.md](../../../references/compiler/src/webassembly.md)).
 
 Three execution targets exist now (`cli/src/cli.rs`:30): the reference interpreter,
 native AMD64 `exe` (the native card's), and `wasm-sps`.
@@ -45,16 +45,15 @@ The Wasm path starts at SPSLow because starting at SPS would duplicate closure c
 and recovering lexical structure from ZASM would require reconstructing lexical regions and stack effects
 from machine program points ([C13](../../../references/compiler/src/webassembly.md)).
 
-C1's product table names the two consumed products and their establishing entry points
-([C1](../../../references/compiler/src/architecture.md)):
-`DynamicsProgram` from `BuiltinRootLinker` feeds the interpreter, and `SpsLowProgram`
-from `SpsLowPipeline::run` feeds the emitter.
+C1's product table names the two consumed products
+and their establishing entry points ([C1](../../../references/compiler/src/architecture.md)): `DynamicsProgram`
+from `BuiltinRootLinker` feeds the interpreter, and `SpsLowProgram` from `SpsLowPipeline::run` feeds the emitter.
 The CLI side is `CommandCompiler::interpret_with_libraries` for the interpreter (`cli/src/compile.rs`:171)
 and `CommandCompiler::emit_wasm_sps` for WebAssembly (`cli/src/compile.rs`:514);
 `run_source` selects one target and hands an `ExecutableProgram` to the runner (`cli/src/main.rs`:342).
 Execution profiles and target spelling are canonical
-in [L15](../../../references/language/src/execution-profiles.md)
-and [L15 backend selection](../../../references/language/src/execution-profiles.md#selecting-an-execution-backend).
+in [Execution Profiles](../../../references/language/src/execution-profiles.md)
+and [CLI backend selection](../../../../cli/README.md#selecting-an-execution-backend).
 
 ## 3. Entry Points and Key Types
 
@@ -84,7 +83,8 @@ and [L15 backend selection](../../../references/language/src/execution-profiles.
   matches the requested root against `StaticElaboration.source` and takes its `residual`,
   failing `MissingResidual` otherwise; eliminated forms are `unreachable!` in the linker.
   Evidence: [link.rs](../../../../lang/dynamics/src/link.rs):87, :190, :210.
-  Canonical: [C6 static elimination](../../../references/compiler/src/elaboration-and-validation.md#static-elimination) and C7.
+  Canonical: [C6 static elimination](../../../references/compiler/src/elaboration-and-validation.md#static-elimination)
+  and C7.
 - **Builtin roots are materialized only from the validated typed signature.** `BuiltinRootLinker` builds
   a `BuiltinPackagePlan::for_executable` and turns each `BuiltinPackageValue::Operation` into a thunk;
   `BuiltinComputationRootLinker` peels nested computation contracts with a seen-set that reports a recursive contract.
@@ -102,7 +102,7 @@ and [L15 backend selection](../../../references/language/src/execution-profiles.
   returned value, an exit code, and a runtime error; a failing run is reported, not silently retried on another target.
   Evidence: [syntax.rs](../../../../lang/dynamics/src/syntax.rs):162–181,
   [eval.rs](../../../../lang/dynamics/src/eval.rs):285–326.
-  Canonical: C7 and [L15 backend selection](../../../references/language/src/execution-profiles.md#selecting-an-execution-backend).
+  Canonical: C7 and [CLI backend selection](../../../../cli/README.md#selecting-an-execution-backend).
 - **The Wasm backend consumes SPSLow directly and keeps source recursion off the host call stack.** The root
   and each SPSLow block or closed label become a table-indexed case function; `entry` initializes the heap,
   program counter, and ambient-stack globals and loops on `call_indirect`.
@@ -119,13 +119,12 @@ and [L15 backend selection](../../../references/language/src/execution-profiles.
   [host.rs](../../../../lang/wasm-common/src/host.rs):132–161, [emit.rs](../../../../lang/wasm-sps/src/emit.rs):797.
   Canonical: [C13 Module and Host ABI](../../../references/compiler/src/webassembly.md#module-and-host-abi).
 - **The scalar boundary is pinned across languages, and language failures share one carrier.** The Rust word encoding
-  and the JS host constants are checked against each other, float rendering is checked against Rust `Display`,
-  and emitted failures call `zydeco.runtime_error(i32)` followed by `unreachable`.
-  Evidence: [syntax/word.rs](../../../../lang/syntax/src/word.rs):87,
-  [wasm-host.mjs](../../../../cli/wasm/wasm-host.mjs):6–9, :349–358;
-  [wasm-common/host.rs](../../../../lang/wasm-common/src/host.rs):13–35.
-  Canonical: C13 tagged-word contract
-  and [C16 runtime oracles](../../../references/compiler/src/validation-and-extending.md#source-fixtures-and-runtime-oracles).
+  and the JS host constants are checked against each other, float rendering is checked against Rust `Display`, and
+  emitted failures call `zydeco.runtime_error(i32)` followed by `unreachable`. Evidence:
+  [syntax/word.rs](../../../../lang/syntax/src/word.rs):87, [wasm-host.mjs](../../../../cli/wasm/wasm-host.mjs):6–9,
+  :349–358; [wasm-common/host.rs](../../../../lang/wasm-common/src/host.rs):13–35. Canonical: C13 tagged-word contract
+  and
+  [C16 runtime oracles](../../../references/compiler/src/validation-and-extending.md#source-fixtures-and-runtime-oracles).
 
 ## 5. Data Flow
 
@@ -185,8 +184,8 @@ Every row below was actually run at `e2dd8979`; only the documented outcome is q
 
 1. [`lang/dynamics/src/README.md`](../../../../lang/dynamics/src/README.md) —
    26-line orientation to the crate's modules.
-2. [C7](../../../references/compiler/src/reference-interpreter.md) —
-   the canonical linking and evaluation contract; read it before the code.
+2. [C7](../../../references/compiler/src/reference-interpreter.md) — the canonical linking and evaluation contract;
+   read it before the code.
 3. [`cli/src/compile.rs`](../../../../cli/src/compile.rs):171 — how a CLI `run` reaches the linker and `Runtime`.
 4. [`lang/dynamics/src/link.rs`](../../../../lang/dynamics/src/link.rs) — residual selection
    and the three erasure passes.
@@ -209,13 +208,12 @@ Every row below was actually run at `e2dd8979`; only the documented outcome is q
 1. Which residual does the interpreter run, and what happens when a root was never residualized?
    → `link.rs`:87–95; [C6](../../../references/compiler/src/elaboration-and-validation.md#static-elimination).
 2. Why does the interpreter link a Builtin package as thunks instead of dispatching on the source record?
-   → `link.rs`:124–158;
-   [C14](../../../references/compiler/src/builtins-and-foreign-calls.md).
+   → `link.rs`:124–158; [C14](../../../references/compiler/src/builtins-and-foreign-calls.md).
 3. Where do the evaluator's stack, environment, and suspended computations live,
    and why does that make its costs unrepresentative?
    → `syntax.rs`:141–158; C7 paragraph starting "The interpreter uses Rust representations".
-4. What are the three program outcomes, and where does a failing run surface to the user? → `syntax.rs`:162–166;
-   [L15 backend selection](../../../references/language/src/execution-profiles.md#selecting-an-execution-backend).
+4. What are the three program outcomes, and where does a failing run surface to the user?
+   → `syntax.rs`:162–166; [CLI backend selection](../../../../cli/README.md#selecting-an-execution-backend).
 5. Why does Wasm emission start at SPSLow rather than at SPS or ZASM?
    → [C13](../../../references/compiler/src/webassembly.md); `wasm-sps/src/lib.rs`:1–20.
 6. How does the generated module avoid growing the engine stack on unbounded source recursion?
@@ -251,9 +249,9 @@ Estimates are the retired studies' `≈` figures and are not additive.
 
 - **Confirmed stale reference text.** Two reference sentences still say "all four backends"
   for tests that commit `5e4f4e46` reduced to three:
-  [C14](../../../references/compiler/src/builtins-and-foreign-calls.md)
-  line 3076 (argument regressions)
-  and [L14 foreign decoding](../../../references/language/src/foreign-interfaces.md#foreign-decoding) line 2407 (FFI specimen decoder).
+  [C14](../../../references/compiler/src/builtins-and-foreign-calls.md) line 3076 (argument regressions)
+  and [L14 foreign decoding](../../../references/language/src/foreign-interfaces.md#foreign-decoding)
+  line 2407 (FFI specimen decoder).
   Current registrations are interpreter, AMD64, and `wasm-sps` (`lang/tests/tests/builtin.rs`:59–102;
   `lang/tests/tests/ffi_examples.rs`:165), so "three backends" is accurate now.
   This belongs in `docs/todos/` per the repository rules; it was not editable from this card.

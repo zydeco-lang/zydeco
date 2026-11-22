@@ -7,26 +7,33 @@ Runtime metadata, such as a buffer length or object vtable pointer,
 is ordinary value data and follows the usual checking and erasure rules.
 An ordinary layout descriptor is also a typed value; evaluating it during checking does not make it a meta annotation.
 
-| Meta annotation | Meaning and valid use |
+This appendix catalogs every recognized meta annotation and links to the chapter that specifies its semantics.
+It is the normative owner for annotations without a dedicated chapter: `doc`, `literal`,
+`discover`, `format`, and `debug`.
+
+## Annotation Catalog
+
+| Meta annotation | Meaning and owning specification |
 | --- | --- |
-| `import(source)` | Import an independently checked term (§12); source selection follows [package resolution](sources/packages.md#package-hierarchy) |
-| `package(role, ...)` | Define a package's role and relationships (§12); names and package context follow [package resolution](sources/packages.md#package-hierarchy) |
+| `import(source)` | Import an independently checked term ([Sources](sources.md#source-boundaries), [package resolution](sources/packages.md#package-hierarchy)) |
+| `package(role, ...)` | Define a package's role and relationships ([Source Packages](sources/packages.md#source-packages)) |
 | `discover(include("glob", ...), exclude("glob", ...), ...)` | Declare candidate source files; discovery follows [package resolution](sources/packages.md#package-hierarchy) |
-| `intrinsic(role)` | Supply a canonical kind/type (`vtype`, `ctype`, `thk`, `ret`, `unit`, `int`, `uint`, `i8`/`i16`/`i32`, `u8`/`u16`/`u32`, `f32`, `f64`, `char`, `string`) or an integer value function (§8) |
-| `builtin(role)` | Mark a host capability or operation in a typed Builtin interface (§13) |
-| `ffi(c, library("name"), symbol("name"))` | Supply a foreign thunk implementation at a hole (§14) |
-| `prelude(none)` / `prelude(from(p))` | Disable the default [core vocabulary](sources/core-prelude.md) or replace it from a lexical packed view |
-| `typeof` | Extract a synthesized classifier (§4); no arguments |
-| `monadic` | Algebra translation under the lexical basis (§11); no arguments |
-| `cbv` | Elaborate a call-by-value expression into the core (§11); no arguments |
-| `cbn` | Reserved for call-by-name blocks (§11); refused until implemented |
-| `partial` | Permit the annotated computation header's binders to fail (§7); no arguments |
+| `intrinsic(role)` | Supply a canonical kind/type (`vtype`, `ctype`, `thk`, `ret`, `unit`, `int`, `uint`, `i8`/`i16`/`i32`, `u8`/`u16`/`u32`, `f32`, `f64`, `char`, `string`) or an [integer value function](value-functions-and-views.md#value-matches-and-integer-intrinsics) |
+| `builtin(role)` | Mark a host capability or operation in a typed Builtin interface ([Primitives and Capabilities](primitives-and-capabilities.md)) |
+| `ffi(c, library("name"), symbol("name"))` | Supply a foreign thunk implementation at a hole ([Foreign Interfaces](foreign-interfaces.md#c-imports)) |
+| `prelude(none)` / `prelude(from(p))` | Disable the default [core vocabulary](sources/core-prelude.md#opt-out-and-replacement) or replace it from a lexical packed view |
+| `typeof` | Extract a synthesized classifier ([Classifier Queries](classification-and-inference.md#classifier-queries)); no arguments |
+| `monadic` | Algebra translation under the lexical basis ([Monadic Blocks](translations/monadic-blocks.md)); no arguments |
+| `cbv` | Elaborate a call-by-value expression into the core ([Call-by-Value Blocks](translations/call-by-value-and-call-by-name.md#call-by-value-blocks)); no arguments |
+| `cbn` | Reserved for call-by-name blocks ([Call-by-Name Blocks](translations/call-by-value-and-call-by-name.md#call-by-name-blocks)); refused until implemented |
+| `partial` | Permit the annotated computation header's binders to fail ([Irrefutability and Partial Binders](patterns-and-coverage.md#irrefutability-and-partial-binders)); no arguments |
 | `literal` | Replace a hole with its attached text block as a string; no arguments |
 | `doc` | Attach [documentation](#source-documentation) to a term, binding, or member |
 | `format(options...)` | Scope formatting options to a payload |
 | `debug` | Record a checked term for compiler observation |
 
-The REPL commands in §12 are frontend interpretations of root meta annotations.
+The REPL commands in the [CLI guide](../../../../cli/README.md#interactive-repl) (`@[type]`, `@[run]`,
+`@(help)`, `@(quit)`) are frontend interpretations of root meta annotations.
 Unrecognized meta annotations are structurally accepted and have no defined semantic effect here.
 Documentation and debug annotations may carry additional annotation arguments.
 Formatting options include `width`, `indent`, `layout`, `parentheses`, and `verbatim`;

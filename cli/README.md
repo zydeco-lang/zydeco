@@ -16,8 +16,8 @@ zydeco run path/to/main.zy -t wasm-sps
 
 `check` accepts library terms as well as executable programs.
 The [quick start](../README.md#quick-start) supplies a complete runnable example;
-the [execution reference](../docs/references/language/src/execution-profiles.md#selecting-an-execution-backend) defines backend selection,
-arguments, streams, and exit status.
+the [execution profiles reference](../docs/references/language/src/execution-profiles.md) defines each
+backend's runtime model, memory limits, and host boundary.
 
 From the repository root, select declared packages by name or tests by file:
 
@@ -27,10 +27,33 @@ zydeco check -p /std -p /std/memory
 zydeco test lib/tests/std/bool.zy -t all
 ```
 
-See [source packages](../docs/references/language/src/sources/packages.md#source-packages) for declarations and discovery,
-and the [standard library guide](../lib/std/README.md#source-packages-and-tests) for fixture-dependent tests.
+See [source packages](../docs/references/language/src/sources/packages.md#source-packages) for declarations
+and discovery, and the [standard library guide](../lib/std/README.md#source-packages-and-tests)
+for fixture-dependent tests.
 Native execution uses `runtime/` by default; `--runtime-dir PATH` selects another source directory.
 WebAssembly execution uses the bundled Node.js host; `NODE` selects the executable.
+
+### Selecting an Execution Backend
+
+Backend selection is command-line execution policy, independent of package meta annotations.
+`run SOURCE -t TARGET` selects one of `interpreter`, `exe` (AMD64), or `wasm-sps`.
+`--target` is the long spelling; omitting it selects `interpreter`.
+`run` inherits terminal streams, forwards arguments after `--`, and returns the program's exit status.
+`--dry` checks and selects the executable root without linking, emitting code, or requiring backend tools.
+
+`test SOURCE` accepts the same targets and allows repeated `-t` options.
+The test-only selection `-t all` expands in place to `interpreter`, `exe`, and `wasm-sps`, in that order.
+Explicit choices replace the interpreter default; duplicates are removed, keeping first-occurrence order.
+Discovery and source checking are shared across backends, with one lowering per test for compiled targets.
+All selected tests and requested backend artifacts are prepared before any test executes.
+Source errors, unsupported lowering, and missing toolchains fail preparation rather than skipping a backend.
+
+Execution is sequential: each test in package-plan order runs on its backends in requested order.
+Every test/backend pair reports a labeled result.
+Zero exits pass; nonzero exits display captured stdout and stderr.
+Runtime errors also fail their pair, and remaining pairs still run.
+The summary counts pairs, and the command fails if any pair fails.
+Wasm requires Node.js and uses the bundled host; native execution requires the AMD64 tools and runtime sources.
 
 ## Interactive REPL
 
@@ -49,8 +72,8 @@ Each input contains one complete term.
 Enter submits complete syntax or adds a line to an incomplete term.
 Alt+Enter inserts a newline; Ctrl+Enter submits the current text for diagnostics.
 After a type checking rejection, edit and retry with the same input number.
-The [interactive engine](../docs/references/compiler/src/tooling/interactive-and-docs.md#interactive-engine) explains source history,
-repeated effects, and captured execution.
+The [interactive engine](../docs/references/compiler/src/tooling/interactive-and-docs.md#interactive-engine)
+explains source history, repeated effects, and captured execution.
 
 ## Build Artifacts
 
@@ -127,8 +150,8 @@ zydeco build lib/ffi/arithmetic.zy --target sharedlib --target-arch x86-64 --bui
 The command publishes `build/example.arithmetic.sharedlib.library.json`, a C header,
 a Zydeco import interface, and the platform library as links into an immutable bundle.
 Distribute the bundle with its dependencies.
-The [C export rules](../docs/references/language/src/foreign-interfaces.md#compiled-libraries-and-c-exports) define the supported
-source interface and call behavior.
+The [C export rules](../docs/references/language/src/foreign-interfaces.md#compiled-libraries-and-c-exports)
+define the supported source interface and call behavior.
 
 Save a C consumer as `consumer.c`:
 
@@ -213,8 +236,8 @@ zydeco build client.zy --target exe --target-arch x86-64 --build-dir client-buil
 ```
 
 Repeat `--link-library` for multiple providers.
-The [native unit contract](../docs/references/language/src/foreign-interfaces.md#native-zydeco-units) defines supported types,
-initialization, and compatibility.
+The [native unit contract](../docs/references/language/src/foreign-interfaces.md#native-zydeco-units)
+defines supported types, initialization, and compatibility.
 Run focused regressions with `cargo test -p zydeco-cli --test unit --test unit_manifest`.
 
 ## Representation Experiments

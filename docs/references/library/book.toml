@@ -1,0 +1,18 @@
+[book]
+title = "Zydeco Standard Library Reference"
+description = "Canonical contracts for Zydeco's standard library: organization, relative monads, effects, manual memory, layouts, views, and byte buffers."
+language = "en"
+src = "src"
+
+[build]
+build-dir = "../../../target/book/library"
+create-missing = false
+
+[preprocessor.repo-links]
+command = "python3 ../../scripts/mdbook-repo-links.py"
+renderers = ["html"]
+
+[output.html]
+git-repository-url = "https://github.com/zydeco-lang/zydeco"
+edit-url-template = "https://github.com/zydeco-lang/zydeco/edit/main/docs/references/library/{path}"
+additional-js = ["theme/home-link.js", "theme/zydeco-hljs.js", "theme/mermaid-init.js"]

@@ -14,7 +14,8 @@ The [ownership map](references/README.md#rule-ownership) connects source rules t
 
 | Material | Reader's purpose |
 | --- | --- |
-| [Language reference](references/language/src/introduction.md) | Look up syntax, typing, behavior, packages, capabilities, and execution boundaries |
+| [Language reference](references/language/src/introduction.md) | Look up syntax, typing, evaluation, translations, packages, host interfaces, and execution profiles |
+| [Standard library reference](references/library/src/introduction.md) | Look up canonical contracts for library organization, relative monads, effects, manual memory, and buffers |
 | [Compiler reference](references/compiler/src/introduction.md) | Find phase contracts, representations, algorithms, runtimes, and validation |
 | [CLI guide](../cli/README.md) | Run programs, use the REPL, and build artifacts |
 | [Standard library guide](../lib/std/README.md) | Use current interfaces, capabilities, and library composition |

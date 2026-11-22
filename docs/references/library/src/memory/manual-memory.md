@@ -4,7 +4,7 @@
 
 Systems code needs to choose storage, initialize it, and release it explicitly.
 [std/memory](../../../../../lib/std/memory/package.zy) provides that interface using ordinary packed values,
-abstract type witnesses, and [CPS](../computations-and-control.md#ret-and-explicit-cps).
+abstract type witnesses, and [CPS](../../../language/src/computations-and-control.md#ret-and-explicit-cps).
 It introduces no lifetimes, borrow checker, affine types, or special continuation kind.
 
 The compiler supplies `Addr`, existing scalars, `Ret`, `Thk`, and the primitive memory operations.
@@ -84,7 +84,6 @@ with explicit `Context`, byte size, and alignment; its `free` also takes the ori
 `reserve L Context allocator context storage` produces a CPS allocation recipe yielding `Ptr L Uninit`;
 `unsafe/release` requires matching geometry, provider/context, and an uninitialized pointer.
 `dynamic_reserve` and `unsafe/dynamic_release` use `Alloc` and `DynamicStorage` at runtime.
-The [executable example](../../../../../lib/tests/std/storage-codecs.zy) covers both forms and state transitions.
 Fixed and dynamic layout conveniences expose these components separately under the same layout witness.
 Record and array factories compose storage; callers select logical conversion only when needed.
 `codecs/product` combines child codecs through matching field paths.
@@ -146,3 +145,4 @@ using the shared [counted-view access](views-and-buffers.md#memory-views) implem
 Zero-sized elements have zero stride. The resulting pointer keeps the same `L` and `S`.
 The caller supplies an allocation covering the elements; bounds checks do not verify that assertion.
 A raw slice does not retain its allocation.
+See the [standard library guide](../../../../../lib/std/README.md#explicit-storage) for worked storage examples.

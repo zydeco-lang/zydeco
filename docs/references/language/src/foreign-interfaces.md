@@ -1,5 +1,7 @@
 # Foreign Interfaces
 
+## C Imports
+
 A foreign implementation is an annotated hole:
 
 ```zydeco
@@ -9,8 +11,8 @@ param val (/Thk; /Ret; /Addr; /Int; /UInt32) : @(import("../../lib/std/builtin.z
 
 For `ffi(c, ...)`, the supported classifier is `Thk (A1 -> ... -> An -> Ret B)`, including zero arguments.
 `Int8/16/32/64` and `UInt8/16/32/64` contribute their matching C `intN_t` or `uintN_t`.
-`Int` and `UInt` use `int64_t` and `uint64_t` carriers in the current profiles;
-their source ranges remain those in [L13](primitives-and-capabilities.md).
+`Int` and `UInt` use `int64_t` and `uint64_t` carriers in the current profiles; their source ranges remain those
+in [Scalar Ranges and Conversions](primitives-and-capabilities.md#scalar-ranges-and-conversions).
 Values entering Zydeco, whether a C import result or an export argument, are range-checked.
 An out-of-range value terminates execution before source code resumes.
 `Addr` contributes one raw data pointer.
@@ -60,25 +62,19 @@ A storage layout determines byte placement; the foreign signature independently 
 A logical product or `Slice L S` does not become a C aggregate or expand into arguments automatically.
 A binding passes the address and any required count separately.
 The current 64-bit profiles use a 64-bit `size_t`; a validated nonnegative `Int` count has the same bits.
-
-The [aligned record fixture](../../../../lib/tests/ffi/static-layout.zy) allocates storage,
-explicitly initializes padding because its C inspector reads every byte,
-writes the typed fields, calls C with the address, and releases storage.
-The [mutable output fixture](../../../../lib/tests/ffi/mutable-output.zy) passes an uninitialized destination to C,
-interprets the C status through a CPS wrapper, and asserts `Init` only after the promised fields have been written.
-The raw adapter supplies no ownership inference for these transitions.
+Callers passing an aligned record to C code that inspects every byte must initialize padding explicitly,
+and callers passing an uninitialized output buffer to C must assert `Init` only after the foreign contract reports
+that the promised fields were written; raw adapters supply no ownership inference for these transitions.
 
 ### Foreign Decoding
 
-The [C specimen](../../../../lib/tests/ffi/contracts.c) produces a `UInt8` tag and `UInt32` payload with `0x58` padding.
-The [source decoder](../../../../lib/tests/ffi/record-input.zy) obtains size and offsets
-from a static plan, checks exact byte extent, and decodes only those fields.
+When decoding foreign record buffers from a static layout plan, callers validate the exact byte extent
+before reading fields, rejecting short or oversized inputs.
 Padding is not part of the logical record and need not be canonicalized before typed use.
-Short and oversized inputs fail before exposing fields to the consumer.
-The [integration test](../../../../lang/tests/tests/ffi_examples.rs) runs the decoder
-on all four backends using actual output from the C specimen.
-Other bindings must establish their own endianness, valid field encodings, union alternatives, and length conventions.
-Canonical serialization, when required, is a separate codec contract.
+Bindings must establish their own endianness, valid field encodings, union alternatives,
+and length conventions; canonical serialization, when required, is a separate codec contract.
+See the [standard library guide](../../../../lib/std/README.md#explicit-storage) for worked C input,
+mutable output, and decoding examples.
 
 ## Compiled Libraries and C Exports
 

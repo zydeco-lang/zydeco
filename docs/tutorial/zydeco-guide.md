@@ -2,8 +2,8 @@
 
 This guide introduces current Zydeco source syntax, CBPV control, library composition, and monadic blocks.
 It assumes familiarity with typed functional programming.
-The [language reference](../references/language/src/introduction.md) gives the precise rules; implementation details belong
-to the [compiler reference](../references/compiler/src/introduction.md).
+The [language reference](../references/language/src/introduction.md) gives the precise rules;
+implementation details belong to the [compiler reference](../references/compiler/src/introduction.md).
 
 Examples use complete source terms except where the surrounding prose describes an intentional rejection.
 Imports are relative to this guide's directory, `docs/tutorial/`; adjust them when copying an example elsewhere.
@@ -122,8 +122,8 @@ ret (first, second)
 Both names can also be passed directly wherever their thunk type is expected.
 A packed value uses plain `let` or `def`; adding `!` would require its body to be a computation.
 
-Documentation uses `--|` Markdown blocks attached to a following `@[doc]` annotation.
-Use `--` for ordinary comments; see [the documentation reference](../references/language/src/meta-annotations.md#source-documentation)
+Documentation uses `--|` Markdown blocks attached to a following `@[doc]` annotation. Use `--` for ordinary comments;
+see [the documentation reference](../references/language/src/meta-annotations.md#source-documentation)
 for attachment and text preservation.
 
 ## 3. Kinds, types, and type-level terms
@@ -502,7 +502,8 @@ Here `Top` is empty codata. The extra `Thk Top` supplies the structure needed fo
 The effect library's `raise` and `catch` adapters accept that structure argument
 after their packed effect input, introduced below.
 More general polymorphic translation is described
-in [the relative-monad reference](../references/language/src/translations/relative-monads.md#relative-monads).
+in [Monadic Blocks](../references/language/src/translations/monadic-blocks.md)
+and the [relative-monad contract](../references/library/src/effects/relative-monads.md#relative-monads).
 
 ## 9. Effect modules
 
@@ -553,7 +554,8 @@ See [packed value composition](../../lib/std/README.md#packed-value-composition)
 ## 10. Capability dictionaries
 
 Use a packed instance when a generic client needs a carrier, its monad dictionary, and effect operations together.
-The [packed-effect contract](../references/language/src/translations/relative-monads.md#packed-effect-instances) specifies this boundary.
+The [packed-effect contract](../references/library/src/effects/relative-monads.md#packed-effect-instances)
+specifies this boundary.
 `IState S M` and `IException E M` describe operations at a supplied carrier;
 `WithMonad` packages such an interface with its carrier and monad dictionary.
 A witness-dependent `pi` lets the client's result refer to the carrier opened from its argument.

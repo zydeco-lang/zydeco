@@ -2,8 +2,9 @@
 
 This reference describes the compiler's current representations, phase contracts, and maintenance entry points.
 It assumes basic programming-languages background.
-The [language reference](../../language/src/introduction.md) owns source semantics;
-[CONTRIBUTING](../../../../CONTRIBUTING.md) owns setup and general command-line workflows.
+The [language reference](../../language/src/introduction.md) owns source semantics,
+the [standard library reference](../../library/src/introduction.md) owns canonical library contracts,
+and [CONTRIBUTING](../../../../CONTRIBUTING.md) owns setup and general command-line workflows.
 This reference owns [compiler pass composition](architecture.md#compiler-pass-composition),
 including pipeline selection and inspection.
 Component guides map local modules, and linked design records retain alternatives and open decisions.

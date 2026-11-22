@@ -1,5 +1,7 @@
 # Computations and Control
 
+## Core Computation Forms
+
 The basic computation forms are:
 
 | Form | Typing and behavior |
@@ -14,6 +16,8 @@ The basic computation forms are:
 | `match v \| p => M ... end` | Runs the body of the first matching arm |
 | `M .d` | Observes destructor `.d` of a codata computation |
 
+## Codata and Copatterns
+
 A computation type `codata | .d1 : B1 ... | .dn : Bn end` describes alternative observations.
 `comatch | .d1 => M1 ... end` supplies the corresponding computations.
 An observation can expose an arrow or another codata protocol, so copatterns may interleave argument patterns
@@ -25,6 +29,8 @@ let Int = @(intrinsic(int)) in
 def Probe = codata | .read : Ret Int end in
 (comatch | .read => ret 42 end : Probe).read
 ```
+
+## Operational Reductions
 
 For irrefutable `p`, the basic reductions are:
 
@@ -39,7 +45,10 @@ fix f => M                    → M with f bound to {fix f => M}
 Value formation does not execute suspended bodies.
 A thunk is not memoized: repeated forces execute its body again.
 `do` determines effect order; duplicating a returned value does not repeat its producing computation.
-Matching selects the first successful arm; partial binders may terminate execution as specified in §7.
+Matching selects the first successful arm; partial binders may terminate execution as specified
+in [Patterns and Coverage](patterns-and-coverage.md#irrefutability-and-partial-binders).
+
+## The Host Root Protocol
 
 `OS` is the host's root protocol. An `OS` computation transfers to another `OS` computation,
 terminates, aborts, or diverges; it has no ordinary source return.

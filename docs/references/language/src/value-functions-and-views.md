@@ -1,5 +1,7 @@
 # Value Functions and Views
 
+## Total Value Functions
+
 `val (x : A) => v` introduces a total value transformation.
 If `v : A'`, its classifier is `val pi (x : A) . A'`.
 Type parameters express polymorphism within this value-function space.
@@ -11,13 +13,16 @@ ret (4 |> duplicate)
 ```
 
 `f v`, `v |> f`, and `f <| v` are the same application; the directional spellings also apply to type functions.
-Functions can be partially applied, passed to other value functions, returned,
-and stored in intermediate structures, subject to §10.
+Functions can be partially applied, passed to other value functions, returned, and stored
+in intermediate structures, subject to [Static Elimination](static-elimination.md).
 They may capture runtime values, but cannot execute computations to form their result.
 A thunk in the result keeps its computation suspended.
 
+## Value Matches and Integer Intrinsics
+
 `match` also produces a value when every arm produces a value of the same type.
-It uses the patterns and exhaustive coverage of §7; computation-producing arms keep their usual meaning.
+It uses the patterns and exhaustive coverage of [Patterns and Coverage](patterns-and-coverage.md);
+computation-producing arms keep their usual meaning.
 The four integer value intrinsics below have classifier `val pi (left : Int) (right : Int) . Int`,
 where `Int` denotes `@(intrinsic(int))`:
 
@@ -39,7 +44,10 @@ ret (maximum 16 (add 5 11))
 ```
 
 These total leaves allow checked arithmetic and layout construction in ordinary source functions.
-They obey §10's static requirements; returning numeric computations remain available for runtime inputs.
+They obey [static elimination's](static-elimination.md#reduction-rules-and-decidability) decidability requirements;
+returning numeric computations remain available for runtime inputs.
+
+## View Patterns
 
 A view pattern `f ~> p` applies the total value function `f` to its input, then matches `p` against the result.
 Only `p` introduces bindings.
@@ -54,6 +62,9 @@ ret (x, whole)
 ```
 
 Views associate to the right: `f ~> g ~> p` transforms with `f`, then `g`, before matching `p`.
+
+## Equational Theory
+
 For complete, well-typed total values, the usual capture-avoiding equations explain application and binding:
 
 ```text
@@ -68,5 +79,6 @@ let f ~> p = V in W             = let p = (V |> f) in W
 The reassociation requires `x` fresh for `U`; binders may be renamed to satisfy it.
 The binding equations use irrefutable patterns.
 Type abstraction/application has the corresponding beta and eta equations.
-These equations concern value transformations; execution still requires the bounded static elimination in §10.
+These equations concern value transformations; execution still requires the bounded reduction
+in [Static Elimination](static-elimination.md).
 An explicitly authored thunk is the runtime callable form when an implementation must remain dynamically selectable.

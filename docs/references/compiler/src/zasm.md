@@ -173,15 +173,15 @@ Local unboxing removes cells where justified, without interpreting a source dict
 
 | Description | Established evidence | Limit |
 | --- | --- | --- |
-| [Source `Representation A`](../../language/src/primitives-and-capabilities/manual-memory.md#typed-pointers-and-slices) | One layout witness shared by typed pointers and CPS operations | No selected register class or argument width |
-| [Source `Plan A`](../../language/src/primitives-and-capabilities/layouts-and-aggregates.md#static-layout-plans) | Validated byte placement and inspectable field offsets | No type identity for each placement, reference map, or calling convention |
+| [Source `Representation A`](../../library/src/memory/manual-memory.md#typed-pointers-and-slices) | One layout witness shared by typed pointers and CPS operations | No selected register class or argument width |
+| [Source `Plan A`](../../library/src/memory/layouts-and-aggregates.md#static-layout-plans) | Validated byte placement and inspectable field offsets | No type identity for each placement, reference map, or calling convention |
 | SPSLow `ProductLayout` | Logical arity and producer/consumer structure | No byte padding or scalar register classification |
 | [Word entries](closure-conversion/word-contracts-and-protocols.md#word-entry-contracts) | Ordered administrative environment/result words and code/record provenance | No different component transport or complete source stack protocol |
 | [Partial source protocols](closure-conversion/word-contracts-and-protocols.md#partial-source-protocols) | Known components, scoped parameters, and regular recursive codata | No nominal storage identity, explicit type-application evidence, or physical stack extent |
 | [Native frame plans](native-emission.md) | Live tagged-word slots, entry roles, and suspension ownership | No layout mixing raw scalar bits with managed references |
 
-[Stored source calls](../../language/src/primitives-and-capabilities/views-and-buffers.md#stored-call-interfaces)
-share a carrier and its dictionary without changing transport.
+[Stored source calls](../../library/src/memory/views-and-buffers.md#stored-call-interfaces) share a carrier
+and its dictionary without changing transport.
 Selecting another machine ABI requires the
 [remaining call-boundary work](../../../proposals/escape-unboxing.md#remaining-machine-call-boundary)
 to establish representation identity, agreement at both ends, target placement, and tracing together.

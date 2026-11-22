@@ -2,9 +2,10 @@
 
 Returning C imports and named scalar C export libraries are implemented.
 Their source obligations belong to [L14](../references/language/src/foreign-interfaces.md),
-and their validated call plan and target adapters to [C14](../references/compiler/src/builtins-and-foreign-calls.md#foreign-calls).
-The [xxHash binding](../../lib/ffi/xxhash.zy) demonstrates the current pointer-and-length borrow.
-The implemented [storage and transport boundary](../references/language/src/foreign-interfaces.md#storage-and-foreign-transport)
+and their validated call plan and target adapters
+to [C14](../references/compiler/src/builtins-and-foreign-calls.md#foreign-calls).
+The [xxHash binding](../../lib/ffi/xxhash.zy) demonstrates the current pointer-and-length borrow. The implemented
+[storage and transport boundary](../references/language/src/foreign-interfaces.md#storage-and-foreign-transport)
 also owns raw pointer obligations and foreign field decoding.
 This proposal contains the next foreign boundaries.
 
@@ -94,9 +95,11 @@ and result successors that immediately perform another allowed operation on the 
 
 ## Following boundary
 
-The first scalar export boundary is implemented in [L14](../references/language/src/foreign-interfaces.md#compiled-libraries-and-c-exports),
+The first scalar export boundary is implemented
+in [L14](../references/language/src/foreign-interfaces.md#compiled-libraries-and-c-exports),
 with [artifact preparation](../references/compiler/src/native-emission.md#compilation-unit-preparation-and-artifacts)
-and [instance ownership](../references/compiler/src/native-runtime.md#runtime-instances) defined in the compiler reference.
+and [instance ownership](../references/compiler/src/native-runtime.md#runtime-instances) defined
+in the compiler reference.
 The next profiles may admit recoverable status returns, retained instances, and incoming ownership-bearing handles.
 An `OS` export additionally needs an explicit process-termination contract.
 
@@ -157,7 +160,8 @@ The remaining shapes are deferred with distinct prerequisites:
 The [aligned record example](../../lib/tests/ffi/static-layout.zy) constructs a record in manual storage
 and passes its address to C. This aggregate-pointer path is independent of aggregate calling conventions.
 The source static builder also computes `Plan A`, but its inspectable shape is not target ABI classification evidence.
-The [storage design](../references/language/src/primitives-and-capabilities/layouts-and-aggregates.md#static-layout-plans) owns this distinction.
+The [storage design](../references/library/src/memory/layouts-and-aggregates.md#static-layout-plans)
+owns this distinction.
 Keep argument order and flattening in one validated representation consumed by every target as these shapes are added.
 
 Header-based validation could check some declaration mistakes but would introduce a separate source of ABI evidence.

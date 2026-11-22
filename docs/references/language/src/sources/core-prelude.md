@@ -133,7 +133,8 @@ and the three transparent data definitions.
 Those data sources import only the primitive leaf, which uses existing intrinsic roles and has no imports,
 abstract witnesses, host capabilities, operations, or parameters.
 The view exports each closed core name once with a unit payload and no hidden factory parameter.
-Manifest kind witnesses use annotated introductions; manifest type witnesses use `pack` (§9).
+Manifest kind witnesses use annotated introductions;
+manifest type witnesses use [`pack`](../polymorphism-and-packed-values.md#existentials-and-packed-values).
 
 The loader supplies that closed view as an ordinary tracked dependency for each default-enabled source.
 The primitive leaf, three bootstrap data definitions, prelude itself, and raw Builtin contracts opt out explicitly
@@ -153,7 +154,7 @@ Annotations remain at their authored positions and do not move a monadic basis a
 or change monadic capture.
 
 Default vocabulary is available in kind and type roots as well as value and computation roots.
-This follows the ordinary [static-only opening rule](../bindings-and-scope.md),
+This follows the ordinary [static-only opening rule](../bindings-and-scope.md#static-only-openings),
 not a special retry or an inserted `pack`.
 An abstract provider witness still cannot escape its opening in a raw type result;
 package the result with an appropriate dependent interface when necessary.

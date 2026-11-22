@@ -49,8 +49,8 @@ but never construct library-defined `Bool`, `Option`, `Either`, `List`, or `Byte
 whose sealed type its final `pack` introduction synthesizes.
 
 Types and the definitions that use them live in the same source package.
-The [organization rule](../../docs/references/language/src/sources/standard-library.md)
-distinguishes manifest structural interfaces from abstract representation witnesses.
+The [organization rule](../../docs/references/library/src/organization.md) distinguishes manifest structural interfaces
+from abstract representation witnesses.
 A module with a reusable input or output contract exports that contract together with its `make` value function.
 For example, `data/package.zy` exports `DataPackage`, `BoolModule`, and `make`:
 
@@ -94,7 +94,8 @@ See [explicit storage](#explicit-storage).
 The primitive leaf and closed default view are `std/primitive` and `std/prelude`.
 Builtin is `std/builtin`; topic entries are `std/data`, `std/text`, `std/numeric`, `std/system`, and `std/memory`.
 These names identify source terms; fields and factory applications remain ordinary language structure.
-The [source-package rules](../../docs/references/language/src/sources/packages.md#source-packages) govern selection and relationships.
+The [source-package rules](../../docs/references/language/src/sources/packages.md#source-packages) govern selection
+and relationships.
 
 The repository's [workspace.zy](../../workspace.zy) explicitly includes entry files and the std test tree.
 From the repository root:
@@ -124,7 +125,7 @@ There is no separate version resolver or hosted registry.
 
 ## Source layout
 
-The [organization rule](../../docs/references/language/src/sources/standard-library.md) separates value data,
+The [organization rule](../../docs/references/library/src/organization.md) separates value data,
 general-purpose dictionaries, effects, and runtime capabilities.
 The current files are:
 
@@ -174,9 +175,25 @@ effect/{state,exception,state-exn}.zy  state, exceptions, and their combination
 effect/nondet.zy           MonadNonDet interface and make factory for ordered search and observers
 ```
 
-The public `Either` type
-and `either` operation bundle follow the [shared binary-sum contract](../../docs/references/language/src/sources/standard-library.md#either-values).
+The public `Either` type and `either` operation bundle follow the
+[shared binary-sum contract](../../docs/references/library/src/organization.md#either-values).
 Fallible APIs put errors on the left and successful values on the right.
+
+### Either operations
+
+All `either` operations take the input branch types `L` and `R` first.
+Transformations then take their new payload type `S`; `fold` instead takes an arbitrary computation result `B`.
+Computation callbacks are passed as thunks and run only for the matching branch:
+
+| Operation | Contract |
+| --- | --- |
+| `left L R value`, `right L R value` | Construct the corresponding branch under `Ret` |
+| `fold L R B value on_left on_right` | Apply the handler for the selected branch, returning `B` |
+| `map L R S value transform` | Transform a right payload through `R -> Ret S`, returning `Ret (Either L S)` |
+| `map_left L R S value transform` | Transform a left payload through `L -> Ret S`, returning `Ret (Either S R)` |
+| `and_then L R S value next` | Sequence a right payload through `R -> Ret (Either L S)`; preserve a left payload |
+| `unwrap_or L R value fallback` | Return the right payload, or the fallback for a left value |
+| `is_left L R value`, `is_right L R value` | Return the corresponding branch test as `Ret Bool` |
 
 Topic implementations are independently checkable source terms; open `make` from entries that also export contracts.
 Import `algebra/monoid.zy` and the `effect/` modules directly; `std.zy` does not assemble them.
@@ -247,9 +264,9 @@ in
   exists (VType as VType) (CType as CType) . @[typeof] types)
 ```
 
-The annotation discloses the kind equations, while the inner `pack` supplies a type constructor.
-The [module-interface rules](../../docs/references/language/src/polymorphism-and-packed-values.md#module-interfaces-and-shared-openings) explain
-when inferred and authored interfaces serve different maintenance needs.
+The annotation discloses the kind equations, while the inner `pack` supplies a type constructor. The
+[module-interface rules](../../docs/references/language/src/polymorphism-and-packed-values.md#module-interfaces-and-shared-openings)
+explain when inferred and authored interfaces serve different maintenance needs.
 
 ## Explicit runtime contracts
 
@@ -316,32 +333,38 @@ the combined `IStateExn` interface composes both effects inside that boundary.
 Each effect module's `instance` builder supplies a concrete carrier and its dictionaries;
 generic clients use a witness-dependent `pi`.
 Ret, Optional, and NonDet use an `instance` value rather than a parameterized builder.
-[L11](../../docs/references/language/src/translations/relative-monads.md#packed-effect-instances) owns the packed boundary
-and its connection to monadic-block translation.
+The [packed-effect reference](../../docs/references/library/src/effects/relative-monads.md#packed-effect-instances)
+owns the packed boundary and its connection to monadic-block translation.
 The [capability walkthrough](../../docs/tutorial/zydeco-guide.md#10-capability-dictionaries) shows how
 to open a concrete instance and pass it to a generic client.
 
-The [elementary effect reference](../../docs/references/language/src/translations/effects-and-transformers.md#elementary-effect-instances)
-specifies Reader's scoped replacement, Writer's pure monoid contract, and Optional's short-circuiting.
-Import [Ret](effect/ret.zy), [Reader](effect/reader.zy), [Writer](effect/writer.zy),
-or [Option](effect/option.zy) explicitly with the same Builtin value used by other modules.
-Reader, Writer, Option, State, Exception, and NonDet use the shared
-[derived transformer interface](../../docs/references/language/src/translations/effects-and-transformers.md#derived-relative-monad-transformers).
-Their transformer instances package a lift together with the monad and effect operations.
-The [translated example](../tests/effects/effect-monadic.zy) shows their carrier-polymorphic clients,
-and the [composition example](../tests/effects/effect-operations.zy) exercises the transformers together.
-[Further effect libraries](../../docs/ideas/README.md#further-effect-libraries) lists fair search, control,
-parsing, and other unimplemented families.
+The
+[elementary effect reference](../../docs/references/library/src/effects/transformers-and-instances.md#elementary-effect-instances)
+specifies Reader's scoped replacement, Writer's pure monoid contract, and Optional's short-circuiting. Import
+[Ret](effect/ret.zy), [Reader](effect/reader.zy), [Writer](effect/writer.zy), or [Option](effect/option.zy) explicitly
+with the same Builtin value used by other modules. Reader, Writer, Option, State, Exception, and NonDet use the shared
+[derived transformer interface](../../docs/references/library/src/effects/transformers-and-instances.md#derived-relative-monad-transformers).
+Their transformer instances package a lift together with the monad and effect operations. The
+[translated example](../tests/effects/effect-monadic.zy) shows their carrier-polymorphic clients, the
+[composition example](../tests/effects/effect-operations.zy) exercises the transformers together, and the
+[law suite](../tests/effects/effect-laws.zy) (paired with
+[law counterexamples](../tests/effects/effect-law-counterexamples.zy),
+[derived-law checks](../tests/effects/transformer-laws.zy),
+[State/Exception stack tests](../tests/effects/state-exception-stack.zy), and
+[transformer classifier tests](../../lang/tests/tests/transformers.rs)) validates the equations and boundaries.
+[Further effect libraries](../../docs/ideas/README.md#further-effect-libraries) lists fair search, control, parsing, and
+other unimplemented families.
 
 ### Derived transformers
 
-Use each module's `transformer_instance` builder when the program needs that effect's operations and a lift.
-Effect configuration comes first, followed by the base carrier and its monad dictionary.
-The computation-level `transformer` exposes the common `MonadTrans` interface for generic transformer clients,
-accepting the base as one `MonadInstance` argument after effect configuration: `! state/transformer S (M, base)`.
-[The packed-base contract](../../docs/references/language/src/translations/effects-and-transformers.md#derived-relative-monad-transformers) keeps
-the result indexed by the supplied carrier while the generated monadic interface stays curried internally.
-[The reference](../../docs/references/language/src/translations/effects-and-transformers.md#elementary-transformers) lists the exact constructors and runners.
+Use each module's `transformer_instance` builder when the program needs that effect's operations and a lift. Effect
+configuration comes first, followed by the base carrier and its monad dictionary. The computation-level `transformer`
+exposes the common `MonadTrans` interface for generic transformer clients, accepting the base as one `MonadInstance`
+argument after effect configuration: `! state/transformer S (M, base)`.
+[The packed-base contract](../../docs/references/library/src/effects/transformers-and-instances.md#derived-relative-monad-transformers)
+keeps the result indexed by the supplied carrier while the generated monadic interface stays curried internally.
+[The reference](../../docs/references/library/src/effects/transformers-and-instances.md#elementary-transformers) lists
+the exact constructors and runners.
 
 For example, StateT over Writer keeps state operations and base output at one transformed carrier:
 
@@ -378,8 +401,8 @@ that encoding before adding an ambient continuation primitive to `Ret`.
 The historical exploration points to [the HOPE talk](http://maxsnew.com/publications.html#hope22)
 and [the delimcc API discussion](https://okmij.org/ftp/continuations/implementations.html#delimcc-paper).
 These encodings do not capture native suspension IDs;
-[native lifetime rules](../../docs/references/compiler/src/native-emission.md)
-remain a separate implementation contract.
+[native lifetime rules](../../docs/references/compiler/src/native-emission.md) remain a separate
+implementation contract.
 
 ### Ordered depth-first search
 
@@ -403,10 +426,13 @@ This library term observes the two answers `3, 1` and returns their length.
 The module supplies `choose`, `guard`, `observe_first`, `observe_many`, and `observe_all`.
 Use `transformer_instance M base` for an explicit base carrier and invoke `lift A computation` on that instance.
 The `_t` observers also take `M base` to build their observation algebras.
-The [search reference](../../docs/references/language/src/translations/effects-and-transformers.md#ordered-depth-first-nondeterminism) owns
-the continuation protocol, observation limits, and interaction with base effects.
+The [search reference](../../docs/references/library/src/effects/nondet.md) owns the continuation protocol,
+observation limits, and interaction with base effects.
 The [backtracking example](../tests/monadic/backtrack.zydeco) is a complete executable client;
-the [translated clients](../tests/effects/nondet-monadic.zy) demonstrate `@[monadic]` composition.
+the [translated clients](../tests/effects/nondet-monadic.zy),
+[operation fixture](../tests/effects/nondet-operations.zy), [law fixture](../tests/effects/nondet-laws.zy),
+[returned-list counterexample](../tests/effects/nondet-law-counterexamples.zy),
+and [transformer interactions](../tests/effects/nondet-transformers.zy) exercise these boundaries.
 
 ## Text model
 
@@ -425,8 +451,9 @@ surrogate code points, and values above the Unicode range with `none`.
 
 `Bytes` is an abstract source-defined immutable sequence of octets with no encoding attached.
 [text/bytes.zy](text/bytes.zy) supplies the type and algorithms using explicitly retained memory;
-[the owning design](../../docs/references/language/src/primitives-and-capabilities/views-and-buffers.md#immutable-owners-and-source-bytes) specifies publication
-and retention.
+[the owning design](../../docs/references/library/src/memory/views-and-buffers.md#immutable-owners-and-source-bytes)
+specifies publication and retention, and [source-bytes.zy](../tests/std/source-bytes.zy) exercises slicing,
+bounds, UTF-8, copying, and retention.
 The compiler has no byte-sequence type or operation family.
 Positions and lengths count octets, not scalars, and `bytes/get` reports one octet as a `UInt8`.
 `bytes/slice value start length` returns the window `[start, start + length)`.
@@ -445,8 +472,8 @@ of these foundational operations.
 
 Import [std/memory](memory/package.zy) directly with a shared Builtin opening.
 Its `fixed` builder calculates placement in source value functions; `dynamic` accepts runtime inputs.
-The [language reference](../../docs/references/language/src/primitives-and-capabilities/manual-memory.md#manual-memory) owns memory state,
-layout laws, unsafe obligations, and retention.
+The [standard library reference](../../docs/references/library/src/memory/manual-memory.md#manual-memory)
+owns memory state, layout laws, unsafe obligations, and retention.
 The library introduces no lifetimes or borrow checker.
 
 ```zydeco
@@ -476,20 +503,19 @@ The types guide transitions, while the caller remains responsible for stale alia
 allocation lifetime, initialization, and matching release.
 `unsafe` is an ordinary library namespace documenting those obligations.
 
-Typed records compose storage geometry independently of logical codecs
-and expose field paths plus partial-initialization accessors.
-Arrays supply direct element access and an explicit initialized-prefix builder.
-General views interpret thin, fat, header, or indirect handles independently of the storage layout.
-Fixed recipes specialize through value functions; `DynamicView` and `DynamicField` make runtime selection explicit.
-The [view and layout contracts](../../docs/references/language/src/primitives-and-capabilities/layouts-and-aggregates.md#typed-records-and-field-paths) describe their types,
-costs, and caller obligations.
+Typed records compose storage geometry independently of logical codecs and expose field paths plus
+partial-initialization accessors. Arrays supply direct element access and an explicit initialized-prefix builder.
+General views interpret thin, fat, header, or indirect handles independently of the storage layout. Fixed recipes
+specialize through value functions; `DynamicView` and `DynamicField` make runtime selection explicit. The
+[view and layout contracts](../../docs/references/library/src/memory/layouts-and-aggregates.md#typed-records-and-field-paths)
+describe their types, costs, and caller obligations.
 
 | Need | API or example |
 | --- | --- |
 | Independent geometry and codecs | [storage.zy](memory/storage.zy), [codecs.zy](memory/codecs.zy), [static and runtime example](../tests/std/storage-codecs.zy) |
-| Fixed placement, padding, and alignment | [layout.zy](memory/layout.zy), [aligned record](../tests/std/static-layout.zy) |
-| Typed fields and partial record initialization | [record.zy](memory/record.zy), [field.zy](memory/field.zy), [example](../tests/std/general-views.zy) |
-| Fixed arrays and element builders | [array.zy](memory/array.zy), [construction and cleanup](../tests/std/array-memory.zy) |
+| Fixed placement, padding, and alignment | [layout.zy](memory/layout.zy), [aligned record](../tests/std/static-layout.zy), [phase tests](../../lang/tests/tests/static_layout.rs) |
+| Typed fields and partial record initialization | [record.zy](memory/record.zy), [field.zy](memory/field.zy), [example](../tests/std/general-views.zy), [state tests](../../lang/tests/tests/general_memory.rs) |
+| Fixed arrays and element builders | [array.zy](memory/array.zy), [construction and cleanup](../tests/std/array-memory.zy), [padded stride](../tests/std/storage-arrays.zy) |
 | Thin, fat, header, and indirect views | [view.zy](memory/view.zy), [header and payload composition](../tests/std/header-array.zy) |
 | Runtime field paths, views, and arrays | [runtime example](../tests/std/runtime-memory.zy) |
 | Runtime placement | [dynamic-layout.zy](memory/dynamic-layout.zy), [example](../tests/std/representation.zy) |
@@ -499,7 +525,7 @@ costs, and caller obligations.
 | Counted pointers with layout-derived indexing | `slices/for_layout` in [slice.zy](memory/slice.zy), [example](../tests/std/memory-views.zy) |
 | Raw memory effects | [native.zy](memory/native.zy) |
 | Share a pointer with another source module | [CPS worker](../tests/std/represented-call/main.zy) |
-| C input and mutable output | [aligned input](../tests/ffi/static-layout.zy), [output](../tests/ffi/mutable-output.zy) |
+| C input, mutable output, and decoding | [aligned input](../tests/ffi/static-layout.zy), [output](../tests/ffi/mutable-output.zy), [C specimen](../tests/ffi/contracts.c), [decoder](../tests/ffi/record-input.zy), [FFI tests](../../lang/tests/tests/ffi_examples.rs) |
 
 An explicitly selected array codec copies whole logical values through the abstract `Values A` managed list.
 Use `elements/unsafe/init_each` and the prefix builder to construct storage directly without that intermediate value.
@@ -533,10 +559,10 @@ The counts below describe payload work; Wasm host address lookup and ordinary so
 
 [numeric/codecs.zy](numeric/codecs.zy) gives every scalar `to_le_bytes` and `from_le_bytes`;
 std includes these operations in its numeric modules.
-The low-level packed value for bytes groups `from_retained`, `with_window`, `copy_to`,
-and fixed-size `build` under `bytes/unsafe`.
-Their [caller contracts](../../docs/references/language/src/primitives-and-capabilities/views-and-buffers.md#immutable-owners-and-source-bytes) cover initialized extents,
-retention, immutable aliases, and one completion per fill.
+The low-level packed value for bytes groups `from_retained`,
+`with_window`, `copy_to`, and fixed-size `build` under `bytes/unsafe`. Their
+[caller contracts](../../docs/references/library/src/memory/views-and-buffers.md#immutable-owners-and-source-bytes)
+cover initialized extents, retention, immutable aliases, and one completion per fill.
 A future [memory-backed writer](../../docs/ideas/README.md#growable-byte-builders-and-incremental-streams)
 would provide incremental construction without changing immutable-byte observations.
 
@@ -567,15 +593,15 @@ The Builtin forms implement these results as computation-polymorphic branches.
 The public library reifies a successful branch with `option/some` and a failed branch with `option/none`.
 Neither backend has a hidden sentinel, and malformed input does not panic the host runtime.
 
-The integer types are `Int8`, `Int16`, `Int32`, `Int64`, `Int`, `UInt8`, `UInt16`, `UInt32`, `UInt64`, and `UInt`.
-Their domains and arithmetic follow [L13](../../docs/references/language/src/primitives-and-capabilities.md).
-`Int` and `UInt` are tagged machine integers; the numbered integer types have exact widths.
-`int64/from_int` and `uint64/from_uint` widen machine integers without loss.
-`int64/to_int` and `uint64/to_uint` select failure or success continuations according to the destination range;
-see the [conversion contract](../../docs/references/language/src/primitives-and-capabilities.md).
-Integer division and remainder are not yet wrapped in checked operations.
-The generic numeric capability layer deliberately excludes them;
-a future checked-arithmetic capability should make their failure behavior explicit.
+The integer types are `Int8`, `Int16`, `Int32`, `Int64`, `Int`, `UInt8`, `UInt16`, `UInt32`, `UInt64`, and `UInt`. Their
+domains and arithmetic follow
+[Primitive Values and Capabilities](../../docs/references/language/src/primitives-and-capabilities.md#scalar-ranges-and-conversions).
+`Int` and `UInt` are tagged machine integers; the numbered integer types have exact widths. `int64/from_int` and
+`uint64/from_uint` widen machine integers without loss. `int64/to_int` and `uint64/to_uint` select failure or success
+continuations according to the destination range; see the
+[conversion contract](../../docs/references/language/src/primitives-and-capabilities.md). Integer division and remainder
+are not yet wrapped in checked operations. The generic numeric capability layer deliberately excludes them; a future
+checked-arithmetic capability should make their failure behavior explicit.
 
 `Float32` and `Float64` are IEEE-754 binary32 and binary64 values backed by Rust's `f32` and `f64`.
 Decimal and scientific literals use an expected `Float32` or `Float64` type and default to `Float64` otherwise.

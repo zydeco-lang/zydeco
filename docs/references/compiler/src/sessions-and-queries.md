@@ -82,7 +82,8 @@ multiple cycles, and correction through overlays.
 The CLI's [execution runner](../../../../cli/src/execution.rs) consumes checked `ExecutableProgram` snapshots,
 sharing their immutable arenas across targets and lowering once for compiled backends.
 It prepares temporary artifacts before execution and owns their cleanup.
-[L15](../../language/src/execution-profiles.md#selecting-an-execution-backend) owns backend execution policy.
+The [CLI guide](../../../../cli/README.md#selecting-an-execution-backend) documents command-line backend selection,
+and [Execution Profiles](../../language/src/execution-profiles.md) owns backend runtime contracts.
 
 `CompilerSession` is the Salsa database and revision owner.
 [ScopedData](../../../../lang/statics/src/query/input.rs) connects the resolved root,

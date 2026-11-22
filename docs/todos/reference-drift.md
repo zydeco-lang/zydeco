@@ -48,18 +48,18 @@ not a missing positivity guarantee to add to the reference.
 
 ## Execution backend and representation scope
 
-- [ ] **Stale four-backend sentences.** Two reference sentences
-  still say the corresponding tests run "on all four backends": the
-  [C14 argument-lookup account](../references/compiler/src/builtins-and-foreign-calls.md)
-  at `compiler.md:3076` and [L14 foreign decoding](../references/language/src/foreign-interfaces.md#foreign-decoding) at `language.md:2407`.
+- [ ] **Stale four-backend sentences.** Two reference sentences still say the corresponding tests run
+  "on all four backends": the [C14 argument-lookup account](../references/compiler/src/builtins-and-foreign-calls.md)
+  at `compiler.md:3076` and [L14 foreign decoding](../references/language/src/foreign-interfaces.md#foreign-decoding)
+  at `language.md:2407`.
   Commit `5e4f4e46` removed the abstract-machine Wasm backend,
-  and [L15 backend selection](../references/language/src/execution-profiles.md#selecting-an-execution-backend) now names `interpreter`,
+  and [CLI backend selection](../../cli/README.md#selecting-an-execution-backend) now names `interpreter`,
   `exe` (AMD64), and `wasm-sps`.
   The tests register exactly those three ([builtin.rs:82-103](../../lang/tests/tests/builtin.rs)
   and [ffi_examples.rs:165](../../lang/tests/tests/ffi_examples.rs)).
   Repair both sentences to say three backends and keep the existing test and specimen lists.
-- [ ] **`--representation` scope.** The [C10 policy selection](../references/compiler/src/zasm.md#policy-selection) account says
-  at `compiler.md:2493` that the CLI's `build --representation` applies
+- [ ] **`--representation` scope.** The [C10 policy selection](../references/compiler/src/zasm.md#policy-selection)
+  account says at `compiler.md:2493` that the CLI's `build --representation` applies
   to "ZASM, AMD64 assembly/executables, and the Wasm backend".
   The [CLI compiler](../../cli/src/compile.rs) also applies the selected policy to library and unit lowering:
   `lower_export` at `compile.rs:142` and `lower_unit` at `compile.rs:163` call `with_representation`,
@@ -72,19 +72,17 @@ not a missing positivity guarantee to add to the reference.
 - [ ] **Bundled numeric decimal spelling.** [wasm-numeric.mjs:1](../../cli/wasm/wasm-numeric.mjs) calls
   the decimal spelling "shared by the interpreter and native numeric builtins".
   The file is a JavaScript re-implementation
-  of the [L13 Rust Display spelling](../references/language/src/primitives-and-capabilities.md)
-  (`language.md:1824`), imported by the [Node host](../../cli/wasm/wasm-host.mjs) at `wasm-host.mjs:3`
-  and checked against Rust by the [Wasm float-text parity test](../../lang/tests/tests/wasm_float_text.rs)
-  at `wasm_float_text.rs:62`; the [execution runner](../../cli/src/execution.rs) bundles it
-  for Wasm execution at `execution.rs:162`.
+  of the [L13 Rust Display spelling](../references/language/src/primitives-and-capabilities.md) (`language.md:1824`),
+  imported by the [Node host](../../cli/wasm/wasm-host.mjs) at `wasm-host.mjs:3` and checked against Rust
+  by the [Wasm float-text parity test](../../lang/tests/tests/wasm_float_text.rs) at `wasm_float_text.rs:62`;
+  the [execution runner](../../cli/src/execution.rs) bundles it for Wasm execution at `execution.rs:162`.
   [C13 module and host ABI](../references/compiler/src/webassembly.md#module-and-host-abi) already treats the Node host
   as a separate implementation.
   Repair the comment to describe a cross-language copy checked by the parity test,
   or share one table across the implementations; do not imply shared code.
-- [ ] **Exported host-symbol prefix.**
-  [C11 native preparation](../references/compiler/src/native-emission.md)
-  and [C12 native runtime](../references/compiler/src/native-runtime.md) own the
-  native model, but neither explains the leading `\x01` in exported host symbol names.
+- [ ] **Exported host-symbol prefix.** [C11 native preparation](../references/compiler/src/native-emission.md)
+  and [C12 native runtime](../references/compiler/src/native-runtime.md) own the native model,
+  but neither explains the leading `\x01` in exported host symbol names.
   [runtime/stub.rs:548](../../runtime/stub.rs) exports `\x01zydeco_frame_step`,
   and [lang/machine/build.rs:51-65](../../lang/machine/build.rs) generates the `\x01`-prefixed link and export names.
   Mach-O normally underscores C symbols;
@@ -96,8 +94,8 @@ not a missing positivity guarantee to add to the reference.
 ## Component and client accounts
 
 - [ ] **Dynamics module map.**
-  [C7 linking and the reference interpreter](../references/compiler/src/reference-interpreter.md)
-  makes the [dynamics guide](../../lang/dynamics/src/README.md) the runtime module map at `compiler.md:1468`,
+  [C7 linking and the reference interpreter](../references/compiler/src/reference-interpreter.md) makes
+  the [dynamics guide](../../lang/dynamics/src/README.md) the runtime module map at `compiler.md:1468`,
   but the guide's key-components list omits `host` and `foreign` and the `memory`
   and `representation` support modules declared in [lib.rs:8-28](../../lang/dynamics/src/lib.rs).
   Add the omitted modules to the guide and mark which are public; no behavior changes.

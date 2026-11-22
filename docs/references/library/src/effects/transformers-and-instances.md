@@ -1,4 +1,4 @@
-# Effect Instances and Transformers
+# Derived Transformers and Elementary Effects
 
 ## Derived Relative Monad Transformers
 
@@ -41,7 +41,7 @@ Import that helper inside the closed translated payload together with the source
 Translation acts on both, generating the transformed dictionary and lift at once.
 It does not inspect an opaque dictionary passed from outside the annotation.
 Dependencies must be bound as parameters inside the payload, as required
-by the [closed translation boundary](algebra-translation.md#closed-translation-boundary).
+by the [closed translation boundary](../../../language/src/translations/monadic-blocks.md#closed-translation-boundary).
 
 The adapter's input classifier is itself derived by translating `fn (T : VType -> CType) => Transformer Ret T`
 as a type root.
@@ -58,22 +58,21 @@ Each effect similarly adapts its generated operation interface.
 These adapters retain meaningful structure evidence: in particular, a computation-type quantifier
 in the source introduces an `Algebra M` argument that cannot be discarded.
 The NonDet source quantifies over a computation answer `R` without an algebra parameter;
-translation produces the algebra-bearing [public carrier](#ordered-depth-first-nondeterminism).
+translation produces the algebra-bearing [public carrier](nondet.md#carrier-and-search-operations).
 The public concrete instance specializes the derived carrier to `Ret`, which need not be definitionally identical
 to the untransformed source carrier.
 
-A `transformer_instance` value function exposes the manifest transformed carrier,
-one `monad` dictionary, its `lift`, and the effect's own operations.
-`Lift M T` abbreviates the lift classifier above; `ITransformer M T` contains only `lift : Thk (Lift M T)`.
-It can combine with effect bundles under `WithMonad`, without another carrier or monad dictionary.
-An ordinary effect client receives an explicit projection of the fields its interface requests;
-for example, pass `(T, #monad = t/monad, #state = t/state)` to `WithMonad (IState S)`.
-A lift-aware client instead uses `WithMonad (ITransformer M)` or a composition of that bundle with effect operations.
-Concrete `instance` builders specialize to `Ret` and project the ordinary effect interface.
-The computation-level `transformer` is a view of the same derived instance, not a separate dictionary implementation.
-It opens its packed base and forwards the curried `M base` arguments to `transformer_instance`.
-The generated `@[monadic]` interface also remains curried; packaging belongs to the library boundary,
-with no definitional equality between the packed and curried classifiers (§9).
+A `transformer_instance` value function exposes the manifest transformed carrier, one `monad` dictionary, its `lift`,
+and the effect's own operations. `Lift M T` abbreviates the lift classifier above; `ITransformer M T` contains only
+`lift : Thk (Lift M T)`. It can combine with effect bundles under `WithMonad`, without another carrier or monad
+dictionary. An ordinary effect client receives an explicit projection of the fields its interface requests; for example,
+pass `(T, #monad = t/monad, #state = t/state)` to `WithMonad (IState S)`. A lift-aware client instead uses
+`WithMonad (ITransformer M)` or a composition of that bundle with effect operations. Concrete `instance` builders
+specialize to `Ret` and project the ordinary effect interface. The computation-level `transformer` is a view of the same
+derived instance, not a separate dictionary implementation. It opens its packed base and forwards the curried `M base`
+arguments to `transformer_instance`. The generated `@[monadic]` interface also remains curried; packaging belongs to the
+library boundary, with no definitional equality between the packed and curried classifiers
+([witness-dependent classifiers](../../../language/src/polymorphism-and-packed-values.md#universal-polymorphism-and-dependent-classifiers)).
 
 External dependencies remain explicit at the translation boundary.
 Writer supplies its source with an empty value and an append operation;
@@ -82,12 +81,6 @@ This retains the [Writer output contract](#writer-output-contract),
 rather than accepting arbitrary effectful base-monad append operations.
 NonDet keeps its shared data package and list observations outside the translated search core,
 preserving the caller's existing `List` witness.
-
-The [uniform-interface fixture](../../../../../lib/tests/effects/transformer-operations.zy) exercises
-all six transformer families through `MonadTrans` and a packed lift-aware client.
-The [classifier tests](../../../../../lang/tests/tests/transformers.rs) pair closed source derivation
-and matching carrier witnesses with rejection of captured dictionaries, mismatched lifts,
-and missing answer-type algebras.
 
 ## Elementary Effect Instances
 
@@ -158,7 +151,7 @@ StateT S M A     = S -> M (A * S)
 ExceptionT E M A = M (Either E A)
 ```
 
-Exception uses the data library's shared [`Either E A`](../sources/standard-library.md#either-values),
+Exception uses the data library's shared [`Either E A`](../organization.md#either-values),
 with `Left E` for errors and `Right A` for successful values.
 The builders share the [derived transformer interface](#derived-relative-monad-transformers):
 
@@ -181,16 +174,6 @@ For example, `OptionT (Writer W) A` can retain output with an absent answer,
 whereas `WriterT W Optional A` has no returned output when its base computation produces `None`.
 This difference follows from the carrier equations, not from a common rollback policy.
 
-The [operation fixture](../../../../../lib/tests/effects/effect-operations.zy) exercises scoped environments,
-noncommutative output, lazy fallback, and transformer order.
-The [law fixture](../../../../../lib/tests/effects/effect-laws.zy) checks the four monad equations
-and lift laws using an ambient mutable trace.
-Its [counterparts](../../../../../lib/tests/effects/effect-law-counterexamples.zy) detect repeated execution
-and effectful append despite successful typechecking.
-The [translated clients](../../../../../lib/tests/effects/effect-monadic.zy) demonstrate closed adapters,
-including the structure arguments required for polymorphic operations.
-These finite tests are regression evidence, not proofs for arbitrary dictionaries.
-
 ### State and Exception Composition
 
 StateT's `.get` and `.put` use the current state, and bind passes the state returned
@@ -198,113 +181,13 @@ by the first computation to its continuation.
 ExceptionT's `.throw` returns `Left`; bind skips its continuation on that case.
 Its `catch` runs a handler only for `Left` and preserves a successful `Right` without invoking the handler.
 Ambient and base effects already performed remain observable through recovery.
-The [derived-law fixture](../../../../../lib/tests/effects/transformer-laws.zy) checks both ordinary instances,
-their transformers over Writer, and their lifts with exact ambient traces.
 
 The standard combined carrier is `StateExn S E A = StateT S (Exception E) A`, or `S -> Ret (Either E (A * S))`.
 It composes the derived State transformer with Exception rather than maintaining another bind implementation.
 Failure discards the updated state, and its catch handler restarts from the state at entry to the protected computation.
-The [combined example](../../../../../lib/tests/effects/state-exception-stack.zy) tests this policy.
 
 Reversing the stack gives `ExceptionT E (State S) A = S -> Ret (Either E A * S)`.
 The state remains observable on failure, and a catch handler continues with that updated state.
-The [translated stack client](../../../../../lib/tests/effects/transformer-monadic.zy) distinguishes these policies
-through the same packed operations;
-the [short-circuit fixture](../../../../../lib/tests/monadic/nominal-short-circuit.zy)
-also admits the state-preserving carrier.
 Neither policy follows from the combined operation interface alone.
-
-## Ordered Depth-First Nondeterminism
-
-A search can produce an answer before exploring its remaining alternatives.
-The [NonDet library](../../../../../lib/std/effect/nondet.zy) represents that remaining work as a continuation,
-so bind can explore the descendants of one answer before requesting another.
-The standard instances preserve branch order and duplicates and use depth-first traversal.
-They provide neither fair interleaving nor implicit pruning or deduplication.
-
-The module exports a `make` value-function factory taking Builtin
-and then the caller's shared [`DataPackage`](../../../../../lib/std/data/package.zy).
-Its list inputs and observations use that package's `List` witness and operations;
-the factory does not create a separate list type.
-The carriers are:
-
-```text
-NonDetT M A = forall (R : CType) .
-  Thk (Algebra M R) -> Thk (A -> Thk R -> R) -> Thk R -> R
-NonDet A = NonDetT Ret A
-```
-
-The observer chooses an answer protocol `R` and supplies its base-monad algebra.
-The success continuation receives one answer and a thunk for the remaining search at `R`;
-the failure continuation describes exhaustion.
-Bind replaces success with a continuation that explores the selected answer's descendants,
-passing the remaining alternatives as their failure continuation.
-The rest is an ordinary reusable thunk, not a linear or memoized cursor.
-Repeated forcing repeats its computation and effects; the standard observers force each visited rest once.
-
-`MonadNonDet M` has `.empty : forall (A : VType) . M A`
-and `.choice : forall (A : VType) . Thk (M A) -> Thk (M A) -> M A`.
-`INonDet M` contains `nondet : Thk (MonadNonDet M)` and combines with the shared monad dictionary
-under `WithMonad INonDet`.
-`instance` exposes `NonDet`; `transformer_instance M base` exposes `NonDetT M`, its dictionary,
-lift, and search operations through the [common derivation](#derived-relative-monad-transformers).
-The shared constructor takes `base : Thk (Monad M)` even though search sequencing and choice compose continuations.
-The observation supplies the algebra used to interpret lifted base computations.
-
-The standard `.choice A left right` starts with `left` and suspends `right`
-until the left search and its descendants are exhausted.
-`.empty A` invokes failure without producing an answer.
-`choose instance A values` visits the supplied list in order, including duplicates;
-`guard instance condition` produces one Unit answer for true and no answer for false.
-Choice is associative with empty as a two-sided identity.
-Bind distributes over choice in its first argument and skips its continuation after empty.
-These laws do not imply commutative or idempotent choice, or that discarding all answers undoes effects.
-
-The concrete observers are:
-
-| Operation | Observation | Exploration boundary |
-| --- | --- | --- |
-| `observe_first A computation` | `Ret (Option A)` | Stops at the first answer; returns `None` on exhaustion |
-| `observe_many A limit computation` | `Ret (List A)` | Stops after at most `limit` answers; a nonpositive limit does not force the computation |
-| `observe_all A computation` | `Ret (List A)` | Explores to exhaustion, retaining order and duplicates |
-
-The bound in `observe_many` limits answers, not execution steps.
-An infinite or diverging left branch can starve later branches; even `observe_first` may therefore diverge.
-`observe_all` requires the explored search to terminate to return its list.
-Stopping after an answer does not force the rest merely to determine whether another answer exists.
-
-Each `_t` observer takes `M base` before the concrete observer's arguments
-and returns the corresponding `M (Option A)` or `M (List A)`.
-Here `base : Thk (Monad M)` constructs the algebra for that observer's protocol.
-The instance's `lift A computation` uses the algebra passed to the search
-to execute the base computation and yield its answer.
-With lawful base dictionaries and algebras it preserves return, bind, and base-effect order.
-Custom observers that call the carrier directly must supply a lawful `Algebra M R`.
-
-Explored ambient and base effects remain observable when a branch later produces no answers.
-For example, `NonDetT (Writer W)` accumulates the output of visited branches, including failed branches,
-whereas `WriterT W NonDet` attaches output to each surviving answer.
-A failure in the base carrier is distinct from search exhaustion: lifting `None`
-from Optional propagates that failure rather than trying the next search alternative.
-No operation automatically rolls back state or other effects.
-
-### Lists and Search Observations
-
-Collecting answers is an observation, not the representation used by search bind.
-The eager candidate `Ret (List A)` executes a continuation on every element before yielding the combined list.
-For input `[1, 2]`, let `f i` emit `F_i` and return one result, and let `g` emit `G_i` on that result.
-Left-associated bind emits `F_1, F_2, G_1, G_2`; right-associated bind emits `F_1, G_1, F_2, G_2`.
-Equal lists therefore do not establish associativity in the presence of ambient effects.
-The [relative-monad paper, §5.4](https://arxiv.org/html/2502.15031v2#S5.SS4),
-identifies the commutativity restriction on this returned-list representation.
-NonDet imposes no such commutativity restriction on its base,
-and collecting its answers is not generally a monad-preserving conversion to returned lists.
-
-The [operation fixture](../../../../../lib/tests/effects/nondet-operations.zy) checks ordering,
-duplicate preservation, repeated observation, lazy branches, and bounded observation of a productive infinite search.
-The [law fixture](../../../../../lib/tests/effects/nondet-laws.zy) checks branching monad
-and choice laws, linearity, and lifts over Reader and Writer.
-The [returned-list counterexample](../../../../../lib/tests/effects/nondet-law-counterexamples.zy) is well-typed
-but distinguishes the associativity traces above.
-[Transformer interactions](../../../../../lib/tests/effects/nondet-transformers.zy) and
-[translated clients](../../../../../lib/tests/effects/nondet-monadic.zy) exercise the other boundaries described here.
+See the [standard library guide](../../../../../lib/std/README.md#relative-monads-and-effect-examples)
+for worked examples and law tests.

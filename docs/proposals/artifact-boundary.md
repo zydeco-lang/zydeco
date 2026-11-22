@@ -19,8 +19,8 @@ its artifact additionally relies on term-oriented composition.
 The stack-passing-style (SPS) paper contributes two calculi, SPS and `SPS_l`, and an implementation claim:
 lowering, β-simplification, closure conversion with existential packages, and lowering to executable code.
 The [language reference](../references/language/src/introduction.md)
-and the [compiler reference](../references/compiler/src/introduction.md) already own those semantics and the phases that realize them;
-`lang/stackir` implements both calculi.
+and the [compiler reference](../references/compiler/src/introduction.md) already own those semantics
+and the phases that realize them; `lang/stackir` implements both calculi.
 
 Two dated studies measured the repository against those claims.
 The **retired 2026-10-21 cleanup audit** catalogued features whose only client is their own tests
@@ -43,7 +43,8 @@ A part of the implementation serves the artifact when it contributes to one of t
 This is the criterion used throughout this memo and by every later proposal.
 
 - **The OOPSLA artifact.** Relative monads model stack-manipulating computation
-  ([L11](../references/language/src/translations/relative-monads.md#relative-monads)); monadic blocks reinterpret CBPV code with any relative monad,
+  ([Relative Monads](../references/library/src/effects/relative-monads.md#relative-monads));
+  monadic blocks reinterpret CBPV code with any relative monad,
   including the transformer derivation; and term-oriented composition gives each term static semantics
   in a context ([L1](../references/language/src/conventions.md#term-oriented-composition)).
   The artifact's executable evidence is the interpreter plus the examples
@@ -51,11 +52,9 @@ This is the criterion used throughout this memo and by every later proposal.
 - **The SPS paper.** SPS makes the ambient stack explicit and second-class;
   `SPS_l` is its first-order closure-converted form.
   The implementation claim covers lowering checked CBPV to SPS
-  and normalizing it ([C8](../references/compiler/src/sps.md)),
-  closure conversion with existential closure
-  and continuation packages ([C9](../references/compiler/src/closure-conversion.md)),
-  and lowering through ZASM and the native or Wasm backend
-  to executable code ([C10–C13](../references/compiler/src/zasm.md)).
+  and normalizing it ([C8](../references/compiler/src/sps.md)), closure conversion with existential closure
+  and continuation packages ([C9](../references/compiler/src/closure-conversion.md)), and lowering
+  through ZASM and the native or Wasm backend to executable code ([C10–C13](../references/compiler/src/zasm.md)).
   The compiled-path examples under `lib/tests/core` and the directive runner are its evidence.
 - **Everything else** is judged by whether a maintained client needs it, or lives outside the artifact.
   Tooling, formatting fidelity, incrementality, packages, FFI, manual memory,
@@ -161,7 +160,7 @@ The starting point is the retired size analysis's core list, with the support cr
 | `lang/assembly`, `lang/amd64`, `lang/machine`, `runtime/` | Keep: ZASM, native preparation, emission, and the shared runtime model | [C10–C12](../references/compiler/src/zasm.md) |
 | `lang/wasm-sps`, `lang/wasm-common` | Keep: the structured Wasm backend from SPSLow and its runtime contract | [C13](../references/compiler/src/webassembly.md) |
 | `lang/session` | Reduced: source loading, package resolution, coarse analysis, and materialization for the CLI and tests; overlays and editor recovery are extras | [C3](../references/compiler/src/sessions-and-queries.md) |
-| `cli` | Reduced: `check`, `run`, `build`, `test`, and SPS pass inspection for interpreter, AMD64, and `wasm-sps`; formatting, REPL, package listing, C-library and native-unit artifact commands are extras | [C1](../references/compiler/src/architecture.md), [L15](../references/language/src/execution-profiles.md#selecting-an-execution-backend) |
+| `cli` | Reduced: `check`, `run`, `build`, `test`, and SPS pass inspection for interpreter, AMD64, and `wasm-sps`; formatting, REPL, package listing, C-library and native-unit artifact commands are extras | [C1](../references/compiler/src/architecture.md), [CLI backend selection](../../cli/README.md#selecting-an-execution-backend) |
 | `lang/tests` | Keep one consolidated harness for the core fixtures | [C16](../references/compiler/src/validation-and-extending.md#source-fixtures-and-runtime-oracles) |
 | `lib/std` | Reduced: the modules the core programs and OOPSLA examples reach, including the monad interfaces and the buffer/bytes storage `std.zy` reaches | [L12](../references/language/src/sources.md) |
 | `lib/tests/oopsla`, `lib/tests/core`, `lang/tests/cases` | Keep as paper evidence: OOPSLA examples and the SPS compiled-path fixtures | [C16](../references/compiler/src/validation-and-extending.md#source-fixtures-and-runtime-oracles) |
@@ -287,11 +286,11 @@ Every affected rule keeps one canonical home; extras material moves or is marked
 
 | Reference area | Consequence | Required action |
 | --- | --- | --- |
-| L11 relative monads | Translation stays, restricted scope; test-only payloads become rejections | Edit coverage and closed-boundary text with the D7 change ([L11](../references/language/src/translations/relative-monads.md#relative-monads)) |
-| L12 sources, imports, and entry | Packages stay in core; editor overlays and discovery tooling become extras | Keep package semantics canonical; mark editor incrementality as extras ([L12](../references/language/src/sources.md)) |
-| L13 primitive values and capabilities | Numerics reduce; manual memory moves; bytes and I/O remain | Edit the primitive and manual-memory scopes with D8 and the memory decision ([L13](../references/language/src/primitives-and-capabilities.md)) |
-| L14 foreign interfaces | FFI and native units move behind an extras feature | Mark the profile as optional and keep the contract canonical ([L14](../references/language/src/foreign-interfaces.md)) |
-| L15 execution profiles | Core keeps interpreter, AMD64, and `wasm-sps`; tooling profiles leave | Update the profile table and backend selection policy ([L15](../references/language/src/execution-profiles.md#selecting-an-execution-backend)) |
+| Monadic blocks & relative monads | Translation stays, restricted scope; test-only payloads become rejections | Edit coverage and closed-boundary text with the D7 change ([Monadic Blocks](../references/language/src/translations/monadic-blocks.md)) |
+| Sources, imports, and entry | Packages stay in core; editor overlays and discovery tooling become extras | Keep package semantics canonical; mark editor incrementality as extras ([Sources](../references/language/src/sources.md)) |
+| Primitive values and capabilities | Numerics reduce; manual memory moves; bytes and I/O remain | Edit the primitive and manual-memory scopes with D8 and the memory decision ([Primitives](../references/language/src/primitives-and-capabilities.md)) |
+| Foreign interfaces | FFI and native units move behind an extras feature | Mark the profile as optional and keep the contract canonical ([Foreign Interfaces](../references/language/src/foreign-interfaces.md)) |
+| Execution profiles | Core keeps interpreter, AMD64, and `wasm-sps`; tooling profiles leave | Update the profile table and backend selection policy ([Execution Profiles](../references/language/src/execution-profiles.md), [CLI](../../cli/README.md#selecting-an-execution-backend)) |
 | C3 source loading and sessions | Reduced core session; overlays, completion, and editor queries move | Split or mark the editor-facing subsections ([C3](../references/compiler/src/sessions-and-queries.md)) |
 | C10–C14 backend chapters | Core keeps the compiled path; ZASM, native, Wasm, FFI, and host text adjust with D3, D4, and the extras | Keep the paper's claim true; update current-implementation accounts only ([C10–C14](../references/compiler/src/zasm.md)) |
 | C15 tooling | Cajun, TUI, formatter fidelity, and REPL move to extras | Mark them as extras and move presentation detail where it belongs ([C15](../references/compiler/src/tooling.md)) |
@@ -416,8 +415,8 @@ polymorphic value functions, applicative nominal families, and value roots have 
 together about 1.5k lines and 45 fixtures at the measured revision.
 Those payloads share nominal-translation machinery with the computation translation std uses,
 so the saving overlaps code that stays.
-Rejecting the test-only payloads with the existing `tyck.expressivity` error preserves
-the [closed translation boundary](../references/language/src/translations/algebra-translation.md#closed-translation-boundary)
+Rejecting the test-only payloads with the existing `tyck.expressivity` error preserves the
+[closed translation boundary](../references/language/src/translations/monadic-blocks.md#closed-translation-boundary)
 and keeps external values as explicit parameters.
 Current evidence remains the standard-library effect modules and the OOPSLA artifact, which imports only `monad.zy`.
 
@@ -588,8 +587,9 @@ at each public entry point, recording arm prefixes, existential prefixes,
 metadata prefixes, line extents, and comment anchors.
 A canonical printer without retention would be a fraction of the size and the parser would keep only spans;
 `lang/surface/src/textual/pretty.rs` alone is 5,489 lines today.
-The CLI and Cajun share that implementation, so the boundary question is whether canonical source output is core tooling
-or an extra; current formatting behavior is owned by [C15](../references/compiler/src/tooling/formatting-and-rendering.md).
+The CLI and Cajun share that implementation,
+so the boundary question is whether canonical source output is core tooling or an extra;
+current formatting behavior is owned by [C15](../references/compiler/src/tooling/formatting-and-rendering.md).
 
 Status: decision needed — the boundary decides whether fidelity joins the formatter in extras;
 a minimal canonical output, if the core needs one, stays.

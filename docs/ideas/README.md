@@ -49,7 +49,8 @@ Value-pattern usefulness work does not implicitly extend the admitted pattern la
 
 Design introduction of kind witnesses separately from the implemented type-witness `pack` form.
 Pair accepted packed values with ill-scoped or mismatched evidence.
-[L9](../references/language/src/polymorphism-and-packed-values.md#module-interfaces-and-shared-openings) owns current module composition.
+[L9](../references/language/src/polymorphism-and-packed-values.md#module-interfaces-and-shared-openings)
+owns current module composition.
 
 ### Computation witness routes
 
@@ -57,7 +58,8 @@ Extend computation application beyond its leading existential prefix only
 with an explicit witness route through preceding products.
 Preserve identity and non-escape checks;
 value-function projection evidence alone does not implement this computation boundary.
-[L9](../references/language/src/polymorphism-and-packed-values.md#module-interfaces-and-shared-openings) owns current module composition.
+[L9](../references/language/src/polymorphism-and-packed-values.md#module-interfaces-and-shared-openings)
+owns current module composition.
 The [compiler boundary issue](../todos/compiler-boundaries.md#nested-witness-diagnostic) tracks the current
 diagnostic limitation; improving that rejection does not implement broader routes.
 
@@ -65,7 +67,8 @@ diagnostic limitation; improving that rejection does not implement broader route
 
 Decide whether companion interfaces need generation or synchronization support.
 Preserve the distinction between an inferred `typeof` contract and an explicitly authored abstraction boundary.
-[L9](../references/language/src/polymorphism-and-packed-values.md#module-interfaces-and-shared-openings) owns current module composition.
+[L9](../references/language/src/polymorphism-and-packed-values.md#module-interfaces-and-shared-openings)
+owns current module composition.
 
 ### Recursive admissibility
 
@@ -87,8 +90,8 @@ and provenance rules; and atomics and volatile access need dedicated primitive s
 Two smaller library additions are typed unchecked indexing that states the obligations it transfers
 and a no-read discard transition for initialized storage.
 None of these introduces source lifetimes without a separate decision.
-[L13](../references/language/src/primitives-and-capabilities/manual-memory.md#manual-memory) owns the implemented layouts, fields, arrays, and views;
-[memory compilation](../proposals/memory-compilation.md) owns the compiler gaps.
+[Manual Memory](../references/library/src/memory/manual-memory.md#manual-memory) owns the implemented layouts,
+fields, arrays, and views; [memory compilation](../proposals/memory-compilation.md) owns the compiler gaps.
 
 ### Functional byte updates with allocation reuse
 
@@ -103,32 +106,32 @@ Fallible codecs that cannot preflight completely need staging,
 and non-contiguous storage needs a workload that justifies it.
 Destination-passing style, OCaml's tail-modulo-constructor transformation,
 and MLIR bufferization are the precedents for separating destination placement from ownership evidence.
-[Retained bytes](../references/language/src/primitives-and-capabilities/views-and-buffers.md#immutable-owners-and-source-bytes) own the current observations.
+[Retained bytes](../references/library/src/memory/views-and-buffers.md#immutable-owners-and-source-bytes)
+own the current observations.
 
 ### Growable byte builders and incremental streams
 
-Repeated immutable append is quadratic. A memory-backed writer could reuse the capability model
-for amortized pushes and publish one immutable `Bytes` result through CPS destination construction,
-with growth reserving capacity before any observable change and failure preserving committed chunks.
-A chunk-processing driver could pass each read chunk to its consumer and request the next read only on completion,
-distinguishing EOF, read failure, consumer failure, and explicit stop.
-Buffered and seekable streams, asynchronous protocols, and native paths are further extensions,
-each with its own position, cancellation, or aliasing contract.
-[L13](../references/language/src/primitives-and-capabilities.md#streams-and-process-arguments) owns the current stream observations;
-the [fixed-capacity buffer](../references/language/src/primitives-and-capabilities/views-and-buffers.md#byte-builders) is the implemented core.
+Repeated immutable append is quadratic. A memory-backed writer could reuse the capability model for amortized pushes and
+publish one immutable `Bytes` result through CPS destination construction, with growth reserving capacity before any
+observable change and failure preserving committed chunks. A chunk-processing driver could pass each read chunk to its
+consumer and request the next read only on completion, distinguishing EOF, read failure, consumer failure, and explicit
+stop. Buffered and seekable streams, asynchronous protocols, and native paths are further extensions, each with its own
+position, cancellation, or aliasing contract.
+[Primitive Values and Capabilities](../references/language/src/primitives-and-capabilities.md#streams-and-process-arguments)
+owns the current stream observations; the
+[fixed-capacity buffer](../references/library/src/memory/views-and-buffers.md#byte-builders) is the implemented core.
 
 ### Further effect libraries
 
-Ret, Reader, Writer, Option, State, Exception, and ordered depth-first NonDet are implemented
-as relative monads with a shared transformer derivation.
-Further families would each need an implementation decision: delimited control,
-fair search and pruning, parsers, free monads, validation accumulators, randomness,
-reader–writer–state bundles, resource management, and asynchronous tasks.
-The admission constraint is that a carrier must compose with ambient computations
-without changing their observable order; eagerly collecting nondeterministic results
-into a list is not an unrestricted relative monad.
-[Elementary effects](../references/language/src/translations/effects-and-transformers.md#elementary-effect-instances)
-and [derived transformers](../references/language/src/translations/effects-and-transformers.md#derived-relative-monad-transformers) own the implemented library.
+Ret, Reader, Writer, Option, State, Exception, and ordered depth-first NonDet are implemented as relative monads with a
+shared transformer derivation. Further families would each need an implementation decision: delimited control, fair
+search and pruning, parsers, free monads, validation accumulators, randomness, reader–writer–state bundles, resource
+management, and asynchronous tasks. The admission constraint is that a carrier must compose with ambient computations
+without changing their observable order; eagerly collecting nondeterministic results into a list is not an unrestricted
+relative monad.
+[Elementary effects](../references/library/src/effects/transformers-and-instances.md#elementary-effect-instances) and
+[derived transformers](../references/library/src/effects/transformers-and-instances.md#derived-relative-monad-transformers)
+own the implemented library.
 
 ## Compiler
 
@@ -138,7 +141,8 @@ Measure code growth from repeated static value-function applications before addi
 Compare direct block sharing with inlining while preserving captured runtime values and effect multiplicity.
 This is an optimization of the residual program, not a new runtime representation for `val pi`.
 [C6](../references/compiler/src/elaboration-and-validation.md#static-elimination) owns elimination;
-[C8](../references/compiler/src/sps/normalization-and-demand.md#sharing-and-discardability) owns residual sharing constraints.
+[C8](../references/compiler/src/sps/normalization-and-demand.md#sharing-and-discardability) owns
+residual sharing constraints.
 
 ### Demand-directed construction
 
@@ -150,14 +154,12 @@ Preserve diagnostic and sharing behavior; allocation counts alone do not establi
 
 Profile the linear `SpanArena` cursor/range lookup before introducing an interval index.
 Keep file-local editor coordinates separate from merged global spans.
-[C2](../references/compiler/src/compiler-data.md) owns current source coordinates
-and provenance.
+[C2](../references/compiler/src/compiler-data.md) owns current source coordinates and provenance.
 
 ### Source-location column caching
 
 Measure whether cached multibyte column information improves location rendering enough to justify its memory cost.
-[C2](../references/compiler/src/compiler-data.md) owns current source coordinates
-and provenance.
+[C2](../references/compiler/src/compiler-data.md) owns current source coordinates and provenance.
 
 ### Source locations in later phases
 
@@ -171,27 +173,26 @@ Preserve rejected-program diagnostics and revision ownership in either design.
 If macro provenance becomes a concrete requirement, review whether a span interner should add hygiene context
 around the compact address-space model.
 This conditional question does not select a macro expansion or hygiene design.
-[C2](../references/compiler/src/compiler-data.md) owns current source coordinates
-and provenance.
+[C2](../references/compiler/src/compiler-data.md) owns current source coordinates and provenance.
 
 ### Compiler memory retention
 
-A checked root elaborates into many more nodes than its source, so retaining every typed arena
-in a long-lived session makes memory depend on root history.
-Extending reclamation to interactive sessions needs an account of active projects, overlays,
-and outstanding snapshots, and must keep keyed facts after arena eviction paired with the right revision.
+A checked root elaborates into many more nodes than its source, so retaining every typed arena in a long-lived session
+makes memory depend on root history. Extending reclamation to interactive sessions needs an account of active projects,
+overlays, and outstanding snapshots, and must keep keyed facts after arena eviction paired with the right revision.
 Measurement targets, none yet measured: judgment-producer query bookkeeping during cold and warm checks,
-inference-region fill scans as local binders grow, repeated root switching against full-arena residency,
-and editor lookups that still route through the session.
-The producer-query migration measured on 2026-08-14 reported about 30% end-to-end checking overhead.
-Open questions are root-aware reclamation versus bounded generations, sharing retained classifier annotations,
-sharing location structure across parsed-source lifetimes, and consumer-driven normalization of closed types.
+inference-region fill scans as local binders grow, repeated root switching against full-arena residency, and editor
+lookups that still route through the session. The producer-query migration measured on 2026-08-14 reported about 30%
+end-to-end checking overhead. Open questions are root-aware reclamation versus bounded generations, sharing retained
+classifier annotations, sharing location structure across parsed-source lifetimes, and consumer-driven normalization of
+closed types.
 [Analysis facts and materialization](../references/compiler/src/sessions-and-queries.md#analysis-facts-and-materialization)
 owns the current split.
 
 ### Stronger typed-arena verification
 
-Tests assert only the [typed-arena invariants](../references/compiler/src/elaboration-and-validation.md#typed-arena-invariants).
+Tests assert only the
+[typed-arena invariants](../references/compiler/src/elaboration-and-validation.md#typed-arena-invariants).
 An optional lint that also re-derived annotations was removed on 2026-10-29.
 A verifier that re-derives annotations would need use-site instantiations or equivalent derivation witnesses
 for parent/child checks, product reconstruction, and definition-reference scope,
@@ -208,7 +209,8 @@ and declaration telescopes for orphan `Data` and `CoData` arms.
 
 Define persistence and replay around immutable numbered sources, including working-directory-relative imports.
 An edited historical entry should receive a new identity; replay must state which effects it executes again.
-[C15](../references/compiler/src/tooling/interactive-and-docs.md#interactive-engine) owns the current submission and retry model.
+[C15](../references/compiler/src/tooling/interactive-and-docs.md#interactive-engine) owns the current submission
+and retry model.
 
 ### REPL history pruning
 
@@ -219,7 +221,8 @@ Transcript clearing alone is not evidence that a source is unreachable.
 ### REPL command extensions
 
 Revisit argument-bearing or stateful commands when a concrete interaction needs them.
-[C15](../references/compiler/src/tooling/interactive-and-docs.md#interactive-engine) owns the current submission and retry model.
+[C15](../references/compiler/src/tooling/interactive-and-docs.md#interactive-engine) owns the current submission
+and retry model.
 
 ### An editor action for typeof
 
@@ -232,7 +235,8 @@ This convenience would not identify the source construct with the REPL's display
 
 Break long quantifier telescopes, consider folding adjacent same-form quantifiers,
 and extend source-shaped term labels beyond type operands while preserving grammar and classifier identity.
-[C15](../references/compiler/src/tooling/formatting-and-rendering.md#elaborated-type-rendering) owns the separate renderers and their current layout support.
+[C15](../references/compiler/src/tooling/formatting-and-rendering.md#elaborated-type-rendering) owns the
+separate renderers and their current layout support.
 
 ### Source generation from elaborated terms
 
@@ -244,13 +248,15 @@ Specify fills, witness names, intrinsic spellings, and synthetic provenance befo
 A reifier would add another textual AST producer while diagnostic-only forms still need a typed renderer;
 a shared precedence layer would add a third vocabulary alongside the two grammars.
 Evaluate those costs against the consumer.
-[C15](../references/compiler/src/tooling/formatting-and-rendering.md#elaborated-type-rendering) owns the separate renderers and their current layout support.
+[C15](../references/compiler/src/tooling/formatting-and-rendering.md#elaborated-type-rendering) owns the
+separate renderers and their current layout support.
 
 ### Floating comment anchors
 
 If new syntax admits floating comments, give them an explicit typed boundary and preserve one stored comment record.
 The current formatter uses entity anchors, typed arm/delimiter boundaries, and exclusion ranges.
-[C15](../references/compiler/src/tooling/formatting-and-rendering.md) owns current textual formatting and comment retention.
+[C15](../references/compiler/src/tooling/formatting-and-rendering.md) owns current textual formatting
+and comment retention.
 
 ### Source fixture directive extensions
 
@@ -261,7 +267,8 @@ An inapplicable expectation must continue to fail the trial.
 Expected exit codes and stable desugaring-rejection spellings remain deferred;
 add them only when a concrete case needs those contracts.
 The [fixture guide](../../lang/tests/cases/README.md) owns current directives;
-[C16](../references/compiler/src/validation-and-extending.md#source-fixtures-and-runtime-oracles) owns discovery and runtime oracles.
+[C16](../references/compiler/src/validation-and-extending.md#source-fixtures-and-runtime-oracles) owns discovery
+and runtime oracles.
 
 ### Structural completion and last-successful state
 

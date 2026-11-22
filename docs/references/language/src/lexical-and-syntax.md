@@ -1,9 +1,14 @@
 # Lexical Structure and Syntax
 
-Source is UTF-8. Whitespace separates tokens but indentation and line breaks do not determine syntax.
+## Source Encoding and Comments
+
+Source is UTF-8. Whitespace separates tokens, while indentation and line breaks do not determine syntax.
 `--` starts a line comment; `/- ... -/` is a nestable block comment.
-An uninterrupted `--|` block attaches text to a following `@[doc]` or `@(literal)`;
+An uninterrupted `--|` block attaches text to a following `@[doc]`
+or `@(literal)` ([Source Documentation](meta-annotations.md#source-documentation));
 an intervening blank line or ordinary comment breaks attachment.
+
+## Identifiers, Sigils, and Literals
 
 Variable names start with an ASCII letter, or with `_` followed by at least one identifier character.
 Subsequent characters are ASCII letters, digits, `_`, apostrophe, `?`, `+`, `*`, `-`, `=`, or `~`.
@@ -19,6 +24,11 @@ Prefixes and suffixes such as `0x10` and `42u8` are rejected.
 Strings use double quotes; characters use single quotes and contain one Unicode scalar value.
 Both support `\\`, `\"`, `\'`, `\n`, `\r`, `\t`, `\0`, and `\u{hex}`, with one
 to six hexadecimal digits denoting a Unicode scalar.
+
+Meta annotations use `@[meta] e` on a payload term or `@(meta)` for a hole payload;
+see [Meta Annotations](meta-annotations.md) for the complete catalog.
+
+## Precedence and Grouping
 
 The main precedence levels, from tightest to loosest, are:
 
@@ -48,6 +58,8 @@ Expression annotations use parentheses, `(e : S)`, or the contents of a `begin .
 Write `((#x = 1) : (#x :: Int))` to annotate the whole named value; `(#x = 1 : Int)` annotates its payload.
 Metadata in a juxtaposed application argument also needs parentheses; backward application admits it
 as a full right operand.
+
+## Field-Marker Rationale
 
 The `#` marker keeps a field name from reading as a binder.
 `=` already marks binding boundaries and both introduces and eliminates named components,

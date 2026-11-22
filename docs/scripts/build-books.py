@@ -39,7 +39,7 @@ def _load_preprocessor_module():
 
 PREPROCESSOR = _load_preprocessor_module()
 
-BOOKS = ("language", "compiler")
+BOOKS = ("language", "library", "compiler")
 SHARED_THEME_FILES = ("theme/home-link.js", "theme/zydeco-hljs.js", "theme/mermaid-init.js")
 SUMMARY_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 HTML_HREF_RE = re.compile(r'href="([^"]+)"')
@@ -272,7 +272,7 @@ def render_landing_page(
     repo_url: str = PREPROCESSOR.DEFAULT_REPO_URL,
     git_ref: str = PREPROCESSOR.DEFAULT_GIT_REF,
 ) -> str:
-    """Generate a minimal landing page linking to both books and the language guide."""
+    """Generate a minimal landing page linking to the reference books and the language guide."""
     repo_url_clean = repo_url.rstrip("/")
     guide_url = f"{repo_url_clean}/blob/{git_ref}/docs/tutorial/zydeco-guide.md"
 
@@ -362,6 +362,7 @@ def render_landing_page(
     <nav aria-label="Documentation">
       <ul>
         <li><a href="./language/">Language Reference<span aria-hidden="true">&rarr;</span></a></li>
+        <li><a href="./library/">Standard Library Reference<span aria-hidden="true">&rarr;</span></a></li>
         <li><a href="./compiler/">Compiler Reference<span aria-hidden="true">&rarr;</span></a></li>
         <li><a href="{html.escape(guide_url, quote=True)}">Language Guide<span aria-hidden="true">&#8599;</span></a></li>
       </ul>
@@ -376,7 +377,7 @@ def render_landing_page(
 def verify_built_site(site_dir: Path) -> list[str]:
     """Sanity-check the assembled HTML site for missing entry pages or unrewritten repo links."""
     errors: list[str] = []
-    for required in ("index.html", "language/index.html", "compiler/index.html"):
+    for required in ("index.html", "language/index.html", "library/index.html", "compiler/index.html"):
         if not (site_dir / required).is_file():
             errors.append(f"built site missing `{required}`")
 
@@ -550,7 +551,7 @@ class BookToolingTests(unittest.TestCase):
                             "Chapter": {
                                 "name": "Sample",
                                 "content": sample_md,
-                                "source_path": "translations/relative-monads.md",
+                                "source_path": "translations/monadic-blocks.md",
                                 "sub_items": [],
                             }
                         }
@@ -635,6 +636,7 @@ class BookToolingTests(unittest.TestCase):
             git_ref="main",
         )
         self.assertIn('href="./language/"', page)
+        self.assertIn('href="./library/"', page)
         self.assertIn('href="./compiler/"', page)
         self.assertIn("https://github.com/zydeco-lang/zydeco/blob/main/docs/tutorial/zydeco-guide.md", page)
         self.assertIn('href="https://github.com/zydeco-lang/zydeco"', page)
@@ -644,10 +646,14 @@ class BookToolingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             site = Path(tmp)
             (site / "language").mkdir()
+            (site / "library").mkdir()
             (site / "compiler").mkdir()
             (site / "index.html").write_text("<html></html>", encoding="utf-8")
             (site / "language" / "index.html").write_text(
                 '<a href="../compiler/sps.html">C8</a>', encoding="utf-8"
+            )
+            (site / "library" / "index.html").write_text(
+                '<a href="../language/conventions.html">Conventions</a>', encoding="utf-8"
             )
             (site / "compiler" / "index.html").write_text(
                 '<a href="../language/conventions.html">L1</a>', encoding="utf-8"
@@ -678,7 +684,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_check.add_argument("--repo-url", default=PREPROCESSOR.DEFAULT_REPO_URL)
     p_check.add_argument("--git-ref", default=PREPROCESSOR.DEFAULT_GIT_REF)
 
-    p_build = sub.add_parser("build", help="build both reference books and the combined landing site")
+    p_build = sub.add_parser("build", help="build all reference books and the combined landing site")
     p_build.add_argument("--output", type=Path, default=Path("target/site"))
     p_build.add_argument("--repo-url", default=PREPROCESSOR.DEFAULT_REPO_URL)
     p_build.add_argument("--git-ref", default=PREPROCESSOR.DEFAULT_GIT_REF)

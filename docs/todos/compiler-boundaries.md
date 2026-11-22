@@ -31,7 +31,8 @@ Review arity-directed refinement and retain all three probes when implementing a
 ## Nested witness diagnostic
 
 [L9](../references/language/src/polymorphism-and-packed-values.md)
-and [C5](../references/compiler/src/checking-and-inference.md#witness-evidence-and-field-lookup) govern witness evidence.
+and [C5](../references/compiler/src/checking-and-inference.md#witness-evidence-and-field-lookup)
+govern witness evidence.
 Computation binders can collect witnesses beneath product patterns,
 but [application instantiation](../../lang/statics/src/check/functions/application.rs)
 traverses a leading existential prefix.
@@ -57,7 +58,8 @@ Improving the rejection diagnostic does not require accepting that extension.
 
 ## Monadic closure validation
 
-The approved [closed translation boundary](../references/language/src/translations/algebra-translation.md#closed-translation-boundary)
+The approved
+[closed translation boundary](../references/language/src/translations/monadic-blocks.md#closed-translation-boundary)
 requires external types to enter through type parameters inside the monadic annotation.
 The implementation's [environment filter](../../lang/statics/src/environment.rs) retains lexical type bindings,
 and the translator starts with an empty structure environment.
@@ -89,10 +91,12 @@ The retained lexical witness is implementation drift, not an invitation to infer
 - [ ] Migrate examples whose type parameters precede the annotation, including the effect examples
   under `lib/tests/effects/`, to the explicit interface and update argument order and structure arguments together.
 
-Implemented [nominal translation](../references/language/src/translations/algebra-translation.md#applicative-nominal-translation) rejects external
-nominal declarations and free external witnesses in reachable local nominal definitions.
-It and [value-function translation](../references/language/src/translations/algebra-translation.md#polymorphic-value-functions) do not establish
-the complete closure validation still required above.
+Implemented
+[nominal translation](../references/language/src/translations/monadic-blocks.md#applicative-nominal-translation)
+rejects external nominal declarations and free external witnesses in reachable local nominal definitions.
+It
+and [value-function translation](../references/language/src/translations/monadic-blocks.md#polymorphic-value-functions)
+do not establish the complete closure validation still required above.
 
 ## Inferred higher-order value-function witnesses
 
@@ -121,10 +125,8 @@ The monadic higher-order tests currently use the explicit signature.
 
 ## Source-load diagnostic locations
 
-[C2](../references/compiler/src/compiler-data.md) keeps source coordinates
-with their owning file,
-and [C15](../references/compiler/src/tooling.md)
-owns source-facing diagnostics.
+[C2](../references/compiler/src/compiler-data.md) keeps source coordinates with their owning file,
+and [C15](../references/compiler/src/tooling.md) owns source-facing diagnostics.
 The [source errors](../../lang/session/src/source/err.rs) retain local byte ranges,
 but import-path and cycle `Display` implementations render spans directly;
 the [CLI renderer](../../cli/src/diagnostics.rs) delegates those load errors to `Display`.
@@ -142,7 +144,8 @@ Replacing the child's import with `()` passes.
 
 ## Partial annotation scope during formatting
 
-The [formatter's semantic-identity law](../references/compiler/src/tooling/formatting-and-rendering.md#semantic-identity)
+The
+[formatter's semantic-identity law](../references/compiler/src/tooling/formatting-and-rendering.md#semantic-identity)
 and [partial-binder scope](../references/language/src/patterns-and-coverage.md) govern this boundary.
 Observed during the 2026-10-13 fixture migration, formatting this source fragment merges the two function headers:
 
@@ -160,9 +163,9 @@ Add a formatter round-trip regression for this pair.
 
 ## Concrete payload annotations during package introduction
 
-Sealing in `pack` rewrites the disclosed witness's occurrences in the payload type
-into the abstract binder, so a payload that speaks only in concrete primitive types produces
-a witness-independent body ([L9](../references/language/src/polymorphism-and-packed-values.md);
+Sealing in `pack` rewrites the disclosed witness's occurrences in the payload type into the abstract binder,
+so a payload that speaks only in concrete primitive types produces a witness-independent
+body ([L9](../references/language/src/polymorphism-and-packed-values.md);
 [Packed Value Introduction](../../DESIGN.md#packed-value-introduction) gives the mechanism account).
 The payload is checked against the disclosed witness, so an explicit annotation naming the abstract binder is accepted
 without abstracting the synthesized body.
@@ -206,8 +209,7 @@ while `run_source` returns early on that failure.
 
 Observed at `e2dd8979` on 2026-11-05; unchanged at `c6c90588`.
 [C14 foreign calls](../references/compiler/src/builtins-and-foreign-calls.md#foreign-calls)
-and [C11 native emission](../references/compiler/src/native-emission.md)
-govern host calls.
+and [C11 native emission](../references/compiler/src/native-emission.md) govern host calls.
 The host-call loop in the [AMD64 emitter](../../lang/amd64/src/emit.rs) at `emit.rs:927-938` pops arguments
 into SysV registers for indices 1 through 6 and reaches `todo!()` at `emit.rs:936` for index 7 and above.
 The arity comes from the builtin role:

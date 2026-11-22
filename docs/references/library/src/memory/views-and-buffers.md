@@ -10,9 +10,9 @@ Its own storage representation is selected separately.
 The [view library](../../../../../lib/std/memory/view.zy) defines these ordinary source types:
 
 ```text
-Cps A        = forall R. Thk (A -> R) -> R
-Checked E A  = forall R. Thk (E -> R) -> Thk (A -> R) -> R
-View P H A   = val pi (handle : H). Thk (P A)
+Cps A             = forall R. Thk (A -> R) -> R
+Checked E A       = forall R. Thk (E -> R) -> Thk (A -> R) -> R
+View P H A        = val pi (handle : H). Thk (P A)
 DynamicView P H A = Thk (H -> P A)
 ```
 
@@ -20,14 +20,15 @@ DynamicView P H A = Thk (H -> P A)
 `! (view handle)` executes that operation; a CPS operation then receives `R` and its successor.
 Typical results are `Ptr L S * M`, where `M` is runtime metadata, but a view can yield another handle for composition.
 `Ret` serves pure calculations, while `Cps` and `Checked` sequence memory observations
-under the [L6 convention](../computations-and-control.md#ret-and-explicit-cps).
+under the [Ret and explicit CPS convention](../../../language/src/computations-and-control.md#ret-and-explicit-cps).
 Applying a value function never executes a load.
 
 `identity`, `precompose`, `map`, and `compose` adapt and combine pure views.
 `as_cps` lifts a pure view; `map_cps` and `compose_cps` preserve the CPS protocol.
 `as_checked`, `map_checked`, and `compose_checked` propagate explicit failure without running a later step.
 No adapter asserts that arbitrary CPS code is pure.
-The fixed recipe itself must disappear under static elimination; runtime handle fields and captured context can remain.
+The fixed recipe itself must disappear under [static elimination](../../../language/src/static-elimination.md);
+runtime handle fields and captured context can remain.
 
 For runtime selection, `materialize` explicitly produces `DynamicView` with its ordinary thunk and captured data.
 Different handle types can be paired with their matching operations in an existential value.
@@ -62,7 +63,8 @@ For a counted initialized element interpretation, the obligation covers the stat
 The fixed header constructors receive `Codec Metadata M` without requiring its allocation geometry.
 `unsafe/dynamic_header` receives `DynamicCodec Metadata M`, runtime displacements,
 and a raw address under these same obligations.
-A header containing a vtable address is supported as data; calling code pointers has its separate FFI boundary.
+A header containing a vtable address is supported as data;
+calling code pointers has its separate [FFI boundary](../../../language/src/foreign-interfaces.md).
 
 [headers/from_fields](../../../../../lib/std/memory/header.zy) derives inline and prefix recipes
 from metadata and payload paths sharing one parent layout.
@@ -70,8 +72,6 @@ Prefix recovery includes the padding chosen by that layout.
 For example, an `Int` length followed by four `UInt32` elements with payload alignment 16 has offsets 0
 and 16, total size 32, and alignment 16.
 The inline handle is the allocation base; the prefix handle is `base + 16`.
-The [complete example](../../../../../lib/tests/std/header-array.zy) constructs that layout
-and uses both interpretations.
 
 `bounded` wraps a counted CPS view with checks for nonnegative capacity and `0 <= length <= capacity`.
 `counted` and `counted_checked` receive `Storage L`, derive rounded element stride,
@@ -117,9 +117,7 @@ and UTF-8 conversion preserve immutable-content semantics.
 Bounds and UTF-8 failures remain explicit branches.
 Concatenation allocates once and copies each input; alignment conversion allocates a suitably aligned copy.
 These pure-content wrappers may use internal allocation
-while following the [Ret convention](../computations-and-control.md#ret-and-explicit-cps).
-The [byte regressions](../../../../../lib/tests/std/source-bytes.zy) exercise slicing,
-bounds, UTF-8, copying, and retention.
+while following the [Ret convention](../../../language/src/computations-and-control.md#ret-and-explicit-cps).
 
 ## Byte Builders
 
@@ -134,10 +132,7 @@ Copying a handle does not keep its prefix metadata synchronized with later updat
 without copying its payload; the caller must not reuse any old handle.
 It requires builtin-heap allocation, since retention eventually frees through that allocator.
 `unsafe/close` instead releases storage through the original allocator.
-Neither repeated finish nor access after close is a checked operation.
-The [builder example](../../../../../lib/tests/std/buffer.zy) covers capacity preflight,
-independent snapshots, spare capacity at publication, and explicit cleanup.
-Growth and integration
+Neither repeated finish nor access after close is a checked operation. Growth and integration
 with `Writer` remain an [open idea](../../../../ideas/README.md#growable-byte-builders-and-incremental-streams).
 
 ## Stored-Call Interfaces
@@ -145,9 +140,9 @@ with `Writer` remain an [open idea](../../../../ideas/README.md#growable-byte-bu
 Source modules share pointer types and CPS operations from the same layout opening.
 A worker can accept `Ptr L Init`, take its fields, initialize the same destination,
 and deliver `Ptr L Init` without allocating another payload.
-The [cross-module example](../../../../../lib/tests/std/represented-call/main.zy) uses this sequence
-with ordinary thunks.
 There is no separate storage-conversion or call-adapter package.
 A different layout needs an explicit allocation and field conversion, with both allocations' lifetimes settled.
 Equal numerical placement does not equate independent witnesses.
 These calls use the existing source word convention; managed logical values and continuations may still allocate.
+See the [standard library guide](../../../../../lib/std/README.md#explicit-storage) for view, byte,
+buffer, and stored-call examples.

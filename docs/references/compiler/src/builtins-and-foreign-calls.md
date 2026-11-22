@@ -20,8 +20,8 @@ and [scalar comparisons](sps/operations-and-patterns.md#scalar-comparisons);
 C11–C13 own the resulting target words and calls.
 The interpreter shares scalar evaluation with constant folding.
 
-Strings are immutable UTF-8 text. `Bytes` is a source-defined abstraction whose
-[owning design](../../language/src/primitives-and-capabilities/views-and-buffers.md#immutable-owners-and-source-bytes)
+Strings are immutable UTF-8 text. `Bytes` is a source-defined abstraction
+whose [owning design](../../library/src/memory/views-and-buffers.md#immutable-owners-and-source-bytes)
 specifies its representation and operations.
 The compiler and host recognize general memory capabilities, without a byte-sequence type or operation family.
 
@@ -39,7 +39,7 @@ The [Node host](../../../../cli/wasm/wasm-memory.mjs) emulates unmanaged memory
 with virtual 64-bit addresses and byte arrays.
 Its range lookup is an embedding implementation cost; it is not a source guarantee of recoverable raw-access errors.
 The virtual address space is separate from managed Wasm memory and exports no native pointer.
-[L13](../../language/src/primitives-and-capabilities/manual-memory.md#manual-memory) owns caller obligations
+[Manual Memory](../../library/src/memory/manual-memory.md#manual-memory) owns caller obligations
 and the distinction between static evidence and runtime data.
 The source [view](../../../../lib/std/memory/view.zy),
 [field](../../../../lib/std/memory/field.zy), [record](../../../../lib/std/memory/record.zy),

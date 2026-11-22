@@ -1,4 +1,55 @@
-# Algebra Translation Semantics
+# Monadic Blocks
+
+Surface translations use meta annotations to give their payload a reading other than the core's own
+and elaborate it into ordinary core syntax, which is then checked, linked, and run like any other term.
+`@[monadic] e` performs sort-preserving algebra translation under a lexically visible relative-monad basis;
+[`@[cbv] e`](call-by-value-and-call-by-name.md#call-by-value-blocks) elaborates a call-by-value expression,
+and [`@[cbn] e`](call-by-value-and-call-by-name.md#call-by-name-blocks) is reserved for call-by-name.
+Because each translation produces core syntax, they compose: a call-by-value block nested
+in a monadic block is translated by both.
+
+## Outer Interface and Basis
+
+`@[monadic] e` selects the lexically visible `Monad` and `Algebra` constructors defined
+by the [relative-monad contract](../../../library/src/effects/relative-monads.md#relative-monads)
+and performs sort-preserving algebra translation.
+Write `L_M` for translation under carrier `M` and its monad implementation.
+The annotation synthesizes its operand once, then supplies an outer interface appropriate to that operand's sort:
+
+| Operand | Generated interface | Result classifier |
+| --- | --- | --- |
+| Type `T : K` | `fn (M : VType -> CType) => L_M(T)` | `(VType -> CType) -> K` |
+| Value `v : A` | `val (M : VType -> CType) (mo : Thk (Monad M)) => L_M(v)` | `val pi (M : VType -> CType) (mo : Thk (Monad M)) . L_M(A)` |
+| Computation `e : B` | `fn (M : VType -> CType) (mo : Thk (Monad M)) => L_M(e)` | `forall (M : VType -> CType) . Thk (Monad M) -> L_M(B)` |
+
+Type operands include value types, computation types, and higher-kinded type constructors.
+Their translation needs the carrier but no runtime dictionary argument.
+Value operands include thunks, value functions, and ordinary value packages used as modules;
+translation preserves them as values rather than inserting a `ret` or forcing suspended computations.
+Kinds have no operand translation and are rejected with `tyck.sort-mismatch`.
+The operand receives no expected classifier from outside the annotation; an ascription inside it applies normally.
+
+Source `Ret`, `ret`, and `do` are reinterpreted through the supplied carrier and its operations.
+Parameters outside the annotation remain outside; translated parameters inside follow the generated interface.
+Polymorphic translation may require additional structure arguments describing how a type supports the translation.
+For example, `let MonadicMonad = @[monadic] (Monad Ret)` derives the dictionary classifier:
+`MonadicMonad M` has the translated operations, including a `Thk Top` argument after each value-type quantifier.
+Likewise, `(@[monadic] { ret 1 }) M mo` is a value of type `Thk (M Int)`.
+
+```zydeco
+param (/Ret; /Thk; builtin) : @(import("../../lib/std/builtin.zy")) in
+let basis = @(import("../../lib/std/effect/monad.zy")) in
+let (/Monad; /Algebra) = basis in
+let mo : Thk (Monad Ret) = {
+  comatch
+  | .return A value => ret value
+  | .bind A B computation continuation =>
+    do value <- ! computation;
+    ! continuation value
+  end
+} in
+(@[monadic] begin do x <- ret 1; ret x end) Ret mo
+```
 
 ## Closed Translation Boundary
 
@@ -150,3 +201,5 @@ Other sealed heads, including nominal aliases of arrows, `Ret`, or abstract cons
 remain unsupported: they need their own typed introduction and algebra construction rules.
 
 Library-encoded delimited control does not imply primitive capture or duplication of the native machine stack.
+Standard library relative monads, effect instances, and derived transformers are specified
+in the [standard library reference](../../../library/src/effects/relative-monads.md).

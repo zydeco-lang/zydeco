@@ -1,10 +1,15 @@
 # Primitive Values and Capabilities
 
+## Builtin Contract and Capabilities
+
 [Builtin](../../../../lib/std/builtin.zy) exposes canonical kinds and fixed-representation types as manifest fields.
 Repeating an intrinsic splice denotes the same canonical kind or type across independently checked sources.
 `Addr`, `Reader`, `Writer`, and `OS` are abstract provider capabilities sharing one opening.
-`Addr` supports [manual memory](primitives-and-capabilities/manual-memory.md#manual-memory); its kind remains `VType`.
-Typed pointers and initialization states are ordinary library types.
+`Addr` is an unmanaged data address
+of kind `VType` supporting [manual memory](../../library/src/memory/manual-memory.md#manual-memory);
+typed pointers, layouts, initialization states, views, and byte buffers are ordinary library types specified
+in the [standard library reference](../../library/src/introduction.md).
+
 Pure libraries can name canonical carriers without requiring a numeric or resource provider merely to name a type.
 Resource operations instead share their provider's abstract opening,
 so a composition root must forward the capability and its operations together.
@@ -12,16 +17,7 @@ The `numeric`, `text`, and `system` groups contain host operations.
 The [standard library](../../../../lib/std/README.md) assembles ordinary module factories and defines `Bool`, `Option`,
 `Either`, `List`, and abstract `Bytes`; host operations select continuations instead of constructing those types.
 
-The memory interfaces build on those capabilities using ordinary packed values and computation protocols:
-
-| Question | Owning section |
-| --- | --- |
-| How are addresses allocated and released? | [Manual memory](primitives-and-capabilities/manual-memory.md#manual-memory) |
-| What does the type checker know about memory state? | [Typed pointers and slices](primitives-and-capabilities/manual-memory.md#typed-pointers-and-slices) |
-| Which layout information is static? | [Static layout plans](primitives-and-capabilities/layouts-and-aggregates.md#static-layout-plans) |
-| What makes a byte sequence immutable? | [Immutable owners](primitives-and-capabilities/views-and-buffers.md#immutable-owners-and-source-bytes) |
-| How are bytes constructed incrementally? | [Byte builders](primitives-and-capabilities/views-and-buffers.md#byte-builders) |
-| How do source modules share pointers? | [Stored calls](primitives-and-capabilities/views-and-buffers.md#stored-call-interfaces) |
+## Primitive Value Families
 
 | Family | Source behavior |
 | --- | --- |
@@ -30,6 +26,8 @@ The memory interfaces build on those capabilities using ordinary packed values a
 | `Float32`, `Float64` | IEEE 754 arithmetic at the chosen width |
 | `Char` | One Unicode scalar, excluding surrogates |
 | `String` | Immutable valid UTF-8; indexed operations count Unicode scalars |
+
+## Scalar Ranges and Conversions
 
 `Int` and `UInt` use every payload bit of a tagged runtime word.
 The current interpreter, AMD64, and Wasm profiles have 64-bit words and 63-bit integer payloads:
@@ -55,21 +53,19 @@ Integer parsing rejects values outside the `Int` range through its failure conti
 random integers range over that same domain.
 Float rendering uses the selected width's Rust Display spelling, including signed zero, `inf`, `-inf`, and `NaN`.
 
-## Text and Byte Sequences
+## Text and Raw Scalar Storage
 
 `String` indices are scalar positions, not byte offsets or grapheme clusters; `byte_length` observes UTF-8 bytes.
-The source-defined `Bytes` type contains immutable octets; equality compares contents and ordering is lexicographic.
-Negative or out-of-range positions, invalid Unicode scalars, and invalid UTF-8 select failure branches.
-The public library reifies these as `Option` or `Either`.
-The [immutable byte contract](primitives-and-capabilities/views-and-buffers.md#immutable-owners-and-source-bytes)
-below explains ownership and library operations.
+Negative or out-of-range positions, invalid Unicode scalars, and invalid UTF-8 select failure branches;
+the public library reifies these as `Option` or `Either`.
+The source-defined `Bytes` abstraction, its immutable retention contract, and `Buffer` builders are specified
+in [Memory Views, Bytes, and Buffers](../../library/src/memory/views-and-buffers.md#immutable-owners-and-source-bytes).
 
 Every scalar Builtin module provides raw `store_le` and `load_le` operations over `Addr`.
 Callers establish writable or initialized readable extents; source byte codecs validate their own lengths.
 They preserve exact little-endian bits; float loads and stores preserve NaN payloads without arithmetic.
-The [source codecs](../../../../lib/std/numeric/codecs.zy) provide `to_le_bytes`
-and `from_le_bytes`, and std includes them in its numeric modules.
-Decoders require the exact scalar width.
+The [source codecs](../../../../lib/std/numeric/codecs.zy) provide `to_le_bytes` and `from_le_bytes`,
+and std includes them in its numeric modules; decoders require the exact scalar width.
 
 ## Streams and Process Arguments
 
@@ -77,10 +73,8 @@ Decoders require the exact scalar width.
 in the invocation's stable sequence, excluding the executable name.
 Negative and out-of-range indices select the first continuation; valid indices supply the string to the second.
 Lookup neither advances nor consumes the sequence.
-The [argument library](../../../../lib/std/system/arguments.zy) builds a lazy right fold in ordinary CBPV.
-Its item computation receives a reusable `Thk R`: discarding it skips the suffix,
-and forcing it repeatedly reruns that suffix computation, including its effects.
-The standard library's `process/arg_list` uses this fold to build its own `List String`.
+The [argument library](../../../../lib/std/system/arguments.zy) builds a lazy right fold in ordinary CBPV
+whose item computation receives a reusable `Thk R`, and `process/arg_list` uses that fold to build `List String`.
 
 I/O uses blocking byte streams and opaque reader/writer handles.
 Copying a handle aliases the same resource; closing it invalidates all aliases, whose later operations report `Closed`.
@@ -89,7 +83,7 @@ Fallible effects use explicit `OS` continuations with structured errors.
 A positive-length byte read at EOF returns empty; line reads distinguish EOF from an empty line.
 Line reading removes `\n` and a preceding `\r`.
 Filesystem helpers use UTF-8 paths, and write/create versus append behavior is explicit in the API.
-The [library guide](../../../../lib/std/README.md) is the operation inventory.
+The [library guide](../../../../lib/std/README.md#streams-and-files) is the operation inventory.
 
 Immutable bytes are data; readers and writers grant access to resources whose observations can change.
 Their `OS` protocols make that distinction explicit without requiring linear ownership of handles.

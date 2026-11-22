@@ -8,8 +8,8 @@ with an abstract successful plan and [inspectable shape](../../../../../lib/std/
 Its constructors support scalars, unmanaged addresses, unit, padding, products, and increased alignment.
 Invalid alignment, negative size, and overflow produce typed `Left` results during static construction;
 only a `Right` plan can be realized.
-The caller handles that static result explicitly.
-Unknown runtime inputs to placement or fixed realization produce a `StaticElimination` diagnostic.
+The caller handles that static result explicitly. Unknown runtime inputs to placement or fixed realization produce
+a [`tyck.static-elimination`](../../../language/src/static-elimination.md#reduction-rules-and-decidability) diagnostic.
 
 `realize A plan` introduces `L` with the [representation interface](../../../../../lib/std/memory/codecs.zy).
 Size and alignment are known constants at this boundary.
@@ -17,11 +17,6 @@ The source recipes specialize field offsets and selected accesses; the pointer c
 Explicit queries can materialize size or alignment as an `Int`, and allocation receives those constants.
 Transporting a plan through an unknown runtime argument does not make its placement static.
 Use `dynamic` when execution chooses sizes or alignment.
-
-The [complete fixed-layout example](../../../../../lib/tests/std/static-layout.zy) allocates a 16-byte aligned record,
-initializes and reads its fields, then takes the value and releases the allocation.
-[Type and phase tests](../../../../../lang/tests/tests/static_layout.rs) pair accepted layouts with invalid arithmetic,
-forged plans, mismatched logical types, and runtime placement operands.
 
 ### Layout Laws
 
@@ -51,7 +46,6 @@ Its `realize A R layout no yes` validates sizes, alignment, and overflow at exec
 then supplies a `Representation A` with a witness, `storage : DynamicStorage L`, and `codec : DynamicCodec L A`.
 Invalid placement selects `no` before allocation or writes.
 Dynamic size, alignment, and offsets remain captured where needed; they are not appended to each typed pointer.
-The [runtime-layout example](../../../../../lib/tests/std/representation.zy) exercises this distinction.
 
 ## Typed Records and Field Paths
 
@@ -106,9 +100,6 @@ For a nested transition, `unsafe/replace` accepts the original parent and the sa
 after its update, and returns the parent with that child state changed.
 It performs no writes or address-equality check: the caller must supply that exact child and retire stale aliases.
 An arbitrary path cannot propagate a parent's entire `Fields` state onto one child.
-The [record and view example](../../../../../lib/tests/std/general-views.zy) exercises direct construction
-and untouched padding; [type/state regressions](../../../../../lang/tests/tests/general_memory.rs) cover nested paths
-and rejected transitions.
 
 ## Array Storage and Element Builders
 
@@ -164,8 +155,7 @@ returning a materialized `DynamicCodec L (Values A)` through `Ret`.
 Whole-value reads and takes construct a managed list behind `Values A`.
 Direct access, prefix building, and `init_each` need no such list.
 Embedding array storage in a record requires only the array's `storage` component.
-[Array construction](../../../../../lib/tests/std/array-memory.zy),
-[storage-only padded stride](../../../../../lib/tests/std/storage-arrays.zy),
-and [runtime selection](../../../../../lib/tests/std/runtime-memory.zy) exercise these choices.
 A typed no-read discard operation remains an [open idea](../../../../ideas/README.md#further-storage-boundaries);
 manual address reinterpretation remains available under its existing obligations.
+See the [standard library guide](../../../../../lib/std/README.md#explicit-storage) for layout,
+record, and array examples.
