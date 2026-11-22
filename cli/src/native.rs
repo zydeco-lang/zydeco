@@ -221,7 +221,7 @@ impl BuildOptions {
 
         std::fs::create_dir_all(&cache_root).map_err(NativeError::PrepareBuildDirectory)?;
         let lock_dir = cache_root.join(format!(".{cache_key}.lock"));
-        let _process_guard = acquire_cache_lock(&lock_dir, &cached)?;
+        let _process_guard = acquire_cache_lock(&lock_dir, || cached.is_ready())?;
         if cached.is_ready() {
             return Ok(cached);
         }
@@ -229,21 +229,7 @@ impl BuildOptions {
         let stage_dir = lock_dir.join("stage");
         let machine_out = stage_dir.join("machine_out");
         std::fs::create_dir_all(&machine_out).map_err(NativeError::PrepareBuildDirectory)?;
-        let entry_symbol = zydeco_machine::native::ENTRY_SYMBOL;
-        let export_entry_symbol = zydeco_machine::native::EXPORT_ENTRY_SYMBOL;
-        let contract = format!(
-            "pub const ENTRY_SYMBOL: &str = {entry_symbol:?};\n\
-             #[cfg(feature = \"runtime\")]\nunsafe extern \"sysv64\" {{\n\
-             #[link_name = {:?}]\n\
-             pub fn entry() -> Word;\n}}\n\
-             pub const EXPORT_ENTRY_SYMBOL: &str = {export_entry_symbol:?};\n\
-             #[macro_export]\nmacro_rules! export_native_entry {{ ($item:item) => {{\n\
-             #[unsafe(export_name = {:?})] $item\n}}; }}\n",
-            format!("\x01{entry_symbol}"),
-            format!("\x01{export_entry_symbol}"),
-        );
-        std::fs::write(machine_out.join("contract.rs"), contract)
-            .map_err(NativeError::PrepareBuildDirectory)?;
+        Self::write_machine_contract(&machine_out)?;
 
         let machine_rlib = stage_dir.join("libzydeco_machine.rlib");
         Self::compile_runtime_crate(
@@ -251,10 +237,11 @@ impl BuildOptions {
             "zydeco_machine",
             "rlib",
             target_triple,
-            Some("feature=\"runtime\""),
+            &["feature=\"runtime\""],
             &[],
             Some(("OUT_DIR", &machine_out)),
             None,
+            Some("pic"),
             &machine_rlib,
         )?;
 
@@ -264,10 +251,11 @@ impl BuildOptions {
             "zydeco_abi",
             "rlib",
             target_triple,
-            Some("feature=\"std\""),
+            &["feature=\"std\""],
             &[("zydeco_machine", &machine_rlib)],
             None,
             None,
+            Some("pic"),
             &abi_rlib,
         )?;
 
@@ -277,10 +265,11 @@ impl BuildOptions {
             "zydeco_host",
             "rlib",
             target_triple,
-            Some("feature=\"std\""),
+            &["feature=\"std\""],
             &[("zydeco_machine", &machine_rlib), ("zydeco_abi", &abi_rlib)],
             None,
             None,
+            Some("pic"),
             &host_rlib,
         )?;
 
@@ -295,10 +284,11 @@ impl BuildOptions {
             "zydeco_runtime",
             "rlib",
             target_triple,
-            Some("feature=\"process-entry\""),
+            &["feature=\"process-entry\""],
             &runtime_externs,
             None,
             Some(&stage_dir),
+            Some("pic"),
             &runtime_rlib,
         )?;
 
@@ -308,10 +298,11 @@ impl BuildOptions {
             "zydeco_runtime",
             "staticlib",
             target_triple,
-            None,
+            &[],
             &runtime_externs,
             None,
             Some(&stage_dir),
+            Some("pic"),
             &runtime_staticlib,
         );
         staticlib_cmd
@@ -333,11 +324,140 @@ impl BuildOptions {
         Ok(cached)
     }
 
+    pub(crate) fn ensure_cached_wasm_runtime(&self) -> Result<CachedWasmRuntime, NativeError> {
+        let mut digest_input = format!("wasm32-wasip1\0{}", rustc_version()?).into_bytes();
+        let mut record_bundle = |path: &str, contents: &str| {
+            digest_input.extend_from_slice(path.as_bytes());
+            digest_input.push(0);
+            digest_input.extend_from_slice(contents.as_bytes());
+            digest_input.push(0);
+        };
+        for source in zydeco_machine::bundle::FILES {
+            record_bundle(source.path, source.contents);
+        }
+        for source in zydeco_abi::bundle::FILES {
+            record_bundle(source.path, source.contents);
+        }
+        for source in zydeco_host::bundle::FILES {
+            record_bundle(source.path, source.contents);
+        }
+        let cache_key = crate::library::LibraryDigest::bytes(&digest_input);
+        let cache_root = runtime_cache_root().join("wasm32-wasip1");
+        let entry_dir = cache_root.join(&cache_key);
+        let cached = CachedWasmRuntime::at(entry_dir.clone());
+        if cached.is_ready() {
+            return Ok(cached);
+        }
+
+        static WASM_CACHE_LOCK: Mutex<()> = Mutex::new(());
+        let _thread_guard = WASM_CACHE_LOCK.lock().unwrap_or_else(|poison| poison.into_inner());
+        if cached.is_ready() {
+            return Ok(cached);
+        }
+
+        std::fs::create_dir_all(&cache_root).map_err(NativeError::PrepareBuildDirectory)?;
+        let lock_dir = cache_root.join(format!(".{cache_key}.lock"));
+        let _process_guard = acquire_cache_lock(&lock_dir, || cached.is_ready())?;
+        if cached.is_ready() {
+            return Ok(cached);
+        }
+
+        let stage_dir = lock_dir.join("stage");
+        let src_dir = stage_dir.join("src");
+        Self::unpack_bundle(
+            &src_dir.join("machine"),
+            zydeco_machine::bundle::FILES.iter().map(|source| (source.path, source.contents)),
+        )?;
+        Self::unpack_bundle(
+            &src_dir.join("abi"),
+            zydeco_abi::bundle::FILES.iter().map(|source| (source.path, source.contents)),
+        )?;
+        Self::unpack_bundle(
+            &src_dir.join("host"),
+            zydeco_host::bundle::FILES.iter().map(|source| (source.path, source.contents)),
+        )?;
+
+        let machine_out = stage_dir.join("machine_out");
+        std::fs::create_dir_all(&machine_out).map_err(NativeError::PrepareBuildDirectory)?;
+        Self::write_machine_contract(&machine_out)?;
+
+        let machine_rlib = stage_dir.join("libzydeco_machine.rlib");
+        Self::compile_runtime_crate(
+            &src_dir.join("machine/src/lib.rs"),
+            "zydeco_machine",
+            "rlib",
+            "wasm32-wasip1",
+            &[],
+            &[],
+            Some(("OUT_DIR", &machine_out)),
+            None,
+            None,
+            &machine_rlib,
+        )?;
+
+        let abi_rlib = stage_dir.join("libzydeco_abi.rlib");
+        Self::compile_runtime_crate(
+            &src_dir.join("abi/src/lib.rs"),
+            "zydeco_abi",
+            "rlib",
+            "wasm32-wasip1",
+            &["feature=\"std\""],
+            &[("zydeco_machine", &machine_rlib)],
+            None,
+            None,
+            None,
+            &abi_rlib,
+        )?;
+
+        let host_rlib = stage_dir.join("libzydeco_host.rlib");
+        Self::compile_runtime_crate(
+            &src_dir.join("host/src/lib.rs"),
+            "zydeco_host",
+            "rlib",
+            "wasm32-wasip1",
+            &["feature=\"std\"", "feature=\"wasm-runtime\""],
+            &[("zydeco_machine", &machine_rlib), ("zydeco_abi", &abi_rlib)],
+            None,
+            None,
+            None,
+            &host_rlib,
+        )?;
+
+        std::fs::create_dir_all(&entry_dir).map_err(NativeError::PrepareBuildDirectory)?;
+        for (source, destination) in [
+            (&machine_rlib, &cached.machine_rlib),
+            (&abi_rlib, &cached.abi_rlib),
+            (&host_rlib, &cached.host_rlib),
+        ] {
+            std::fs::copy(source, destination).map_err(NativeError::CopyRuntimeFile)?;
+        }
+        std::fs::write(&cached.ready_marker, b"ok").map_err(NativeError::PrepareBuildDirectory)?;
+        Ok(cached)
+    }
+
+    fn write_machine_contract(machine_out: &Path) -> Result<(), NativeError> {
+        let entry_symbol = zydeco_machine::native::ENTRY_SYMBOL;
+        let export_entry_symbol = zydeco_machine::native::EXPORT_ENTRY_SYMBOL;
+        let contract = format!(
+            "pub const ENTRY_SYMBOL: &str = {entry_symbol:?};\n\
+             #[cfg(feature = \"runtime\")]\nunsafe extern \"sysv64\" {{\n\
+             #[link_name = {:?}]\n\
+             pub fn entry() -> Word;\n}}\n\
+             pub const EXPORT_ENTRY_SYMBOL: &str = {export_entry_symbol:?};\n\
+             #[macro_export]\nmacro_rules! export_native_entry {{ ($item:item) => {{\n\
+             #[unsafe(export_name = {:?})] $item\n}}; }}\n",
+            format!("\x01{entry_symbol}"),
+            format!("\x01{export_entry_symbol}"),
+        );
+        std::fs::write(machine_out.join("contract.rs"), contract)
+            .map_err(NativeError::PrepareBuildDirectory)
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn rustc_runtime_command(
         root_source: &Path, crate_name: &str, crate_type: &str, target_triple: &str,
-        cfg_flag: Option<&str>, externs: &[(&str, &Path)], env_dir: Option<(&str, &Path)>,
-        dependency_dir: Option<&Path>, output: &Path,
+        cfg_flags: &[&str], externs: &[(&str, &Path)], env_dir: Option<(&str, &Path)>,
+        dependency_dir: Option<&Path>, relocation_model: Option<&str>, output: &Path,
     ) -> Command {
         let mut command = Command::new("rustc");
         command.arg(root_source).args([
@@ -357,10 +477,11 @@ impl BuildOptions {
             "panic=abort",
             "-C",
             "lto=off",
-            "-C",
-            "relocation-model=pic",
         ]);
-        if let Some(cfg) = cfg_flag {
+        if let Some(model) = relocation_model {
+            command.args(["-C", &format!("relocation-model={model}")]);
+        }
+        for cfg in cfg_flags {
             command.args(["--cfg", cfg]);
         }
         if let Some(dir) = dependency_dir {
@@ -379,18 +500,19 @@ impl BuildOptions {
     #[allow(clippy::too_many_arguments)]
     fn compile_runtime_crate(
         root_source: &Path, crate_name: &str, crate_type: &str, target_triple: &str,
-        cfg_flag: Option<&str>, externs: &[(&str, &Path)], env_dir: Option<(&str, &Path)>,
-        dependency_dir: Option<&Path>, output: &Path,
+        cfg_flags: &[&str], externs: &[(&str, &Path)], env_dir: Option<(&str, &Path)>,
+        dependency_dir: Option<&Path>, relocation_model: Option<&str>, output: &Path,
     ) -> Result<(), NativeError> {
         let mut command = Self::rustc_runtime_command(
             root_source,
             crate_name,
             crate_type,
             target_triple,
-            cfg_flag,
+            cfg_flags,
             externs,
             env_dir,
             dependency_dir,
+            relocation_model,
             output,
         );
         NativeTool::Rustc.run(&mut command)
@@ -404,11 +526,62 @@ impl BuildOptions {
         Ok(())
     }
 
-    pub fn write_wasm(&self, artifact: &str, module: &[u8]) -> Result<WasmArtifact, NativeError> {
+    /// Link a relocatable `wasm-sps` object file with `zydeco-host` (`wasm32-wasip1`) into
+    /// a standalone WASI executable whose imports are strictly `wasi_snapshot_preview1`.
+    pub fn link_wasm(&self, artifact: &str, object: &[u8]) -> Result<WasmArtifact, NativeError> {
         std::fs::create_dir_all(&self.build_dir).map_err(NativeError::PrepareBuildDirectory)?;
-        let path = self.build_dir.join(format!("{artifact}.sps.wasm"));
-        std::fs::write(&path, module).map_err(NativeError::WriteBackendOutput)?;
-        Ok(WasmArtifact { path })
+        let cached = self.ensure_cached_wasm_runtime()?;
+        let stage =
+            tempfile::tempdir_in(&self.build_dir).map_err(NativeError::PrepareBuildDirectory)?;
+        let obj_path = stage.path().join(format!("{artifact}.sps.o"));
+        let main_rs = stage.path().join("wasm_main.rs");
+        std::fs::write(&obj_path, object).map_err(NativeError::WriteBackendOutput)?;
+        std::fs::write(
+            &main_rs,
+            "unsafe extern \"C\" {\n    fn zydeco_wasm_entry();\n}\n\
+             fn main() {\n    zydeco_host::wasm::run_process(zydeco_wasm_entry);\n}\n",
+        )
+        .map_err(NativeError::WriteBackendOutput)?;
+
+        let staged_wasm = self.build_dir.join(format!(".{artifact}.main.sps.wasm"));
+        let final_wasm = self.build_dir.join(format!("{artifact}.sps.wasm"));
+        let mut rustc = Command::new("rustc");
+        rustc
+            .arg(&main_rs)
+            .args([
+                "--crate-name",
+                "main",
+                "--crate-type",
+                "bin",
+                "--edition",
+                "2024",
+                "--target",
+                "wasm32-wasip1",
+                "-C",
+                "opt-level=2",
+                "-C",
+                "panic=abort",
+                "-C",
+                "lto=off",
+                "-C",
+                "target-feature=+tail-call",
+                "-C",
+                "link-arg=--no-check-features",
+            ])
+            .arg("-C")
+            .arg(format!("link-arg={}", obj_path.display()))
+            .arg("-L")
+            .arg(format!("dependency={}", cached.dir.display()))
+            .arg("--extern")
+            .arg(format!("zydeco_host={}", cached.host_rlib.display()))
+            .arg("-o")
+            .arg(&staged_wasm);
+        if let Err(error) = NativeTool::Rustc.run(&mut rustc) {
+            let _ = std::fs::remove_file(&staged_wasm);
+            return Err(error);
+        }
+        Self::publish_executable(&staged_wasm, &final_wasm)?;
+        Ok(WasmArtifact { path: final_wasm })
     }
 }
 
@@ -445,6 +618,33 @@ impl CachedRuntime {
     }
 }
 
+pub(crate) struct CachedWasmRuntime {
+    pub(crate) dir: PathBuf,
+    pub(crate) machine_rlib: PathBuf,
+    pub(crate) abi_rlib: PathBuf,
+    pub(crate) host_rlib: PathBuf,
+    ready_marker: PathBuf,
+}
+
+impl CachedWasmRuntime {
+    fn at(dir: PathBuf) -> Self {
+        Self {
+            machine_rlib: dir.join("libzydeco_machine.rlib"),
+            abi_rlib: dir.join("libzydeco_abi.rlib"),
+            host_rlib: dir.join("libzydeco_host.rlib"),
+            ready_marker: dir.join(".ready"),
+            dir,
+        }
+    }
+
+    fn is_ready(&self) -> bool {
+        self.ready_marker.is_file()
+            && self.machine_rlib.is_file()
+            && self.abi_rlib.is_file()
+            && self.host_rlib.is_file()
+    }
+}
+
 struct CacheLockGuard(PathBuf);
 
 impl Drop for CacheLockGuard {
@@ -462,15 +662,15 @@ fn runtime_cache_root() -> PathBuf {
 }
 
 fn acquire_cache_lock(
-    lock_dir: &Path, cached: &CachedRuntime,
+    lock_dir: &Path, is_ready: impl Fn() -> bool,
 ) -> Result<CacheLockGuard, NativeError> {
     let deadline = Instant::now() + Duration::from_secs(180);
     loop {
         match std::fs::create_dir(lock_dir) {
             | Ok(()) => return Ok(CacheLockGuard(lock_dir.to_path_buf())),
             | Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-                if cached.is_ready() || Instant::now() >= deadline {
-                    if cached.is_ready() {
+                if is_ready() || Instant::now() >= deadline {
+                    if is_ready() {
                         // Return a dummy non-locked guard path so the caller sees `is_ready()`.
                         return Ok(CacheLockGuard(PathBuf::new()));
                     }

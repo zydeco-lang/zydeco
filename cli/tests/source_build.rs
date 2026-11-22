@@ -105,9 +105,8 @@ fn partial_patterns_report_runtime_failure_across_backends() {
             let mut output = command.output().unwrap();
             if target != "exe" {
                 assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
-                output = Command::new(std::env::var_os("NODE").unwrap_or_else(|| "node".into()))
-                    .arg(workspace.join("cli/wasm/wasm-host.mjs"))
-                    .arg(build.join("partial.sps.wasm"))
+                output = zydeco_cli::execution::wasm_command(&build.join("partial.sps.wasm"))
+                    .unwrap()
                     .output()
                     .unwrap();
             }

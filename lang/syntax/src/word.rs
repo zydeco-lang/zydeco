@@ -81,32 +81,4 @@ mod tests {
             );
         }
     }
-
-    /// The JavaScript host still restates the scalar boundary outside Rust.
-    #[test]
-    fn javascript_boundary_matches() {
-        let pin = |text: &str, name: &str, expected: &str| {
-            let needle = format!("const {name}");
-            let line = text
-                .lines()
-                .find(|line| line.contains(&needle))
-                .unwrap_or_else(|| panic!("source no longer defines {name}"));
-            let value = line.split_once('=').unwrap().1.trim().trim_end_matches(';');
-            assert_eq!(value, expected, "boundary constant {name} diverged");
-        };
-
-        let host = std::fs::read_to_string(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../cli/wasm/wasm-host.mjs"),
-        )
-        .expect("the wasm host is part of this repository");
-
-        pin(&host, "IMMEDIATE_SIGNED_MIN", "-(0x4000_0000_0000_0000n)");
-        pin(&host, "IMMEDIATE_SIGNED_MAX", "0x3fff_ffff_ffff_ffffn");
-        pin(&host, "IMMEDIATE_UNSIGNED_MAX", "0x7fff_ffff_ffff_ffffn");
-
-        assert_eq!(RuntimeWord::TAG, 1);
-        assert_eq!(RuntimeWord::UNSIGNED_MAX, 0x7fff_ffff_ffff_ffff);
-        assert_eq!(RuntimeWord::SIGNED_MIN, -0x4000_0000_0000_0000);
-        assert_eq!(RuntimeWord::SIGNED_MAX, 0x3fff_ffff_ffff_ffff);
-    }
 }

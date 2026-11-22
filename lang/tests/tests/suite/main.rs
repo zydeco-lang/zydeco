@@ -52,4 +52,3 @@ mod transformers;
 mod r#typeof;
 mod value_calculation;
 mod value_pi;
-mod wasm_float_text;

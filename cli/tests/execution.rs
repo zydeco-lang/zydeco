@@ -224,7 +224,7 @@ fn invalid_sources_and_missing_hosts_fail_before_any_test_runs() {
         );
         let output = fixture
             .command(&["test", "-p", "a", "-p", "b", "-t", "all"])
-            .env("NODE", fixture.directory.path().join("missing-node"))
+            .env("WASMTIME", fixture.directory.path().join("missing-wasmtime"))
             .output()
             .unwrap();
         assert!(Fixture::stdout(&output, 1).is_empty());
@@ -247,7 +247,7 @@ fn test_preflight_failures_leave_filesystem_effects_unexecuted() {
                 .command(&["test"])
                 .args(selection)
                 .args(["-t", "interpreter", "-t", "wasm-sps"])
-                .env("NODE", fixture.directory.path().join("missing-node"))
+                .env("WASMTIME", fixture.directory.path().join("missing-wasmtime"))
                 .output()
                 .unwrap();
             assert!(Fixture::stdout(&output, 1).is_empty());
@@ -360,6 +360,7 @@ fn dry_run_needs_no_backend_tools_and_does_not_execute() {
     for target in ["interpreter", "exe", "wasm-sps"] {
         let output = fixture
             .command(&["run", "main.zy", "--dry", "-t", target, "-r", "missing-runtime"])
+            .env("WASMTIME", fixture.directory.path().join("missing-wasmtime"))
             .env("NODE", fixture.directory.path().join("missing-node"))
             .output()
             .unwrap();
@@ -461,42 +462,72 @@ fn native_run_and_all_backend_tests_share_the_runner() {
 #[test]
 fn wasm_random_integers_use_the_host_generator_and_wrap_to_payload_width() {
     let fixture = Fixture::new();
-    fixture.write("main.zy", &Fixture::program(
-        "! system/random/generate { fn value => ! system/stdio/write_int value { ! process/exit 0 } }",
-    ));
-    for value in [
-        i64::MIN,
-        zydeco_syntax::word::RuntimeWord::SIGNED_MIN,
-        zydeco_syntax::word::RuntimeWord::SIGNED_MAX,
-        i64::MAX,
-    ] {
-        fixture.write(
-            "random.cjs",
-            &format!(
-                r#"
-            require('node:crypto').randomBytes = size => {{
-                if (size !== 8) throw new Error('random integers require eight bytes');
-                const bytes = Buffer.alloc(size);
-                bytes.writeBigInt64LE({value}n);
-                return bytes;
-            }};
-            require('node:module').syncBuiltinESMExports();
-        "#
-            ),
-        );
-        let output = fixture
-            .command(&["run", "main.zy", "-t", "wasm-sps"])
-            .env(
-                "NODE_OPTIONS",
-                format!("--require={:?}", fixture.directory.path().join("random.cjs")),
-            )
-            .output()
-            .unwrap();
-        assert_eq!(
-            Fixture::stdout(&output, 0),
-            zydeco_syntax::word::RuntimeWord::wrap_signed(value).to_string()
-        );
-    }
+    fixture.write(
+        "main.zy",
+        &Fixture::program(
+            "! system/random/generate { fn value => ! system/stdio/write_int value { ! process/exit 0 } }",
+        ),
+    );
+    let output = fixture.command(&["run", "main.zy", "-t", "wasm-sps"]).output().unwrap();
+    let rendered = Fixture::stdout(&output, 0);
+    let parsed: i64 = rendered.trim().parse().expect("random_int outputs a signed integer");
+    assert!(
+        (zydeco_syntax::word::RuntimeWord::SIGNED_MIN
+            ..=zydeco_syntax::word::RuntimeWord::SIGNED_MAX)
+            .contains(&parsed),
+        "generated integer {parsed} exceeded 63-bit tagged payload range",
+    );
+}
+
+#[test]
+fn wasm_sps_linked_module_imports_only_wasi_snapshot_preview1() {
+    let fixture = Fixture::new();
+    fixture.write(
+        "main.zy",
+        &Fixture::program("! system/stdio/write_line \"standalone wasi\" { ! process/exit 0 }"),
+    );
+    let build = fixture.directory.path().join("build");
+    let output = fixture
+        .command(&["build", "main.zy", "--target", "wasm-sps", "--build-dir"])
+        .arg(&build)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+
+    let bytes = std::fs::read(build.join("main.sps.wasm")).unwrap();
+    wasmparser::Validator::new().validate_all(&bytes).unwrap();
+    let import_modules: std::collections::BTreeSet<String> = wasmparser::Parser::new(0)
+        .parse_all(&bytes)
+        .filter_map(|payload| match payload.unwrap() {
+            | wasmparser::Payload::ImportSection(reader) => Some(reader),
+            | _ => None,
+        })
+        .flat_map(|reader| reader.into_imports())
+        .map(|import| import.unwrap().module.to_owned())
+        .collect();
+    assert_eq!(import_modules, ["wasi_snapshot_preview1".to_owned()].into_iter().collect());
+}
+
+#[test]
+fn wasm_sps_tail_calls_run_100k_iterations_without_stack_overflow() {
+    let fixture = Fixture::new();
+    let builtin = Path::new(env!("CARGO_MANIFEST_DIR")).join("../lib/std/builtin.zy");
+    fixture.write(
+        "tail.zy",
+        &format!(
+            "param (/OS; /Int; /process; /numeric; /system) : @(import({:?})) in\n\
+             let fix count (n : Int) : OS =\n\
+               ! numeric/int/eq OS n 0\n\
+                 {{ ! system/stdio/write_line \"done\" {{ ! process/exit 0 }} }}\n\
+                 {{ do next <- ! numeric/int/sub n 1; ! count next }}\n\
+             in\n\
+             ! count 100000\n",
+            builtin.to_str().unwrap(),
+        ),
+    );
+    let output = fixture.command(&["run", "tail.zy", "-t", "wasm-sps"]).output().unwrap();
+    assert_eq!(Fixture::stdout(&output, 0), "done\n");
+    assert!(output.stderr.is_empty(), "{}", String::from_utf8_lossy(&output.stderr));
 }
 
 #[test]

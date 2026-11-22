@@ -483,7 +483,7 @@ impl Application {
                     }
                     let artifact = self.artifact_name(path)?;
                     let module = backend.emit_wasm_sps()?;
-                    let module = options.write_wasm(&artifact, &module)?;
+                    let module = options.link_wasm(&artifact, &module)?;
                     println!("{}", module.path().display());
                 }
                 | BuildTarget::Exe => {

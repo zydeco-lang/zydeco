@@ -46,9 +46,8 @@ impl RuntimeFixture {
         }
         let output = command.output().unwrap();
         assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
-        Command::new(std::env::var_os("NODE").unwrap_or_else(|| "node".into()))
-            .arg(self.workspace.join("cli/wasm/wasm-host.mjs"))
-            .arg(build.join("runtime.sps.wasm"))
+        zydeco_cli::execution::wasm_command(&build.join("runtime.sps.wasm"))
+            .unwrap()
             .output()
             .unwrap()
     }
@@ -220,7 +219,18 @@ fn arithmetic_modules_import_only_their_remaining_host_calls() {
         .flat_map(|imports| imports.into_imports())
         .map(|import| import.unwrap().name)
         .collect::<std::collections::BTreeSet<_>>();
-    assert_eq!(imports, ["exit", "runtime_error"].into_iter().collect());
+    assert_eq!(
+        imports,
+        [
+            "__indirect_function_table",
+            "__linear_memory",
+            "zydeco_exit",
+            "zydeco_runtime_error",
+            "zydeco_wasm_alloc",
+        ]
+        .into_iter()
+        .collect()
+    );
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]

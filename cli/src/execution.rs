@@ -15,12 +15,117 @@ use crate::{
     TargetArchitecture, TargetOs, TestInteraction,
 };
 
+const NODE_WASI_SCRIPT: &str = "\
+const fs = require('node:fs');\n\
+const { WASI } = require('node:wasi');\n\
+const preopens = JSON.parse(process.env.ZYDECO_WASI_PREOPENS || '{}');\n\
+const wasi = new WASI({ version: 'preview1', args: process.argv.slice(1), env: process.env, preopens });\n\
+const bytes = fs.readFileSync(process.argv[1]);\n\
+WebAssembly.compile(bytes)\n\
+  .then((module) => WebAssembly.instantiate(module, wasi.getImportObject()))\n\
+  .then((instance) => wasi.start(instance))\n\
+  .catch((error) => { process.stderr.write(`${error?.stack ?? error}\\n`); process.exit(1); });";
+
+/// WebAssembly WASI runtime selected for executing standalone `.sps.wasm` binaries.
+#[derive(Clone, Debug)]
+enum WasmRunner {
+    Wasmtime(PathBuf),
+    NodeWasi(PathBuf),
+}
+
+impl WasmRunner {
+    fn discover() -> Result<Self, ExecutionError> {
+        if let Some(wasmtime) = std::env::var_os("WASMTIME") {
+            let path = PathBuf::from(wasmtime);
+            verify_runtime(&path)?;
+            return Ok(Self::Wasmtime(path));
+        }
+        let default_wasmtime = PathBuf::from("wasmtime");
+        if verify_runtime(&default_wasmtime).is_ok() {
+            return Ok(Self::Wasmtime(default_wasmtime));
+        }
+        let node = PathBuf::from(std::env::var_os("NODE").unwrap_or_else(|| "node".into()));
+        verify_runtime(&node)?;
+        Ok(Self::NodeWasi(node))
+    }
+
+    fn command(&self, module_path: &Path) -> Command {
+        let preopens = wasi_preopens();
+        match self {
+            | Self::Wasmtime(wasmtime) => {
+                let mut command = Command::new(wasmtime);
+                command.args(["run", "-W", "tail-call=y"]);
+                for dir in &preopens {
+                    command.arg("--dir").arg(format!("{dir}::{dir}"));
+                }
+                command.arg("--").arg(module_path);
+                command
+            }
+            | Self::NodeWasi(node) => {
+                let preopen_map = preopens
+                    .iter()
+                    .map(|dir| (dir.as_str(), dir.as_str()))
+                    .collect::<std::collections::BTreeMap<_, _>>();
+                let json = serde_json::to_string(&preopen_map)
+                    .expect("serialize WASI preopen directory map");
+                let mut command = Command::new(node);
+                command
+                    .args(["--no-warnings", "-e", NODE_WASI_SCRIPT, "--"])
+                    .arg(module_path)
+                    .env("ZYDECO_WASI_PREOPENS", json);
+                command
+            }
+        }
+    }
+}
+
+/// Returns a [`Command`] configured to execute a linked standalone `.sps.wasm` binary.
+pub fn wasm_command(module_path: &Path) -> Result<Command, ExecutionError> {
+    Ok(WasmRunner::discover()?.command(module_path))
+}
+
+fn wasi_preopens() -> Vec<String> {
+    let mut dirs = Vec::new();
+    let mut push_dir = |candidate: String| {
+        if !candidate.is_empty() && !dirs.contains(&candidate) {
+            dirs.push(candidate);
+        }
+    };
+    push_dir(".".to_owned());
+    let mut push_path = |path: &Path| {
+        if let Some(text) = normalize_dir_string(path) {
+            push_dir(text);
+        }
+        if let Ok(canonical) = std::fs::canonicalize(path)
+            && let Some(text) = normalize_dir_string(&canonical)
+        {
+            push_dir(text);
+        }
+    };
+    if let Ok(cwd) = std::env::current_dir() {
+        push_path(&cwd);
+    }
+    let temp = std::env::temp_dir();
+    push_path(&temp);
+    let tmp = Path::new("/tmp");
+    if tmp.is_dir() {
+        push_path(tmp);
+    }
+    dirs
+}
+
+fn normalize_dir_string(path: &Path) -> Option<String> {
+    let text = path.to_str()?;
+    let trimmed = if text == "/" { text } else { text.trim_end_matches('/') };
+    (!trimmed.is_empty()).then(|| trimmed.to_owned())
+}
+
 /// Execution policy shared by source commands and the Rust fixture harness.
 pub struct ExecutionRunner<'a> {
     compiler: &'a CommandCompiler,
     targets: Vec<ExecutionTarget>,
     runtime_dir: PathBuf,
-    node: PathBuf,
+    wasm: Option<WasmRunner>,
     libraries: crate::library::LinkedLibraries,
 }
 
@@ -96,11 +201,12 @@ impl<'a> ExecutionRunner<'a> {
                 unique.push(target);
             }
         }
-        let node = PathBuf::from(std::env::var_os("NODE").unwrap_or_else(|| "node".into()));
-        if unique.contains(&ExecutionTarget::WasmSps) {
-            verify_node_runtime(&node)?;
-        }
-        Ok(Self { compiler, targets: unique, runtime_dir, node, libraries: Default::default() })
+        let wasm = if unique.contains(&ExecutionTarget::WasmSps) {
+            Some(WasmRunner::discover()?)
+        } else {
+            None
+        };
+        Ok(Self { compiler, targets: unique, runtime_dir, wasm, libraries: Default::default() })
     }
 
     /// Reuse the checked source and one lowering across all requested backends.
@@ -150,19 +256,16 @@ impl<'a> ExecutionRunner<'a> {
                         Command::new(executable.path())
                     }
                     | ExecutionTarget::WasmSps => {
-                        let module = backend.emit_wasm_sps()?;
-                        let path = directory.path().join("program.wasm");
-                        std::fs::write(&path, module)?;
-                        for (name, source) in [
-                            ("wasm-host.mjs", include_str!("../wasm/wasm-host.mjs")),
-                            ("wasm-numeric.mjs", include_str!("../wasm/wasm-numeric.mjs")),
-                            ("wasm-memory.mjs", include_str!("../wasm/wasm-memory.mjs")),
-                        ] {
-                            std::fs::write(directory.path().join(name), source)?;
-                        }
-                        let mut command = Command::new(&self.node);
-                        command.arg(directory.path().join("wasm-host.mjs")).arg(path);
-                        command
+                        let options = BuildOptions::host(
+                            directory.path().to_owned(),
+                            self.runtime_dir.clone(),
+                        )?;
+                        let object = backend.emit_wasm_sps()?;
+                        let artifact = options.link_wasm("program", &object)?;
+                        self.wasm
+                            .as_ref()
+                            .expect("WASM runner initialized for wasm-sps")
+                            .command(artifact.path())
                     }
                 };
                 Ok(PreparedExecution {
@@ -240,24 +343,24 @@ impl PreparedExecution {
     }
 }
 
-fn verify_node_runtime(node: &Path) -> Result<(), ExecutionError> {
+fn verify_runtime(program: &Path) -> Result<(), ExecutionError> {
     static VERIFIED: OnceLock<Mutex<HashSet<PathBuf>>> = OnceLock::new();
     let cache = VERIFIED.get_or_init(|| Mutex::new(HashSet::new()));
-    if cache.lock().unwrap_or_else(|poison| poison.into_inner()).contains(node) {
+    if cache.lock().unwrap_or_else(|poison| poison.into_inner()).contains(program) {
         return Ok(());
     }
-    let output = Command::new(node)
+    let output = Command::new(program)
         .arg("--version")
         .output()
-        .map_err(|source| ExecutionError::Start { program: node.to_path_buf(), source })?;
+        .map_err(|source| ExecutionError::Start { program: program.to_path_buf(), source })?;
     if !output.status.success() {
         return Err(ExecutionError::Host {
-            program: node.to_path_buf(),
+            program: program.to_path_buf(),
             status: output.status,
             stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
         });
     }
-    cache.lock().unwrap_or_else(|poison| poison.into_inner()).insert(node.to_path_buf());
+    cache.lock().unwrap_or_else(|poison| poison.into_inner()).insert(program.to_path_buf());
     Ok(())
 }
 

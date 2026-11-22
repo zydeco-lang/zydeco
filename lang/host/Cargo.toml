@@ -12,6 +12,7 @@ description = "Shared garbage collector, managed strings, I/O handles, and entro
 default = ["std"]
 bundle = []
 std = ["zydeco-abi/std"]
+wasm-runtime = ["std"]
 
 [dependencies]
 zydeco-machine = { workspace = true }

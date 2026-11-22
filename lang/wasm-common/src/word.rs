@@ -3,11 +3,11 @@
 //! The word encoding itself — the immediate boundary, the integer and float
 //! classification — lives in [`zydeco_syntax::word`], which every backend and the
 //! external boundary pins share. This module adds the WebAssembly function bodies
-//! that decode, encode, box, and divide tagged words.
+//! that decode, encode, box, divide, and access linear-memory words.
 
-use wasm_encoder::{Function, Instruction as WasmInstruction};
+use wasm_encoder::{Instruction as WasmInstruction, MemArg};
+use zydeco_syntax::memory::{AccessWidth, MemoryScalar};
 use zydeco_syntax::scalar::{ScalarProgram, ScalarStep, ScalarType};
-
 use zydeco_syntax::{
     ComparisonOp, ComparisonPredicate, FloatArithmetic, FloatType, IntegerArithmetic, IntegerType,
     PrimitiveOp, SpareBox,
@@ -15,7 +15,12 @@ use zydeco_syntax::{
 
 pub use zydeco_syntax::word::{EncodedScalar, RuntimeWord, ScalarRepresentation, WordError};
 
-use crate::{Limits, WORD_BYTES, WORD_MEMORY, WasmEmitError};
+use crate::{
+    Limits, WORD_BYTES, WORD_MEMORY, WasmEmitError,
+    object::{FuncRef, RelocFunction},
+};
+
+const RAW_MEMORY: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
 
 /// The `i64` local holding the tagged pointer word of a freshly allocated box.
 ///
@@ -26,29 +31,29 @@ pub struct PointerLocal(pub u32);
 
 impl PointerLocal {
     /// Bind the pointer of a freshly allocated box and expose its store address.
-    fn bind_allocation(&self, function: &mut Function) {
+    fn bind_allocation(&self, function: &mut RelocFunction) {
         function.instruction(&WasmInstruction::I64ExtendI32U);
         function.instruction(&WasmInstruction::LocalTee(self.0));
         function.instruction(&WasmInstruction::I32WrapI64);
     }
 
     /// Push the pointer as a tagged word.
-    fn push_word(&self, function: &mut Function) {
+    fn push_word(&self, function: &mut RelocFunction) {
         function.instruction(&WasmInstruction::LocalGet(self.0));
     }
 }
 
-/// Shared instruction sequences over a function under construction.
+/// Shared instruction sequences over a relocatable function under construction.
 ///
-/// Each sequence assumes the backend's allocator helper is installed at `alloc_function`
-/// and leaves its result on the operand stack unless a local is named.
+/// Each sequence calls `alloc_function` (`zydeco_wasm_alloc`) and leaves its result on
+/// the operand stack unless a local is named.
 pub struct WordEmitter<'f> {
-    function: &'f mut Function,
-    alloc_function: u32,
+    function: &'f mut RelocFunction,
+    alloc_function: FuncRef,
 }
 
 impl<'f> WordEmitter<'f> {
-    pub fn new(function: &'f mut Function, alloc_function: u32) -> Self {
+    pub fn new(function: &'f mut RelocFunction, alloc_function: FuncRef) -> Self {
         Self { function, alloc_function }
     }
 
@@ -106,9 +111,42 @@ impl<'f> WordEmitter<'f> {
         self.function.instruction(&instruction);
     }
 
+    /// Emit an inline little-endian linear-memory load (`[address: i64] -> [raw_bits: i64]`).
+    pub fn raw_load(&mut self, scalar: MemoryScalar) {
+        self.function.instruction(&WasmInstruction::I32WrapI64);
+        let instruction = match scalar {
+            | MemoryScalar::Integer(IntegerType::Int8) => WasmInstruction::I64Load8S(RAW_MEMORY),
+            | MemoryScalar::Integer(IntegerType::UInt8) => WasmInstruction::I64Load8U(RAW_MEMORY),
+            | MemoryScalar::Integer(IntegerType::Int16) => WasmInstruction::I64Load16S(RAW_MEMORY),
+            | MemoryScalar::Integer(IntegerType::UInt16) => WasmInstruction::I64Load16U(RAW_MEMORY),
+            | MemoryScalar::Integer(IntegerType::Int32) => WasmInstruction::I64Load32S(RAW_MEMORY),
+            | MemoryScalar::Integer(IntegerType::UInt32)
+            | MemoryScalar::Float(FloatType::Float32) => WasmInstruction::I64Load32U(RAW_MEMORY),
+            | MemoryScalar::Integer(
+                IntegerType::Int64 | IntegerType::UInt64 | IntegerType::Int | IntegerType::UInt,
+            )
+            | MemoryScalar::Float(FloatType::Float64)
+            | MemoryScalar::Address => WasmInstruction::I64Load(RAW_MEMORY),
+        };
+        self.function.instruction(&instruction);
+    }
+
+    /// Emit an inline little-endian linear-memory store (`[address: i64, raw_bits: i64] -> []`).
+    pub fn raw_store(&mut self, scalar: MemoryScalar, scratch: u32) {
+        self.function.instruction(&WasmInstruction::LocalSet(scratch));
+        self.function.instruction(&WasmInstruction::I32WrapI64);
+        self.function.instruction(&WasmInstruction::LocalGet(scratch));
+        let instruction = match scalar.width() {
+            | AccessWidth::Bits8 => WasmInstruction::I64Store8(RAW_MEMORY),
+            | AccessWidth::Bits16 => WasmInstruction::I64Store16(RAW_MEMORY),
+            | AccessWidth::Bits32 => WasmInstruction::I64Store32(RAW_MEMORY),
+            | AccessWidth::Bits64 => WasmInstruction::I64Store(RAW_MEMORY),
+        };
+        self.function.instruction(&instruction);
+    }
+
     /// Decode an ordinary store operand into raw bits in its occurrence-local home.
-    pub fn memory_decode(&mut self, scalar: zydeco_syntax::memory::MemoryScalar, local: u32) {
-        use zydeco_syntax::memory::MemoryScalar;
+    pub fn memory_decode(&mut self, scalar: MemoryScalar, local: u32) {
         match scalar {
             | MemoryScalar::Integer(ty) => self.decode_integer(local, ty),
             | MemoryScalar::Float(ty) => {
@@ -130,10 +168,7 @@ impl<'f> WordEmitter<'f> {
     }
 
     /// Validate a loaded carrier, then leave its ordinary value on the operand stack.
-    pub fn memory_encode(
-        &mut self, scalar: zydeco_syntax::memory::MemoryScalar, local: u32, pointer: PointerLocal,
-    ) {
-        use zydeco_syntax::memory::MemoryScalar;
+    pub fn memory_encode(&mut self, scalar: MemoryScalar, local: u32, pointer: PointerLocal) {
         if let MemoryScalar::Integer(ty) = scalar {
             if matches!(ty, IntegerType::Int | IntegerType::UInt) {
                 self.function.instruction(&WasmInstruction::LocalGet(local));
@@ -174,7 +209,7 @@ impl<'f> WordEmitter<'f> {
     /// operand stack.
     pub fn boxed(&mut self, bits: u64, pointer: PointerLocal) {
         self.function.instruction(&WasmInstruction::I32Const(1));
-        self.function.instruction(&WasmInstruction::Call(self.alloc_function));
+        self.function.call(self.alloc_function);
         pointer.bind_allocation(self.function);
         self.function.instruction(&WasmInstruction::I64Const(bits as i64));
         self.function.instruction(&WasmInstruction::I64Store(WORD_MEMORY));
@@ -238,7 +273,7 @@ impl<'f> WordEmitter<'f> {
             match spare {
                 | SpareBox::Opaque => {
                     self.function.instruction(&WasmInstruction::I32Const(1));
-                    self.function.instruction(&WasmInstruction::Call(self.alloc_function));
+                    self.function.call(self.alloc_function);
                 }
             }
         }
@@ -297,7 +332,7 @@ impl<'f> WordEmitter<'f> {
 
     /// Inputs are raw locals. No value memory, allocation, or source callback is used.
     pub fn scalar_kernel(&mut self, kernel: &zydeco_syntax::scalar::ScalarKernel, base: u32) {
-        use zydeco_syntax::{memory::MemoryScalar, scalar::KernelStep};
+        use zydeco_syntax::scalar::KernelStep;
         let region = kernel.region();
         for (index, step) in region.steps.iter().enumerate() {
             let target = base + (region.inputs.len() + index) as u32;
@@ -446,7 +481,7 @@ impl<'f> WordEmitter<'f> {
 
     fn box_local(&mut self, local: u32, pointer: PointerLocal) {
         self.function.instruction(&WasmInstruction::I32Const(1));
-        self.function.instruction(&WasmInstruction::Call(self.alloc_function));
+        self.function.call(self.alloc_function);
         pointer.bind_allocation(self.function);
         self.function.instruction(&WasmInstruction::LocalGet(local));
         self.function.instruction(&WasmInstruction::I64Store(WORD_MEMORY));
@@ -466,12 +501,12 @@ impl ProductFields {
     }
 
     /// Checked memory access to one field.
-    pub fn word_at(index: usize) -> Result<wasm_encoder::MemArg, WasmEmitError> {
-        Ok(wasm_encoder::MemArg { offset: u64::from(Self::byte_offset(index)?), ..WORD_MEMORY })
+    pub fn word_at(index: usize) -> Result<MemArg, WasmEmitError> {
+        Ok(MemArg { offset: u64::from(Self::byte_offset(index)?), ..WORD_MEMORY })
     }
 
     /// Memory access to one compile-time-constant field.
-    pub fn word_at_const(index: u32) -> wasm_encoder::MemArg {
-        wasm_encoder::MemArg { offset: u64::from(index * WORD_BYTES), ..WORD_MEMORY }
+    pub fn word_at_const(index: u32) -> MemArg {
+        MemArg { offset: u64::from(index * WORD_BYTES), ..WORD_MEMORY }
     }
 }

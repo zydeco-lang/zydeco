@@ -14,6 +14,8 @@ pub mod io;
 #[cfg(feature = "std")]
 pub mod random;
 pub mod string;
+#[cfg(all(feature = "wasm-runtime", target_arch = "wasm32"))]
+pub mod wasm;
 
 pub use zydeco_abi::{HostIoErrorKind, RuntimeFailure};
 

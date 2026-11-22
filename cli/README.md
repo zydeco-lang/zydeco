@@ -31,7 +31,7 @@ See [source packages](../docs/references/language/src/sources/packages.md#source
 and discovery, and the [standard library guide](../lib/std/README.md#source-packages-and-tests)
 for fixture-dependent tests.
 Native execution uses `runtime/` by default; `--runtime-dir PATH` selects another source directory.
-WebAssembly execution uses the bundled Node.js host; `NODE` selects the executable.
+WebAssembly execution produces standalone WASI (`wasm32-wasip1`) executables and runs them with `wasmtime` (`WASMTIME` selects the executable, falling back to `node` `node:wasi`).
 
 ### Selecting an Execution Backend
 
@@ -53,7 +53,7 @@ Every test/backend pair reports a labeled result.
 Zero exits pass; nonzero exits display captured stdout and stderr.
 Runtime errors also fail their pair, and remaining pairs still run.
 The summary counts pairs, and the command fails if any pair fails.
-Wasm requires Node.js and uses the bundled host; native execution requires the AMD64 tools and runtime sources.
+Wasm execution requires `wasmtime` (or Node.js `node:wasi` fallback); native execution requires the AMD64 tools and runtime sources.
 
 ## Interactive REPL
 
@@ -130,14 +130,14 @@ Build a module from first-order SPSLow:
 zydeco build path/to/main.zy --target wasm-sps --build-dir build
 ```
 
-The command writes `build/main.sps.wasm`.
-Use `run -t wasm-sps` for compilation and execution, or run an existing module with the bundled host:
+The command links `build/main.sps.wasm`, a standalone WASI (`wasm32-wasip1`) module importing only `wasi_snapshot_preview1`.
+Use `run -t wasm-sps` for compilation and execution, or run an existing module directly with `wasmtime`:
 
 ```sh
-node cli/wasm/wasm-host.mjs build/main.sps.wasm
+wasmtime run -W tail-call=y build/main.sps.wasm
 ```
 
-CI uses Node.js 24. The [WebAssembly ABI](../DESIGN.md#webassembly-backend) describes the embedding interface.
+The [WebAssembly backend](../DESIGN.md#webassembly-backend) describes the compiled object and WASI runtime linking.
 
 ### C Libraries
 

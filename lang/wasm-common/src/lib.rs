@@ -1,40 +1,32 @@
 //! The runtime contract of the Zydeco WebAssembly backend.
 //!
-//! Generated modules follow one runtime contract: an OCaml-style tagged-word
-//! representation with one-word boxes, a bump allocator over linear memory, host imports
-//! under one namespace, and a `string_literal` import for static string data. This crate
-//! owns that contract — the word encoding, the host-call ABI, the allocator body,
-//! and the module scaffolding — so the emitter only decides how its IR drives it.
+//! Generated `.o` objects follow one runtime contract: an OCaml-style tagged-word
+//! representation with one-word boxes, `zydeco_wasm_alloc` over WASI linear memory, host
+//! imports under `env`, and `.rodata.strings` static literals linked with `zydeco-host`.
 
 pub mod host;
 pub mod module;
+pub mod object;
 pub mod word;
 
 pub use host::{
-    HostCallKind, HostImport, HostSections, RuntimeFailure, StaticString, StringTable,
-    WasmRuntimeFailure,
+    ALLOC_SYMBOL, ENTRY_SYMBOL, HostCallKind, HostImport, HostSections, RUNTIME_ERROR_SYMBOL,
+    RuntimeFailure, StaticString, StringTable, WasmRuntimeFailure,
 };
-pub use module::{AllocFunction, WasmModule, WasmSections};
+pub use module::WasmModule;
+pub use object::{DataSymbol, FuncRef, RelocFunction, TableSymbol, WasmObjectBuilder};
 pub use word::{EncodedScalar, PointerLocal, ProductFields, RuntimeWord, WordEmitter, WordError};
 
 use thiserror::Error;
 use wasm_encoder::MemArg;
 
-/// Import namespace used by generated modules.
-///
-/// Returning builtins accept their arguments as `i64` words and return one `i64`.
-/// Control builtins return four `i64` words: argument count, closure, first argument,
-/// and second argument. Operations that can produce a boxed 64-bit scalar receive one
-/// trailing `i32` spare-box address.
-pub const HOST_MODULE: &str = "zydeco";
-
-/// WebAssembly page size in bytes.
-pub const WASM_PAGE_BYTES: u32 = 64 * 1024;
+/// Import module namespace used by relocatable Wasm object files.
+pub const HOST_MODULE: &str = "env";
 
 /// Size of one runtime word in bytes.
 pub const WORD_BYTES: u32 = 8;
 
-/// Unaligned eight-byte access to linear memory 0.
+/// Eight-byte-aligned access to linear memory 0.
 pub const WORD_MEMORY: MemArg = MemArg { offset: 0, align: 3, memory_index: 0 };
 
 /// Errors raised by the shared WebAssembly backend support.

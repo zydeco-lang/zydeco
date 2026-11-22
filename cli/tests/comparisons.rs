@@ -43,9 +43,8 @@ impl Fixture {
         }
         let output = command.output().unwrap();
         assert!(output.status.success(), "{target}: {}", String::from_utf8_lossy(&output.stderr));
-        Command::new(std::env::var_os("NODE").unwrap_or_else(|| "node".into()))
-            .arg(self.workspace.join("cli/wasm/wasm-host.mjs"))
-            .arg(build.join("comparison.sps.wasm"))
+        zydeco_cli::execution::wasm_command(&build.join("comparison.sps.wasm"))
+            .unwrap()
             .output()
             .unwrap()
     }
