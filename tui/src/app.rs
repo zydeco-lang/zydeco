@@ -161,10 +161,7 @@ impl Repl {
 
     fn evaluate(&mut self, source: String, mode: ExpressionMode) {
         let number = self.current_number();
-        let outcome = match self.engine.install(number, source.clone()) {
-            | Ok(input) => self.engine.evaluate(&input, mode),
-            | Err(error) => EvaluationOutcome::Error(error.to_string()),
-        };
+        let outcome = self.engine.evaluate_source(number, source.clone(), mode);
         match outcome {
             | EvaluationOutcome::TypeRejected(error) => {
                 self.retain_for_retry(number, source, error)
@@ -177,7 +174,7 @@ impl Repl {
 
     fn record(&mut self, source: String, outcome: EvaluationOutcome) {
         let number = self.current_number();
-        let outcome = match self.engine.install(number, source.clone()) {
+        let outcome = match self.engine.install_entry(number, source.clone()) {
             | Ok(_) => outcome,
             | Err(error) => EvaluationOutcome::Error(error.to_string()),
         };

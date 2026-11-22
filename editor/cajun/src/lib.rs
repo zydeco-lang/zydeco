@@ -8,6 +8,7 @@ mod hover;
 mod progress;
 mod rename;
 mod semantic;
+mod span_index;
 mod type_links;
 
 use analysis::{ProjectFailure, ProjectState};
@@ -45,7 +46,7 @@ use tower_lsp::{
         TextDocumentSyncSaveOptions, TextEdit, Url, WorkDoneProgressOptions, WorkspaceEdit,
     },
 };
-use zydeco_session::{CompilerSession, SourceGraph};
+use zydeco_session::{CompilerSession, SourceGraph, source::SourcePath};
 
 struct ZydecoDocument;
 
@@ -151,6 +152,7 @@ pub struct Cajun {
     client: Client,
     session: Arc<Mutex<SessionState>>,
     projects: RwLock<HashMap<PathBuf, CachedProject>>,
+    uri_paths: RwLock<HashMap<Url, PathBuf>>,
     work_done_progress: AtomicBool,
     semantic_tokens_refresh: AtomicBool,
     completion_snippets: AtomicBool,
@@ -165,6 +167,7 @@ impl Cajun {
             client,
             session: Arc::new(Mutex::new(SessionState::default())),
             projects: RwLock::new(HashMap::new()),
+            uri_paths: RwLock::new(HashMap::new()),
             work_done_progress: AtomicBool::new(false),
             semantic_tokens_refresh: AtomicBool::new(false),
             completion_snippets: AtomicBool::new(false),
@@ -179,7 +182,7 @@ impl Cajun {
     }
 
     async fn source_graph(&self, uri: &Url) -> Option<(PathBuf, Arc<SourceGraph>)> {
-        let path = Self::path(uri).ok()?;
+        let path = self.resolve_path(uri).await.ok()?;
         let (revision, snapshot) = {
             let session = self.session.lock().await;
             (session.revision(), session.compiler.snapshot())
@@ -202,7 +205,7 @@ impl Cajun {
     async fn refresh_with_progress(
         &self, uri: &Url, progress: AnalysisProgressReporter,
     ) -> RefreshOutcome {
-        let path = match Self::path(uri) {
+        let path = match self.resolve_path(uri).await {
             | Ok(path) => path,
             | Err(error) => return RefreshOutcome::Failed(ProjectFailure::internal(error)),
         };
@@ -294,7 +297,7 @@ impl Cajun {
                 .unwrap_or_default(),
             | RefreshOutcome::Superseded => Vec::new(),
             | RefreshOutcome::Failed(failure) => {
-                let path = Self::path(&uri).ok();
+                let path = self.resolve_path(&uri).await.ok();
                 let source = match path.as_deref() {
                     | Some(path) => {
                         let overlay = self.session.lock().await.source(path);
@@ -328,17 +331,17 @@ impl Cajun {
         }
     }
 
-    fn progress_session(&self, uri: &Url) -> Option<AnalysisProgressSession> {
+    async fn progress_session(&self, uri: &Url) -> Option<AnalysisProgressSession> {
         if !self.work_done_progress.load(Ordering::Relaxed) {
             return None;
         }
-        let root = Self::path(uri).ok()?;
+        let root = self.resolve_path(uri).await.ok()?;
         let sequence = self.next_progress_sequence.fetch_add(1, Ordering::Relaxed);
         Some(AnalysisProgressSession::new(self.client.clone(), root, sequence))
     }
 
     async fn set_document(&self, uri: &Url, text: String) -> Option<PathBuf> {
-        let path = Self::path(uri).ok()?;
+        let path = self.resolve_path(uri).await.ok()?;
         self.session.lock().await.set_document(&path, text).ok()?;
         Some(path)
     }
@@ -348,14 +351,16 @@ impl Cajun {
         source.or_else(|| std::fs::read_to_string(path).ok())
     }
 
-    fn path(uri: &Url) -> std::result::Result<PathBuf, String> {
-        uri.to_file_path()
-            .map(|path| Self::normalize_path(&path))
-            .map_err(|_| format!("Cajun supports file URIs, but received `{uri}`"))
-    }
-
-    fn normalize_path(path: &Path) -> PathBuf {
-        path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
+    async fn resolve_path(&self, uri: &Url) -> std::result::Result<PathBuf, String> {
+        if let Some(path) = self.uri_paths.read().await.get(uri).cloned() {
+            return Ok(path);
+        }
+        let raw = uri
+            .to_file_path()
+            .map_err(|_| format!("Cajun supports file URIs, but received `{uri}`"))?;
+        let resolved = SourcePath::identity(&raw).unwrap_or(raw);
+        self.uri_paths.write().await.insert(uri.clone(), resolved.clone());
+        Ok(resolved)
     }
 }
 
@@ -460,7 +465,7 @@ impl LanguageServer for Cajun {
             return;
         }
         self.set_document(&document.uri, document.text).await;
-        let progress = self.progress_session(&document.uri);
+        let progress = self.progress_session(&document.uri).await;
         self.analyze_and_publish(document.uri, Some(document.version), progress).await;
     }
 
@@ -486,9 +491,10 @@ impl LanguageServer for Cajun {
         if !ZydecoDocument::accepts(&params.text_document.uri) {
             return;
         }
+        self.uri_paths.write().await.remove(&params.text_document.uri);
         if let Some(text) = params.text {
             self.set_document(&params.text_document.uri, text).await;
-        } else if let Ok(path) = Self::path(&params.text_document.uri) {
+        } else if let Ok(path) = self.resolve_path(&params.text_document.uri).await {
             self.session.lock().await.refresh_disk(&path);
         }
         self.analyze_and_publish(params.text_document.uri, None, None).await;
@@ -497,13 +503,20 @@ impl LanguageServer for Cajun {
     async fn did_change_watched_files(
         &self, params: tower_lsp::lsp_types::DidChangeWatchedFilesParams,
     ) {
-        let mut session = self.session.lock().await;
+        let mut paths = Vec::new();
         for change in params.changes {
             if ZydecoDocument::accepts(&change.uri)
-                && let Ok(path) = Self::path(&change.uri)
+                && let Ok(path) = self.resolve_path(&change.uri).await
             {
-                session.refresh_disk(&path);
+                paths.push(path);
             }
+        }
+        if paths.is_empty() {
+            return;
+        }
+        let mut session = self.session.lock().await;
+        for path in paths {
+            session.refresh_disk(&path);
         }
     }
 
@@ -512,7 +525,8 @@ impl LanguageServer for Cajun {
         if !ZydecoDocument::accepts(&uri) {
             return;
         }
-        if let Ok(path) = Self::path(&uri) {
+        if let Ok(path) = self.resolve_path(&uri).await {
+            self.uri_paths.write().await.remove(&uri);
             let mut session = self.session.lock().await;
             session.close_document(&path);
             self.projects.write().await.remove(&path);
@@ -619,10 +633,18 @@ impl LanguageServer for Cajun {
             | RefreshOutcome::Failed(_) | RefreshOutcome::Superseded => return Ok(None),
         };
         let options = self.configuration.snapshot().await.hover;
-        let session = self.session.lock().await;
+        let snapshot = {
+            let session = self.session.lock().await;
+            session.compiler.snapshot()
+        };
         let projects = self.projects.read().await;
         Ok(projects.get(&path).and_then(|cached| {
-            cached.project.hover(&session.compiler, &path, target.position, options)
+            match AnalysisTask::run(|| {
+                cached.project.hover(&snapshot, &path, target.position, options)
+            }) {
+                | AnalysisTask::Completed(hover) => hover,
+                | AnalysisTask::Cancelled => None,
+            }
         }))
     }
 
@@ -631,7 +653,7 @@ impl LanguageServer for Cajun {
         if !ZydecoDocument::accepts(&target.text_document.uri) {
             return Ok(None);
         }
-        let path = match Self::path(&target.text_document.uri) {
+        let path = match self.resolve_path(&target.text_document.uri).await {
             | Ok(path) => path,
             | Err(_) => return Ok(None),
         };
@@ -683,7 +705,7 @@ impl LanguageServer for Cajun {
         if !ZydecoDocument::accepts(&uri) {
             return Ok(None);
         }
-        let path = match Self::path(&uri) {
+        let path = match self.resolve_path(&uri).await {
             | Ok(path) => path,
             | Err(_) => return Ok(None),
         };
@@ -713,7 +735,7 @@ impl LanguageServer for Cajun {
         if !ZydecoDocument::accepts(&uri) {
             return Ok(None);
         }
-        let path = match Self::path(&uri) {
+        let path = match self.resolve_path(&uri).await {
             | Ok(path) => path,
             | Err(_) => return Ok(None),
         };

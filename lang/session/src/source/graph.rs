@@ -54,10 +54,10 @@ pub enum SourceKind {
     Program,
 }
 
-pub(crate) struct SourcePath;
+pub struct SourcePath;
 
 impl SourcePath {
-    pub(crate) fn identity(path: &Path) -> std::io::Result<PathBuf> {
+    pub fn identity(path: &Path) -> std::io::Result<PathBuf> {
         path.canonicalize().or_else(|_| {
             let absolute = std::path::absolute(path)?;
             let mut ancestor = absolute.as_path();

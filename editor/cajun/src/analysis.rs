@@ -10,10 +10,11 @@ use tower_lsp::lsp_types::{
 };
 use zydeco_foundation::{
     arena::ArenaAccess,
-    span::{FileMap, LineCol, Span},
+    span::{FileId, FileMap, LineCol, SourceMap},
 };
 use zydeco_session::{
     AnalysisError, CompilerSession, ProgramAnalysis, SourceDiagnosticSite, SourceLoadErrors,
+    source::SourcePath,
 };
 use zydeco_statics::{
     arena::StaticsArena,
@@ -22,7 +23,7 @@ use zydeco_statics::{
 };
 use zydeco_surface::{
     scoped::arena::ScopedArena,
-    scoped::syntax::{DefId, Term, TermId},
+    scoped::syntax::{DefId, TermId},
     textual::syntax::EntityId,
 };
 use zydeco_syntax::Pretty;
@@ -36,22 +37,20 @@ use crate::{
     progress::{AnalysisProgress, SourceDiscovery},
     rename::{RenameRejection, Renamer},
     semantic::SemanticHighlighter,
+    span_index::SpanIndex,
     type_links::TypeReferenceCollector,
 };
 
 /// Compiler analysis state for one editor root.
 pub(crate) struct ProjectState {
     analysis: Arc<ProgramAnalysis>,
-    /// The materialized typed arena of the open root. The project is a live
-    /// consumer of its root, so it holds the occurrence payload while the
-    /// project lives; the session and its salsa memo only retain the latest
-    /// root on demand.
-    statics: Arc<StaticsArena>,
     /// The analyzed root, for fact lookups against the session's memoized
     /// queries.
     root: PathBuf,
-    file_maps: HashMap<PathBuf, FileMap>,
-    semantic_path: PathBuf,
+    root_file_id: FileId,
+    path_to_file: HashMap<PathBuf, FileId>,
+    file_uris: Vec<Option<Url>>,
+    span_index: SpanIndex,
     semantic_tokens: Vec<SemanticToken>,
 }
 
@@ -133,8 +132,11 @@ impl ProjectDiagnostic {
 
     fn range(&self, published_path: &Path, source: &str) -> Option<Range> {
         let site = self.site.as_ref()?;
-        if ProjectState::normalize_path(site.path()) != ProjectState::normalize_path(published_path)
-        {
+        let site_path =
+            SourcePath::identity(site.path()).unwrap_or_else(|_| site.path().to_path_buf());
+        let target_path =
+            SourcePath::identity(published_path).unwrap_or_else(|_| published_path.to_path_buf());
+        if site_path != target_path {
             return None;
         }
         let file = FileMap::local(source, None);
@@ -200,41 +202,58 @@ impl ProjectState {
         let analysis = session
             .analyze(source_path)
             .map_err(|error| ProjectFailure::from_analysis_error(&error))?;
+        let source_map = analysis
+            .spans()
+            .source_map()
+            .ok_or_else(|| ProjectFailure::internal("the analyzed program omitted a source map"))?;
+        let slot_count =
+            source_map.files().iter().map(|file| file.id().0 as usize + 1).max().unwrap_or(0);
+        let mut path_to_file = HashMap::with_capacity(source_map.files().len());
+        let mut file_uris = vec![None; slot_count];
+        for file in source_map.files() {
+            let file_path = file.path();
+            if !file_path.as_os_str().is_empty() {
+                let normalized = SourcePath::identity(&file_path).unwrap_or(file_path);
+                let uri = Url::from_file_path(&normalized).ok();
+                path_to_file.insert(normalized, file.id());
+                if let Some(slot) = file_uris.get_mut(file.id().0 as usize) {
+                    *slot = uri;
+                }
+            }
+        }
+        let root = SourcePath::identity(source_path).unwrap_or_else(|_| source_path.to_path_buf());
+        let root_file_id = path_to_file.get(&root).copied().ok_or_else(|| {
+            ProjectFailure::internal(format!("the parsed program omitted `{}`", root.display()))
+        })?;
+        let root_file = source_map.file(root_file_id).ok_or_else(|| {
+            ProjectFailure::internal(format!("the parsed program omitted `{}`", root.display()))
+        })?;
+        let scoped = analysis.scoped();
+        let span_index = SpanIndex::build(analysis.spans(), scoped);
+        // Materialize ephemerally for initial semantic highlighting; hover
+        // re-materializes on demand so switching files lets Salsa's LRU drop
+        // old StaticsArenas.
         let statics = session
             .materialize_arena(&analysis)
             .map_err(|error| ProjectFailure::from_analysis_error(&error))?;
-        let scoped = analysis.scoped();
-        let file_maps = analysis
-            .sources()
-            .map(|(path, source)| {
-                let path = Self::normalize_path(path);
-                (path.clone(), FileMap::local(source, Some(Arc::new(path))))
-            })
-            .collect();
-        let source_path = Self::normalize_path(source_path);
-        let source = analysis.source(&source_path).ok_or_else(|| {
-            ProjectFailure::internal(format!(
-                "the parsed program omitted `{}`",
-                source_path.display()
-            ))
-        })?;
-        progress(AnalysisProgress::Highlighting { path: source_path.clone() });
-        let tokens = SemanticHighlighter::compiler_refined(
-            source,
-            &source_path,
+        progress(AnalysisProgress::Highlighting { path: root.clone() });
+        let semantic_tokens = SemanticHighlighter::compiler_refined(
+            root_file.source(),
+            root_file_id,
+            root_file,
             analysis.spans(),
             scoped,
             Some(&statics),
         );
-        let semantic_path = source_path;
-        let semantic_tokens = tokens;
+        drop(statics);
 
         Ok(Self {
             analysis,
-            statics,
-            root: semantic_path.clone(),
-            file_maps,
-            semantic_path,
+            root,
+            root_file_id,
+            path_to_file,
+            file_uris,
+            span_index,
             semantic_tokens,
         })
     }
@@ -303,18 +322,32 @@ impl ProjectState {
         &self, session: &CompilerSession, file_path: &Path, position: Position,
         options: HoverOptions,
     ) -> Option<Hover> {
-        self.symbol_at_with_range_end(file_path, position, options.range_end)
-            .and_then(|occurrence| self.symbol_hover(session, &occurrence, options.line_width))
-            .or_else(|| self.term_hover(file_path, position, options))
+        let symbol = self.symbol_at_with_range_end(file_path, position, options.range_end);
+        let term = if symbol.is_none() {
+            Some(self.term_at(file_path, position, options.range_end)?)
+        } else {
+            None
+        };
+        let statics = session.materialize_arena(&self.analysis).ok()?;
+        if let Some(occurrence) = symbol
+            && let Some(hover) =
+                self.symbol_hover(session, &statics, &occurrence, options.line_width)
+        {
+            return Some(hover);
+        }
+        let (term, range) =
+            term.or_else(|| self.term_at(file_path, position, options.range_end))?;
+        self.term_hover_at(&statics, term, range, options.line_width)
     }
 
     fn symbol_hover(
-        &self, session: &CompilerSession, occurrence: &SymbolOccurrence, line_width: HoverLineWidth,
+        &self, session: &CompilerSession, statics: &StaticsArena, occurrence: &SymbolOccurrence,
+        line_width: HoverLineWidth,
     ) -> Option<Hover> {
         let name = &self.scoped().defs[&occurrence.definition];
         let annotation =
             session.annotation_of_def(&self.root, occurrence.definition).ok().flatten()?;
-        let formatter = Formatter::new(self.scoped(), self.statics());
+        let formatter = Formatter::new(self.scoped(), statics);
         let definition_type =
             session.type_definition_of_def(&self.root, occurrence.definition).ok().flatten();
         let annotation_width =
@@ -331,18 +364,17 @@ impl ProjectState {
         });
         let displayed_definition =
             definition.as_ref().filter(|definition| definition.is_expanded()).and(definition_type);
-        let references =
-            TypeReferenceCollector::collect(self.statics(), annotation, displayed_definition);
+        let references = TypeReferenceCollector::collect(statics, annotation, displayed_definition);
         let definitions = references
             .definitions()
             .filter(|definition| *definition != occurrence.definition)
             .filter_map(|definition| self.type_definition_link(definition));
         let sealed_types = references
             .sealed_types()
-            .filter(|sealed| {
-                self.statics().abst_hints.get(sealed).copied() != Some(occurrence.definition)
-            })
-            .filter_map(|sealed| self.sealed_type_equation(sealed, &formatter, line_width));
+            .filter(|sealed| statics.abst_hints.get(sealed).copied() != Some(occurrence.definition))
+            .filter_map(|sealed| {
+                self.sealed_type_equation(statics, sealed, &formatter, line_width)
+            });
         let mut signature =
             HoverSignature::with_definitions(name.as_str(), &annotation_text, definitions)
                 .with_definition(definition)
@@ -360,43 +392,22 @@ impl ProjectState {
         })
     }
 
-    /// The checked annotation of the innermost term enclosing the position.
-    ///
-    /// Compound terms carry no resolver-backed symbol of their own — projection
-    /// field names, applications, and literals all resolve during type checking
-    /// rather than name resolution — so this hover reports the annotation the
-    /// checker recorded for the term itself. Resolved symbols take precedence,
-    /// so hovering a variable or definition still reports the definition.
-    fn term_hover(
-        &self, file_path: &Path, position: Position, options: HoverOptions,
-    ) -> Option<Hover> {
-        let HoverOptions { line_width, range_end } = options;
-        let (term, range) = self.term_at(file_path, position, range_end)?;
-        self.term_hover_at(term, range, line_width)
-    }
-
     fn term_at(
         &self, file_path: &Path, position: Position, range_end: RangeEnd,
     ) -> Option<(TermId, Range)> {
-        let file_path = Self::normalize_path(file_path);
-        let offset = self.offset(&file_path, position)?;
-        let terms = self.scoped().terms.iter().filter_map(|(term, _)| {
-            let entity = self.scoped().origins.source(&term.into())?;
-            Some((term, &self.analysis.spans()[&entity]))
-        });
-        let (_, range, term) = terms
-            .filter_map(|(term, span)| {
-                self.containing_range(&file_path, offset, span, range_end)
-                    .map(|(length, range)| (length, range, term))
-            })
-            .min_by_key(|(length, _, _)| *length)?;
+        let file_id = self.file_id_for(file_path)?;
+        let file_map = self.file_map(file_id)?;
+        let offset =
+            file_map.offset_utf16(LineCol { line: position.line, column: position.character })?;
+        let (term, bytes) = self.span_index.file(file_id)?.term_at(offset, range_end)?;
+        let range = Self::byte_range_in_file(file_map, bytes)?;
         Some((term, range))
     }
 
     fn term_hover_at(
-        &self, term: TermId, range: Range, line_width: HoverLineWidth,
+        &self, statics: &StaticsArena, term: TermId, range: Range, line_width: HoverLineWidth,
     ) -> Option<Hover> {
-        let (checked, annotation) = match self.statics().term_annotation(term)? {
+        let (checked, annotation) = match statics.term_annotation(term)? {
             | TermAnnId::Value(term, annotation) => {
                 (TypedTermId::Value(term), AnnId::Type(annotation))
             }
@@ -406,7 +417,7 @@ impl ProjectState {
             | TermAnnId::Type(term, kind) => (TypedTermId::Type(term), AnnId::Kind(kind)),
             | TermAnnId::Kind(_) | TermAnnId::Hole(_) => return None,
         };
-        let formatter = Formatter::new(self.scoped(), self.statics());
+        let formatter = Formatter::new(self.scoped(), statics);
         let mut rendered = String::new();
         checked.pretty(&formatter).render_fmt(line_width.columns(), &mut rendered).ok()?;
         let label = Self::term_label(rendered, line_width);
@@ -418,12 +429,12 @@ impl ProjectState {
                 &mut annotation_text,
             )
             .ok()?;
-        let references = TypeReferenceCollector::collect(self.statics(), annotation, None);
+        let references = TypeReferenceCollector::collect(statics, annotation, None);
         let definitions =
             references.definitions().filter_map(|definition| self.type_definition_link(definition));
-        let sealed_types = references
-            .sealed_types()
-            .filter_map(|sealed| self.sealed_type_equation(sealed, &formatter, line_width));
+        let sealed_types = references.sealed_types().filter_map(|sealed| {
+            self.sealed_type_equation(statics, sealed, &formatter, line_width)
+        });
         let signature = HoverSignature::with_definitions(&label, &annotation_text, definitions)
             .with_sealed_types(sealed_types)
             .markdown();
@@ -449,23 +460,23 @@ impl ProjectState {
     }
 
     pub(crate) fn document_symbols(&self, file_path: &Path) -> Vec<DocumentSymbol> {
-        let file_path = Self::normalize_path(file_path);
-        let mut symbols = self
-            .scoped()
-            .defs
+        let Some(file_id) = self.file_id_for(file_path) else {
+            return Vec::new();
+        };
+        let Some(file_map) = self.file_map(file_id) else {
+            return Vec::new();
+        };
+        let Some(file_index) = self.span_index.file(file_id) else {
+            return Vec::new();
+        };
+        let defs = &self.scoped().defs;
+        let mut symbols = file_index
+            .document_symbols()
             .iter()
-            .filter_map(|(definition, name)| {
-                if self.is_implicit_definition(*definition) {
-                    return None;
-                }
-                let entity = self.scoped().origins.source(&(*definition).into())?;
-                let span = &self.analysis.spans()[&entity];
-                (self.span_file(span) == Some(file_path.clone()))
-                    .then(|| {
-                        let range = self.span_range(span)?;
-                        Some(Self::document_symbol(name.as_str().to_owned(), range))
-                    })
-                    .flatten()
+            .filter_map(|(definition, bytes)| {
+                let name = defs.get(definition)?;
+                let range = Self::byte_range_in_file(file_map, bytes.clone())?;
+                Some(Self::document_symbol(name.as_str().to_owned(), range))
             })
             .collect::<Vec<_>>();
         symbols.sort_by_key(|symbol| {
@@ -480,20 +491,25 @@ impl ProjectState {
     }
 
     pub(crate) fn semantic_tokens(&self, file_path: &Path) -> Option<Vec<SemanticToken>> {
-        (self.semantic_path == Self::normalize_path(file_path))
+        (self.file_id_for(file_path) == Some(self.root_file_id))
             .then(|| self.semantic_tokens.clone())
     }
 
     pub(crate) fn diagnostics(&self, file_path: &Path) -> Vec<Diagnostic> {
-        let file_path = Self::normalize_path(file_path);
+        let Some(file_id) = self.file_id_for(file_path) else {
+            return Vec::new();
+        };
+        let Some(file_map) = self.file_map(file_id) else {
+            return Vec::new();
+        };
         let mut diagnostics = self
             .analysis
             .warnings()
             .into_iter()
-            .filter(|site| Self::normalize_path(site.path()) == file_path)
+            .filter(|site| self.file_id_for(site.path()) == Some(file_id))
             .filter_map(|site| {
                 Some(Diagnostic {
-                    range: self.byte_range(&file_path, site.warning.range().clone())?,
+                    range: Self::byte_range_in_file(file_map, site.warning.range().clone())?,
                     severity: Some(DiagnosticSeverity::WARNING),
                     code: Some(NumberOrString::String(site.warning.code().to_owned())),
                     source: Some("zydeco".to_owned()),
@@ -502,26 +518,29 @@ impl ProjectState {
                 })
             })
             .collect::<Vec<_>>();
-        if let Some(type_diagnostics) = self.analysis.outcome().diagnostics() {
+        if let (Some(type_diagnostics), Some(source_map)) =
+            (self.analysis.outcome().diagnostics(), self.source_map())
+        {
             diagnostics.extend(type_diagnostics.iter().filter_map(|diagnostic| {
                 // LSP diagnostics require a real per-file range. An internal failure without a
                 // source anchor remains available to non-file frontends instead of being
                 // misrepresented at the beginning of the root document.
                 let primary = diagnostic.primary.as_ref()?;
-                let diagnostic_path = self.span_file(&primary.span)?;
-                if diagnostic_path != file_path {
+                let (primary_file, primary_bytes) = source_map.range(primary.span)?;
+                if primary_file.id() != file_id {
                     return None;
                 }
-                let range = self.span_range(&primary.span)?;
+                let range = Self::byte_range_in_file(primary_file, primary_bytes)?;
                 let related_information = diagnostic
                     .related
                     .iter()
                     .filter_map(|related| {
-                        let path = self.span_file(&related.span)?;
+                        let (related_file, related_bytes) = source_map.range(related.span)?;
+                        let uri = self.file_uri(related_file.id())?.clone();
                         Some(DiagnosticRelatedInformation {
                             location: Location {
-                                uri: Url::from_file_path(path).ok()?,
-                                range: self.span_range(&related.span)?,
+                                uri,
+                                range: Self::byte_range_in_file(related_file, related_bytes)?,
                             },
                             message: related.message.clone(),
                         })
@@ -549,8 +568,7 @@ impl ProjectState {
     pub(crate) fn document_links(
         &self, file_path: &Path,
     ) -> Vec<tower_lsp::lsp_types::DocumentLink> {
-        let file_path = Self::normalize_path(file_path);
-        crate::document_links::ImportDocumentLinks::new(self.analysis.graph()).for_file(&file_path)
+        crate::document_links::ImportDocumentLinks::new(self.analysis.graph()).for_file(file_path)
     }
 
     /// Shared lookup for symbol commands: accept either identifier edge without extending its range.
@@ -562,54 +580,13 @@ impl ProjectState {
     fn symbol_at_with_range_end(
         &self, file_path: &Path, position: Position, range_end: RangeEnd,
     ) -> Option<SymbolOccurrence> {
-        let file_path = Self::normalize_path(file_path);
-        let offset = self.offset(&file_path, position)?;
-        let definitions = self.scoped().defs.iter().filter_map(|(definition, _)| {
-            if self.is_implicit_definition(*definition) {
-                return None;
-            }
-            let entity = self.scoped().origins.source(&(*definition).into())?;
-            Some((*definition, &self.analysis.spans()[&entity]))
-        });
-        let uses = self.scoped().terms.iter().filter_map(|(term, body)| {
-            let Term::Var(definition) = body else {
-                return None;
-            };
-            let entity = self.scoped().origins.source(&term.into())?;
-            if self.is_implicit_definition(*definition)
-                && self.scoped().origins.source(&(*definition).into()) == Some(entity)
-            {
-                return None;
-            }
-            Some((*definition, &self.analysis.spans()[&entity]))
-        });
-        definitions
-            .chain(uses)
-            .filter_map(|(definition, span)| {
-                self.containing_occurrence(&file_path, offset, definition, span, range_end)
-            })
-            .min_by_key(|(length, _)| *length)
-            .map(|(_, occurrence)| occurrence)
-    }
-
-    fn containing_occurrence(
-        &self, file_path: &Path, offset: usize, definition: DefId, span: &Span, range_end: RangeEnd,
-    ) -> Option<(usize, SymbolOccurrence)> {
-        self.containing_range(file_path, offset, span, range_end)
-            .map(|(length, range)| (length, SymbolOccurrence { definition, range }))
-    }
-
-    /// The LSP range of a span in `file_path` that contains the byte `offset`
-    /// under the requested endpoint policy, paired with its byte length so
-    /// callers can prefer the innermost enclosing entity.
-    fn containing_range(
-        &self, file_path: &Path, offset: usize, span: &Span, range_end: RangeEnd,
-    ) -> Option<(usize, Range)> {
-        let (_, bytes) = self.analysis.spans().source_map().and_then(|map| map.range(*span))?;
-        (self.span_file(span) == Some(file_path.to_path_buf())
-            && range_end.contains(&bytes, offset))
-        .then(|| self.span_range(span).map(|hit| (bytes.end.saturating_sub(bytes.start), hit)))
-        .flatten()
+        let file_id = self.file_id_for(file_path)?;
+        let file_map = self.file_map(file_id)?;
+        let offset =
+            file_map.offset_utf16(LineCol { line: position.line, column: position.character })?;
+        let (definition, bytes) = self.span_index.file(file_id)?.symbol_at(offset, range_end)?;
+        let range = Self::byte_range_in_file(file_map, bytes)?;
+        Some(SymbolOccurrence { definition, range })
     }
 
     /// Prelude binders have annotation origins rather than editable identifier tokens.
@@ -632,10 +609,11 @@ impl ProjectState {
     }
 
     fn sealed_type_equation(
-        &self, sealed: AbstId, formatter: &Formatter<'_>, line_width: HoverLineWidth,
+        &self, statics: &StaticsArena, sealed: AbstId, formatter: &Formatter<'_>,
+        line_width: HoverLineWidth,
     ) -> Option<SealedTypeEquationPreview> {
         let mut rendered = String::new();
-        SealedTypeEquation::new(self.statics(), sealed)?
+        SealedTypeEquation::new(statics, sealed)?
             .pretty(formatter)
             .render_fmt(line_width.columns(), &mut rendered)
             .ok()?;
@@ -648,9 +626,10 @@ impl ProjectState {
     }
 
     fn entity_location(&self, entity: &EntityId) -> Option<Location> {
-        let span = &self.analysis.spans()[entity];
-        let path = self.span_file(span)?;
-        Some(Location { uri: Url::from_file_path(path).ok()?, range: self.span_range(span)? })
+        let span = self.analysis.spans()[entity];
+        let (file, bytes) = self.source_map()?.range(span)?;
+        let uri = self.file_uri(file.id())?.clone();
+        Some(Location { uri, range: Self::byte_range_in_file(file, bytes)? })
     }
 
     fn ordered_locations(mut locations: Vec<Location>) -> Vec<Location> {
@@ -674,26 +653,27 @@ impl ProjectState {
         locations
     }
 
-    fn offset(&self, file_path: &Path, position: Position) -> Option<usize> {
-        self.file_maps
-            .get(file_path)?
-            .offset_utf16(LineCol { line: position.line, column: position.character })
+    fn file_id_for(&self, file_path: &Path) -> Option<FileId> {
+        if let Some(&id) = self.path_to_file.get(file_path) {
+            return Some(id);
+        }
+        let normalized = SourcePath::identity(file_path).ok()?;
+        self.path_to_file.get(&normalized).copied()
     }
 
-    /// The normalized path of the file a merged span belongs to.
-    fn span_file(&self, span: &Span) -> Option<PathBuf> {
-        let (file, _) = self.analysis.spans().source_map()?.range(*span)?;
-        Some(Self::normalize_path(&file.path()))
+    fn source_map(&self) -> Option<&SourceMap> {
+        self.analysis.spans().source_map()
     }
 
-    fn span_range(&self, span: &Span) -> Option<Range> {
-        let (file, range) = self.analysis.spans().source_map()?.range(*span)?;
-        let path = Self::normalize_path(&file.path());
-        self.byte_range(&path, range)
+    fn file_map(&self, id: FileId) -> Option<&FileMap> {
+        self.source_map()?.file(id)
     }
 
-    fn byte_range(&self, path: &Path, range: std::ops::Range<usize>) -> Option<Range> {
-        let file_map = self.file_maps.get(path)?;
+    fn file_uri(&self, id: FileId) -> Option<&Url> {
+        self.file_uris.get(id.0 as usize)?.as_ref()
+    }
+
+    fn byte_range_in_file(file_map: &FileMap, range: std::ops::Range<usize>) -> Option<Range> {
         Some(Range::new(
             Self::position(file_map.line_col_utf16(range.start)?),
             Self::position(file_map.line_col_utf16(range.end)?),
@@ -704,16 +684,8 @@ impl ProjectState {
         Position::new(cursor.line, cursor.column)
     }
 
-    fn normalize_path(path: &Path) -> PathBuf {
-        path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
-    }
-
     fn scoped(&self) -> &ScopedArena {
         self.analysis.scoped()
-    }
-
-    fn statics(&self) -> &StaticsArena {
-        &self.statics
     }
 
     #[allow(deprecated)]
@@ -1843,5 +1815,39 @@ value
             token.text == "OS"
                 && token.modifiers.iter().any(|modifier| modifier == "computationType")
         }));
+    }
+
+    #[test]
+    fn hover_rematerializes_after_eviction_without_pinning_statics_arena() {
+        let directory = tempfile::tempdir().unwrap();
+        let a = directory.path().join("a.zy");
+        let b = directory.path().join("b.zy");
+        let stray = directory.path().join("stray.zy");
+        let source_a = "  \ndef a = 1 in\nret a\n";
+        let source_b = "def b = \"ok\" in\nret b\n";
+        std::fs::write(&a, source_a).unwrap();
+        std::fs::write(&b, source_b).unwrap();
+
+        let mut session = zydeco_session::CompilerSession::default();
+        let project_a = ProjectState::load_from_session(&a, &session, |_| {}).unwrap();
+        let _project_b = ProjectState::load_from_session(&b, &session, |_| {}).unwrap();
+        // Trigger Salsa LRU eviction of earlier check memos via another overlay revision.
+        session.set_overlay(&b, "def b = \"updated\" in\nret b\n".to_owned()).unwrap();
+
+        let hover = project_a
+            .hover(&session, &a, source_position(source_a, "a = 1"), HoverOptions::default())
+            .unwrap();
+        let HoverContents::Markup(contents) = hover.contents else {
+            panic!("symbol hover should use markup content")
+        };
+        assert_eq!(fenced_zydeco_sources(&contents.value), vec!["a : Int"]);
+        assert!(
+            project_a
+                .hover(&session, &stray, Position::new(1, 4), HoverOptions::default())
+                .is_none()
+        );
+        assert!(
+            project_a.hover(&session, &a, Position::new(0, 0), HoverOptions::default()).is_none()
+        );
     }
 }

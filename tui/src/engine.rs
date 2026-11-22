@@ -5,8 +5,8 @@ use zydeco_dynamics::{ProgKont, Runtime, fmt::Formatter as DynamicFormatter};
 use zydeco_foundation::dense::DenseId;
 use zydeco_ir::{BuiltinPackagePlan, CoreProgram};
 use zydeco_session::{
-    AnalysisOutcome, CheckedProgram, CompilerSession, ProgramAnalysis, SourceLoadError,
-    source::{PackageId, Project},
+    AnalysisError, CheckedProgram, CompilerSession, ProgramAnalysis, ReplEntry, SourceLoadError,
+    source::Project,
 };
 use zydeco_statics::{
     BuiltinPackagePlanError, BuiltinPackagePlanner, TyckObservation,
@@ -15,7 +15,7 @@ use zydeco_statics::{
     syntax::{Fillable, PackPi, TermAnnId, Type, TypeId},
 };
 use zydeco_surface::textual::SourceNumber;
-use zydeco_syntax::{App, BuiltinRole, BuiltinTypeRole, Meta, Pretty, Ugly};
+use zydeco_syntax::{App, BuiltinRole, BuiltinTypeRole, Pretty, Ugly};
 
 pub(crate) enum EvaluationOutcome {
     Success(String),
@@ -23,91 +23,67 @@ pub(crate) enum EvaluationOutcome {
     Error(String),
 }
 
+#[cfg(test)]
 pub(crate) struct InstalledInput {
-    direct_wrapper: PathBuf,
-    returned_wrapper: PathBuf,
+    path: PathBuf,
 }
 
 pub(crate) struct ReplEngine {
     directory: PathBuf,
-    builtin: PathBuf,
     session: CompilerSession,
     bindings: Arc<Project>,
 }
 
 impl ReplEngine {
-    const INPUT_OBSERVATION: &'static str = "zydeco-tui-input";
-
     pub(crate) fn new(directory: PathBuf, bindings: Arc<Project>) -> Self {
-        let builtin = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../lib/std/builtin.zy");
-        Self { directory, builtin, session: CompilerSession::default(), bindings }
+        Self { directory, session: CompilerSession::default(), bindings }
     }
 
+    pub(crate) fn install_entry(
+        &mut self, number: SourceNumber, source: String,
+    ) -> Result<PathBuf, Box<SourceLoadError>> {
+        self.session.install_repl_entry(&self.directory, number, source).map_err(Box::new)
+    }
+
+    #[cfg(test)]
     pub(crate) fn install(
         &mut self, number: SourceNumber, source: String,
     ) -> Result<InstalledInput, Box<SourceLoadError>> {
-        let input = number.overlay_path(&self.directory);
-        self.session.set_overlay(&input, source)?;
-
-        let direct_root = self.directory.join(format!(".zydeco-repl-root-{}", number.get()));
-        let returned_root =
-            self.directory.join(format!(".zydeco-repl-value-root-{}", number.get()));
-        let builtin = format!("{:?}", self.builtin.to_string_lossy());
-        let direct_wrapper = format!(
-            concat!("param (/Unit = _) : @(import({})) in\n", "@[debug(\"{}\")] @(import({}))\n",),
-            builtin,
-            Self::INPUT_OBSERVATION,
-            number.get(),
-        );
-        let returned_wrapper = format!(
-            concat!(
-                "param (/Unit = _) : @(import({})) in\n",
-                "ret (@[debug(\"{}\")] @(import({})))\n",
-            ),
-            builtin,
-            Self::INPUT_OBSERVATION,
-            number.get(),
-        );
-        self.session.set_overlay(&direct_root, direct_wrapper)?;
-        self.session.set_overlay(&returned_root, returned_wrapper)?;
-        Ok(InstalledInput { direct_wrapper: direct_root, returned_wrapper: returned_root })
+        self.install_entry(number, source).map(|path| InstalledInput { path })
     }
 
+    #[cfg(test)]
     pub(crate) fn evaluate(
         &self, input: &InstalledInput, mode: ExpressionMode,
     ) -> EvaluationOutcome {
-        let direct_analysis = match self.session.analyze_package(
-            &PackageId { path: input.direct_wrapper.clone(), name: None },
-            self.bindings.clone(),
-        ) {
-            | Ok(analysis) => analysis,
+        Self::finish_evaluation(
+            self.session.check_repl_path(&input.path, self.bindings.clone()),
+            mode,
+        )
+    }
+
+    pub(crate) fn evaluate_source(
+        &mut self, number: SourceNumber, source: String, mode: ExpressionMode,
+    ) -> EvaluationOutcome {
+        Self::finish_evaluation(
+            self.session.check_repl_entry(&self.directory, number, source, self.bindings.clone()),
+            mode,
+        )
+    }
+
+    fn finish_evaluation(
+        entry: Result<ReplEntry, AnalysisError>, mode: ExpressionMode,
+    ) -> EvaluationOutcome {
+        let ReplEntry { analysis, program } = match entry {
+            | Ok(entry) => entry,
             | Err(error) => {
                 return EvaluationOutcome::Error(DiagnosticText::analysis_error(&error));
             }
         };
-        let analysis = if matches!(direct_analysis.outcome(), AnalysisOutcome::Checked { .. }) {
-            direct_analysis
-        } else {
-            let returned_analysis = match self.session.analyze_package(
-                &PackageId { path: input.returned_wrapper.clone(), name: None },
-                self.bindings.clone(),
-            ) {
-                | Ok(analysis) => analysis,
-                | Err(error) => {
-                    return EvaluationOutcome::Error(DiagnosticText::analysis_error(&error));
-                }
-            };
-            if matches!(returned_analysis.outcome(), AnalysisOutcome::Rejected { .. }) {
-                return EvaluationOutcome::TypeRejected(DiagnosticText::rejected(&direct_analysis));
-            }
-            returned_analysis
+        let Some(program) = program else {
+            return EvaluationOutcome::TypeRejected(DiagnosticText::rejected(&analysis));
         };
-
-        let program = self
-            .session
-            .checked_program(&analysis)
-            .expect("a checked analysis has an owned program");
-        let root = Self::input_root(&analysis);
+        let root = program.root;
         let observations = Self::observations(&analysis, &program);
         let result = match mode {
             | ExpressionMode::Type => Ok(Self::inspect(&program, root)),
@@ -127,8 +103,12 @@ impl ReplEngine {
             | root @ (TermAnnId::Kind(_) | TermAnnId::Type(_, _)) => {
                 Ok(Self::inspect(&program, root))
             }
-            | TermAnnId::Value(_, _) => Self::run_checked(program, root, false),
-            | TermAnnId::Compu(_, _) => Self::run_checked(program, root, false),
+            | TermAnnId::Value(_, _) if program.statics.core.is_none() => {
+                Ok(Self::inspect(&program, root))
+            }
+            | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
+                Self::run_checked(program, root, false)
+            }
             | TermAnnId::Hole(_) => unreachable!("a checked source root cannot remain a hole"),
         }
     }
@@ -301,23 +281,6 @@ impl ReplEngine {
         Self::inspect_with(&formatter, root)
     }
 
-    fn input_root(analysis: &ProgramAnalysis) -> TermAnnId {
-        analysis
-            .observations()
-            .iter()
-            .rev()
-            .find_map(|observation| match observation {
-                | TyckObservation::Debug { metadata, result }
-                    if metadata.arguments()
-                        == [Meta::string(Self::INPUT_OBSERVATION)].as_slice() =>
-                {
-                    Some(*result)
-                }
-                | _ => None,
-            })
-            .expect("the checked REPL wrapper retains its input observation")
-    }
-
     fn inspect_with(formatter: &StaticFormatter<'_>, root: TermAnnId) -> String {
         match root {
             | TermAnnId::Kind(kind) => format!("{} : Set", Self::pretty(formatter, kind)),
@@ -342,14 +305,8 @@ impl ReplEngine {
             .observations()
             .iter()
             .filter_map(|observation| match observation {
-                | TyckObservation::Debug { metadata, .. }
-                    if metadata.arguments()
-                        == [Meta::string(Self::INPUT_OBSERVATION)].as_slice() =>
-                {
-                    None
-                }
                 | TyckObservation::Debug { metadata, result } => {
-                    Some(format!("@[{}] {}", metadata, Self::inspect_with(&formatter, *result),))
+                    Some(format!("@[{}] {}", metadata, Self::inspect_with(&formatter, *result)))
                 }
                 | TyckObservation::HoleSolution { .. } => None,
             })
@@ -599,6 +556,55 @@ let stop : Thk (Int -> OS) = process/exit in
             }
             | EvaluationOutcome::TypeRejected(error) | EvaluationOutcome::Error(error) => {
                 panic!("declaration-free program failed: {error}")
+            }
+        }
+    }
+
+    #[test]
+    fn types_kinds_and_static_values_inspect_directly_without_wrappers() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut engine = ReplEngine::new(directory.path().to_path_buf(), Arc::default());
+
+        for (index, (source, expected_fragment)) in
+            [("Int", "VType"), ("VType", "Set"), ("val (x : Int) => x", "val")]
+                .into_iter()
+                .enumerate()
+        {
+            let number = SourceNumber::new(index as u64 + 1).unwrap();
+            let eval = engine.evaluate_source(number, source.to_owned(), ExpressionMode::Evaluate);
+            assert!(
+                matches!(eval, EvaluationOutcome::Success(ref text) if text.contains(expected_fragment)),
+                "Evaluate failed for `{source}`"
+            );
+            let typed = engine.evaluate_source(number, source.to_owned(), ExpressionMode::Type);
+            assert!(
+                matches!(typed, EvaluationOutcome::Success(ref text) if text.contains(expected_fragment)),
+                "Type failed for `{source}`"
+            );
+            let run = engine.evaluate_source(number, source.to_owned(), ExpressionMode::Run);
+            assert!(
+                matches!(run, EvaluationOutcome::Error(_)),
+                "Run should reject non-runnable `{source}`"
+            );
+        }
+    }
+
+    #[test]
+    fn user_debug_observations_are_preserved() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut engine = ReplEngine::new(directory.path().to_path_buf(), Arc::default());
+        let outcome = engine.evaluate_source(
+            SourceNumber::new(1).unwrap(),
+            r#"@[debug("probe")] 42"#.to_owned(),
+            ExpressionMode::Evaluate,
+        );
+        match outcome {
+            | EvaluationOutcome::Success(text) => {
+                assert!(text.contains(r#"@[debug("probe")]"#), "{text}");
+                assert!(text.contains("42 : Int"), "{text}");
+            }
+            | EvaluationOutcome::TypeRejected(error) | EvaluationOutcome::Error(error) => {
+                panic!("debug observation failed: {error}")
             }
         }
     }

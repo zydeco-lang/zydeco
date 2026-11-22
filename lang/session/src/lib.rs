@@ -5,6 +5,6 @@ pub mod source;
 pub use source::{
     AnalysisError, AnalysisOutcome, CheckedProgram, CompilerSession, CompletionAnalysis,
     CompletionError, CompletionSemantics, ExecutableError, ExecutableProgram, LibraryProgram,
-    ProgramAnalysis, ResolveError, SourceCaches, SourceDiagnosticSite, SourceGraph, SourceId,
-    SourceImportId, SourceLoadError, SourceLoadErrors, TyckReport, UnitProgram,
+    ProgramAnalysis, ReplEntry, ResolveError, SourceCaches, SourceDiagnosticSite, SourceGraph,
+    SourceId, SourceImportId, SourceLoadError, SourceLoadErrors, TyckReport, UnitProgram,
 };

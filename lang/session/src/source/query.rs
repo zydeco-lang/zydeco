@@ -114,6 +114,12 @@ impl ProgramAnalysis {
     }
 }
 
+/// Outcome of checking one numbered REPL input entry directly against a project.
+pub struct ReplEntry {
+    pub analysis: Arc<ProgramAnalysis>,
+    pub program: Option<CheckedProgram>,
+}
+
 /// A checked program whose immutable static arena is shared with the check memo.
 #[derive(Clone)]
 pub struct CheckedProgram {
@@ -445,6 +451,36 @@ impl CompilerSession {
     ) -> Result<Arc<ProgramAnalysis>, AnalysisError> {
         let root = self.analysis_root(&id.path)?;
         analyze_source(self, root, id.name.clone(), project)
+    }
+
+    /// Install or update one numbered REPL overlay in `directory` and return its overlay path.
+    pub fn install_repl_entry(
+        &mut self, directory: &Path, number: zydeco_surface::textual::SourceNumber, source: String,
+    ) -> Result<PathBuf, SourceLoadError> {
+        let path = number.overlay_path(directory);
+        self.set_overlay(&path, source)?;
+        Ok(path)
+    }
+
+    /// Analyze and recover an already-installed REPL entry path without wrapper files.
+    pub fn check_repl_path(
+        &self, path: &Path, project: Arc<super::Project>,
+    ) -> Result<ReplEntry, AnalysisError> {
+        let analysis = self
+            .analyze_package(&super::PackageId { path: path.to_path_buf(), name: None }, project)?;
+        let program = self.checked_program(&analysis);
+        Ok(ReplEntry { analysis, program })
+    }
+
+    /// Install and directly check one numbered REPL entry against `project`.
+    pub fn check_repl_entry(
+        &mut self, directory: &Path, number: zydeco_surface::textual::SourceNumber, source: String,
+        project: Arc<super::Project>,
+    ) -> Result<ReplEntry, AnalysisError> {
+        let path = self
+            .install_repl_entry(directory, number, source)
+            .map_err(|error| AnalysisError::Source { error: Arc::new(error.into()) })?;
+        self.check_repl_path(&path, project)
     }
     /// Create a consistent read snapshot for a request.
     pub fn snapshot(&self) -> Self {
@@ -1615,5 +1651,64 @@ end
 
         session.set_overlay(&lib, "{ ret () }".to_string()).unwrap();
         assert!(session.analyze(&main).unwrap().outcome().diagnostics().is_some());
+    }
+
+    #[test]
+    fn repl_entry_checks_values_computations_types_kinds_and_imports_in_single_pass() {
+        let fixture = Fixture::new();
+        let dir = fixture.directory.path();
+        let mut session = CompilerSession::default();
+        let project: Arc<crate::source::Project> = Arc::default();
+
+        // Warm the default prelude on entry [1].
+        let canonical_dir = dir.canonicalize().unwrap();
+        let e1 = session
+            .check_repl_entry(dir, SourceNumber::new(1).unwrap(), "42".into(), project.clone())
+            .unwrap();
+        assert!(e1.program.is_some());
+        assert_eq!(
+            e1.analysis
+                .graph()
+                .sources
+                .iter()
+                .filter(|(_, f)| f.path.starts_with(&canonical_dir))
+                .count(),
+            1
+        );
+
+        for (n, src, expect_ok) in [
+            (2, "ret 1", true),
+            (3, "Int", true),
+            (4, "VType", true),
+            (5, "1 2", false),
+            (6, "@(import(1))", true),
+        ] {
+            session.query_counters().reset();
+            let entry = session
+                .check_repl_entry(
+                    dir,
+                    SourceNumber::new(n).unwrap(),
+                    src.to_string(),
+                    project.clone(),
+                )
+                .unwrap();
+            let snap = session.query_counters().snapshot();
+            assert_eq!(snap.check_unit, 1, "entry [{n}] ({src}) should check exactly one unit");
+            assert!(
+                entry.analysis.graph().instances.iter().all(|i| {
+                    let name = i.template.path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                    !name.starts_with(".zydeco-repl-root-")
+                        && !name.starts_with(".zydeco-repl-value-root-")
+                }),
+                "direct REPL check must not introduce wrapper files"
+            );
+            if expect_ok {
+                assert!(entry.program.is_some(), "expected `{src}` to check");
+                assert!(entry.analysis.outcome().root().is_some());
+            } else {
+                assert!(entry.program.is_none(), "expected `{src}` to fail type checking");
+                assert!(entry.analysis.outcome().diagnostics().is_some());
+            }
+        }
     }
 }

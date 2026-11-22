@@ -1,10 +1,10 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use tower_lsp::lsp_types::{DocumentLink, Position, Range, Url};
 use zydeco_foundation::span::{FileMap, LineCol};
 use zydeco_session::{
     SourceGraph,
-    source::{PackageInstance, PackageInstanceId, SourceTemplate},
+    source::{PackageInstance, PackageInstanceId, SourcePath, SourceTemplate},
 };
 use zydeco_surface::textual::{ImportSite, ImportTarget, LexicalRole, LexicalTokens, syntax as t};
 
@@ -19,13 +19,13 @@ impl<'graph> ImportDocumentLinks<'graph> {
     }
 
     pub(crate) fn for_file(&self, path: &Path) -> Vec<DocumentLink> {
-        let path = Self::normalize_path(path);
+        let path = SourcePath::identity(path).unwrap_or_else(|_| path.to_path_buf());
         let mut links = self
             .graph
             .instances
             .iter()
             .enumerate()
-            .filter(|(_, instance)| Self::normalize_path(&instance.template.path) == path)
+            .filter(|(_, instance)| instance.template.path == path)
             .flat_map(|(id, _)| self.for_instance(PackageInstanceId(id)))
             .collect::<Vec<_>>();
         links.sort_by_key(|link| {
@@ -91,7 +91,10 @@ impl<'graph> ImportDocumentLinks<'graph> {
                                 &file.file,
                                 literal.range.start + 1..literal.range.end - 1,
                             )?,
-                            Self::normalize_path(&file.path.parent()?.join(path)),
+                            {
+                                let joined = file.path.parent()?.join(path);
+                                SourcePath::identity(&joined).unwrap_or(joined)
+                            },
                         )
                     }
                     | zydeco_surface::metadata::SourceReference::Package(path) => {
@@ -138,10 +141,6 @@ impl<'graph> ImportDocumentLinks<'graph> {
 
     fn position(cursor: LineCol) -> Position {
         Position::new(cursor.line, cursor.column)
-    }
-
-    fn normalize_path(path: &Path) -> PathBuf {
-        path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
     }
 }
 

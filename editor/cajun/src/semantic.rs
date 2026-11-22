@@ -1,14 +1,11 @@
-use std::{
-    collections::{BTreeMap, HashSet},
-    path::{Path, PathBuf},
-};
+use std::collections::{BTreeMap, HashSet};
 
 use tower_lsp::lsp_types::{
     SemanticToken, SemanticTokenModifier, SemanticTokenType, SemanticTokensLegend,
 };
 use zydeco_foundation::{
     arena::ArenaAccess,
-    span::{FileMap, Span},
+    span::{FileId, FileMap},
 };
 use zydeco_statics::{
     arena::StaticsArena,
@@ -17,7 +14,7 @@ use zydeco_statics::{
 use zydeco_surface::{
     scoped::{
         arena::ScopedArena,
-        syntax::{DefId, PatId, Pattern, Pi, Sigma, Term, ValPi},
+        syntax::{DefId, EntityId, PatId, Pattern, Pi, Sigma, Term, ValPi},
     },
     textual::{LexicalRole, LexicalTokens, syntax::SpanArena},
 };
@@ -42,13 +39,13 @@ impl SemanticHighlighter {
     }
 
     pub(crate) fn compiler_refined(
-        source: &str, file_path: &Path, spans: &SpanArena, scoped: &ScopedArena,
+        source: &str, file_id: FileId, file_map: &FileMap, spans: &SpanArena, scoped: &ScopedArena,
         statics: Option<&StaticsArena>,
     ) -> Vec<SemanticToken> {
         SemanticDocument::new(source)
-            .with_compiler_fields(file_path, spans, scoped)
-            .with_compiler_names(file_path, spans, scoped, statics)
-            .finish()
+            .with_compiler_fields(file_id, spans, scoped)
+            .with_compiler_names(file_id, spans, scoped, statics)
+            .finish_with_map(file_map)
     }
 }
 
@@ -61,12 +58,6 @@ struct ByteRange {
 impl ByteRange {
     fn new(start: usize, end: usize) -> Self {
         Self { start, end }
-    }
-
-    /// The file-local range of a merged-program span.
-    fn from_span(spans: &SpanArena, span: &Span) -> Option<Self> {
-        let (_, range) = spans.source_map()?.range(*span)?;
-        Some(Self::new(range.start, range.end))
     }
 
     fn line_ranges(self, source: &str) -> impl Iterator<Item = Self> + '_ {
@@ -225,32 +216,23 @@ impl<'source> SemanticDocument<'source> {
     }
 
     fn with_compiler_names(
-        mut self, file_path: &Path, spans: &SpanArena, scoped: &ScopedArena,
+        mut self, file_id: FileId, spans: &SpanArena, scoped: &ScopedArena,
         statics: Option<&StaticsArena>,
     ) -> Self {
         let parameters = ParameterDefinitions::new(scoped).collect();
         let classifier = NameClassifier::new(statics, &parameters);
         scoped.defs.iter().for_each(|(definition, name)| {
             let style = classifier.classify(*definition, name.as_str());
-            (!scoped.is_prelude_definition(*definition))
-                .then(|| Self::entity_span(spans, scoped, (*definition).into()))
-                .flatten()
-                .and_then(|span| {
-                    Self::same_file(spans, span, file_path)
-                        .then(|| ByteRange::from_span(spans, span))
-                        .flatten()
-                })
-                .into_iter()
-                .for_each(|range| self.overlay(range, style.with(SemanticModifier::Declaration)));
+            if !scoped.is_prelude_definition(*definition)
+                && let Some(range) =
+                    Self::entity_range(spans, scoped, (*definition).into(), file_id)
+            {
+                self.overlay(range, style.with(SemanticModifier::Declaration));
+            }
             scoped.users.forth(definition).iter().for_each(|term| {
-                Self::entity_span(spans, scoped, (*term).into())
-                    .and_then(|span| {
-                        Self::same_file(spans, span, file_path)
-                            .then(|| ByteRange::from_span(spans, span))
-                            .flatten()
-                    })
-                    .into_iter()
-                    .for_each(|range| self.overlay(range, style));
+                if let Some(range) = Self::entity_range(spans, scoped, (*term).into(), file_id) {
+                    self.overlay(range, style);
+                }
             });
         });
         // Contextual OS is a resolved internal term, not a fabricated lexical definition.
@@ -271,22 +253,15 @@ impl<'source> SemanticDocument<'source> {
                 let Some(class) = NameClass::from_annotation(statics, AnnId::Kind(kind)) else {
                     return;
                 };
-                Self::entity_span(spans, scoped, term.into())
-                    .and_then(|span| {
-                        Self::same_file(spans, span, file_path)
-                            .then(|| ByteRange::from_span(spans, span))
-                            .flatten()
-                    })
-                    .into_iter()
-                    .for_each(|range| {
-                        self.overlay(range, class.style(false).with(SemanticModifier::Readonly))
-                    });
+                if let Some(range) = Self::entity_range(spans, scoped, term.into(), file_id) {
+                    self.overlay(range, class.style(false).with(SemanticModifier::Readonly));
+                }
             });
         self
     }
 
     fn with_compiler_fields(
-        mut self, file_path: &Path, spans: &SpanArena, scoped: &ScopedArena,
+        mut self, file_id: FileId, spans: &SpanArena, scoped: &ScopedArena,
     ) -> Self {
         scoped.terms.iter().for_each(|(term, body)| {
             let field = match body {
@@ -297,41 +272,32 @@ impl<'source> SemanticDocument<'source> {
                 | _ => None,
             };
             field.into_iter().for_each(|(field, occurrence)| {
-                Self::entity_span(spans, scoped, term.into())
-                    .and_then(|span| {
-                        Self::same_file(spans, span, file_path)
-                            .then(|| ByteRange::from_span(spans, span))
-                            .flatten()
-                    })
-                    .into_iter()
-                    .for_each(|within| self.overlay_field(within, field, occurrence));
+                if let Some(within) = Self::entity_range(spans, scoped, term.into(), file_id) {
+                    self.overlay_field(within, field, occurrence);
+                }
             });
         });
         scoped.pats.iter().for_each(|(pattern, body)| {
             let Pattern::Named(Named(field, _)) = body else {
                 return;
             };
-            Self::entity_span(spans, scoped, pattern.into())
-                .and_then(|span| {
-                    Self::same_file(spans, span, file_path)
-                        .then(|| ByteRange::from_span(spans, span))
-                        .flatten()
-                })
-                .into_iter()
-                .for_each(|within| {
-                    self.overlay_field(within, field.as_str(), FieldOccurrence::First)
-                });
+            if let Some(within) = Self::entity_range(spans, scoped, pattern.into(), file_id) {
+                self.overlay_field(within, field.as_str(), FieldOccurrence::First);
+            }
         });
         self
     }
 
     fn finish(self) -> Vec<SemanticToken> {
         let map = FileMap::local(self.source, None);
+        self.finish_with_map(&map)
+    }
+
+    fn finish_with_map(self, map: &FileMap) -> Vec<SemanticToken> {
         let source = self.source;
         self.tokens
             .into_iter()
             .flat_map(|(range, style)| {
-                let map = &map;
                 range
                     .line_ranges(source)
                     .filter_map(move |range| PositionedToken::new(map, range, style))
@@ -394,22 +360,12 @@ impl<'source> SemanticDocument<'source> {
         }
     }
 
-    fn entity_span<'a>(
-        spans: &'a SpanArena, scoped: &ScopedArena,
-        entity: zydeco_surface::scoped::syntax::EntityId,
-    ) -> Option<&'a Span> {
-        scoped.origins.source(&entity).map(|textual| &spans[&textual])
-    }
-
-    fn same_file(spans: &SpanArena, span: &Span, file_path: &Path) -> bool {
-        spans.source_map().and_then(|map| map.range(*span)).is_some_and(|(file, _)| {
-            let path = file.path();
-            path == file_path || Self::normalize_path(&path) == file_path
-        })
-    }
-
-    fn normalize_path(path: &Path) -> PathBuf {
-        path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
+    fn entity_range(
+        spans: &SpanArena, scoped: &ScopedArena, entity: EntityId, file_id: FileId,
+    ) -> Option<ByteRange> {
+        let textual = scoped.origins.source(&entity)?;
+        let (file, range) = spans.source_map()?.range(spans[&textual])?;
+        (file.id() == file_id).then_some(ByteRange::new(range.start, range.end))
     }
 }
 
