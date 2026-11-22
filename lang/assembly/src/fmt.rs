@@ -49,11 +49,13 @@ impl<'a> Pretty<'a, Formatter<'a>> for AssemblyProgram {
 
 impl<'a> Pretty<'a, Formatter<'a>> for ProgId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let layout = f.layouts.and_then(|layouts| layouts.get(self).cloned());
-        RcDoc::concat([
-            layout.map(|layout| layout.pretty(f)).unwrap_or_else(RcDoc::nil),
-            f.arena.programs[self].pretty(f),
-        ])
+        zydeco_foundation::stack::maybe_grow(|| {
+            let layout = f.layouts.and_then(|layouts| layouts.get(self).cloned());
+            RcDoc::concat([
+                layout.map(|layout| layout.pretty(f)).unwrap_or_else(RcDoc::nil),
+                f.arena.programs[self].pretty(f),
+            ])
+        })
     }
 }
 

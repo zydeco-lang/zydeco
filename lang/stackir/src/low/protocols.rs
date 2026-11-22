@@ -33,13 +33,15 @@ struct ValueFact {
 
 impl ValueFact {
     fn with_protocol(protocol: ValueProtocol) -> Self {
-        let fields = match &protocol {
-            | ValueProtocol::Product(fields) => {
-                fields.iter().cloned().map(Self::with_protocol).collect()
-            }
-            | _ => Vec::new(),
-        };
-        Self { protocol, fields, code: None }
+        zydeco_foundation::stack::maybe_grow(|| {
+            let fields = match &protocol {
+                | ValueProtocol::Product(fields) => {
+                    fields.iter().cloned().map(Self::with_protocol).collect()
+                }
+                | _ => Vec::new(),
+            };
+            Self { protocol, fields, code: None }
+        })
     }
 
     fn product(fields: Vec<Self>) -> Self {
@@ -146,368 +148,404 @@ impl<'a> ProtocolValidator<'a> {
     }
 
     fn bind(&self, id: VPatId, mut fact: ValueFact, context: &mut Context) {
-        if let Some(protocol) = self.arena.pattern_protocols.get(&id) {
-            fact.protocol = fact.protocol.with_evidence(protocol);
-            if fact.fields.is_empty() {
-                fact.fields = ValueFact::with_protocol(fact.protocol.clone()).fields;
-            }
-        }
-        match &self.arena.vpats[&id] {
-            | ValuePattern::Var(def) => {
-                context.values.insert(*def, fact);
-            }
-            | ValuePattern::Alias(Alias(patterns)) => {
-                for pattern in patterns {
-                    self.bind(*pattern, fact.clone(), context);
+        zydeco_foundation::stack::maybe_grow(|| {
+            if let Some(protocol) = self.arena.pattern_protocols.get(&id) {
+                fact.protocol = fact.protocol.with_evidence(protocol);
+                if fact.fields.is_empty() {
+                    fact.fields = ValueFact::with_protocol(fact.protocol.clone()).fields;
                 }
             }
-            | ValuePattern::VCons(product) => {
-                for (index, pattern) in product.items.iter().enumerate() {
-                    let field = if fact.fields.len() == product.layout.arity {
-                        if index + 1 == product.items.len()
-                            && product.items.len() < product.layout.arity
-                        {
-                            ValueFact::product(fact.fields[index..].to_vec())
-                        } else {
-                            fact.fields[index].clone()
-                        }
-                    } else {
-                        ValueFact::default()
-                    };
-                    self.bind(*pattern, field, context);
+            match &self.arena.vpats[&id] {
+                | ValuePattern::Var(def) => {
+                    context.values.insert(*def, fact);
                 }
-            }
-            | ValuePattern::Ctor(Ctor(_, pattern)) => {
-                self.bind(*pattern, ValueFact::default(), context)
-            }
-            | ValuePattern::Hole(_) | ValuePattern::Triv(_) => {}
-        }
-    }
-
-    fn value(&self, id: ValueId, context: &Context) -> Result<ValueFact, ProtocolError> {
-        let mut fact = match &self.arena.values[&id] {
-            | Value::Var(def) => context.values.get(def).cloned().unwrap_or_default(),
-            | Value::Ext(ValueExt::Block(Block { label, entry, body })) => {
-                let protocol = self.entry(id, *entry)?;
-                let mut local = Context::default();
-                local.values.insert(*label, ValueFact::with_code(protocol.clone()));
-                self.bind(entry.environment(), ValueFact::default(), &mut local);
-                match &protocol {
-                    | EntryProtocol::Closure(stack) => local.stack = stack.clone(),
-                    | EntryProtocol::Continuation(value) => {
-                        let EntryParameters::Continuation { result, .. } = entry else {
-                            unreachable!()
-                        };
-                        self.parameter(*result, value)?;
-                        self.bind(*result, ValueFact::with_protocol(value.clone()), &mut local);
+                | ValuePattern::Alias(Alias(patterns)) => {
+                    for pattern in patterns {
+                        self.bind(*pattern, fact.clone(), context);
                     }
                 }
-                self.compu(*body, local)?;
-                ValueFact::with_code(protocol)
-            }
-            | Value::Ext(ValueExt::ClosurePackage(ClosurePackage { environment, code })) => {
-                self.value(*environment, context)?;
-                let code = self.value(*code, context)?;
-                let stack = match code.code {
-                    | Some(EntryProtocol::Closure(stack)) => stack,
-                    | _ => StackProtocol::Unknown,
-                };
-                ValueFact::with_protocol(ValueProtocol::Thunk(Box::new(stack)))
-            }
-            | Value::VCons(product) => {
-                let mut fields = product
-                    .items
-                    .iter()
-                    .map(|value| self.value(*value, context))
-                    .collect::<Result<Vec<_>, _>>()?;
-                if fields.len() < product.layout.arity {
-                    let suffix = fields.pop().unwrap_or_default();
-                    let remaining = product.layout.arity - fields.len();
-                    fields.extend(if suffix.fields.len() == remaining {
-                        suffix.fields
-                    } else {
-                        vec![ValueFact::default(); remaining]
-                    });
+                | ValuePattern::VCons(product) => {
+                    for (index, pattern) in product.items.iter().enumerate() {
+                        let field = if fact.fields.len() == product.layout.arity {
+                            if index + 1 == product.items.len()
+                                && product.items.len() < product.layout.arity
+                            {
+                                ValueFact::product(fact.fields[index..].to_vec())
+                            } else {
+                                fact.fields[index].clone()
+                            }
+                        } else {
+                            ValueFact::default()
+                        };
+                        self.bind(*pattern, field, context);
+                    }
                 }
-                ValueFact::product(fields)
-            }
-            | Value::Triv(_) => ValueFact::with_protocol(ValueProtocol::Unit),
-            | Value::Literal(literal) => ValueFact::with_protocol(match literal {
-                | Literal::Integer(value) => value
-                    .integer_type()
-                    .map(|ty| ValueProtocol::Primitive(PrimitiveType::Integer(ty)))
-                    .unwrap_or_default(),
-                | Literal::Float(value) => {
-                    ValueProtocol::Primitive(PrimitiveType::Float(value.float_type()))
+                | ValuePattern::Ctor(Ctor(_, pattern)) => {
+                    self.bind(*pattern, ValueFact::default(), context)
                 }
-                | Literal::String(_) => ValueProtocol::Primitive(PrimitiveType::String),
-                | Literal::Char(_) => ValueProtocol::Primitive(PrimitiveType::Char),
-            }),
-            | Value::AddrOffset(AddrOffset { base, displacement }) => {
-                for (value, expected) in [
-                    (*base, ValueProtocol::Address),
-                    (
-                        *displacement,
-                        ValueProtocol::Primitive(PrimitiveType::Integer(IntegerType::Int)),
-                    ),
-                ] {
-                    let fact = self.value(value, context)?;
-                    self.check_value(value, &expected, &fact.protocol)?;
-                }
-                ValueFact::with_protocol(ValueProtocol::Address)
-            }
-            | Value::Primitive(Primitive { operation, operands }) => {
-                for value in operands {
-                    self.value(*value, context)?;
-                }
-                ValueFact::with_protocol(ValueProtocol::Primitive(match operation {
-                    | PrimitiveOp::Integer(ty, _) => PrimitiveType::Integer(*ty),
-                    | PrimitiveOp::Float(ty, _) => PrimitiveType::Float(*ty),
-                }))
-            }
-            | Value::Ctor(Ctor(_, body)) => {
-                self.value(*body, context)?;
-                ValueFact::default()
-            }
-            | Value::Hole(_) => ValueFact::default(),
-        };
-        if let Some(protocol) = self.arena.value_protocols.get(&id) {
-            if matches!(self.arena.values[&id], Value::Ext(ValueExt::ClosurePackage(_))) {
-                self.check_value(id, protocol, &fact.protocol)?;
-            }
-            fact.protocol = fact.protocol.with_evidence(protocol);
-            if fact.fields.is_empty() {
-                fact.fields = ValueFact::with_protocol(fact.protocol.clone()).fields;
-            }
-        }
-        Ok(fact)
-    }
-
-    fn stack(&self, id: StackId, context: &Context) -> Result<StackProtocol, ProtocolError> {
-        Ok(match &self.arena.stacks[&id] {
-            | Stack::Var(_) => context.stack.runtime_head().clone(),
-            | Stack::Arg(Cons(value, rest)) => StackProtocol::Argument(
-                Box::new(self.value(*value, context)?.protocol),
-                Box::new(self.stack(*rest, context)?),
-            ),
-            | Stack::Tag(Cons(tag, rest)) => {
-                StackProtocol::Tag(tag.clone(), Box::new(self.stack(*rest, context)?))
-            }
-            | Stack::Ext(StackExt::ContinuationPackage(ContinuationPackage { code, residual })) => {
-                let code = self.value(*code, context)?;
-                self.stack(*residual, context)?;
-                let value = match code.code {
-                    | Some(EntryProtocol::Continuation(value)) => value,
-                    | _ => ValueProtocol::Unknown,
-                };
-                StackProtocol::Continuation(Box::new(value))
+                | ValuePattern::Hole(_) | ValuePattern::Triv(_) => {}
             }
         })
     }
 
-    fn case(&self, id: CompuId, case: &SCoMatch, context: Context) -> Result<(), ProtocolError> {
-        let SCoMatch { scrut, arms } = case;
-        let supplied = self.stack(*scrut, &context)?;
-        let expected = match self.arena.case_protocols.get(&id) {
-            | Some(expected) => {
-                self.check_stack(id, expected, &supplied)?;
-                expected
-            }
-            | None => &supplied,
-        };
-        let definition = match expected.runtime_head() {
-            | StackProtocol::Codata(protocol) => {
-                let definition = self
-                    .arena
-                    .protocols
-                    .get(*protocol)
-                    .expect("protocol references were validated");
-                let expected =
-                    definition.observations.iter().map(|(tag, _)| tag.clone()).collect::<Vec<_>>();
-                let found = arms.iter().map(|arm| arm.dtor.0.clone()).collect::<Vec<_>>();
-                if expected.len() != found.len() || expected.iter().any(|tag| !found.contains(tag))
-                {
-                    return Err(ProtocolError::Observations { compu: id, expected, found });
-                }
-                Some(definition)
-            }
-            | StackProtocol::Tag(tag, _) => {
-                if !arms.iter().any(|arm| &arm.dtor.0 == tag) {
-                    return Err(ProtocolError::MissingObservation { compu: id, tag: tag.clone() });
-                }
-                None
-            }
-            | StackProtocol::Unknown | StackProtocol::Parameter(_) => None,
-            | found => {
-                return Err(ProtocolError::ExpectedCodata { compu: id, found: found.clone() });
-            }
-        };
-        for CoMatcher { dtor: Cons(tag, _), tail } in arms {
-            let mut branch = context.clone();
-            let declared = definition
-                .and_then(|definition| definition.observation(tag))
-                .cloned()
-                .unwrap_or_default();
-            branch.stack = match &supplied {
-                | StackProtocol::Tag(selected, rest) if selected == tag => {
-                    rest.clone().with_evidence(&declared)
-                }
-                | _ => declared,
-            };
-            self.compu(*tail, branch)?;
-        }
-        Ok(())
-    }
-
-    fn compu(&self, mut id: CompuId, mut context: Context) -> Result<(), ProtocolError> {
-        loop {
-            match &self.arena.compus[&id] {
-                | Computation::Memory(MemoryStep::Load { scalar, address, result, next }) => {
-                    let address_fact = self.value(*address, &context)?;
-                    self.check_value(*address, &ValueProtocol::Address, &address_fact.protocol)?;
-                    let protocol = ValueProtocol::from(*scalar);
-                    self.parameter(*result, &protocol)?;
-                    self.bind(*result, ValueFact::with_protocol(protocol), &mut context);
-                    id = *next;
-                }
-                | Computation::Memory(MemoryStep::Store { scalar, address, value, next }) => {
-                    let address_fact = self.value(*address, &context)?;
-                    self.check_value(*address, &ValueProtocol::Address, &address_fact.protocol)?;
-                    let value_fact = self.value(*value, &context)?;
-                    self.check_value(*value, &ValueProtocol::from(*scalar), &value_fact.protocol)?;
-                    id = *next;
-                }
-                | Computation::Hole(SHole(stack))
-                | Computation::ExternCall(ExternCall { stack, .. }) => {
-                    self.stack(*stack, &context)?;
-                    return Ok(());
-                }
-                | Computation::Ext(CompuExt::Jump(Jump { target, argument, stack })) => {
-                    let code = self
-                        .value(*target, &context)?
-                        .code
-                        .unwrap_or_else(|| EntryProtocol::unknown(argument.kind()));
-                    let value = self.value(argument.word().1, &context)?;
-                    let stack = self.stack(*stack, &context)?;
-                    match code {
-                        | EntryProtocol::Closure(expected) => {
-                            self.check_stack(id, &expected, &stack)?
-                        }
-                        | EntryProtocol::Continuation(expected) => {
-                            self.check_value(argument.word().1, &expected, &value.protocol)?
+    fn value(&self, id: ValueId, context: &Context) -> Result<ValueFact, ProtocolError> {
+        zydeco_foundation::stack::maybe_grow(|| {
+            let mut fact = match &self.arena.values[&id] {
+                | Value::Var(def) => context.values.get(def).cloned().unwrap_or_default(),
+                | Value::Ext(ValueExt::Block(Block { label, entry, body })) => {
+                    let protocol = self.entry(id, *entry)?;
+                    let mut local = Context::default();
+                    local.values.insert(*label, ValueFact::with_code(protocol.clone()));
+                    self.bind(entry.environment(), ValueFact::default(), &mut local);
+                    match &protocol {
+                        | EntryProtocol::Closure(stack) => local.stack = stack.clone(),
+                        | EntryProtocol::Continuation(value) => {
+                            let EntryParameters::Continuation { result, .. } = entry else {
+                                unreachable!()
+                            };
+                            self.parameter(*result, value)?;
+                            self.bind(*result, ValueFact::with_protocol(value.clone()), &mut local);
                         }
                     }
-                    return Ok(());
+                    self.compu(*body, local)?;
+                    ValueFact::with_code(protocol)
                 }
-                // A label body runs on the stack each jump supplies, over the variables in scope.
-                | Computation::Ext(CompuExt::LetLabel(LetLabel { label, body, tail, .. })) => {
-                    let stack = self.arena.label_protocols.get(label).cloned().unwrap_or_default();
-                    self.compu(*body, Context { stack, ..context.clone() })?;
-                    id = *tail;
-                }
-                | Computation::Ext(CompuExt::JumpLabel(JumpLabel { label, stack })) => {
-                    let found = self.stack(*stack, &context)?;
-                    if let Some(expected) = self.arena.label_protocols.get(label) {
-                        self.check_stack(id, expected, &found)?;
-                    }
-                    return Ok(());
-                }
-                | Computation::ProductMatch(SProductMatch { scrut, binder, body })
-                | Computation::LetValue(LetValue { bindee: scrut, binder, tail: body }) => {
-                    let value = self.value(*scrut, &context)?;
-                    self.bind(*binder, value, &mut context);
-                    id = *body;
-                }
-                | Computation::Compare(CompareBranch {
-                    operation,
-                    operands,
-                    when_true,
-                    when_false,
-                }) => {
-                    for operand in operands {
-                        let fact = self.value(*operand, &context)?;
-                        self.check_value(
-                            *operand,
-                            &ValueProtocol::Primitive(operation.operand_type()),
-                            &fact.protocol,
-                        )?;
-                    }
-                    self.compu(*when_true, context.clone())?;
-                    id = *when_false;
-                }
-                | Computation::CoprodMatch(SCoprodMatch { scrut, arms }) => {
-                    self.value(*scrut, &context)?;
-                    for Matcher { binder, tail } in arms {
-                        let mut branch = context.clone();
-                        self.bind(*binder, ValueFact::default(), &mut branch);
-                        self.compu(*tail, branch)?;
-                    }
-                    return Ok(());
-                }
-                | Computation::LetStack(LetStack { bindee, tail, .. }) => {
-                    context.stack = self.stack(*bindee, &context)?;
-                    id = *tail;
-                }
-                | Computation::LetArg(LetArg { binder: Cons(binder, _), bindee, tail }) => {
-                    let stack = self.stack(*bindee, &context)?;
-                    self.check_stack(
-                        id,
-                        &StackProtocol::Argument(Box::default(), Box::default()),
-                        &stack,
-                    )?;
-                    let (value, rest) = match stack {
-                        | StackProtocol::Argument(value, rest) => (*value, *rest),
-                        | _ => (ValueProtocol::Unknown, StackProtocol::Unknown),
-                    };
-                    self.parameter(*binder, &value)?;
-                    self.bind(*binder, ValueFact::with_protocol(value), &mut context);
-                    context.stack = rest;
-                    id = *tail;
-                }
-                | Computation::CoCase(case) => return self.case(id, case, context),
-                | Computation::Ext(CompuExt::OpenClosure(OpenClosure {
-                    package,
-                    environment,
-                    code,
-                    body,
-                })) => {
-                    let value = self.value(*package, &context)?.protocol;
-                    self.check_value(*package, &ValueProtocol::Thunk(Box::default()), &value)?;
-                    let protocol = match value {
-                        | ValueProtocol::Thunk(stack) => *stack,
+                | Value::Ext(ValueExt::ClosurePackage(ClosurePackage { environment, code })) => {
+                    self.value(*environment, context)?;
+                    let code = self.value(*code, context)?;
+                    let stack = match code.code {
+                        | Some(EntryProtocol::Closure(stack)) => stack,
                         | _ => StackProtocol::Unknown,
                     };
-                    self.bind(*environment, ValueFact::default(), &mut context);
-                    self.bind(
-                        *code,
-                        ValueFact::with_code(EntryProtocol::Closure(protocol)),
-                        &mut context,
-                    );
-                    id = *body;
+                    ValueFact::with_protocol(ValueProtocol::Thunk(Box::new(stack)))
                 }
-                | Computation::Ext(CompuExt::OpenContinuation(OpenContinuation {
-                    package,
-                    code,
-                    body,
-                })) => {
-                    let stack = self.stack(*package, &context)?;
-                    self.check_stack(id, &StackProtocol::Continuation(Box::default()), &stack)?;
-                    let value = match stack {
-                        | StackProtocol::Continuation(value) => *value,
-                        | _ => ValueProtocol::Unknown,
-                    };
-                    self.bind(
-                        *code,
-                        ValueFact::with_code(EntryProtocol::Continuation(value)),
-                        &mut context,
-                    );
-                    // Opening hides the saved extent. Only the provenance checker relates it
-                    // to the eventual jump; there is no physical end-of-frame descriptor.
-                    context.stack = StackProtocol::Unknown;
-                    id = *body;
+                | Value::VCons(product) => {
+                    let mut fields = product
+                        .items
+                        .iter()
+                        .map(|value| self.value(*value, context))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    if fields.len() < product.layout.arity {
+                        let suffix = fields.pop().unwrap_or_default();
+                        let remaining = product.layout.arity - fields.len();
+                        fields.extend(if suffix.fields.len() == remaining {
+                            suffix.fields
+                        } else {
+                            vec![ValueFact::default(); remaining]
+                        });
+                    }
+                    ValueFact::product(fields)
+                }
+                | Value::Triv(_) => ValueFact::with_protocol(ValueProtocol::Unit),
+                | Value::Literal(literal) => ValueFact::with_protocol(match literal {
+                    | Literal::Integer(value) => value
+                        .integer_type()
+                        .map(|ty| ValueProtocol::Primitive(PrimitiveType::Integer(ty)))
+                        .unwrap_or_default(),
+                    | Literal::Float(value) => {
+                        ValueProtocol::Primitive(PrimitiveType::Float(value.float_type()))
+                    }
+                    | Literal::String(_) => ValueProtocol::Primitive(PrimitiveType::String),
+                    | Literal::Char(_) => ValueProtocol::Primitive(PrimitiveType::Char),
+                }),
+                | Value::AddrOffset(AddrOffset { base, displacement }) => {
+                    for (value, expected) in [
+                        (*base, ValueProtocol::Address),
+                        (
+                            *displacement,
+                            ValueProtocol::Primitive(PrimitiveType::Integer(IntegerType::Int)),
+                        ),
+                    ] {
+                        let fact = self.value(value, context)?;
+                        self.check_value(value, &expected, &fact.protocol)?;
+                    }
+                    ValueFact::with_protocol(ValueProtocol::Address)
+                }
+                | Value::Primitive(Primitive { operation, operands }) => {
+                    for value in operands {
+                        self.value(*value, context)?;
+                    }
+                    ValueFact::with_protocol(ValueProtocol::Primitive(match operation {
+                        | PrimitiveOp::Integer(ty, _) => PrimitiveType::Integer(*ty),
+                        | PrimitiveOp::Float(ty, _) => PrimitiveType::Float(*ty),
+                    }))
+                }
+                | Value::Ctor(Ctor(_, body)) => {
+                    self.value(*body, context)?;
+                    ValueFact::default()
+                }
+                | Value::Hole(_) => ValueFact::default(),
+            };
+            if let Some(protocol) = self.arena.value_protocols.get(&id) {
+                if matches!(self.arena.values[&id], Value::Ext(ValueExt::ClosurePackage(_))) {
+                    self.check_value(id, protocol, &fact.protocol)?;
+                }
+                fact.protocol = fact.protocol.with_evidence(protocol);
+                if fact.fields.is_empty() {
+                    fact.fields = ValueFact::with_protocol(fact.protocol.clone()).fields;
                 }
             }
-        }
+            Ok(fact)
+        })
+    }
+
+    fn stack(&self, id: StackId, context: &Context) -> Result<StackProtocol, ProtocolError> {
+        zydeco_foundation::stack::maybe_grow(|| {
+            Ok(match &self.arena.stacks[&id] {
+                | Stack::Var(_) => context.stack.runtime_head().clone(),
+                | Stack::Arg(Cons(value, rest)) => StackProtocol::Argument(
+                    Box::new(self.value(*value, context)?.protocol),
+                    Box::new(self.stack(*rest, context)?),
+                ),
+                | Stack::Tag(Cons(tag, rest)) => {
+                    StackProtocol::Tag(tag.clone(), Box::new(self.stack(*rest, context)?))
+                }
+                | Stack::Ext(StackExt::ContinuationPackage(ContinuationPackage {
+                    code,
+                    residual,
+                })) => {
+                    let code = self.value(*code, context)?;
+                    self.stack(*residual, context)?;
+                    let value = match code.code {
+                        | Some(EntryProtocol::Continuation(value)) => value,
+                        | _ => ValueProtocol::Unknown,
+                    };
+                    StackProtocol::Continuation(Box::new(value))
+                }
+            })
+        })
+    }
+
+    fn case(&self, id: CompuId, case: &SCoMatch, context: Context) -> Result<(), ProtocolError> {
+        zydeco_foundation::stack::maybe_grow(|| {
+            let SCoMatch { scrut, arms } = case;
+            let supplied = self.stack(*scrut, &context)?;
+            let expected = match self.arena.case_protocols.get(&id) {
+                | Some(expected) => {
+                    self.check_stack(id, expected, &supplied)?;
+                    expected
+                }
+                | None => &supplied,
+            };
+            let definition = match expected.runtime_head() {
+                | StackProtocol::Codata(protocol) => {
+                    let definition = self
+                        .arena
+                        .protocols
+                        .get(*protocol)
+                        .expect("protocol references were validated");
+                    let expected = definition
+                        .observations
+                        .iter()
+                        .map(|(tag, _)| tag.clone())
+                        .collect::<Vec<_>>();
+                    let found = arms.iter().map(|arm| arm.dtor.0.clone()).collect::<Vec<_>>();
+                    if expected.len() != found.len()
+                        || expected.iter().any(|tag| !found.contains(tag))
+                    {
+                        return Err(ProtocolError::Observations { compu: id, expected, found });
+                    }
+                    Some(definition)
+                }
+                | StackProtocol::Tag(tag, _) => {
+                    if !arms.iter().any(|arm| &arm.dtor.0 == tag) {
+                        return Err(ProtocolError::MissingObservation {
+                            compu: id,
+                            tag: tag.clone(),
+                        });
+                    }
+                    None
+                }
+                | StackProtocol::Unknown | StackProtocol::Parameter(_) => None,
+                | found => {
+                    return Err(ProtocolError::ExpectedCodata { compu: id, found: found.clone() });
+                }
+            };
+            for CoMatcher { dtor: Cons(tag, _), tail } in arms {
+                let mut branch = context.clone();
+                let declared = definition
+                    .and_then(|definition| definition.observation(tag))
+                    .cloned()
+                    .unwrap_or_default();
+                branch.stack = match &supplied {
+                    | StackProtocol::Tag(selected, rest) if selected == tag => {
+                        rest.clone().with_evidence(&declared)
+                    }
+                    | _ => declared,
+                };
+                self.compu(*tail, branch)?;
+            }
+            Ok(())
+        })
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn compu(&self, mut id: CompuId, mut context: Context) -> Result<(), ProtocolError> {
+        zydeco_foundation::stack::maybe_grow(|| {
+            loop {
+                match &self.arena.compus[&id] {
+                    | Computation::Memory(MemoryStep::Load { scalar, address, result, next }) => {
+                        let address_fact = self.value(*address, &context)?;
+                        self.check_value(
+                            *address,
+                            &ValueProtocol::Address,
+                            &address_fact.protocol,
+                        )?;
+                        let protocol = ValueProtocol::from(*scalar);
+                        self.parameter(*result, &protocol)?;
+                        self.bind(*result, ValueFact::with_protocol(protocol), &mut context);
+                        id = *next;
+                    }
+                    | Computation::Memory(MemoryStep::Store { scalar, address, value, next }) => {
+                        let address_fact = self.value(*address, &context)?;
+                        self.check_value(
+                            *address,
+                            &ValueProtocol::Address,
+                            &address_fact.protocol,
+                        )?;
+                        let value_fact = self.value(*value, &context)?;
+                        self.check_value(
+                            *value,
+                            &ValueProtocol::from(*scalar),
+                            &value_fact.protocol,
+                        )?;
+                        id = *next;
+                    }
+                    | Computation::Hole(SHole(stack))
+                    | Computation::ExternCall(ExternCall { stack, .. }) => {
+                        self.stack(*stack, &context)?;
+                        return Ok(());
+                    }
+                    | Computation::Ext(CompuExt::Jump(Jump { target, argument, stack })) => {
+                        let code = self
+                            .value(*target, &context)?
+                            .code
+                            .unwrap_or_else(|| EntryProtocol::unknown(argument.kind()));
+                        let value = self.value(argument.word().1, &context)?;
+                        let stack = self.stack(*stack, &context)?;
+                        match code {
+                            | EntryProtocol::Closure(expected) => {
+                                self.check_stack(id, &expected, &stack)?
+                            }
+                            | EntryProtocol::Continuation(expected) => {
+                                self.check_value(argument.word().1, &expected, &value.protocol)?
+                            }
+                        }
+                        return Ok(());
+                    }
+                    // A label body runs on the stack each jump supplies, over the variables in scope.
+                    | Computation::Ext(CompuExt::LetLabel(LetLabel {
+                        label, body, tail, ..
+                    })) => {
+                        let stack =
+                            self.arena.label_protocols.get(label).cloned().unwrap_or_default();
+                        self.compu(*body, Context { stack, ..context.clone() })?;
+                        id = *tail;
+                    }
+                    | Computation::Ext(CompuExt::JumpLabel(JumpLabel { label, stack })) => {
+                        let found = self.stack(*stack, &context)?;
+                        if let Some(expected) = self.arena.label_protocols.get(label) {
+                            self.check_stack(id, expected, &found)?;
+                        }
+                        return Ok(());
+                    }
+                    | Computation::ProductMatch(SProductMatch { scrut, binder, body })
+                    | Computation::LetValue(LetValue { bindee: scrut, binder, tail: body }) => {
+                        let value = self.value(*scrut, &context)?;
+                        self.bind(*binder, value, &mut context);
+                        id = *body;
+                    }
+                    | Computation::Compare(CompareBranch {
+                        operation,
+                        operands,
+                        when_true,
+                        when_false,
+                    }) => {
+                        for operand in operands {
+                            let fact = self.value(*operand, &context)?;
+                            self.check_value(
+                                *operand,
+                                &ValueProtocol::Primitive(operation.operand_type()),
+                                &fact.protocol,
+                            )?;
+                        }
+                        self.compu(*when_true, context.clone())?;
+                        id = *when_false;
+                    }
+                    | Computation::CoprodMatch(SCoprodMatch { scrut, arms }) => {
+                        self.value(*scrut, &context)?;
+                        for Matcher { binder, tail } in arms {
+                            let mut branch = context.clone();
+                            self.bind(*binder, ValueFact::default(), &mut branch);
+                            self.compu(*tail, branch)?;
+                        }
+                        return Ok(());
+                    }
+                    | Computation::LetStack(LetStack { bindee, tail, .. }) => {
+                        context.stack = self.stack(*bindee, &context)?;
+                        id = *tail;
+                    }
+                    | Computation::LetArg(LetArg { binder: Cons(binder, _), bindee, tail }) => {
+                        let stack = self.stack(*bindee, &context)?;
+                        self.check_stack(
+                            id,
+                            &StackProtocol::Argument(Box::default(), Box::default()),
+                            &stack,
+                        )?;
+                        let (value, rest) = match stack {
+                            | StackProtocol::Argument(value, rest) => (*value, *rest),
+                            | _ => (ValueProtocol::Unknown, StackProtocol::Unknown),
+                        };
+                        self.parameter(*binder, &value)?;
+                        self.bind(*binder, ValueFact::with_protocol(value), &mut context);
+                        context.stack = rest;
+                        id = *tail;
+                    }
+                    | Computation::CoCase(case) => return self.case(id, case, context),
+                    | Computation::Ext(CompuExt::OpenClosure(OpenClosure {
+                        package,
+                        environment,
+                        code,
+                        body,
+                    })) => {
+                        let value = self.value(*package, &context)?.protocol;
+                        self.check_value(*package, &ValueProtocol::Thunk(Box::default()), &value)?;
+                        let protocol = match value {
+                            | ValueProtocol::Thunk(stack) => *stack,
+                            | _ => StackProtocol::Unknown,
+                        };
+                        self.bind(*environment, ValueFact::default(), &mut context);
+                        self.bind(
+                            *code,
+                            ValueFact::with_code(EntryProtocol::Closure(protocol)),
+                            &mut context,
+                        );
+                        id = *body;
+                    }
+                    | Computation::Ext(CompuExt::OpenContinuation(OpenContinuation {
+                        package,
+                        code,
+                        body,
+                    })) => {
+                        let stack = self.stack(*package, &context)?;
+                        self.check_stack(id, &StackProtocol::Continuation(Box::default()), &stack)?;
+                        let value = match stack {
+                            | StackProtocol::Continuation(value) => *value,
+                            | _ => ValueProtocol::Unknown,
+                        };
+                        self.bind(
+                            *code,
+                            ValueFact::with_code(EntryProtocol::Continuation(value)),
+                            &mut context,
+                        );
+                        // Opening hides the saved extent. Only the provenance checker relates it
+                        // to the eventual jump; there is no physical end-of-frame descriptor.
+                        context.stack = StackProtocol::Unknown;
+                        id = *body;
+                    }
+                }
+            }
+        })
     }
 }
 

@@ -132,7 +132,7 @@ impl<'a> EntryValidator<'a> {
     }
 
     fn bind(&self, pattern: VPatId, value: ValueEvidence, context: &mut Context) {
-        match &self.arena.vpats[&pattern] {
+        zydeco_foundation::stack::maybe_grow(|| match &self.arena.vpats[&pattern] {
             | ValuePattern::Var(def) => {
                 context.values.insert(*def, value);
             }
@@ -168,7 +168,7 @@ impl<'a> EntryValidator<'a> {
                 }
             }
             | ValuePattern::Hole(_) | ValuePattern::Triv(_) => {}
-        }
+        })
     }
 
     fn continuation_residual(
@@ -191,200 +191,214 @@ impl<'a> EntryValidator<'a> {
     }
 
     fn value(&self, id: ValueId, context: &Context) -> Result<ValueEvidence, EntryContractError> {
-        Ok(match &self.arena.values[&id] {
-            | Value::Var(def) => context.values.get(def).cloned().unwrap_or_default(),
-            | Value::Ext(ValueExt::Block(Block { label, entry, body })) => {
-                let evidence = ValueEvidence::Code(CodeEvidence::Block(*entry));
-                let mut local = Context::default();
-                local.values.insert(*label, evidence.clone());
-                for (_, pattern) in entry.words() {
-                    self.bind(pattern, ValueEvidence::Unknown, &mut local);
+        zydeco_foundation::stack::maybe_grow(|| {
+            Ok(match &self.arena.values[&id] {
+                | Value::Var(def) => context.values.get(def).cloned().unwrap_or_default(),
+                | Value::Ext(ValueExt::Block(Block { label, entry, body })) => {
+                    let evidence = ValueEvidence::Code(CodeEvidence::Block(*entry));
+                    let mut local = Context::default();
+                    local.values.insert(*label, evidence.clone());
+                    for (_, pattern) in entry.words() {
+                        self.bind(pattern, ValueEvidence::Unknown, &mut local);
+                    }
+                    self.compu(*body, local)?;
+                    evidence
                 }
-                self.compu(*body, local)?;
-                evidence
-            }
-            | Value::Ext(ValueExt::ClosurePackage(ClosurePackage { environment, code })) => {
-                let env = self.value(*environment, context)?;
-                let evidence = self.value(*code, context)?;
-                let site = EntrySite::Closure(id);
-                let code = self.code(*code, evidence, EntryKind::Closure, site)?;
-                self.environment(code, &env, site)?;
-                ValueEvidence::Unknown
-            }
-            | Value::VCons(product) => ValueEvidence::Product {
-                arity: product.layout.arity,
-                fields: product
-                    .items
-                    .iter()
-                    .map(|value| self.value(*value, context))
-                    .collect::<Result<_, _>>()?,
-            },
-            | Value::Ctor(Ctor(_, value)) => {
-                self.value(*value, context)?;
-                ValueEvidence::Unknown
-            }
-            | Value::Primitive(Primitive { operands, .. }) => {
-                for value in operands {
+                | Value::Ext(ValueExt::ClosurePackage(ClosurePackage { environment, code })) => {
+                    let env = self.value(*environment, context)?;
+                    let evidence = self.value(*code, context)?;
+                    let site = EntrySite::Closure(id);
+                    let code = self.code(*code, evidence, EntryKind::Closure, site)?;
+                    self.environment(code, &env, site)?;
+                    ValueEvidence::Unknown
+                }
+                | Value::VCons(product) => ValueEvidence::Product {
+                    arity: product.layout.arity,
+                    fields: product
+                        .items
+                        .iter()
+                        .map(|value| self.value(*value, context))
+                        .collect::<Result<_, _>>()?,
+                },
+                | Value::Ctor(Ctor(_, value)) => {
                     self.value(*value, context)?;
+                    ValueEvidence::Unknown
                 }
-                ValueEvidence::Unknown
-            }
-            | Value::AddrOffset(AddrOffset { base, displacement }) => {
-                self.value(*base, context)?;
-                self.value(*displacement, context)?;
-                ValueEvidence::Unknown
-            }
-            | Value::Triv(_) => ValueEvidence::Unit,
-            | Value::Hole(_) | Value::Literal(_) => ValueEvidence::Unknown,
+                | Value::Primitive(Primitive { operands, .. }) => {
+                    for value in operands {
+                        self.value(*value, context)?;
+                    }
+                    ValueEvidence::Unknown
+                }
+                | Value::AddrOffset(AddrOffset { base, displacement }) => {
+                    self.value(*base, context)?;
+                    self.value(*displacement, context)?;
+                    ValueEvidence::Unknown
+                }
+                | Value::Triv(_) => ValueEvidence::Unit,
+                | Value::Hole(_) | Value::Literal(_) => ValueEvidence::Unknown,
+            })
         })
     }
 
     fn stack(&self, id: StackId, context: &Context) -> Result<StackEvidence, EntryContractError> {
-        Ok(match &self.arena.stacks[&id] {
-            | Stack::Var(_) => context.stack.clone(),
-            | Stack::Arg(Cons(value, rest)) => StackEvidence::Argument(
-                self.value(*value, context)?,
-                Box::new(self.stack(*rest, context)?),
-            ),
-            | Stack::Tag(Cons(_, rest)) => {
-                StackEvidence::Tag(Box::new(self.stack(*rest, context)?))
-            }
-            | Stack::Ext(StackExt::ContinuationPackage(ContinuationPackage { code, residual })) => {
-                let evidence = self.value(*code, context)?;
-                let site = EntrySite::Continuation(id);
-                let code = self.code(*code, evidence, EntryKind::Continuation, site)?;
-                let rest = self.stack(*residual, context)?;
-                self.continuation_residual(code, *residual, rest, site)?;
-                StackEvidence::Unknown
-            }
+        zydeco_foundation::stack::maybe_grow(|| {
+            Ok(match &self.arena.stacks[&id] {
+                | Stack::Var(_) => context.stack.clone(),
+                | Stack::Arg(Cons(value, rest)) => StackEvidence::Argument(
+                    self.value(*value, context)?,
+                    Box::new(self.stack(*rest, context)?),
+                ),
+                | Stack::Tag(Cons(_, rest)) => {
+                    StackEvidence::Tag(Box::new(self.stack(*rest, context)?))
+                }
+                | Stack::Ext(StackExt::ContinuationPackage(ContinuationPackage {
+                    code,
+                    residual,
+                })) => {
+                    let evidence = self.value(*code, context)?;
+                    let site = EntrySite::Continuation(id);
+                    let code = self.code(*code, evidence, EntryKind::Continuation, site)?;
+                    let rest = self.stack(*residual, context)?;
+                    self.continuation_residual(code, *residual, rest, site)?;
+                    StackEvidence::Unknown
+                }
+            })
         })
     }
 
     fn compu(&self, mut id: CompuId, mut context: Context) -> Result<(), EntryContractError> {
-        loop {
-            match &self.arena.compus[&id] {
-                | Computation::Memory(MemoryStep::Load { address, result, next, .. }) => {
-                    self.value(*address, &context)?;
-                    self.bind(*result, ValueEvidence::Unknown, &mut context);
-                    id = *next;
-                }
-                | Computation::Memory(MemoryStep::Store { address, value, next, .. }) => {
-                    self.value(*address, &context)?;
-                    self.value(*value, &context)?;
-                    id = *next;
-                }
-                | Computation::Hole(SHole(stack))
-                | Computation::ExternCall(ExternCall { stack, .. }) => {
-                    self.stack(*stack, &context)?;
-                    return Ok(());
-                }
-                | Computation::Ext(CompuExt::Jump(Jump { target, argument, stack })) => {
-                    let evidence = self.value(*target, &context)?;
-                    let site = EntrySite::Jump(id);
-                    let code = self.code(*target, evidence, argument.kind(), site)?;
-                    let value = self.value(argument.word().1, &context)?;
-                    let rest = self.stack(*stack, &context)?;
-                    match argument {
-                        | EntryArgument::Closure { .. } => self.environment(code, &value, site)?,
-                        | EntryArgument::Continuation { .. } => {
-                            self.continuation_residual(code, *stack, rest, site)?;
+        zydeco_foundation::stack::maybe_grow(|| {
+            loop {
+                match &self.arena.compus[&id] {
+                    | Computation::Memory(MemoryStep::Load { address, result, next, .. }) => {
+                        self.value(*address, &context)?;
+                        self.bind(*result, ValueEvidence::Unknown, &mut context);
+                        id = *next;
+                    }
+                    | Computation::Memory(MemoryStep::Store { address, value, next, .. }) => {
+                        self.value(*address, &context)?;
+                        self.value(*value, &context)?;
+                        id = *next;
+                    }
+                    | Computation::Hole(SHole(stack))
+                    | Computation::ExternCall(ExternCall { stack, .. }) => {
+                        self.stack(*stack, &context)?;
+                        return Ok(());
+                    }
+                    | Computation::Ext(CompuExt::Jump(Jump { target, argument, stack })) => {
+                        let evidence = self.value(*target, &context)?;
+                        let site = EntrySite::Jump(id);
+                        let code = self.code(*target, evidence, argument.kind(), site)?;
+                        let value = self.value(argument.word().1, &context)?;
+                        let rest = self.stack(*stack, &context)?;
+                        match argument {
+                            | EntryArgument::Closure { .. } => {
+                                self.environment(code, &value, site)?
+                            }
+                            | EntryArgument::Continuation { .. } => {
+                                self.continuation_residual(code, *stack, rest, site)?;
+                            }
                         }
+                        return Ok(());
                     }
-                    return Ok(());
-                }
-                // A label body runs on the stack each jump supplies, over the variables in scope.
-                | Computation::Ext(CompuExt::LetLabel(LetLabel { body, tail, .. })) => {
-                    let entry = Context { stack: StackEvidence::default(), ..context.clone() };
-                    self.compu(*body, entry)?;
-                    id = *tail;
-                }
-                | Computation::Ext(CompuExt::JumpLabel(JumpLabel { stack, .. })) => {
-                    self.stack(*stack, &context)?;
-                    return Ok(());
-                }
-                | Computation::ProductMatch(SProductMatch { scrut, binder, body })
-                | Computation::LetValue(LetValue { bindee: scrut, binder, tail: body }) => {
-                    let value = self.value(*scrut, &context)?;
-                    self.bind(*binder, value, &mut context);
-                    id = *body;
-                }
-                | Computation::Compare(CompareBranch {
-                    operation: _,
-                    operands,
-                    when_true,
-                    when_false,
-                }) => {
-                    for operand in operands {
-                        self.value(*operand, &context)?;
+                    // A label body runs on the stack each jump supplies, over the variables in scope.
+                    | Computation::Ext(CompuExt::LetLabel(LetLabel { body, tail, .. })) => {
+                        let entry = Context { stack: StackEvidence::default(), ..context.clone() };
+                        self.compu(*body, entry)?;
+                        id = *tail;
                     }
-                    self.compu(*when_true, context.clone())?;
-                    id = *when_false;
-                }
-                | Computation::CoprodMatch(SCoprodMatch { scrut, arms }) => {
-                    self.value(*scrut, &context)?;
-                    for Matcher { binder, tail } in arms {
-                        let mut branch = context.clone();
-                        self.bind(*binder, ValueEvidence::Unknown, &mut branch);
-                        self.compu(*tail, branch)?;
+                    | Computation::Ext(CompuExt::JumpLabel(JumpLabel { stack, .. })) => {
+                        self.stack(*stack, &context)?;
+                        return Ok(());
                     }
-                    return Ok(());
-                }
-                | Computation::LetStack(LetStack { bindee, tail, .. }) => {
-                    context.stack = self.stack(*bindee, &context)?;
-                    id = *tail;
-                }
-                | Computation::LetArg(LetArg { binder: Cons(binder, _), bindee, tail }) => {
-                    let (value, rest) = match self.stack(*bindee, &context)? {
-                        | StackEvidence::Argument(value, rest) => (value, *rest),
-                        | _ => (ValueEvidence::Unknown, StackEvidence::Unknown),
-                    };
-                    self.bind(*binder, value, &mut context);
-                    context.stack = rest;
-                    id = *tail;
-                }
-                | Computation::CoCase(SCoMatch { scrut, arms }) => {
-                    context.stack = match self.stack(*scrut, &context)? {
-                        | StackEvidence::Tag(rest) => *rest,
-                        | _ => StackEvidence::Unknown,
-                    };
-                    for CoMatcher { tail, .. } in arms {
-                        self.compu(*tail, context.clone())?;
+                    | Computation::ProductMatch(SProductMatch { scrut, binder, body })
+                    | Computation::LetValue(LetValue { bindee: scrut, binder, tail: body }) => {
+                        let value = self.value(*scrut, &context)?;
+                        self.bind(*binder, value, &mut context);
+                        id = *body;
                     }
-                    return Ok(());
-                }
-                | Computation::Ext(CompuExt::OpenClosure(OpenClosure {
-                    package,
-                    environment,
-                    code,
-                    body,
-                })) => {
-                    self.value(*package, &context)?;
-                    self.bind(*environment, ValueEvidence::Environment(id), &mut context);
-                    self.bind(
-                        *code,
-                        ValueEvidence::Code(CodeEvidence::Opening { id, kind: EntryKind::Closure }),
-                        &mut context,
-                    );
-                    id = *body;
-                }
-                | Computation::Ext(CompuExt::OpenContinuation(OpenContinuation {
-                    package,
-                    code,
-                    body,
-                })) => {
-                    self.stack(*package, &context)?;
-                    self.bind(
-                        *code,
-                        ValueEvidence::Code(CodeEvidence::Opening {
-                            id,
-                            kind: EntryKind::Continuation,
-                        }),
-                        &mut context,
-                    );
-                    context.stack = StackEvidence::Opened(id);
-                    id = *body;
+                    | Computation::Compare(CompareBranch {
+                        operation: _,
+                        operands,
+                        when_true,
+                        when_false,
+                    }) => {
+                        for operand in operands {
+                            self.value(*operand, &context)?;
+                        }
+                        self.compu(*when_true, context.clone())?;
+                        id = *when_false;
+                    }
+                    | Computation::CoprodMatch(SCoprodMatch { scrut, arms }) => {
+                        self.value(*scrut, &context)?;
+                        for Matcher { binder, tail } in arms {
+                            let mut branch = context.clone();
+                            self.bind(*binder, ValueEvidence::Unknown, &mut branch);
+                            self.compu(*tail, branch)?;
+                        }
+                        return Ok(());
+                    }
+                    | Computation::LetStack(LetStack { bindee, tail, .. }) => {
+                        context.stack = self.stack(*bindee, &context)?;
+                        id = *tail;
+                    }
+                    | Computation::LetArg(LetArg { binder: Cons(binder, _), bindee, tail }) => {
+                        let (value, rest) = match self.stack(*bindee, &context)? {
+                            | StackEvidence::Argument(value, rest) => (value, *rest),
+                            | _ => (ValueEvidence::Unknown, StackEvidence::Unknown),
+                        };
+                        self.bind(*binder, value, &mut context);
+                        context.stack = rest;
+                        id = *tail;
+                    }
+                    | Computation::CoCase(SCoMatch { scrut, arms }) => {
+                        context.stack = match self.stack(*scrut, &context)? {
+                            | StackEvidence::Tag(rest) => *rest,
+                            | _ => StackEvidence::Unknown,
+                        };
+                        for CoMatcher { tail, .. } in arms {
+                            self.compu(*tail, context.clone())?;
+                        }
+                        return Ok(());
+                    }
+                    | Computation::Ext(CompuExt::OpenClosure(OpenClosure {
+                        package,
+                        environment,
+                        code,
+                        body,
+                    })) => {
+                        self.value(*package, &context)?;
+                        self.bind(*environment, ValueEvidence::Environment(id), &mut context);
+                        self.bind(
+                            *code,
+                            ValueEvidence::Code(CodeEvidence::Opening {
+                                id,
+                                kind: EntryKind::Closure,
+                            }),
+                            &mut context,
+                        );
+                        id = *body;
+                    }
+                    | Computation::Ext(CompuExt::OpenContinuation(OpenContinuation {
+                        package,
+                        code,
+                        body,
+                    })) => {
+                        self.stack(*package, &context)?;
+                        self.bind(
+                            *code,
+                            ValueEvidence::Code(CodeEvidence::Opening {
+                                id,
+                                kind: EntryKind::Continuation,
+                            }),
+                            &mut context,
+                        );
+                        context.stack = StackEvidence::Opened(id);
+                        id = *body;
+                    }
                 }
             }
-        }
+        })
     }
 }

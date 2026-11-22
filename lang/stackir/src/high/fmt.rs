@@ -16,31 +16,31 @@ impl<'a> Pretty<'a, Formatter<'a>> for DefId {
 
 impl<'a> Pretty<'a, Formatter<'a>> for VPatId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        f.inner.vpats[self].pretty(f)
+        zydeco_foundation::stack::maybe_grow(|| f.inner.vpats[self].pretty(f))
     }
 }
 
 impl<'a> Pretty<'a, Formatter<'a>> for ValueId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        match f.inner.values.get(self) {
+        zydeco_foundation::stack::maybe_grow(|| match f.inner.values.get(self) {
             | Some(value) => value.pretty(f),
             | None => RcDoc::text(format!("<value:{}>", self.concise())),
-        }
+        })
     }
 }
 
 impl<'a> Pretty<'a, Formatter<'a>> for StackId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        f.inner.stacks[self].pretty(f)
+        zydeco_foundation::stack::maybe_grow(|| f.inner.stacks[self].pretty(f))
     }
 }
 
 impl<'a> Pretty<'a, Formatter<'a>> for CompuId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        match f.inner.compus.get(self) {
+        zydeco_foundation::stack::maybe_grow(|| match f.inner.compus.get(self) {
             | Some(compu) => compu.pretty(f),
             | None => RcDoc::text(format!("<compu:{}>", self.concise())),
-        }
+        })
     }
 }
 

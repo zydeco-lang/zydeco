@@ -369,3 +369,40 @@ fn continuation_transfers_preserve_the_restored_stack() {
         }
     }
 }
+
+#[test]
+fn deep_continuation_blocks_validate_on_a_small_stack() {
+    std::thread::Builder::new()
+        .stack_size(512 * 1024)
+        .spawn(|| {
+            let mut f = Fixture::default();
+            let mut body = f.terminal();
+            for _ in 0..2048 {
+                let label = f.def();
+                let environment: VPatId = f.build(Triv);
+                let result = f.build(Hole);
+                let code = f.build(Block {
+                    label,
+                    entry: EntryParameters::Continuation { result, environment },
+                    body,
+                });
+                let saved: ValueId = f.build(Triv);
+                let base = f.build(StackVar);
+                let residual = f.build(Cons(saved, base));
+                let stack = f.build(ContinuationPackage { code, residual });
+
+                let target = f.block(EntryKind::Closure, 0);
+                let closure_env = f.build(Triv);
+                body = f.build(Jump {
+                    target,
+                    argument: EntryArgument::Closure { environment: closure_env },
+                    stack,
+                });
+            }
+            let program = f.check(body).unwrap();
+            assert_eq!(program.root(), body);
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}

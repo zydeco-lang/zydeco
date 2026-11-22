@@ -16,29 +16,31 @@ impl<'a> Pretty<'a, Formatter<'a>> for DefId {
 
 impl<'a> Pretty<'a, Formatter<'a>> for VPatId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        f.inner.vpats[self].pretty(f)
+        zydeco_foundation::stack::maybe_grow(|| f.inner.vpats[self].pretty(f))
     }
 }
 
 impl<'a> Pretty<'a, Formatter<'a>> for ValueId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let value = f.inner.values[self].pretty(f);
-        match f.inner.entry_protocols.get(self) {
-            | Some(protocol) => RcDoc::text(format!("{protocol} ")).append(value),
-            | None => value,
-        }
+        zydeco_foundation::stack::maybe_grow(|| {
+            let value = f.inner.values[self].pretty(f);
+            match f.inner.entry_protocols.get(self) {
+                | Some(protocol) => RcDoc::text(format!("{protocol} ")).append(value),
+                | None => value,
+            }
+        })
     }
 }
 
 impl<'a> Pretty<'a, Formatter<'a>> for StackId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        f.inner.stacks[self].pretty(f)
+        zydeco_foundation::stack::maybe_grow(|| f.inner.stacks[self].pretty(f))
     }
 }
 
 impl<'a> Pretty<'a, Formatter<'a>> for CompuId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        f.inner.compus[self].pretty(f)
+        zydeco_foundation::stack::maybe_grow(|| f.inner.compus[self].pretty(f))
     }
 }
 
