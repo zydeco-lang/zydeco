@@ -1,16 +1,16 @@
 use super::*;
 use crate::protocol::ValueProtocol;
-use zydeco_statics::arena::StaticsScope;
-use zydeco_utils::fold::Explicit;
+use zydeco_foundation::{dense::DenseId, fold::Explicit};
 
 struct Fixture {
     source: SpsArena,
-    origins: IdAllocator<StaticsScope>,
+    next_origin: usize,
 }
 
 impl Fixture {
     fn pattern(&mut self, pattern: impl Into<ValuePattern>) -> VPatId {
-        let origin = ss::PatId::Value(self.origins.alloc());
+        let origin = crate::ir::VPatId::from_index(self.next_origin);
+        self.next_origin += 1;
         pattern.into().build(&mut self.source, Some(origin))
     }
 
@@ -30,12 +30,12 @@ impl Fixture {
 
 #[test]
 fn pattern_copies_preserve_children_definitions_layouts_and_evidence() {
-    let mut fixture = Fixture { source: SpsArena::default(), origins: IdAllocator::new() };
+    let mut fixture = Fixture { source: SpsArena::default(), next_origin: 0 };
     let definition: DefId = fixture.source.admin.fresh_def();
-    fixture.source.admin.insert_def(definition, VarName("argument".into()));
+    fixture.source.admin.insert_def(definition, VarName::new("argument"));
     let variable = fixture.pattern(definition);
     let constructor =
-        fixture.pattern(Ctor(CtorIdx { idx: 2, name: CtorName("+Item".into()) }, variable));
+        fixture.pattern(Ctor(CtorIdx { idx: 2, name: CtorName::new("+Item") }, variable));
     let hole = fixture.pattern(Hole);
     let unit = fixture.pattern(Triv);
     fixture.source.inner.pattern_protocols.insert_new(unit, ValueProtocol::Unit);
@@ -74,7 +74,7 @@ fn pattern_copies_preserve_children_definitions_layouts_and_evidence() {
 #[test]
 fn invalid_product_layouts_are_rejected_before_allocating_the_parent() {
     fn reject(arity: usize, expected: &str) {
-        let mut fixture = Fixture { source: SpsArena::default(), origins: IdAllocator::new() };
+        let mut fixture = Fixture { source: SpsArena::default(), next_origin: 0 };
         let hole = fixture.pattern(Hole);
         let unit = fixture.pattern(Triv);
         let root = fixture.pattern(VCons::new(vec![hole, unit], ProductLayout { arity: 2 }));

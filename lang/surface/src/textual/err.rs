@@ -1,7 +1,7 @@
 use super::{DiagnosticToken, ParseFailure, ParseIssue, ParseIssueKind, TokenKind};
 use ariadne::{Config, IndexType, Label, Report, ReportKind};
 use std::{fmt::Display, ops::Range};
-use zydeco_utils::span::{FileMap, PathDisplay};
+use zydeco_foundation::span::{FileMap, PathDisplay};
 
 /// A strict parse failure together with the exact source snapshot that failed.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]

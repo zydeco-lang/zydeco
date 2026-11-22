@@ -4,12 +4,15 @@ use super::{
     syntax::*,
     traverse::{Node, Traversal, Visitor},
 };
-use std::{convert::Infallible, ops::ControlFlow};
+use std::{collections::HashSet, convert::Infallible, ops::ControlFlow};
 
-/// Free-variable summaries needed while checking resolved terms.
+/// Free-variable and source-boundary summaries needed while checking resolved terms.
 #[derive(Debug, Default)]
 pub struct TermContexts {
     coctxs_term_local: ArenaPagedAssoc<TermId, CoContext>,
+    coctxs_pat_local: ArenaAssoc<PatId, CoContext>,
+    boundary_terms: rustc_hash::FxHashSet<TermId>,
+    boundary_pats: rustc_hash::FxHashSet<PatId>,
 }
 
 impl TermContexts {
@@ -26,6 +29,52 @@ impl TermContexts {
     pub fn at(&self, term: &TermId) -> &CoContext {
         &self.coctxs_term_local[term]
     }
+
+    /// Whether any definition in `defs` may occur freely inside `entity`.
+    pub fn mentions_any(&self, entity: EntityId, defs: &HashSet<DefId>) -> bool {
+        if defs.is_empty() {
+            return false;
+        }
+        match entity {
+            | EntityId::Term(term) => match self.coctxs_term_local.get(&term) {
+                | Some(coctx) => defs.iter().any(|def| coctx.contains(def)),
+                | None => true,
+            },
+            | EntityId::Pat(pat) => match self.coctxs_pat_local.get(&pat) {
+                | Some(coctx) => defs.iter().any(|def| coctx.contains(def)),
+                | None => true,
+            },
+            | EntityId::Def(def) => defs.contains(&def),
+        }
+    }
+
+    /// Whether `def` may occur freely inside `entity`.
+    pub fn mentions_def(&self, entity: EntityId, def: &DefId) -> bool {
+        match entity {
+            | EntityId::Term(term) => match self.coctxs_term_local.get(&term) {
+                | Some(coctx) => coctx.contains(def),
+                | None => true,
+            },
+            | EntityId::Pat(pat) => match self.coctxs_pat_local.get(&pat) {
+                | Some(coctx) => coctx.contains(def),
+                | None => true,
+            },
+            | EntityId::Def(found) => found == *def,
+        }
+    }
+
+    /// Whether `entity` contains an unresolved `SourceBoundary`.
+    pub fn has_source_boundary(&self, entity: EntityId) -> bool {
+        match entity {
+            | EntityId::Term(term) => {
+                self.coctxs_term_local.get(&term).is_none() || self.boundary_terms.contains(&term)
+            }
+            | EntityId::Pat(pat) => {
+                self.coctxs_pat_local.get(&pat).is_none() || self.boundary_pats.contains(&pat)
+            }
+            | EntityId::Def(_) => false,
+        }
+    }
 }
 
 /// A postorder analysis that can share a traversal with other visitors.
@@ -35,13 +84,20 @@ pub struct ContextCollector {
     ctxs_pat_local: ArenaAssoc<PatId, Context>,
     coctxs_pat_local: ArenaAssoc<PatId, CoContext>,
     coctxs_term_local: ArenaPagedAssoc<TermId, CoContext>,
+    boundary_terms: rustc_hash::FxHashSet<TermId>,
+    boundary_pats: rustc_hash::FxHashSet<PatId>,
 }
 
 impl ContextCollector {
-    /// Retain term summaries and release temporary pattern summaries.
+    /// Retain term and pattern summaries along with source-boundary markers.
     /// Only nodes reached by a completed traversal have summaries.
     pub fn finish(self) -> TermContexts {
-        TermContexts { coctxs_term_local: self.coctxs_term_local }
+        TermContexts {
+            coctxs_term_local: self.coctxs_term_local,
+            coctxs_pat_local: self.coctxs_pat_local,
+            boundary_terms: self.boundary_terms,
+            boundary_pats: self.boundary_pats,
+        }
     }
 }
 
@@ -63,6 +119,25 @@ impl ContextCollector {
     fn pattern(&mut self, pat: PatId, item: &Pattern) {
         if self.ctxs_pat_local.get(&pat).is_some() {
             return;
+        }
+        let has_boundary = match item {
+            | Pattern::Ann(Ann { tm, ty }) => {
+                self.boundary_pats.contains(tm) || self.boundary_terms.contains(ty)
+            }
+            | Pattern::Hole(_) | Pattern::Lit(_) | Pattern::Var(_) | Pattern::Triv(_) => false,
+            | Pattern::Named(Named(_, inner))
+            | Pattern::Ctor(Ctor(_, inner))
+            | Pattern::Project(ProjectionPattern(_, inner)) => self.boundary_pats.contains(inner),
+            | Pattern::View(ViewPattern { function, pattern }) => {
+                self.boundary_pats.contains(pattern) || self.boundary_terms.contains(function)
+            }
+            | Pattern::Alias(Alias(inner)) => {
+                inner.iter().any(|item| self.boundary_pats.contains(item))
+            }
+            | Pattern::Cons(inner) => inner.iter().any(|item| self.boundary_pats.contains(item)),
+        };
+        if has_boundary {
+            self.boundary_pats.insert(pat);
         }
         match item {
             | Pattern::Ann(inner) => {
@@ -151,6 +226,103 @@ impl ContextCollector {
     fn term(&mut self, term: TermId, item: &Term<DefId>) {
         if self.coctxs_term_local.get(&term).is_some() {
             return;
+        }
+        let has_boundary = match item {
+            | Term::SourceBoundary(_) => true,
+            | Term::Internal(_) | Term::Hole(_) | Term::Var(_) | Term::Triv(_) | Term::Lit(_) => {
+                false
+            }
+            | Term::Meta(inner) => self.boundary_terms.contains(&inner.1),
+            | Term::TypeOf(TypeOf(operand)) => self.boundary_terms.contains(operand),
+            | Term::SignatureBoundary(SignatureBoundary(inner))
+            | Term::Sealed(Sealed(inner))
+            | Term::Named(Named(_, inner))
+            | Term::Label(Label(_, inner))
+            | Term::Thunk(Thunk(inner))
+            | Term::Force(Force(inner))
+            | Term::Ret(Return(inner))
+            | Term::Residual(Residual(inner))
+            | Term::Block(Block(inner))
+            | Term::CbvBlock(CbvBlock { body: inner })
+            | Term::Ctor(Ctor(_, inner))
+            | Term::Dtor(Dtor(inner, _))
+            | Term::Proj(Proj(inner, _)) => self.boundary_terms.contains(inner),
+            | Term::Ann(inner) => {
+                self.boundary_terms.contains(&inner.tm) || self.boundary_terms.contains(&inner.ty)
+            }
+            | Term::Cons(inner) => inner.iter().any(|item| self.boundary_terms.contains(item)),
+            | Term::Abs(Abs(pats, body)) | Term::Pi(Pi(pats, body)) => {
+                pats.iter().any(|pat| self.boundary_pats.contains(pat))
+                    || self.boundary_terms.contains(body)
+            }
+            | Term::ValAbs(Abs(pat, body))
+            | Term::Fix(Fix(pat, body))
+            | Term::ValPi(ValPi(pat, body))
+            | Term::Sigma(Sigma(pat, body)) => {
+                self.boundary_pats.contains(pat) || self.boundary_terms.contains(body)
+            }
+            | Term::App(App(head, arguments)) => {
+                self.boundary_terms.contains(head)
+                    || arguments.iter().any(|argument| self.boundary_terms.contains(argument))
+            }
+            | Term::ManifestExists(inner) => {
+                self.boundary_pats.contains(&inner.binder)
+                    || self.boundary_terms.contains(&inner.definition)
+                    || self.boundary_terms.contains(&inner.body)
+            }
+            | Term::Pack(inner) => {
+                self.boundary_pats.contains(&inner.binder)
+                    || self.boundary_terms.contains(&inner.definition)
+                    || self.boundary_terms.contains(&inner.body)
+            }
+            | Term::Do(inner) => {
+                self.boundary_pats.contains(&inner.binder)
+                    || self.boundary_terms.contains(&inner.bindee)
+                    || self.boundary_terms.contains(&inner.tail)
+            }
+            | Term::Let(inner) => {
+                self.boundary_pats.contains(&inner.binder)
+                    || self.boundary_terms.contains(&inner.bindee)
+                    || self.boundary_terms.contains(&inner.tail)
+            }
+            | Term::MobileParam(_) | Term::MobileBind(_) => false,
+            | Term::RecGroup(RecGroup { definitions, tail }) => {
+                definitions.iter().any(|definition| {
+                    self.boundary_pats.contains(&definition.binder)
+                        || self.boundary_terms.contains(&definition.bindee)
+                }) || self.boundary_terms.contains(tail)
+            }
+            | Term::MoBlock(inner) => {
+                self.boundary_terms.contains(&inner.body)
+                    || self.boundary_terms.contains(&inner.basis.monad)
+                    || self.boundary_terms.contains(&inner.basis.algebra)
+            }
+            | Term::Data(Data { arms }) => {
+                arms.iter().any(|arm| self.boundary_terms.contains(&arm.param))
+            }
+            | Term::CoData(CoData { arms }) => {
+                arms.iter().any(|arm| self.boundary_terms.contains(&arm.out))
+            }
+            | Term::Match(Match { scrut, arms }) => {
+                self.boundary_terms.contains(scrut)
+                    || arms.iter().any(|arm| {
+                        self.boundary_pats.contains(&arm.binder)
+                            || self.boundary_terms.contains(&arm.tail)
+                    })
+            }
+            | Term::CoMatchClauses(CoMatchClauses { clauses }) => clauses.iter().any(|clause| {
+                self.boundary_terms.contains(&clause.tail)
+                    || clause.spine.iter().any(|item| match item {
+                        | CoPatternItem::Pat(pat) => self.boundary_pats.contains(pat),
+                        | CoPatternItem::Dtor(_) => false,
+                    })
+            }),
+            | Term::CoMatch(CoMatch { arms }) => {
+                arms.iter().any(|arm| self.boundary_terms.contains(&arm.tail))
+            }
+        };
+        if has_boundary {
+            self.boundary_terms.insert(term);
         }
         match item {
             | Term::Meta(inner) => {

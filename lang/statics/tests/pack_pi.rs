@@ -1,23 +1,21 @@
 mod common;
 
 use common::TestFixture;
+use zydeco_foundation::prelude::IdAllocator;
 use zydeco_statics::{Alloc, Lub, Tycker, environment::*, syntax::*};
-use zydeco_utils::prelude::IdAllocator;
 
 impl TestFixture {
     fn package_domain(tycker: &mut Tycker<'_>, vtype: KindId, ctype: KindId) -> TypeId {
-        let env = TyEnv::new();
         let source_witness: AbstId = Alloc::alloc(tycker, None::<DefId>, ctype, &());
-        let payload = Alloc::alloc(tycker, UnitTy, vtype, &env);
-        let binder = TypeBinder::with_witness(tycker, source_witness, &env);
-        Alloc::alloc(tycker, Exists::new(binder, payload), vtype, &env)
+        let payload = Alloc::alloc(tycker, UnitTy, vtype, &());
+        let binder = TypeBinder::with_witness(tycker, source_witness);
+        Alloc::alloc(tycker, Exists::new(binder, payload), vtype, &())
     }
 
     fn witness(tycker: &mut Tycker<'_>, ctype: KindId) -> (AbstId, TypeId) {
         let witness: AbstId = Alloc::alloc(tycker, None::<DefId>, ctype, &());
         tycker.statics.existential_skolems.ensure(witness);
-        let body_env = TyEnv::new().with_skolem(witness);
-        let codomain = Alloc::alloc(tycker, witness, ctype, &body_env);
+        let codomain = Alloc::alloc(tycker, witness, ctype, &());
         (witness, codomain)
     }
 
@@ -28,7 +26,7 @@ impl TestFixture {
             tycker,
             PackPi { domain, witnesses: PackTelescope::singleton(witness), codomain },
             ctype,
-            &TyEnv::new(),
+            &(),
         )
     }
 
@@ -46,7 +44,7 @@ impl TestFixture {
                 codomain,
             },
             vtype,
-            &TyEnv::new(),
+            &(),
         )
     }
 }
@@ -93,7 +91,7 @@ fn holes_in_pack_pi_codomain_retain_the_bound_witness_scope() {
         let fill: zydeco_statics::syntax::FillId =
             Alloc::alloc(tycker, zydeco_statics::syntax::InferenceSite::Term(site), (), &());
         let body_env = TyEnv::new().with_skolem(witness);
-        let hole = Alloc::alloc(tycker, fill, ctype, &body_env);
+        let hole = Alloc::alloc(tycker, fill, ctype, body_env.skolem_scope());
         let pack_pi = TestFixture::pack_pi(tycker, domain, witness, hole, ctype);
 
         assert!(pack_pi.constrain_to_scope(tycker, &SkolemScope::default()).is_ok());
@@ -125,7 +123,7 @@ fn abstract_substitution_sequences_shadow_bound_pack_pi_witnesses() {
         let (bound, bound_ty) = TestFixture::witness(tycker, ctype);
         let (free, free_ty) = TestFixture::witness(tycker, ctype);
         let (_, bound_replacement) = TestFixture::witness(tycker, ctype);
-        let codomain = Alloc::alloc(tycker, Prod(vec![bound_ty, free_ty]), ctype, &TyEnv::new());
+        let codomain = Alloc::alloc(tycker, Prod(vec![bound_ty, free_ty]), ctype, &());
         let pack_pi = TestFixture::pack_pi(tycker, domain, bound, codomain, ctype);
         let assignments = [(free, bound_ty), (bound, bound_replacement)];
 

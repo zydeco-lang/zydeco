@@ -3,8 +3,8 @@
 ## Motivation and boundary
 
 Producing one procedure body and direct jumps does not necessarily eliminate capture transport.
-The [current procedure lowering](../references/compiler/src/closure-conversion.md#correspondence-with-sps_l) uses a local label
-when every call lies in its binding block.
+The [current procedure lowering](../references/compiler/src/closure-conversion.md#correspondence-with-sps_l)
+uses a local label when every call lies in its binding block.
 A call from a continuation block instead requires a closed label whose callers push the procedure's free variables.
 This is correct, but can copy the same captured values at each call.
 
@@ -96,7 +96,7 @@ Compare the same program's portable result and runtime behavior.
 | Frame storage grows between suspension and resumption | Logical ownership remains valid without retaining raw slot pointers |
 | Repeated tail transfers have a fixed pending continuation set | Frame extent does not grow with the number of optimized transfers |
 
-Extend [native-model tests](../../lang/tests/tests/native_model.rs)
+Extend [native-model tests](../../lang/tests/tests/suite/native_model.rs)
 and frame-plan mutation tests alongside the source fixture.
 Include two invocations of the same source procedure so equal layouts cannot accidentally pass
 for equal dynamic owners, and a mixed-call case that forces the conservative representation.
@@ -105,5 +105,5 @@ Preserve the existing interpreter and Wasm behavior even when they do not receiv
 Measure capture words transported, activation entries, frame high-water usage, and GC roots separately.
 Empty-capture examples cannot establish a capture-copying improvement;
 retained storage must also be checked for keeping dead values alive.
-The [activation-lifetime contract](../references/compiler/src/native-emission.md#activation-lifetime) remains the governing
-implemented boundary until a reviewed extension replaces it.
+The [activation-lifetime contract](../references/compiler/src/native-emission.md#activation-lifetime) remains the
+governing implemented boundary until a reviewed extension replaces it.

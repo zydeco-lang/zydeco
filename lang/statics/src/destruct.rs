@@ -5,14 +5,12 @@ use super::*;
 impl TypeBinder {
     /// Reconstruct the ordinary, whole-argument pattern used by internal
     /// binders that were created from an abstract type directly.
-    pub fn with_witness(tycker: &mut Tycker<'_>, witness: AbstId, env: &TyEnv) -> Self {
-        use zydeco_utils::arena::ArenaAccess;
-
-        let kind = tycker.statics.annotations_abst[&witness];
-        let hint = tycker.statics.abst_hints.get(&witness).copied();
+    pub fn with_witness(tycker: &mut Tycker<'_>, witness: AbstId) -> Self {
+        let kind = tycker.statics.annotations_abst[witness];
+        let hint = tycker.statics.abst_hints.get(witness).copied();
         let pattern = match hint {
-            | Some(def) => Alloc::alloc(tycker, def, kind, env),
-            | None => Alloc::alloc(tycker, Hole, kind, env),
+            | Some(def) => Alloc::alloc(tycker, def, kind, &()),
+            | None => Alloc::alloc(tycker, Hole, kind, &()),
         };
         Self { pattern, witness }
     }
@@ -54,18 +52,15 @@ impl KPatId {
     }
 
     pub fn reify(&self, tycker: &Tycker<'_>) -> KindId {
-        match tycker.statics.kpats[self] {
+        match tycker.statics.kpats[*self] {
             | KindPattern::Hole(_) => {
                 unreachable!("a manifest kind-pattern hole cannot be reified")
             }
-            | KindPattern::Var(definition) => {
-                let AnnId::Kind(kind) = tycker.statics.env_kpat[self][&definition] else {
-                    unreachable!(
-                        "a manifest kind binder must resolve to its transparent definition"
-                    )
-                };
-                kind
-            }
+            | KindPattern::Var(definition) => tycker
+                .kind_bindings
+                .get(&definition)
+                .copied()
+                .expect("a manifest kind binder must resolve to its transparent definition"),
         }
     }
 }
@@ -97,23 +92,22 @@ impl TPatId {
         match def {
             | Some(def) => (def, kd),
             | None => {
-                let def = Alloc::alloc(tycker, VarName("_".to_owned()), kd.into(), &());
+                let def = Alloc::alloc(tycker, VarName::new("_"), kd.into(), &());
                 (def, kd)
             }
         }
     }
     pub fn reify(&self, tycker: &mut Tycker) -> TypeId {
         use TypePattern as TPat;
-        let kd = tycker.statics.annotations_tpat[self].to_owned();
-        let env = tycker.statics.env_tpat[self].clone();
-        match tycker.statics.tpats[self].to_owned() {
+        let kd = tycker.statics.annotations_tpat[*self].to_owned();
+        match tycker.statics.tpats[*self].to_owned() {
             | TPat::Hole(Hole) => {
                 unreachable!("type pattern hole can't be reified")
             }
-            | TPat::Var(def) => Alloc::alloc(tycker, def, kd, &env),
+            | TPat::Var(def) => Alloc::alloc(tycker, def, kd, &()),
             | TPat::Named(Named(name, inner)) => {
                 let inner = inner.reify(tycker);
-                Alloc::alloc(tycker, Named(name, inner), kd, &env)
+                Alloc::alloc(tycker, Named(name, inner), kd, &())
             }
         }
     }
@@ -136,8 +130,8 @@ impl TPatId {
     /// Rebuild a complete argument for this pattern from the payload represented
     /// by its abstract witness.
     pub fn introduce_payload(&self, tycker: &mut Tycker<'_>, payload: TypeId) -> Result<TypeId> {
-        let domain_kind = tycker.statics.annotations_tpat[self];
-        match tycker.statics.tpats[self].to_owned() {
+        let domain_kind = tycker.statics.annotations_tpat[*self];
+        match tycker.statics.tpats[*self].to_owned() {
             | TypePattern::Hole(_) | TypePattern::Var(_) => {
                 let payload_kind = tycker.statics.type_kind(payload);
                 Lub::lub(domain_kind, payload_kind, tycker)?;
@@ -145,25 +139,22 @@ impl TPatId {
             }
             | TypePattern::Named(Named(name, inner)) => {
                 let inner = inner.introduce_payload(tycker, payload)?;
-                let env = tycker.statics.env_tpat[self].clone();
-                Ok(Alloc::alloc(tycker, Named(name, inner), domain_kind, &env))
+                Ok(Alloc::alloc(tycker, Named(name, inner), domain_kind, &()))
             }
         }
     }
 
     /// Copy this pattern's named shape while replacing its payload binder.
-    pub fn rebind_payload(
-        &self, tycker: &mut Tycker<'_>, payload: Option<DefId>, env: &TyEnv,
-    ) -> TPatId {
-        let domain_kind = tycker.statics.annotations_tpat[self];
-        match tycker.statics.tpats[self].to_owned() {
+    pub fn rebind_payload(&self, tycker: &mut Tycker<'_>, payload: Option<DefId>) -> TPatId {
+        let domain_kind = tycker.statics.annotations_tpat[*self];
+        match tycker.statics.tpats[*self].to_owned() {
             | TypePattern::Hole(_) | TypePattern::Var(_) => match payload {
-                | Some(def) => Alloc::alloc(tycker, def, domain_kind, env),
-                | None => Alloc::alloc(tycker, Hole, domain_kind, env),
+                | Some(def) => Alloc::alloc(tycker, def, domain_kind, &()),
+                | None => Alloc::alloc(tycker, Hole, domain_kind, &()),
             },
             | TypePattern::Named(Named(name, inner)) => {
-                let inner = inner.rebind_payload(tycker, payload, env);
-                Alloc::alloc(tycker, Named(name, inner), domain_kind, env)
+                let inner = inner.rebind_payload(tycker, payload);
+                Alloc::alloc(tycker, Named(name, inner), domain_kind, &())
             }
         }
     }
@@ -182,7 +173,7 @@ impl TypeId {
             | Kind::Label(Label(found, inner_kind)) => {
                 if &found != expected {
                     return tycker
-                        .err(TyckError::NamedLabelMismatch { expected: expected.clone(), found });
+                        .err(TyckError::NamedLabelMismatch { expected: *expected, found });
                 }
                 Lub::lub(inner_kind, payload_kind, tycker)?;
             }
@@ -196,13 +187,10 @@ impl TypeId {
                 if &found == expected {
                     Ok(inner)
                 } else {
-                    tycker.err(TyckError::NamedLabelMismatch { expected: expected.clone(), found })
+                    tycker.err(TyckError::NamedLabelMismatch { expected: *expected, found })
                 }
             }
-            | _ => {
-                let env = tycker.statics.env_at(*self);
-                Ok(Alloc::alloc(tycker, Proj(*self, expected.clone()), payload_kind, &env))
-            }
+            | _ => Ok(Alloc::alloc(tycker, Proj(*self, *expected), payload_kind, &())),
         }
     }
 
@@ -312,16 +300,14 @@ impl TypeId {
         }
     }
     pub fn destruct_data<'t>(&self, _env: &TyEnv, tycker: &'t mut Tycker) -> Option<&'t Data> {
-        use zydeco_utils::arena::ArenaAccess;
         match tycker.speculate(|tycker| tycker.type_filled(self))?.to_owned() {
-            | Type::Data(data) => tycker.statics.datas.get(&data),
+            | Type::Data(data) => tycker.statics.datas.get(data),
             | _ => None,
         }
     }
     pub fn destruct_codata<'t>(&self, _env: &TyEnv, tycker: &'t mut Tycker) -> Option<&'t CoData> {
-        use zydeco_utils::arena::ArenaAccess;
         match tycker.speculate(|tycker| tycker.type_filled(self))?.to_owned() {
-            | Type::CoData(coda) => tycker.statics.codatas.get(&coda),
+            | Type::CoData(coda) => tycker.statics.codatas.get(coda),
             | _ => None,
         }
     }
@@ -390,36 +376,35 @@ impl VPatId {
     /// in the pattern are bound in the environment.
     pub fn reify(&self, tycker: &mut Tycker) -> ValueId {
         use ValuePattern as VPat;
-        let ty = tycker.statics.annotations_vpat[self].to_owned();
-        let env = tycker.statics.env_vpat[self].clone();
-        match tycker.statics.vpats[self].to_owned() {
-            | VPat::Hole(Hole) => Alloc::alloc(tycker, Hole, ty, &env),
-            | VPat::Var(def) => Alloc::alloc(tycker, def, ty, &env),
+        let ty = tycker.statics.annotations_vpat[*self].to_owned();
+        match tycker.statics.vpats[*self].to_owned() {
+            | VPat::Hole(Hole) => Alloc::alloc(tycker, Hole, ty, &()),
+            | VPat::Var(def) => Alloc::alloc(tycker, def, ty, &()),
             | VPat::Named(vpat) => {
                 let Named(name, inner) = vpat;
                 let inner = inner.reify(tycker);
-                Alloc::alloc(tycker, Named(name, inner), ty, &env)
+                Alloc::alloc(tycker, Named(name, inner), ty, &())
             }
-            | VPat::Triv(Triv) => Alloc::alloc(tycker, Triv, ty, &env),
-            | VPat::Lit(literal) => Alloc::alloc(tycker, literal, ty, &env),
+            | VPat::Triv(Triv) => Alloc::alloc(tycker, Triv, ty, &()),
+            | VPat::Lit(literal) => Alloc::alloc(tycker, literal, ty, &()),
             | VPat::Ctor(vpat) => {
                 let Ctor(ctor, vpat) = vpat;
                 let vpat_ = vpat.reify(tycker);
-                Alloc::alloc(tycker, Ctor(ctor, vpat_), ty, &env)
+                Alloc::alloc(tycker, Ctor(ctor, vpat_), ty, &())
             }
             | VPat::Alias(Alias(patterns)) => {
                 patterns.iter().next().expect("an alias pattern is non-empty").reify(tycker)
             }
             | VPat::VCons(items) => {
                 let items = items.into_iter().map(|item| item.reify(tycker)).collect();
-                Alloc::alloc(tycker, ss::Value::VCons(items), ty, &env)
+                Alloc::alloc(tycker, ss::Value::VCons(items), ty, &())
             }
             | VPat::SCons(vpat) => {
                 let ConsN(witnesses, body) = vpat;
                 let witnesses =
                     witnesses.into_iter().map(|witness| witness.reify(tycker)).collect();
                 let body = body.reify(tycker);
-                Alloc::alloc(tycker, ConsN(witnesses, body), ty, &env)
+                Alloc::alloc(tycker, ConsN(witnesses, body), ty, &())
             }
             | VPat::View(_) => {
                 unreachable!("a view pattern cannot be reified as its input value")
@@ -432,12 +417,14 @@ impl ValueId {
     /// Recover static evidence using the same lexical reducer that eliminates
     /// value functions before execution. Computations remain opaque.
     pub(crate) fn static_shape(
-        &self, tycker: &mut Tycker<'_>,
+        &self, tycker: &mut Tycker<'_>, scope: &crate::SkolemScope,
     ) -> crate::elaborate::static_values::StaticShape {
-        crate::elaborate::static_values::StaticElaborator::inspect(tycker, *self)
+        crate::elaborate::static_values::StaticElaborator::inspect(tycker, *self, scope)
     }
 
-    pub fn package_witnesses(&self, tycker: &mut Tycker<'_>) -> Option<Vec<StaticTermId>> {
-        self.static_shape(tycker).witnesses()
+    pub fn package_witnesses(
+        &self, tycker: &mut Tycker<'_>, scope: &crate::SkolemScope,
+    ) -> Option<Vec<StaticTermId>> {
+        self.static_shape(tycker, scope).witnesses()
     }
 }

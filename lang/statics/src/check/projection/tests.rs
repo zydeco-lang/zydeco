@@ -7,18 +7,18 @@ fn field_substitution_is_independent_of_label_depth() {
         let empty = TyEnv::default();
         let vtype = ss::VType.build(tycker, &empty);
         let unit = ss::UnitTy.build(tycker, &empty);
-        let source_def: ss::DefId = tycker.fresh();
-        let target_def: ss::DefId = tycker.fresh();
-        let source: ss::TypeId = Alloc::alloc(tycker, source_def, vtype, &empty);
-        let target: ss::TypeId = Alloc::alloc(tycker, target_def, vtype, &empty);
+        let source_def: ss::DefId = tycker.fresh_def();
+        let target_def: ss::DefId = tycker.fresh_def();
+        let source: ss::TypeId = Alloc::alloc(tycker, source_def, vtype, &());
+        let target: ss::TypeId = Alloc::alloc(tycker, target_def, vtype, &());
         let environment =
             TyEnv::from_iter([(source_def, target.into()), (target_def, unit.into())]);
 
-        let field = FieldName("selected".to_owned());
-        let wrapper = FieldName("wrapper".to_owned());
-        let shallow = Alloc::alloc(tycker, ss::Label(field.clone(), source), vtype, &empty);
-        let nested = Alloc::alloc(tycker, ss::Label(field.clone(), source), vtype, &empty);
-        let deep = Alloc::alloc(tycker, ss::Label(wrapper, nested), vtype, &empty);
+        let field = FieldName::new("selected");
+        let wrapper = FieldName::new("wrapper");
+        let shallow = Alloc::alloc(tycker, ss::Label(field, source), vtype, &());
+        let nested = Alloc::alloc(tycker, ss::Label(field, source), vtype, &());
+        let deep = Alloc::alloc(tycker, ss::Label(wrapper, nested), vtype, &());
 
         let shallow =
             FieldProjectionResolver::value_term(tycker, &environment, shallow, &field).unwrap();
@@ -37,13 +37,13 @@ fn field_search_reenters_the_environment_after_unrolling_a_seal() {
         let environment = TyEnv::default();
         let vtype = ss::VType.build(tycker, &environment);
         let unit = ss::UnitTy.build(tycker, &environment);
-        let field = FieldName("selected".to_owned());
-        let wrapper = FieldName("wrapper".to_owned());
-        let definition = Alloc::alloc(tycker, ss::Label(field.clone(), unit), vtype, &environment);
+        let field = FieldName::new("selected");
+        let wrapper = FieldName::new("wrapper");
+        let definition = Alloc::alloc(tycker, ss::Label(field, unit), vtype, &());
         let witness: ss::AbstId = Alloc::alloc(tycker, None::<ss::DefId>, vtype, &());
         tycker.record_seal(witness, definition);
-        let sealed = Alloc::alloc(tycker, witness, vtype, &environment);
-        let root = Alloc::alloc(tycker, ss::Label(wrapper.clone(), sealed), vtype, &environment);
+        let sealed = Alloc::alloc(tycker, witness, vtype, &());
+        let root = Alloc::alloc(tycker, ss::Label(wrapper, sealed), vtype, &());
 
         let direct =
             FieldProjectionResolver::value_term(tycker, &environment, root, &wrapper).unwrap();
@@ -62,14 +62,14 @@ fn repeated_field_search_reuses_materialization_until_inference_changes() {
         let empty = TyEnv::default();
         let vtype = ss::VType.build(tycker, &empty);
         let unit = ss::UnitTy.build(tycker, &empty);
-        let source_def: ss::DefId = tycker.fresh();
-        let source = Alloc::alloc(tycker, source_def, vtype, &empty);
+        let source_def: ss::DefId = tycker.fresh_def();
+        let source = Alloc::alloc(tycker, source_def, vtype, &());
         let environment = TyEnv::from_iter([(source_def, unit.into())]);
-        let field = FieldName("selected".to_owned());
-        let definition = Alloc::alloc(tycker, ss::Label(field.clone(), source), vtype, &empty);
+        let field = FieldName::new("selected");
+        let definition = Alloc::alloc(tycker, ss::Label(field, source), vtype, &());
         let witness: ss::AbstId = Alloc::alloc(tycker, None::<ss::DefId>, vtype, &());
         tycker.record_seal(witness, definition);
-        let sealed = Alloc::alloc(tycker, witness, vtype, &empty);
+        let sealed = Alloc::alloc(tycker, witness, vtype, &());
 
         let before = tycker.statics.types_pre.len();
         let first =
@@ -103,7 +103,7 @@ fn adding_a_seal_invalidates_cached_field_materialization() {
         let vtype = ss::VType.build(tycker, &empty);
         let unit = ss::UnitTy.build(tycker, &empty);
         let witness: ss::AbstId = Alloc::alloc(tycker, None::<ss::DefId>, vtype, &());
-        let sealed = Alloc::alloc(tycker, witness, vtype, &empty);
+        let sealed = Alloc::alloc(tycker, witness, vtype, &());
         let deferred = DeferredEnvType::with_environment(sealed, &empty);
 
         let before = deferred.materialize(tycker).unwrap();
@@ -122,10 +122,10 @@ fn deferred_telescope_uses_the_final_environment_once() {
         let empty = TyEnv::default();
         let vtype = ss::VType.build(tycker, &empty);
         let unit = ss::UnitTy.build(tycker, &empty);
-        let source_def: ss::DefId = tycker.fresh();
-        let target_def: ss::DefId = tycker.fresh();
-        let source: ss::TypeId = Alloc::alloc(tycker, source_def, vtype, &empty);
-        let target: ss::TypeId = Alloc::alloc(tycker, target_def, vtype, &empty);
+        let source_def: ss::DefId = tycker.fresh_def();
+        let target_def: ss::DefId = tycker.fresh_def();
+        let source: ss::TypeId = Alloc::alloc(tycker, source_def, vtype, &());
+        let target: ss::TypeId = Alloc::alloc(tycker, target_def, vtype, &());
         let first = TyEnv::from_iter([(source_def, target.into())]);
         let final_environment =
             TyEnv::from_iter([(source_def, target.into()), (target_def, unit.into())]);
@@ -150,8 +150,8 @@ fn deferred_telescope_composes_abstract_assignments_in_order() {
         let unit = ss::UnitTy.build(tycker, &environment);
         let first: ss::AbstId = Alloc::alloc(tycker, None::<ss::DefId>, vtype, &());
         let second: ss::AbstId = Alloc::alloc(tycker, None::<ss::DefId>, vtype, &());
-        let first_ty = Alloc::alloc(tycker, first, vtype, &environment);
-        let second_ty = Alloc::alloc(tycker, second, vtype, &environment);
+        let first_ty = Alloc::alloc(tycker, first, vtype, &());
+        let second_ty = Alloc::alloc(tycker, second, vtype, &());
 
         let materialized = DeferredTelescopeType::new(first_ty)
             .with_abstract(first, second_ty)

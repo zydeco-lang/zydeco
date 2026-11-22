@@ -155,7 +155,7 @@ Observed during the 2026-10-13 fixture migration, formatting this source fragmen
 
 The original rejects with `tyck.refutable-binding`; the printed `@[partial] fn (0 : Int) (1 : Int) => ret 0` is accepted
 because both binders now belong to the annotated header.
-The [partial-binding tables](../../lang/tests/tests/partial.rs) retain this rejected nested header
+The [partial-binding tables](../../lang/tests/tests/suite/partial.rs) retain this rejected nested header
 and accepted single-header counterparts as inline Rust sources.
 
 Preserve nested headers when flattening would extend a meta annotation's scope.

@@ -6,7 +6,7 @@
 
 use ariadne::FnCache;
 use std::{collections::HashMap, path::PathBuf};
-use zydeco_utils::span::PathDisplay;
+use zydeco_foundation::span::PathDisplay;
 
 use super::{ProgramAnalysis, SourceGraph};
 

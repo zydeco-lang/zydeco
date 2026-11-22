@@ -10,16 +10,7 @@ impl TermChecker<'_> {
             let su::Hole = term;
             match switch {
                 | Switch::Syn => {
-                    let term = crate::query::InternedTerm::new(tycker.db, self.inner);
-                    let Some(fill) = crate::query::term_hole_syn_judgment(
-                        tycker.db,
-                        tycker.data,
-                        term,
-                        tycker.site_occurrence(),
-                    ) else {
-                        unreachable!("hole judgments are query-produced")
-                    };
-                    tycker.statics.fills.insert_new(fill, ss::InferenceSite::Term(self.inner));
+                    let fill = Alloc::alloc(tycker, self.inner, (), &());
                     TermAnnId::Hole(fill)
                 }
                 | Switch::Ana(AnnId::Set) => {
@@ -28,26 +19,8 @@ impl TermChecker<'_> {
                 }
                 | Switch::Ana(AnnId::Kind(kd)) => {
                     // a type hole, with a specific kind in mind
-                    let input = crate::query::InternedHoleAna::new(
-                        tycker.db,
-                        crate::query::HoleAnaShape::Type { kd },
-                    );
-                    let outcome = tycker.judge(self.inner, input, crate::query::hole_ana_judgment);
-                    let crate::query::HoleAnaOutcome::Type { fill, ty, kd } = outcome else {
-                        unreachable!("the kind arm of hole judgments is query-produced")
-                    };
-                    tycker.statics.fills.insert_new(fill, ss::InferenceSite::Term(self.inner));
-                    tycker.statics.types_pre.insert_new(ty, ss::Fillable::Fill(fill), kd);
-                    tycker.store_env(ty, &self.info);
-                    let scope = self.info.skolem_scope().clone();
-                    if let Some(existing) =
-                        tycker.statics.fill_scopes.insert_or_get(fill, scope.clone())
-                    {
-                        tycker
-                            .statics
-                            .fill_scopes
-                            .replace_existing(fill, existing.intersection(&scope));
-                    }
+                    let fill = Alloc::alloc(tycker, self.inner, (), &());
+                    let ty = Alloc::alloc(tycker, fill, kd, self.info.skolem_scope());
                     TermAnnId::Type(ty, kd)
                 }
                 | Switch::Ana(AnnId::Type(ty)) => {
@@ -56,52 +29,18 @@ impl TermChecker<'_> {
                     let kd = tycker.statics.type_kind(ty);
                     match tycker.kind_filled(&kd)?.to_owned() {
                         | ss::Kind::VType(ss::VType) => {
-                            let input = crate::query::InternedHoleAna::new(
-                                tycker.db,
-                                crate::query::HoleAnaShape::Value { ty },
-                            );
-                            let outcome =
-                                tycker.judge(self.inner, input, crate::query::hole_ana_judgment);
-                            let crate::query::HoleAnaOutcome::Value { fill, id, value, ann } =
-                                outcome
-                            else {
-                                unreachable!("the value arm of hole judgments is query-produced")
-                            };
-                            tycker
-                                .statics
-                                .fills
-                                .insert_new(fill, ss::InferenceSite::Term(self.inner));
+                            let fill = Alloc::alloc(tycker, self.inner, (), &());
                             fill.fill(tycker, ty.into())?;
-                            tycker.statics.fill_hints.insert_new(fill, ());
-                            tycker.statics.values.insert_new(id, value);
-                            tycker.statics.annotations_value.insert_new(id, ann);
-                            tycker.statics.env_value.insert_new(id, self.info.clone());
-                            TermAnnId::Value(id, ann)
+                            tycker.statics.fill_hints.ensure(fill);
+                            let id = Alloc::alloc(tycker, ss::Value::Hole(ss::Hole), ty, &());
+                            TermAnnId::Value(id, ty)
                         }
                         | ss::Kind::CType(ss::CType) => {
-                            let input = crate::query::InternedHoleAna::new(
-                                tycker.db,
-                                crate::query::HoleAnaShape::Compu { ty },
-                            );
-                            let outcome =
-                                tycker.judge(self.inner, input, crate::query::hole_ana_judgment);
-                            let crate::query::HoleAnaOutcome::Compu { fill, id, compu, ann } =
-                                outcome
-                            else {
-                                unreachable!(
-                                    "the computation arm of hole judgments is query-produced"
-                                )
-                            };
-                            tycker
-                                .statics
-                                .fills
-                                .insert_new(fill, ss::InferenceSite::Term(self.inner));
+                            let fill = Alloc::alloc(tycker, self.inner, (), &());
                             fill.fill(tycker, ty.into())?;
-                            tycker.statics.fill_hints.insert_new(fill, ());
-                            tycker.statics.compus.insert_new(id, compu);
-                            tycker.statics.annotations_compu.insert_new(id, ann);
-                            tycker.statics.env_compu.insert_new(id, self.info.clone());
-                            TermAnnId::Compu(id, ann)
+                            tycker.statics.fill_hints.ensure(fill);
+                            let id = Alloc::alloc(tycker, ss::Computation::Hole(ss::Hole), ty, &());
+                            TermAnnId::Compu(id, ty)
                         }
                         | ss::Kind::Arrow(_) | ss::Kind::Label(_) => {
                             tycker.err(TyckError::SortMismatch)?
@@ -131,22 +70,10 @@ impl TermChecker<'_> {
             };
             match ann {
                 | AnnId::Set => {
-                    let term = crate::query::InternedTerm::new(tycker.db, self.inner);
-                    let env_data = crate::query::EnvData::new(tycker.db, self.info.clone());
-                    let annotation = crate::query::InternedAnn::new(tycker.db, ann);
-                    let Some(crate::query::VarSynOutcome::Kind { id }) =
-                        crate::query::var_syn_judgment(
-                            tycker.db,
-                            tycker.data,
-                            env_data,
-                            term,
-                            annotation,
-                            tycker.site_occurrence(),
-                        )
-                    else {
-                        unreachable!("the set arm of variable judgments is query-produced")
+                    let AnnId::Kind(kd) = self.info[&def] else {
+                        unreachable!("kind-bound variables carry kind annotations")
                     };
-                    TermAnnId::Kind(id)
+                    TermAnnId::Kind(kd)
                 }
                 | AnnId::Kind(kd) => match self.info.recursively_get_type(tycker, &def) {
                     | Some(&ann) => {
@@ -154,29 +81,12 @@ impl TermChecker<'_> {
                         TermAnnId::Type(ty, kd)
                     }
                     | None => {
-                        let ty = Alloc::alloc(tycker, def, kd, &self.info);
+                        let ty = Alloc::alloc(tycker, def, kd, &());
                         TermAnnId::Type(ty, kd)
                     }
                 },
-                | AnnId::Type(_) => {
-                    let term = crate::query::InternedTerm::new(tycker.db, self.inner);
-                    let env_data = crate::query::EnvData::new(tycker.db, self.info.clone());
-                    let annotation = crate::query::InternedAnn::new(tycker.db, ann);
-                    let Some(crate::query::VarSynOutcome::Value { id, value, ty }) =
-                        crate::query::var_syn_judgment(
-                            tycker.db,
-                            tycker.data,
-                            env_data,
-                            term,
-                            annotation,
-                            tycker.site_occurrence(),
-                        )
-                    else {
-                        unreachable!("the type arm of variable judgments is query-produced")
-                    };
-                    tycker.statics.values.insert_new(id, value);
-                    tycker.statics.annotations_value.insert_new(id, ty);
-                    tycker.statics.env_value.insert_new(id, self.info.clone());
+                | AnnId::Type(ty) => {
+                    let id = Alloc::alloc(tycker, ss::Value::Var(def), ty, &());
                     TermAnnId::Value(id, ty)
                 }
             }
@@ -188,25 +98,14 @@ impl TermChecker<'_> {
     ) -> Result<TermAnnId> {
         Ok(match switch {
             | Switch::Syn => {
-                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
-                let Some(outcome) = crate::query::triv_syn_judgment(
-                    tycker.db,
-                    tycker.data,
-                    term,
-                    tycker.site_occurrence(),
-                ) else {
-                    unreachable!("trivial judgments are query-produced")
-                };
-                let crate::query::TrivSynOutcome { id, value, ty } = outcome;
-                tycker.statics.values.insert_new(id, value);
-                tycker.statics.annotations_value.insert_new(id, ty);
-                tycker.statics.env_value.insert_new(id, self.info.clone());
+                let ty = tycker.intrinsics.unit;
+                let id = Alloc::alloc(tycker, ss::Triv, ty, &());
                 TermAnnId::Value(id, ty)
             }
             | Switch::Ana(AnnId::Type(ana)) => {
                 let unit = ss::UnitTy.build(tycker, &self.info);
                 let ann = Lub::lub(ana, unit, tycker)?;
-                let triv = Alloc::alloc(tycker, ss::Triv, ann, &self.info);
+                let triv = Alloc::alloc(tycker, ss::Triv, ann, &());
                 TermAnnId::Value(triv, ann)
             }
             | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker.err(TyckError::SortMismatch)?,
@@ -218,24 +117,43 @@ impl TermChecker<'_> {
     ) -> Result<TermAnnId> {
         Ok(match switch {
             | Switch::Syn => {
-                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
-                let Some(outcome) = crate::query::literal_syn_judgment(
-                    tycker.db,
-                    tycker.data,
-                    term,
-                    tycker.site_occurrence(),
-                ) else {
-                    unreachable!("literal judgments are query-produced")
-                };
-                match outcome {
-                    | crate::query::LiteralSynOutcome::Value { id, value, ty } => {
-                        tycker.statics.values.insert_new(id, value);
-                        tycker.statics.annotations_value.insert_new(id, ty);
-                        tycker.statics.env_value.insert_new(id, self.info.clone());
-                        TermAnnId::Value(id, ty)
+                use zydeco_syntax::{FloatType, IntegerType, Literal, PrimitiveType};
+                let (lit, ty) = match lit {
+                    | Literal::Integer(i) => {
+                        let integer_type = IntegerType::Int;
+                        let value = i.value();
+                        let Some(i) = i.with_type(integer_type) else {
+                            tycker
+                                .err(TyckError::IntegerLiteralOutOfRange { value, integer_type })?
+                        };
+                        (
+                            Literal::Integer(i),
+                            tycker.intrinsics.primitives[&PrimitiveType::Integer(integer_type)],
+                        )
                     }
-                    | crate::query::LiteralSynOutcome::Error(error) => tycker.err(error)?,
-                }
+                    | Literal::Float(value) => {
+                        let float_type = FloatType::Float64;
+                        let original = value;
+                        let Some(value) = value.with_type(float_type) else {
+                            tycker.err(TyckError::FloatLiteralOutOfRange {
+                                value: original.value(),
+                                float_type,
+                            })?
+                        };
+                        (
+                            Literal::Float(value),
+                            tycker.intrinsics.primitives[&PrimitiveType::Float(float_type)],
+                        )
+                    }
+                    | Literal::String(s) => {
+                        (Literal::String(s), tycker.intrinsics.primitives[&PrimitiveType::String])
+                    }
+                    | Literal::Char(c) => {
+                        (Literal::Char(c), tycker.intrinsics.primitives[&PrimitiveType::Char])
+                    }
+                };
+                let id = Alloc::alloc(tycker, ss::Value::Lit(lit), ty, &());
+                TermAnnId::Value(id, ty)
             }
             | Switch::Ana(annotation) => {
                 let switch = Switch::Ana(annotation);
@@ -320,7 +238,7 @@ impl TermChecker<'_> {
                         (Lit::Char(c), ty)
                     }
                 };
-                let lit = Alloc::alloc(tycker, lit, ty, &self.info);
+                let lit = Alloc::alloc(tycker, lit, ty, &());
                 TermAnnId::Value(lit, ty)
             }
         })

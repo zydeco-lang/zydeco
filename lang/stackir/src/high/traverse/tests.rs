@@ -99,7 +99,7 @@ fn cyclic_ownership_does_not_prevent_independent_repeated_edges_from_being_repor
     let cyclic: ValueId = arena.admin.fresh_node();
     arena.inner.values.insert_new(
         cyclic,
-        Value::Ctor(Ctor(CtorIdx { idx: 0, name: CtorName("loop".into()) }, cyclic)),
+        Value::Ctor(Ctor(CtorIdx { idx: 0, name: CtorName::new("loop") }, cyclic)),
     );
     let shared = Triv.build(&mut arena, None);
     let pair = VCons::new(vec![cyclic, shared, shared], ProductLayout { arity: 3 })

@@ -7,22 +7,22 @@ fn prepared_products_substitute_once_and_reenter_after_unrolling() {
         let empty = TyEnv::default();
         let vtype = ss::VType.build(tycker, &empty);
         let unit = ss::UnitTy.build(tycker, &empty);
-        let source_def: ss::DefId = tycker.fresh();
-        let target_def: ss::DefId = tycker.fresh();
-        let source: ss::TypeId = Alloc::alloc(tycker, source_def, vtype, &empty);
-        let target: ss::TypeId = Alloc::alloc(tycker, target_def, vtype, &empty);
+        let source_def: ss::DefId = tycker.fresh_def();
+        let target_def: ss::DefId = tycker.fresh_def();
+        let source: ss::TypeId = Alloc::alloc(tycker, source_def, vtype, &());
+        let target: ss::TypeId = Alloc::alloc(tycker, target_def, vtype, &());
         let environment =
             TyEnv::from_iter([(source_def, target.into()), (target_def, unit.into())]);
 
-        let product = Alloc::alloc(tycker, ss::Prod(vec![source, source]), vtype, &empty);
+        let product = Alloc::alloc(tycker, ss::Prod(vec![source, source]), vtype, &());
         let prepared = product.subst_env(tycker, &environment).unwrap();
         let ss::Prod(components) = prepared.view_prepared_product(tycker, &environment).unwrap();
         assert_eq!(components.as_slice(), [target, target]);
 
-        let definition = Alloc::alloc(tycker, ss::Prod(vec![source, unit]), vtype, &empty);
+        let definition = Alloc::alloc(tycker, ss::Prod(vec![source, unit]), vtype, &());
         let witness: ss::AbstId = Alloc::alloc(tycker, None::<ss::DefId>, vtype, &());
         tycker.record_seal(witness, definition);
-        let sealed = Alloc::alloc(tycker, witness, vtype, &empty);
+        let sealed = Alloc::alloc(tycker, witness, vtype, &());
         let ss::Prod(components) = sealed.view_prepared_product(tycker, &environment).unwrap();
         assert_eq!(components.as_slice(), [target, unit]);
         assert!(tycker.errors.is_empty());
@@ -35,11 +35,11 @@ fn prepared_annotations_survive_lexical_environment_extensions() {
         let empty = TyEnv::default();
         let vtype = ss::VType.build(tycker, &empty);
         let unit = ss::UnitTy.build(tycker, &empty);
-        let source_def: ss::DefId = tycker.fresh();
-        let target_def: ss::DefId = tycker.fresh();
-        let inner_def: ss::DefId = tycker.fresh();
-        let source: ss::TypeId = Alloc::alloc(tycker, source_def, vtype, &empty);
-        let target: ss::TypeId = Alloc::alloc(tycker, target_def, vtype, &empty);
+        let source_def: ss::DefId = tycker.fresh_def();
+        let target_def: ss::DefId = tycker.fresh_def();
+        let inner_def: ss::DefId = tycker.fresh_def();
+        let source: ss::TypeId = Alloc::alloc(tycker, source_def, vtype, &());
+        let target: ss::TypeId = Alloc::alloc(tycker, target_def, vtype, &());
         let prepared_environment =
             TyEnv::from_iter([(source_def, target.into()), (target_def, unit.into())]);
         let prepared = source.subst_env(tycker, &prepared_environment).unwrap();
@@ -62,7 +62,7 @@ fn forall_bodies_preserve_prepared_expected_types() {
     with_tycker(
         |allocator, scoped| {
             let binder_def: su::DefId = allocator.alloc();
-            scoped.insert_def(binder_def, su::VarName("A".to_owned()));
+            scoped.insert_def(binder_def, su::VarName::new("A"));
 
             let binder: su::PatId = allocator.alloc();
             let body: su::TermId = allocator.alloc();
@@ -76,12 +76,11 @@ fn forall_bodies_preserve_prepared_expected_types() {
             let empty = TyEnv::default();
             let vtype = ss::VType.build(tycker, &empty);
             let ctype = ss::CType.build(tycker, &empty);
-            let target_def: ss::DefId = tycker.fresh();
-            let target: ss::TypeId = Alloc::alloc(tycker, target_def, ctype, &empty);
-            let terminal_data: ss::CoDataId = tycker.fresh();
-            tycker.statics.codatas.insert_new(terminal_data, ss::CoData::new([]));
-            let terminal = Alloc::alloc(tycker, terminal_data, ctype, &empty);
-            let expected_pattern: ss::TPatId = Alloc::alloc(tycker, binder_def, vtype, &empty);
+            let target_def: ss::DefId = tycker.fresh_def();
+            let target: ss::TypeId = Alloc::alloc(tycker, target_def, ctype, &());
+            let terminal_data: ss::CoDataId = tycker.statics.codatas.alloc(ss::CoData::new([]));
+            let terminal = Alloc::alloc(tycker, terminal_data, ctype, &());
+            let expected_pattern: ss::TPatId = Alloc::alloc(tycker, binder_def, vtype, &());
             let expected_witness: ss::AbstId = Alloc::alloc(tycker, expected_pattern, (), &());
             let expected = Alloc::alloc(
                 tycker,
@@ -90,7 +89,7 @@ fn forall_bodies_preserve_prepared_expected_types() {
                     target,
                 ),
                 ctype,
-                &empty,
+                &(),
             );
             let environment = TyEnv::from_iter([(target_def, terminal.into())]);
             let root = tycker.data.root(tycker.db);
@@ -123,24 +122,19 @@ fn checked_type_applications_suspend_function_kinded_prefixes() {
         let function_kind = Alloc::alloc(tycker, ss::Arrow(vtype, result_kind), (), &());
         let first = anonymous_type_binder(tycker, vtype, &environment);
         let second = anonymous_type_binder(tycker, vtype, &environment);
-        let first_type = Alloc::alloc(tycker, first.witness, vtype, &environment);
-        let second_type = Alloc::alloc(tycker, second.witness, vtype, &environment);
-        let body =
-            Alloc::alloc(tycker, ss::Prod(vec![first_type, second_type]), vtype, &environment);
-        let inner = Alloc::alloc(
-            tycker,
-            ss::TypeAbstraction { binder: second, body },
-            result_kind,
-            &environment,
-        );
+        let first_type = Alloc::alloc(tycker, first.witness, vtype, &());
+        let second_type = Alloc::alloc(tycker, second.witness, vtype, &());
+        let body = Alloc::alloc(tycker, ss::Prod(vec![first_type, second_type]), vtype, &());
+        let inner =
+            Alloc::alloc(tycker, ss::TypeAbstraction { binder: second, body }, result_kind, &());
         let function = Alloc::alloc(
             tycker,
             ss::TypeAbstraction { binder: first, body: inner },
             function_kind,
-            &environment,
+            &(),
         );
-        let first_argument = Alloc::alloc(tycker, ss::UnitTy, vtype, &environment);
-        let second_argument = Alloc::alloc(tycker, ss::OpaqueTy, vtype, &environment);
+        let first_argument = Alloc::alloc(tycker, ss::UnitTy, vtype, &());
+        let second_argument = Alloc::alloc(tycker, ss::OpaqueTy, vtype, &());
 
         let partial = function.apply_type_argument(tycker, first_argument, result_kind).unwrap();
         assert!(matches!(
@@ -170,8 +164,8 @@ fn synthesized_ascriptions_preserve_current_annotations() {
         |allocator, scoped| {
             let source_def = allocator.alloc();
             let target_def = allocator.alloc();
-            scoped.insert_def(source_def, su::VarName("Source".to_owned()));
-            scoped.insert_def(target_def, su::VarName("Target".to_owned()));
+            scoped.insert_def(source_def, su::VarName::new("Source"));
+            scoped.insert_def(target_def, su::VarName::new("Target"));
 
             let hole = allocator.alloc();
             let annotation = allocator.alloc();
@@ -185,10 +179,9 @@ fn synthesized_ascriptions_preserve_current_annotations() {
             let empty = TyEnv::default();
             let vtype = ss::VType.build(tycker, &empty);
             let unit = ss::UnitTy.build(tycker, &empty);
-            let target = Alloc::alloc(tycker, target_def, vtype, &empty);
-            let field = FieldName("field".to_owned());
-            let annotation: ss::TypeId =
-                Alloc::alloc(tycker, ss::Label(field, target), vtype, &empty);
+            let target = Alloc::alloc(tycker, target_def, vtype, &());
+            let field = FieldName::new("field");
+            let annotation: ss::TypeId = Alloc::alloc(tycker, ss::Label(field, target), vtype, &());
             tycker.statics.annotations_var.insert_new(source_def, vtype.into());
             let environment =
                 TyEnv::from_iter([(source_def, annotation.into()), (target_def, unit.into())]);

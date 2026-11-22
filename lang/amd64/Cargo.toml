@@ -12,7 +12,7 @@ description = "amd64 support for zydeco"
 [dependencies]
 strum = { workspace = true }
 zydeco-machine = { workspace = true }
-zydeco-utils = { workspace = true }
+zydeco-foundation = { workspace = true }
 zydeco-syntax = { workspace = true }
 zydeco-stackir = { workspace = true }
 zydeco-assembly = { workspace = true }

@@ -425,7 +425,7 @@ fn expected_definitions_are_reported_with_the_canonical_def_spelling() {
     let source = "let value = 1 in";
     let error = crate::textual::ParseError {
         error: StrictParser::source(source, &mut Parser::new()).unwrap_err(),
-        file_map: zydeco_utils::span::FileMap::local(source, None),
+        file_map: zydeco_foundation::span::FileMap::local(source, None),
     };
     let ParseIssueKind::UnrecognizedEof { expected } = &error.error.primary().kind else {
         panic!("a missing body ends the input early")
@@ -438,6 +438,10 @@ fn expected_definitions_are_reported_with_the_canonical_def_spelling() {
         StrictParser::source("let value = 1 in def copy = value in copy", &mut Parser::new())
             .is_ok()
     );
+    assert!(StrictParser::source("let define = 1 in define", &mut Parser::new()).is_ok());
+    assert!(StrictParser::source("define value = 1 in value", &mut Parser::new()).is_err());
+    assert!(StrictParser::source("comatch | .run => ret () end", &mut Parser::new()).is_ok());
+    assert!(StrictParser::source("comatch x => ret x end", &mut Parser::new()).is_err());
 }
 
 #[test]

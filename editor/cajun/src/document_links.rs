@@ -1,12 +1,12 @@
 use std::path::{Path, PathBuf};
 
 use tower_lsp::lsp_types::{DocumentLink, Position, Range, Url};
+use zydeco_foundation::span::{FileMap, LineCol};
 use zydeco_session::{
     SourceGraph,
     source::{PackageInstance, PackageInstanceId, SourceTemplate},
 };
 use zydeco_surface::textual::{ImportSite, ImportTarget, LexicalRole, LexicalTokens, syntax as t};
-use zydeco_utils::span::{FileMap, LineCol};
 
 /// Filesystem import links derived from one compiler source graph.
 pub(crate) struct ImportDocumentLinks<'graph> {
@@ -150,9 +150,9 @@ mod tests {
     use super::ImportDocumentLinks;
     use std::sync::Arc;
     use tower_lsp::lsp_types::{Position, Range, Url};
+    use zydeco_foundation::span::{FileMap, LineCol};
     use zydeco_session::CompilerSession;
     use zydeco_surface::textual::SourceNumber;
-    use zydeco_utils::span::{FileMap, LineCol};
 
     fn source_range(source: &str, text: &str) -> Range {
         let start = source.find(text).unwrap();

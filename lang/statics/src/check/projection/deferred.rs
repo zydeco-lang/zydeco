@@ -3,8 +3,10 @@
 use super::*;
 
 impl DeferredEnvMaterializationKey {
-    fn new(root: ss::TypeId, environment: &ss::TyEnv, operation: DeferredEnvOperation) -> Self {
-        Self { root, environment: environment.clone(), operation }
+    fn new(
+        root: ss::TypeId, environment: std::sync::Arc<ss::TyEnv>, operation: DeferredEnvOperation,
+    ) -> Self {
+        Self { root, environment, operation }
     }
 }
 
@@ -17,21 +19,37 @@ impl DeferredEnvMaterializationCache {
         self.entries.insert(key, materialized);
     }
 
+    pub(super) fn field_index(
+        &self, key: &(ss::TypeId, std::sync::Arc<ss::TyEnv>),
+    ) -> Option<std::sync::Arc<FieldIndex>> {
+        self.field_indexes.get(key).cloned()
+    }
+
+    pub(super) fn insert_field_index(
+        &mut self, key: (ss::TypeId, std::sync::Arc<ss::TyEnv>), index: std::sync::Arc<FieldIndex>,
+    ) {
+        self.field_indexes.insert(key, index);
+    }
+
     pub(in crate::check) fn clear(&mut self) {
         self.entries.clear();
+        self.field_indexes.clear();
     }
 }
 
 impl DeferredEnvType {
+    #[cfg(test)]
     pub(in crate::check) fn with_environment(root: ss::TypeId, environment: &ss::TyEnv) -> Self {
-        Self {
-            root,
-            environment: environment.clone(),
-            pending: Some(DeferredEnvOperation::UnrollThenSubstitute),
-        }
+        Self::with_shared_environment(root, std::sync::Arc::new(environment.clone()))
     }
 
-    fn materialized(root: ss::TypeId, environment: ss::TyEnv) -> Self {
+    pub(in crate::check) fn with_shared_environment(
+        root: ss::TypeId, environment: std::sync::Arc<ss::TyEnv>,
+    ) -> Self {
+        Self { root, environment, pending: Some(DeferredEnvOperation::UnrollThenSubstitute) }
+    }
+
+    fn materialized(root: ss::TypeId, environment: std::sync::Arc<ss::TyEnv>) -> Self {
         Self { root, environment, pending: None }
     }
 
@@ -42,7 +60,8 @@ impl DeferredEnvType {
 
     pub(in crate::check) fn materialize(&self, tycker: &mut Tycker<'_>) -> Result<ss::TypeId> {
         let Some(operation) = self.pending else { return Ok(self.root) };
-        let key = DeferredEnvMaterializationKey::new(self.root, &self.environment, operation);
+        let key =
+            DeferredEnvMaterializationKey::new(self.root, self.environment.clone(), operation);
         if let Some(materialized) = tycker.field_materializations.get(&key) {
             return Ok(materialized);
         }

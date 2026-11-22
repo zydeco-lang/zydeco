@@ -26,23 +26,9 @@ impl TermChecker<'_> {
                     Ok((name, ty))
                 })
                 .collect_reported::<Vec<_>>()?;
-            let arms_interned = crate::query::InternedDataArms::new(tycker.db, arms);
-            let kd_interned = crate::query::InternedKind::new(tycker.db, vtype);
-            let outcome = tycker.judge(
-                self.inner,
-                (arms_interned, kd_interned),
-                |db, data, term, (arms, kd), occurrence| {
-                    crate::query::data_syn_judgment(db, data, term, arms, kd, occurrence)
-                },
-            );
-            tycker.statics.datas.insert_new(outcome.data_id, outcome.data);
-            tycker.statics.types_pre.insert_new(
-                outcome.ty_id,
-                ss::Fillable::Done(outcome.ty),
-                outcome.kd,
-            );
-            tycker.store_env(outcome.ty_id, &self.info);
-            TermAnnId::Type(outcome.ty_id, outcome.kd)
+            let data_id = tycker.statics.datas.alloc(ss::Data::new(arms));
+            let ty_id = Alloc::alloc(tycker, data_id, vtype, &());
+            TermAnnId::Type(ty_id, vtype)
         })
     }
 
@@ -69,23 +55,9 @@ impl TermChecker<'_> {
                     Ok((name, ty))
                 })
                 .collect_reported::<Vec<_>>()?;
-            let arms_interned = crate::query::InternedCoDataArms::new(tycker.db, arms);
-            let kd_interned = crate::query::InternedKind::new(tycker.db, ctype);
-            let outcome = tycker.judge(
-                self.inner,
-                (arms_interned, kd_interned),
-                |db, data, term, (arms, kd), occurrence| {
-                    crate::query::codata_syn_judgment(db, data, term, arms, kd, occurrence)
-                },
-            );
-            tycker.statics.codatas.insert_new(outcome.codata_id, outcome.codata);
-            tycker.statics.types_pre.insert_new(
-                outcome.ty_id,
-                ss::Fillable::Done(outcome.ty),
-                outcome.kd,
-            );
-            tycker.store_env(outcome.ty_id, &self.info);
-            TermAnnId::Type(outcome.ty_id, outcome.kd)
+            let codata_id = tycker.statics.codatas.alloc(ss::CoData::new(arms));
+            let ty_id = Alloc::alloc(tycker, codata_id, ctype, &());
+            TermAnnId::Type(ty_id, ctype)
         })
     }
 
@@ -109,24 +81,14 @@ impl TermChecker<'_> {
             };
             let arg_ty = match tycker.statics.datas[&data_id].get(&ctor) {
                 | Some(ty) => ty.to_owned(),
-                | None => tycker.err(TyckError::UnknownDataConstructor(ctor.clone()))?,
+                | None => tycker.err(TyckError::UnknownDataConstructor(ctor))?,
             };
             let arg_out_ann = self.mk(arg).tyck(tycker, Action::ana(arg_ty.into()))?;
             let TermAnnId::Value(arg, _arg_ty) = arg_out_ann else { unreachable!() };
-            let input = crate::query::InternedCtorInput::new(
-                tycker.db,
-                ctor.to_owned(),
-                arg,
-                ana_ty,
-                data_id,
-            );
-            let outcome = tycker.judge(self.inner, input, crate::query::ctor_syn_judgment);
-            tycker.statics.values.insert_new(outcome.id, outcome.value);
-            tycker.statics.annotations_value.insert_new(outcome.id, outcome.ann);
-            tycker.statics.env_value.insert_new(outcome.id, self.info.clone());
+            let id = Alloc::alloc(tycker, ss::Ctor(ctor, arg), ana_ty, &());
             // hint the ctor to be associated with the definition name
-            tycker.statics.data_hints.insert_new(outcome.id, data_id);
-            TermAnnId::Value(outcome.id, outcome.ann)
+            tycker.statics.data_hints.insert_new(id, data_id);
+            TermAnnId::Value(id, ana_ty)
         })
     }
 
@@ -164,7 +126,7 @@ impl TermChecker<'_> {
                         | _ => tycker.err(TyckError::SortMismatch)?,
                     };
                     let joined = tycker.guarded(|tycker| {
-                        tycker.tasks.push_back_mut(TyckTask::Term(source_tail, switch));
+                        tycker.tasks.push(TyckTask::Term(source_tail, switch));
                         binding.close_scope(tycker, ty)?;
                         match result_type {
                             | Some(previous) => Lub::lub(previous, ty, tycker),
@@ -191,12 +153,8 @@ impl TermChecker<'_> {
                         ss::Matcher { binder, tail }
                     })
                     .collect();
-                let value = Alloc::alloc(
-                    tycker,
-                    ss::Value::Match(ss::Match { scrut, arms }),
-                    ty,
-                    &self.info,
-                );
+                let value =
+                    Alloc::alloc(tycker, ss::Value::Match(ss::Match { scrut, arms }), ty, &());
                 TermAnnId::Value(value, ty)
             } else {
                 let arms: Vec<_> = matchers
@@ -205,15 +163,11 @@ impl TermChecker<'_> {
                         let TermAnnId::Compu(tail, _) = tail else {
                             unreachable!("arm classifiers have the same kind")
                         };
-                        (binder, tail)
+                        ss::Matcher { binder, tail }
                     })
                     .collect();
-                let input = crate::query::InternedMatchInput::new(tycker.db, scrut, arms, ty);
-                let outcome = tycker.judge(self.inner, input, crate::query::match_syn_judgment);
-                tycker.statics.compus.insert_new(outcome.id, outcome.compu);
-                tycker.statics.annotations_compu.insert_new(outcome.id, outcome.ann);
-                tycker.statics.env_compu.insert_new(outcome.id, self.info.clone());
-                TermAnnId::Compu(outcome.id, outcome.ann)
+                let id = Alloc::alloc(tycker, ss::Match { scrut, arms }, ty, &());
+                TermAnnId::Compu(id, ty)
             }
         })
     }
@@ -261,7 +215,7 @@ impl TermChecker<'_> {
                 .map(|su::CoMatcher { dtor, tail }| {
                     let arm_ty = match arms.get(&dtor) {
                         | Some(arm_ty) => arm_ty,
-                        | None => tycker.err(TyckError::UnknownCoDataDestructor(dtor.clone()))?,
+                        | None => tycker.err(TyckError::UnknownCoDataDestructor(dtor))?,
                     };
                     let tail_out_ann = self.mk(tail).tyck(tycker, Action::ana(arm_ty.into()))?;
                     let TermAnnId::Compu(tail, _ty) = tail_out_ann else {
@@ -270,21 +224,10 @@ impl TermChecker<'_> {
                     Ok(ss::CoMatcher { dtor, tail })
                 })
                 .collect_reported::<Vec<_>>()?;
-            let input = crate::query::InternedCoMatchInput::new(
-                tycker.db,
-                comatchers_new
-                    .iter()
-                    .map(|comatcher| (comatcher.dtor.clone(), comatcher.tail))
-                    .collect::<Vec<_>>(),
-                ana_ty,
-            );
-            let outcome = tycker.judge(self.inner, input, crate::query::comatch_syn_judgment);
-            tycker.statics.compus.insert_new(outcome.id, outcome.compu);
-            tycker.statics.annotations_compu.insert_new(outcome.id, outcome.ann);
-            tycker.statics.env_compu.insert_new(outcome.id, self.info.clone());
+            let id = Alloc::alloc(tycker, ss::CoMatch { arms: comatchers_new }, ana_ty, &());
             // hint the whole computation to be associated with the codata type
-            tycker.statics.codata_hints.insert_new(outcome.id, codata_id);
-            TermAnnId::Compu(outcome.id, outcome.ann)
+            tycker.statics.codata_hints.insert_new(id, codata_id);
+            TermAnnId::Compu(id, ana_ty)
         })
     }
 
@@ -309,28 +252,18 @@ impl TermChecker<'_> {
             let _ = tycker.statics.codata_hints.upsert(body, codata_id);
             let whole_ty = match tycker.statics.codatas[&codata_id].get(&dtor) {
                 | Some(ty) => ty.to_owned(),
-                | None => tycker.err(TyckError::UnknownCoDataDestructor(dtor.clone()))?,
+                | None => tycker.err(TyckError::UnknownCoDataDestructor(dtor))?,
             };
             match switch {
                 | Switch::Syn => {
-                    let input =
-                        crate::query::InternedDtorInput::new(tycker.db, body, dtor, whole_ty);
-                    let outcome = tycker.judge(self.inner, input, crate::query::dtor_syn_judgment);
-                    tycker.statics.compus.insert_new(outcome.id, outcome.compu);
-                    tycker.statics.annotations_compu.insert_new(outcome.id, outcome.ann);
-                    tycker.statics.env_compu.insert_new(outcome.id, self.info.clone());
-                    TermAnnId::Compu(outcome.id, outcome.ann)
+                    let id = Alloc::alloc(tycker, ss::Dtor(body, dtor), whole_ty, &());
+                    TermAnnId::Compu(id, whole_ty)
                 }
                 | Switch::Ana(ana) => {
                     let AnnId::Type(ana_ty) = ana else { tycker.err(TyckError::SortMismatch)? };
                     let whole_ty = Lub::lub(ana_ty, whole_ty, tycker)?;
-                    let input =
-                        crate::query::InternedDtorInput::new(tycker.db, body, dtor, whole_ty);
-                    let outcome = tycker.judge(self.inner, input, crate::query::dtor_syn_judgment);
-                    tycker.statics.compus.insert_new(outcome.id, outcome.compu);
-                    tycker.statics.annotations_compu.insert_new(outcome.id, outcome.ann);
-                    tycker.statics.env_compu.insert_new(outcome.id, self.info.clone());
-                    TermAnnId::Compu(outcome.id, outcome.ann)
+                    let id = Alloc::alloc(tycker, ss::Dtor(body, dtor), whole_ty, &());
+                    TermAnnId::Compu(id, whole_ty)
                 }
             }
         })

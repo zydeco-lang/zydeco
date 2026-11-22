@@ -38,14 +38,6 @@ trait RuntimeInteger: Copy {
     fn decode(value: Word) -> Self;
     fn encode(self) -> Word;
 
-    fn encode_wrapping(value: Self, _spare: *mut Word) -> Word {
-        value.wrap().encode()
-    }
-
-    fn wrap(self) -> Self {
-        self
-    }
-
     fn out_of_range() -> ! {
         let _ = writeln!(
             std::io::stderr().lock(),
@@ -103,10 +95,6 @@ impl RuntimeInteger for i64 {
     fn encode(self) -> Word {
         Immediate::signed(self).unwrap_or_else(|| Self::out_of_range())
     }
-
-    fn wrap(self) -> Self {
-        RuntimeWord::wrap_signed(self)
-    }
 }
 
 impl RuntimeInteger for u64 {
@@ -119,10 +107,6 @@ impl RuntimeInteger for u64 {
             .ok()
             .and_then(Immediate::unsigned)
             .unwrap_or_else(|| Self::out_of_range())
-    }
-
-    fn wrap(self) -> Self {
-        RuntimeWord::wrap_unsigned(self)
     }
 }
 
@@ -139,10 +123,6 @@ macro_rules! boxed_integer {
 
             fn encode(value: $raw, spare: *mut Word) -> Word {
                 OpaqueScalar::store(spare, value as Word)
-            }
-
-            fn encode_wrapping(value: $raw, spare: *mut Word) -> Word {
-                Self::encode(value, spare)
             }
         }
     };
@@ -197,10 +177,6 @@ impl HostFloat64 {
     fn decode(word: Word) -> f64 {
         f64::from_bits(OpaqueScalar::load(word) as u64)
     }
-
-    fn encode(value: f64, spare: *mut Word) -> Word {
-        OpaqueScalar::store(spare, value.to_bits() as Word)
-    }
 }
 
 struct HostFloat32;
@@ -208,10 +184,6 @@ struct HostFloat32;
 impl HostFloat32 {
     fn decode(word: Word) -> f32 {
         f32::from_bits(Immediate::decode_unsigned(word) as u32)
-    }
-
-    fn encode(value: f32, _spare: *mut Word) -> Word {
-        Immediate::expect_unsigned(value.to_bits() as Word)
     }
 }
 
@@ -639,81 +611,6 @@ extern "sysv64" fn zydeco_str_get_branch(
     }
 }
 
-// Optional normalization may leave arithmetic calls intact. These entries obey
-// the same wrapping/trapping contracts as emitted primitives.
-macro_rules! integer_arithmetic {
-    ($type:ty, [$($extra:tt)*], $spare:expr;
-        $add:ident, $sub:ident, $mul:ident, $div:ident, $rem:ident) => {
-        #[unsafe(export_name = concat!("\x01", stringify!($add)))]
-        extern "sysv64" fn $add(first: Word, second: Word $($extra)*) -> Word {
-            <$type>::encode_wrapping(
-                <$type>::decode(first).wrapping_add(<$type>::decode(second)), $spare,
-            )
-        }
-        #[unsafe(export_name = concat!("\x01", stringify!($sub)))]
-        extern "sysv64" fn $sub(first: Word, second: Word $($extra)*) -> Word {
-            <$type>::encode_wrapping(
-                <$type>::decode(first).wrapping_sub(<$type>::decode(second)), $spare,
-            )
-        }
-        #[unsafe(export_name = concat!("\x01", stringify!($mul)))]
-        extern "sysv64" fn $mul(first: Word, second: Word $($extra)*) -> Word {
-            <$type>::encode_wrapping(
-                <$type>::decode(first).wrapping_mul(<$type>::decode(second)), $spare,
-            )
-        }
-        #[unsafe(export_name = concat!("\x01", stringify!($div)))]
-        extern "sysv64" fn $div(first: Word, second: Word $($extra)*) -> Word {
-            let first = <$type>::decode(first);
-            let second = <$type>::decode(second);
-            if second == 0 {
-                zydeco_integer_division_by_zero();
-            }
-            <$type>::encode_wrapping(first.wrapping_div(second), $spare)
-        }
-        #[unsafe(export_name = concat!("\x01", stringify!($rem)))]
-        extern "sysv64" fn $rem(first: Word, second: Word $($extra)*) -> Word {
-            let first = <$type>::decode(first);
-            let second = <$type>::decode(second);
-            if second == 0 {
-                zydeco_integer_remainder_by_zero();
-            }
-            <$type>::encode_wrapping(first.wrapping_rem(second), $spare)
-        }
-    };
-}
-
-integer_arithmetic!(i8, [], std::ptr::null_mut(); zydeco_int8_add, zydeco_int8_sub, zydeco_int8_mul, zydeco_int8_div, zydeco_int8_mod);
-integer_arithmetic!(i16, [], std::ptr::null_mut(); zydeco_int16_add, zydeco_int16_sub, zydeco_int16_mul, zydeco_int16_div, zydeco_int16_mod);
-integer_arithmetic!(i32, [], std::ptr::null_mut(); zydeco_int32_add, zydeco_int32_sub, zydeco_int32_mul, zydeco_int32_div, zydeco_int32_mod);
-integer_arithmetic!(i64, [], std::ptr::null_mut(); zydeco_int_add, zydeco_int_sub, zydeco_int_mul, zydeco_int_div, zydeco_int_mod);
-integer_arithmetic!(u8, [], std::ptr::null_mut(); zydeco_uint8_add, zydeco_uint8_sub, zydeco_uint8_mul, zydeco_uint8_div, zydeco_uint8_mod);
-integer_arithmetic!(u16, [], std::ptr::null_mut(); zydeco_uint16_add, zydeco_uint16_sub, zydeco_uint16_mul, zydeco_uint16_div, zydeco_uint16_mod);
-integer_arithmetic!(u32, [], std::ptr::null_mut(); zydeco_uint32_add, zydeco_uint32_sub, zydeco_uint32_mul, zydeco_uint32_div, zydeco_uint32_mod);
-integer_arithmetic!(u64, [], std::ptr::null_mut(); zydeco_uint_add, zydeco_uint_sub, zydeco_uint_mul, zydeco_uint_div, zydeco_uint_mod);
-
-integer_arithmetic!(HostInt64, [, spare: *mut Word], spare; zydeco_int64_add, zydeco_int64_sub, zydeco_int64_mul, zydeco_int64_div, zydeco_int64_mod);
-integer_arithmetic!(HostUInt64, [, spare: *mut Word], spare; zydeco_uint64_add, zydeco_uint64_sub, zydeco_uint64_mul, zydeco_uint64_div, zydeco_uint64_mod);
-
-macro_rules! float_arithmetic {
-    ($host:ty, $extra:tt, $spare:expr; $( $name:ident => $operation:tt ),+ $(,)?) => {
-        $(
-            float_arithmetic!(@one $host, $extra, $spare; $name => $operation);
-        )+
-    };
-    (@one $host:ty, [$($extra:tt)*], $spare:expr; $name:ident => $operation:tt) => {
-        #[unsafe(export_name = concat!("\x01", stringify!($name)))]
-        extern "sysv64" fn $name(first: Word, second: Word $($extra)*) -> Word {
-            <$host>::encode(<$host>::decode(first) $operation <$host>::decode(second), $spare)
-        }
-    };
-}
-
-float_arithmetic!(HostFloat32, [], std::ptr::null_mut();
-    zydeco_float32_add => +, zydeco_float32_sub => -, zydeco_float32_mul => *, zydeco_float32_div => /);
-float_arithmetic!(HostFloat64, [, spare: *mut Word], spare;
-    zydeco_float64_add => +, zydeco_float64_sub => -, zydeco_float64_mul => *, zydeco_float64_div => /);
-
 macro_rules! integer_render {
     ($type:ty, $to_string:ident => $symbol:literal) => {
         #[unsafe(export_name = $symbol)]
@@ -1034,8 +931,17 @@ extern "sysv64" fn zydeco_arg_at(index: Word, when_none: Word, when_some: Word) 
 
 #[unsafe(export_name = "\x01zydeco_random_int")]
 extern "sysv64" fn zydeco_random_int(continuation: Word) -> Word {
-    use rand::RngExt;
-    let integer = rand::rng().random_range(RuntimeWord::SIGNED_MIN..=RuntimeWord::SIGNED_MAX);
+    use std::io::Read;
+    let mut bytes = [0_u8; 8];
+    let Ok(mut urandom) = std::fs::File::open("/dev/urandom") else {
+        let _ = writeln!(std::io::stderr().lock(), "Zydeco runtime: cannot open /dev/urandom");
+        std::process::exit(1);
+    };
+    if urandom.read_exact(&mut bytes).is_err() {
+        let _ = writeln!(std::io::stderr().lock(), "Zydeco runtime: cannot read /dev/urandom");
+        std::process::exit(1);
+    }
+    let integer = RuntimeWord::wrap_signed(i64::from_ne_bytes(bytes));
     HostControl::with_one_argument(continuation, integer.encode())
 }
 
@@ -1158,6 +1064,12 @@ extern "sysv64" fn entry_box(stack_start: *mut Word) -> *mut Word {
     unsafe { (&mut *RuntimeInstance::heap()).allocate(1, AllocationKind::Opaque, roots) }
         .unwrap_or_else(|error| out_of_memory(error))
         .cast()
+}
+
+#[cfg(feature = "process-entry")]
+#[unsafe(export_name = "\x01zydeco_run_process")]
+pub extern "C" fn zydeco_run_process() {
+    run_process();
 }
 
 #[cfg(feature = "process-entry")]

@@ -1,6 +1,6 @@
 use tower_lsp::lsp_types::{Position, Range, TextEdit};
+use zydeco_foundation::span::{FileMap, LineCol};
 use zydeco_surface::textual::{StrictParser, fmt::PrettyFormatter, syntax::Parser};
-use zydeco_utils::span::{FileMap, LineCol};
 
 /// One complete outcome of a whole-document formatting request.
 #[derive(Clone, Debug, PartialEq)]

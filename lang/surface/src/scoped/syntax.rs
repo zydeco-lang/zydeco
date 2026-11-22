@@ -8,7 +8,7 @@ pub use crate::textual::syntax::SpanArena;
 /// The term site that contributed a binding to a contextual term.
 pub type BindingId = TermId;
 
-zydeco_utils::new_key_type! {
+zydeco_foundation::new_key_type! {
     /// Identifier for a node in the condensation DAG of context bindings.
     pub struct ContextNodeId;
 }
@@ -98,9 +98,9 @@ pub struct BlockBody {
 /* --------------------------------- Context -------------------------------- */
 
 /// Context is what variables we *can use* at a given term site.
-pub type Context = zydeco_utils::context::Context<DefId>;
+pub type Context = zydeco_foundation::context::Context<DefId>;
 
 /* -------------------------------- CoContext ------------------------------- */
 
 /// CoContext is what variables we *have used* at a given term site.
-pub type CoContext = zydeco_utils::context::CoContext<DefId>;
+pub type CoContext = zydeco_foundation::context::CoContext<DefId>;

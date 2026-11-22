@@ -3,11 +3,11 @@
 use crate::{arena::StaticsArena, syntax as ss};
 use std::collections::HashSet;
 use thiserror::Error;
+use zydeco_foundation::prelude::ArenaAccess;
 use zydeco_syntax::{
     App, Arrow, BuiltinRole, BuiltinTypeRole, ForeignImport, ForeignParameter, ForeignResult,
     ForeignSignature, ForeignSignatureError, ForeignTarget, Named, PrimitiveType,
 };
-use zydeco_utils::prelude::ArenaAccess;
 
 /// A foreign annotation whose classifier is outside its implemented entry profile.
 #[derive(Clone, Debug, Error)]

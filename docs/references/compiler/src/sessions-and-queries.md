@@ -130,36 +130,29 @@ Individual malformed directives may stop at their first local error until a furt
 
 ## Query and Checker Ownership
 
-Allocation-producing syntax judgments are producer queries: they return node identities
-and immutable outcomes from explicit inputs.
-The checker inserts those outcomes into its materialized arena.
-The [intrinsic singleton query](../../../../lang/statics/src/query/intrinsic.rs) derives identities
-from a synthetic check-wide site, independent of the first source occurrence naming an intrinsic.
-`Tycker::new` materializes those singletons and retains their complete `IntrinsicStatics` identities
-for construction during checking.
-Finished arenas retain the nodes while dropping this construction-only table.
-Unification, fill resolution, substitutions, opening of a packed value, copattern elaboration,
-and recursive-group processing retain a checker-owned algorithmic core.
-Their intermediate results depend on mutable inference state; replaying a site alone cannot reconstruct that state.
-
-A cached node must therefore be distinguished from a pure source-to-judgment function.
-Per-call arena snapshots would make query keys expensive and defeat reuse;
-a tracked mirror does not make an arbitrary table cell reconstructible from its site.
-A worklist redesign of the solver would be a separate algorithmic change.
-The current boundary gives producers replay-stable identities through the [session identity registry](compiler-data.md)
-while letting inference retain its sequential state.
-C5 defines the publication boundary after that state stops changing.
+`CompilerSession` tracks coarse source-level queries (`load_source`, `parse_source`,
+`check_source`, `check_library`, and `check_unit`) rather than fine-grained per-AST-node Salsa leaf queries.
+`Tycker::new` allocates shared intrinsic singletons directly into a fresh `StaticsArena`
+via [`IntrinsicStatics`](../../../../lang/statics/src/check/intrinsics.rs),
+and uses a root-keyed `DefGenAllocator` (`KeySpaceRegistry<su::TermId>`) for generated `DefId`s.
+Checking, unification, fill resolution, substitutions, opening of packed values, copattern elaboration,
+and monadic/static elaboration all execute directly inside one mutable `Tycker` pass over `ScopedData`.
+Unfinished intermediate state (`fill_trail`, `tasks`, `lub_cache`,
+`field_materializations`) stays inside `Tycker` without per-node Salsa keys or mirrored arena tables,
+and `Tycker::strip_checker_state` releases construction-only kind-interning indexes
+before publishing the `Arc<StaticsArena>`.
+C5 defines the publication and finalization boundary once inference closes.
 
 ## Analysis Facts and Materialization
 
-`analyze_source` retains `StaticsArena::clone_keyed_indexes()` in `ProgramAnalysis`.
+`analyze_source` retains keyed indexes extracted from `StaticsArena` in `ProgramAnalysis`.
 That analysis is a source and fact snapshot, not a complete typed tree.
 
 | Retained keyed information | Transient occurrence payload |
 | --- | --- |
 | Definition annotations, bodies, alias entry points, and intrinsic roles | Typed values, computations, and patterns |
 | Fill sites, solutions, scopes, and abstract identities | Per-occurrence kinds and types |
-| Data/codata definitions, term facts, normalized top annotations, and provenance indexes | Derived node columns needed during full-tree traversal |
+| Data/codata definitions, term facts, normalized top annotations, and provenance indexes | Checker-only unification state and `TypeArena` kind indexes |
 
 Retained facts support random access by semantic identity where recovery would require a regional recheck.
 Occurrence payload is materialized for full traversal; retaining it longer requires a measured consumer benefit.
@@ -170,13 +163,14 @@ or `executable_program`, which recover the arena through the coarse check.
 Materialization uses the session's current inputs, so callers must pair an analysis
 with the matching session revision or snapshot.
 Live consumers share the complete arena through `Arc`; lowerers add phase-local metadata instead of cloning it.
-Checker-only state, including per-node typing environments, is stripped before full-arena publication.
+Checker-only indexes (`TypeArena::strip_kind_index`) and transient `Tycker` state are dropped
+before full-arena publication.
 Cajun may keep a project's materialization alive while that project is in use.
 
 `check_source` has a one-entry LRU configuration.
 The test session pool explicitly triggers eviction between analyses and periodically replaces its database generation.
-Fine-grained judgment memos have a different lifetime from the full arena;
-dropping an analysis alone does not promise reclamation of all database storage.
+Coarse queries avoid per-node Salsa memo retention overhead
+while deterministic `DefGenAllocator` spaces preserve definition identities across re-materialization.
 [Retention questions](../../../ideas/README.md#compiler-memory-retention) concern memo lifetime,
 compact facts, and parsed-source storage.
 [Session tests](../../../../lang/session/src/source/tests.rs) and query tests check facts after eviction,

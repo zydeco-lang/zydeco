@@ -7,29 +7,29 @@ use crate::{
     syntax::AssemblyProgram,
 };
 use std::convert::Infallible;
+use zydeco_foundation::{pass::CompilerPass, pipeline};
 use zydeco_stackir::SpsLowProgram;
-use zydeco_statics::arena::StaticsArena;
-use zydeco_surface::scoped::arena::ScopedArena;
-use zydeco_utils::{pass::CompilerPass, pipeline};
 
 /// Lower Stack IR and establish the stack-layout invariants required by backends.
-pub struct LoweringPipeline<'a, P = Local> {
-    scoped: &'a ScopedArena,
-    statics: &'a StaticsArena,
+pub struct LoweringPipeline<P = Local> {
     policy: P,
 }
 
-impl<'a> LoweringPipeline<'a> {
-    pub fn new(scoped: &'a ScopedArena, statics: &'a StaticsArena) -> Self {
-        Self { scoped, statics, policy: Local }
+impl LoweringPipeline {
+    pub fn new() -> Self {
+        Self { policy: Local }
     }
 }
 
-impl<'a, P: RepresentationPolicy> LoweringPipeline<'a, P> {
-    pub fn with_representation<Q: RepresentationPolicy>(
-        self, policy: Q,
-    ) -> LoweringPipeline<'a, Q> {
-        LoweringPipeline { scoped: self.scoped, statics: self.statics, policy }
+impl Default for LoweringPipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<P: RepresentationPolicy> LoweringPipeline<P> {
+    pub fn with_representation<Q: RepresentationPolicy>(self, policy: Q) -> LoweringPipeline<Q> {
+        LoweringPipeline { policy }
     }
 
     /// Select native lowering and checked frame preparation as one reusable pass.
@@ -42,24 +42,20 @@ impl<'a, P: RepresentationPolicy> LoweringPipeline<'a, P> {
     > {
         let lower = move |program: &SpsLowProgram| {
             Ok::<_, FramePlanError>(
-                Lowerer::with_policy(self.scoped, self.statics, program, &self.policy)
-                    .with_native_frames()
-                    .run(),
+                Lowerer::with_policy(program, &self.policy).with_native_frames().run(),
             )
         };
         pipeline![lower, AnalyzeStack.with_error(), NativeProgram::prepare]
     }
 }
 
-impl<P: RepresentationPolicy> CompilerPass<&SpsLowProgram> for LoweringPipeline<'_, P> {
+impl<P: RepresentationPolicy> CompilerPass<&SpsLowProgram> for LoweringPipeline<P> {
     type Output = AssemblyProgram;
     type Error = Infallible;
 
     fn run(&mut self, program: &SpsLowProgram) -> Result<Self::Output, Self::Error> {
         let lower = |program: &SpsLowProgram| {
-            Ok::<_, Infallible>(
-                Lowerer::with_policy(self.scoped, self.statics, program, &self.policy).run(),
-            )
+            Ok::<_, Infallible>(Lowerer::with_policy(program, &self.policy).run())
         };
         let finish = |assembly: AssemblyBuild| Ok(assembly.finish());
         pipeline![lower, AnalyzeStack, finish].run(program)

@@ -1,8 +1,8 @@
 # WebAssembly backend strategy
 
 The `wasm-sps` target keeps its qualified name while the unqualified `wasm` target is undecided.
-[C13](../references/compiler/src/webassembly.md) owns the current emitter,
-module ABI, representations, and embedding limits.
+[C13](../references/compiler/src/webassembly.md) owns the current emitter, module ABI,
+representations, and embedding limits.
 This proposal retains the criteria for naming the default target, optional target features,
 reclamation choices, and the open runtime questions.
 The structured SPSLow path replaced an abstract-machine prototype over ZASM after a 2026-08-30 comparison
@@ -12,15 +12,16 @@ the later bounded memory evidence for both prototypes.
 
 ## Validation Evidence
 
-The [source harness](../references/compiler/src/validation-and-extending.md#source-fixtures-and-runtime-oracles) supports declared stdin,
-captured output, and expected exits on the backend, and the committed Node.js host executes the compile tests,
-examples, the `exec` suite, OOPSLA artifacts, effects, packs, stack/control cases, tutorial programs,
+The [source harness](../references/compiler/src/validation-and-extending.md#source-fixtures-and-runtime-oracles)
+supports declared stdin, captured output, and expected exits on the backend,
+and the committed Node.js host executes the compile tests, examples, the `exec` suite,
+OOPSLA artifacts, effects, packs, stack/control cases, tutorial programs,
 and standard-library collection, text, numeric, argument-list, and filesystem tests.
 These cases cover direct calls, higher-order closures, tuples and product suffixes,
 match/comatch, cloned continuations, string and byte operations, every numeric width, host control transfers,
 persistent-stack allocation stress, and signed and unsigned tagged-word boundaries.
-Multi-argument process folds use the [source argument library](../../lib/std/system/arguments.zy)
-and execute in the focused [argument regressions](../../lang/tests/tests/builtin.rs).
+Multi-argument process folds use the [source argument library](../../lib/std/system/arguments.zy) and execute
+in the focused [argument regressions](../../lang/tests/tests/suite/builtin.rs).
 Emission sorts arena-derived identifiers, so repeated builds of one source produce identical bytes.
 Harness support alone does not establish coverage of every embedding edge case,
 and the allocation stress results demonstrate growth rather than an acceptable long-running memory policy.

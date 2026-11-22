@@ -1,16 +1,12 @@
 use crate::{FragmentProgram, SpsLowConverter, SpsLowProgram};
 use std::convert::Infallible;
-use zydeco_statics::arena::StaticsArena;
-use zydeco_surface::scoped::arena::ScopedArena;
-use zydeco_utils::{pass::CompilerPass, pipeline};
+use zydeco_foundation::{pass::CompilerPass, pipeline};
 
 /// Convert SPS in its scheme's fragment into first-order SPSLow.
-pub struct SpsLowPipeline<'a> {
-    pub scoped: &'a ScopedArena,
-    pub statics: &'a StaticsArena,
-}
+#[derive(Default)]
+pub struct SpsLowPipeline;
 
-impl SpsLowPipeline<'_> {
+impl SpsLowPipeline {
     /// Select the optional SPS transformations.
     pub fn with_optimizations<P>(
         self, optimizations: P,
@@ -19,30 +15,24 @@ impl SpsLowPipeline<'_> {
         P: CompilerPass<FragmentProgram, Output = FragmentProgram>,
     {
         let check = move |program: FragmentProgram| {
-            crate::high::check::check(program.as_program(), self.scoped, self.statics);
+            crate::high::check::check(program.as_program());
             Ok::<_, P::Error>(program)
         };
-        pipeline![
-            check,
-            optimizations,
-            check,
-            SpsLowConverter { scoped: self.scoped, statics: self.statics }.with_error(),
-        ]
+        pipeline![check, optimizations, check, SpsLowConverter.with_error()]
     }
 }
 
-impl CompilerPass<FragmentProgram> for SpsLowPipeline<'_> {
+impl CompilerPass<FragmentProgram> for SpsLowPipeline {
     type Output = SpsLowProgram;
     type Error = Infallible;
 
     fn run(&mut self, stackir: FragmentProgram) -> Result<Self::Output, Self::Error> {
         // The default plan, composed statically: normalize, then localize what stays shared.
-        Self { scoped: self.scoped, statics: self.statics }
-            .with_optimizations(pipeline![
-                crate::high::normalize::Normalizer,
-                crate::high::localize::Localizer,
-            ])
-            .run(stackir)
+        Self.with_optimizations(pipeline![
+            crate::high::normalize::Normalizer,
+            crate::high::localize::Localizer,
+        ])
+        .run(stackir)
     }
 }
 
@@ -75,7 +65,7 @@ mod tests {
 
         fn def(&mut self, name: &str) -> DefId {
             let def = self.arena.admin.fresh_def();
-            self.arena.admin.insert_def(def, VarName(name.into()));
+            self.arena.admin.insert_def(def, VarName::new(name));
             def
         }
 
@@ -115,8 +105,7 @@ mod tests {
             let program =
                 FragmentProgram::try_new(SpsProgram::new(self.arena, root), SpsScheme::BranchJoin)
                     .unwrap();
-            SpsLowPipeline { scoped: &ScopedArena::default(), statics: &StaticsArena::default() }
-                .run_infallible(program)
+            SpsLowPipeline.run_infallible(program)
         }
 
         fn parameters(&mut self, params: &[DefId], mut tail: CompuId) -> CompuId {
@@ -171,17 +160,14 @@ mod tests {
     #[test]
     fn custom_optimization_stages_are_reusable_and_preserve_errors() {
         use std::cell::Cell;
-        use zydeco_utils::pass::{Identity, PassSequence};
-        let scoped = ScopedArena::default();
-        let statics = StaticsArena::default();
+        use zydeco_foundation::pass::{Identity, PassSequence};
         let calls = Cell::new(0);
         let visit = |program: FragmentProgram| {
             calls.set(calls.get() + 1);
             Ok::<_, Infallible>(program)
         };
         let optimizations = PassSequence::new().with_pass(Identity).with_pass(visit);
-        let mut lowering =
-            SpsLowPipeline { scoped: &scoped, statics: &statics }.with_optimizations(optimizations);
+        let mut lowering = SpsLowPipeline.with_optimizations(optimizations);
         for _ in 0..2 {
             let output = lowering.run_infallible(PrimitiveFixture::closed_program());
             assert!(output.arena().inner.compus.iter().next().is_some());
@@ -193,13 +179,11 @@ mod tests {
         }
         let reject = |_: FragmentProgram| Err::<FragmentProgram, _>(Error::Rejected);
         let completed = Cell::new(false);
-        let mut lowering = pipeline![
-            SpsLowPipeline { scoped: &scoped, statics: &statics }.with_optimizations(reject),
-            |output: SpsLowProgram| {
+        let mut lowering =
+            pipeline![SpsLowPipeline.with_optimizations(reject), |output: SpsLowProgram| {
                 completed.set(true);
                 Ok(output)
-            },
-        ];
+            },];
         assert_eq!(lowering.run(PrimitiveFixture::closed_program()).unwrap_err(), Error::Rejected);
         assert!(!completed.get());
     }

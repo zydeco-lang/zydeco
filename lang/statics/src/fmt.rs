@@ -8,7 +8,6 @@
 use super::syntax::*;
 use crate::arena::StaticsArena;
 use zydeco_surface::scoped::syntax::ScopedArena;
-use zydeco_utils::arena::ArenaAccess;
 
 /* -------------------------------- Formatter ------------------------------- */
 
@@ -116,7 +115,7 @@ fn witness_pattern<'a>(f: &'a Formatter<'a>, pattern: &TPatId) -> RcDoc<'a> {
 /// Print an existential binder kind in its source spelling, dropping the
 /// component label that qualifies the kind of a projected witness.
 fn witness_kind<'a>(f: &'a Formatter<'a>, kind: KindId) -> RcDoc<'a> {
-    match f.statics.kinds_pre.get(&kind) {
+    match f.statics.kinds_pre.get(kind) {
         | Some(Fillable::Done(Kind::Label(Label(_, inner)))) => inner.pretty(f),
         | _ => kind.pretty(f),
     }
@@ -129,7 +128,7 @@ pub struct SealedTypeEquation(AbstId);
 
 impl SealedTypeEquation {
     pub fn new(statics: &StaticsArena, sealed: AbstId) -> Option<Self> {
-        let definition = statics.seals.get(&sealed)?;
+        let definition = statics.seals.get(sealed)?;
         statics.type_kind_at(*definition)?;
         Some(Self(sealed))
     }
@@ -161,7 +160,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for KindId {
                     let mut operands = vec![func.pretty(f)];
                     let mut tail = *arg;
                     while let Some(Fillable::Done(Kind::Arrow(Arrow(domain, codomain)))) =
-                        f.statics.kinds_pre.get(&tail)
+                        f.statics.kinds_pre.get(tail)
                     {
                         operands.push(domain.pretty(f));
                         tail = *codomain;
@@ -225,7 +224,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for TypeId {
                     let mut operands = vec![tight_type(f, func)];
                     let mut tail = *arg;
                     while let Some(Fillable::Done(Type::Arrow(Arrow(domain, codomain)))) =
-                        f.statics.types_pre.get(&tail)
+                        f.statics.types_pre.get(tail)
                     {
                         operands.push(tight_type(f, domain));
                         tail = *codomain;
@@ -379,7 +378,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for AbstId {
         let () = &f.statics.absts[self];
         match f.statics.abst_hints.get(self) {
             | Some(hint) => f.def_name(hint).pretty(f),
-            | None => RcDoc::text(self.concise()),
+            | None => {
+                RcDoc::text(format!("#{}", zydeco_foundation::dense::DenseId::raw_u32(*self)))
+            }
         }
     }
 }
@@ -453,28 +454,25 @@ impl<'a> Pretty<'a, Formatter<'a>> for CoDataId {
 
 impl<'a> Pretty<'a, Formatter<'a>> for VarName {
     fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
-        let VarName(name) = self;
-        RcDoc::text(name.clone())
+        RcDoc::text(self.as_str())
     }
 }
 
 impl<'a> Pretty<'a, Formatter<'a>> for FieldName {
     fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
-        RcDoc::text(self.plain())
+        RcDoc::text(self.plain_str())
     }
 }
 
 impl<'a> Pretty<'a, Formatter<'a>> for CtorName {
     fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
-        let CtorName(name) = self;
-        RcDoc::text(name.clone())
+        RcDoc::text(self.as_str())
     }
 }
 
 impl<'a> Pretty<'a, Formatter<'a>> for DtorName {
     fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
-        let DtorName(name) = self;
-        RcDoc::text(name.clone())
+        RcDoc::text(self.as_str())
     }
 }
 
@@ -1002,15 +1000,15 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Alloc, DerivedAllocator, StaticsAlloc};
+    use crate::{Alloc, DefGenAllocator, StaticsAlloc};
+    use zydeco_foundation::prelude::IdAllocator;
     use zydeco_surface::bitter::arena::BitterScope;
     use zydeco_surface::scoped::arena::ScopedArena;
     use zydeco_syntax::{IntegerType, PrimitiveType, VarName};
-    use zydeco_utils::prelude::IdAllocator;
 
     /// A minimal arena that allocates the types the printer renders.
     struct FormatterFixture {
-        allocator: DerivedAllocator,
+        allocator: DefGenAllocator,
         statics: StaticsArena,
         defs: IdAllocator<BitterScope>,
         scoped: ScopedArena,
@@ -1019,8 +1017,8 @@ mod tests {
     impl Default for FormatterFixture {
         fn default() -> Self {
             Self {
-                allocator: DerivedAllocator::new(
-                    Default::default(),
+                allocator: DefGenAllocator::new(
+                    &Default::default(),
                     IdAllocator::<BitterScope>::new().alloc(),
                 ),
                 statics: StaticsArena::default(),
@@ -1030,8 +1028,8 @@ mod tests {
         }
     }
 
-    impl AsMut<DerivedAllocator> for FormatterFixture {
-        fn as_mut(&mut self) -> &mut DerivedAllocator {
+    impl AsMut<DefGenAllocator> for FormatterFixture {
+        fn as_mut(&mut self) -> &mut DefGenAllocator {
             &mut self.allocator
         }
     }
@@ -1072,7 +1070,7 @@ mod tests {
 
         fn named_witness(&mut self, name: &str) -> AbstId {
             let definition = self.defs.alloc();
-            self.scoped.insert_def(definition, VarName(name.to_owned()));
+            self.scoped.insert_def(definition, VarName::new(name));
             let kind = self.vtype();
             let abst = Alloc::alloc(self, None::<DefId>, kind, &());
             self.statics.abst_hints.insert_new(abst, definition);

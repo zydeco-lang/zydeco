@@ -148,12 +148,12 @@ impl IntoName<VarName> for VarName {
 }
 impl IntoName<VarName> for String {
     fn into_name(self) -> VarName {
-        VarName(self)
+        VarName::new(self)
     }
 }
 impl IntoName<VarName> for &str {
     fn into_name(self) -> VarName {
-        VarName(self.to_owned())
+        VarName::new(self)
     }
 }
 impl IntoName<CtorName> for CtorName {
@@ -163,7 +163,7 @@ impl IntoName<CtorName> for CtorName {
 }
 impl IntoName<CtorName> for &str {
     fn into_name(self) -> CtorName {
-        CtorName(self.to_owned())
+        CtorName::new(self)
     }
 }
 impl IntoName<DtorName> for DtorName {
@@ -173,7 +173,7 @@ impl IntoName<DtorName> for DtorName {
 }
 impl IntoName<DtorName> for &str {
     fn into_name(self) -> DtorName {
-        DtorName(self.to_owned())
+        DtorName::new(self)
     }
 }
 
@@ -264,12 +264,12 @@ impl<E, S, T, A, U> Construct<E, T> for cs::Ann<S, U>
 where
     E: ConstructEnv,
     U: Construct<E, A>,
-    for<'a> S: Alloc<Tycker<'a>, T, Ann = A, Env = TyEnv>,
+    for<'a> S: Alloc<Tycker<'a>, T, Ann = A, Env = ()>,
 {
     fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, T)> {
         let cs::Ann(tm, ty) = self;
         let (env, ty) = ty.construct(tycker, env)?;
-        let tm = Alloc::alloc(tycker, tm, ty, env.ty());
+        let tm = Alloc::alloc(tycker, tm, ty, &());
         Ok((env, tm))
     }
 }
@@ -351,7 +351,7 @@ where
 {
     fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, AbstId)> {
         let cs::Ann(tm, kd) = self;
-        cs::Ann(VarName(tm), kd).construct(tycker, env)
+        cs::Ann(VarName::new(tm), kd).construct(tycker, env)
     }
 }
 impl<E, K> Construct<E, AbstId> for cs::Ann<&str, K>
@@ -362,18 +362,6 @@ where
     fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, AbstId)> {
         let cs::Ann(tm, kd) = self;
         cs::Ann(tm.to_owned(), kd).construct(tycker, env)
-    }
-}
-impl<E, K> Construct<E, AbstId> for cs::Ann<Option<DefId>, K>
-where
-    E: ConstructEnv,
-    K: Construct<E, KindId>,
-{
-    fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, AbstId)> {
-        let cs::Ann(def, kd) = self;
-        let (env, kd) = kd.construct(tycker, env)?;
-        let abst = Alloc::alloc(tycker, def, kd, &());
-        Ok((env, abst))
     }
 }
 
@@ -431,7 +419,7 @@ where
     fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, TPatId)> {
         let cs::Pat(Hole, kd) = self;
         let (env, kd) = kd.construct(tycker, env)?;
-        let tpat = Alloc::alloc(tycker, Hole, kd, env.ty());
+        let tpat = Alloc::alloc(tycker, Hole, kd, &());
         Ok((env, tpat))
     }
 }
@@ -487,16 +475,15 @@ where
     fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, TypeId)> {
         let cs::Ann(Hole, (kd, site)) = self;
         let (env, kd) = kd.construct(tycker, env)?;
-        let fill: FillId = tycker.fresh();
-        tycker.statics.fills.insert_new(fill, site.into());
-        let ty = Alloc::alloc(tycker, fill, kd, env.ty());
+        let fill = Alloc::alloc(tycker, site, (), &());
+        let ty = Alloc::alloc(tycker, fill, kd, env.ty().skolem_scope());
         Ok((env, ty))
     }
 }
 impl<E: ConstructEnv> Construct<E, TypeId> for AbstId {
     fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, TypeId)> {
-        let kd = tycker.statics.annotations_abst[&self];
-        let ty = Alloc::alloc(tycker, self, kd, env.ty());
+        let kd = tycker.statics.annotations_abst[self];
+        let ty = Alloc::alloc(tycker, self, kd, &());
         Ok((env, ty))
     }
 }
@@ -515,7 +502,7 @@ where
             unreachable!("a type operator has an arrow kind")
         };
         let (env, ty_2) = ty_2.construct(tycker, env)?;
-        let ty = Alloc::alloc(tycker, App(ty_1, ty_2), kd_b, env.ty());
+        let ty = Alloc::alloc(tycker, App(ty_1, ty_2), kd_b, &());
         let ty = ty.normalize(tycker, kd_b)?;
         Ok((env, ty))
     }
@@ -550,7 +537,7 @@ where
         let (env, thk) = ThkTy.construct(tycker, env)?;
         let (env, arg) = arg.construct(tycker, env)?;
         let (env, vtype) = VType.construct(tycker, env)?;
-        let ty = Alloc::alloc(tycker, App(thk, arg), vtype, env.ty());
+        let ty = Alloc::alloc(tycker, App(thk, arg), vtype, &());
         Ok((env, ty))
     }
 }
@@ -564,7 +551,7 @@ where
         let (env, ret) = RetTy.construct(tycker, env)?;
         let (env, arg) = arg.construct(tycker, env)?;
         let (env, ctype) = CType.construct(tycker, env)?;
-        let ty = Alloc::alloc(tycker, App(ret, arg), ctype, env.ty());
+        let ty = Alloc::alloc(tycker, App(ret, arg), ctype, &());
         Ok((env, ty))
     }
 }
@@ -576,18 +563,17 @@ where
 {
     fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, TypeId)> {
         let cs::Data(data, f) = self;
-        let arms = tycker.statics.datas[&data].clone();
+        let arms = tycker.statics.datas[data].clone();
         let arms = arms
-            .into_iter()
-            .map(|(ctor, ty)| {
-                let (_, ty) = (f.clone())(ctor.clone(), ty).construct(tycker, env.clone())?;
+            .iter()
+            .map(|&(ctor, ty)| {
+                let (_, ty) = (f.clone())(ctor, ty).construct(tycker, env.clone())?;
                 Ok((ctor, ty))
             })
-            .collect::<Result<rpds::VectorSync<_>>>()?;
-        let data: DataId = tycker.fresh();
-        tycker.statics.datas.insert_new(data, Data::new(arms.iter().cloned()));
+            .collect::<Result<Vec<_>>>()?;
+        let data = tycker.statics.datas.alloc(Data::new(arms));
         let (env, kd) = VType.construct(tycker, env)?;
-        let ty = Alloc::alloc(tycker, data, kd, env.ty());
+        let ty = Alloc::alloc(tycker, data, kd, &());
         Ok((env, ty))
     }
 }
@@ -599,18 +585,17 @@ where
 {
     fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, TypeId)> {
         let cs::CoData(coda, f) = self;
-        let arms = tycker.statics.codatas[&coda].clone();
+        let arms = tycker.statics.codatas[coda].clone();
         let arms = arms
-            .into_iter()
-            .map(|(dtor, ty)| {
-                let (_, ty) = (f.clone())(dtor.clone(), ty).construct(tycker, env.clone())?;
+            .iter()
+            .map(|&(dtor, ty)| {
+                let (_, ty) = (f.clone())(dtor, ty).construct(tycker, env.clone())?;
                 Ok((dtor, ty))
             })
-            .collect::<Result<rpds::VectorSync<_>>>()?;
-        let coda: CoDataId = tycker.fresh();
-        tycker.statics.codatas.insert_new(coda, CoData::new(arms.iter().cloned()));
+            .collect::<Result<Vec<_>>>()?;
+        let coda = tycker.statics.codatas.alloc(CoData::new(arms));
         let (env, kd) = CType.construct(tycker, env)?;
-        let ty = Alloc::alloc(tycker, coda, kd, env.ty());
+        let ty = Alloc::alloc(tycker, coda, kd, &());
         Ok((env, ty))
     }
 }
@@ -623,7 +608,7 @@ where
         let Prod(components) = self;
         let (env, components): (E, Vec<TypeId>) = components.construct(tycker, env)?;
         let (env, vtype) = VType.construct(tycker, env)?;
-        let ty = Alloc::alloc(tycker, Prod(components), vtype, env.ty());
+        let ty = Alloc::alloc(tycker, Prod(components), vtype, &());
         Ok((env, ty))
     }
 }
@@ -639,17 +624,16 @@ where
         let (env, abst) = abst.construct(tycker, env)?;
         let (env, ty) = ty(abst).construct(tycker, env)?;
         let (env, ctype) = CType.construct(tycker, env)?;
-        let binder = TypeBinder::with_witness(tycker, abst, env.ty());
-        let ty = Alloc::alloc(tycker, Forall(binder, ty), ctype, env.ty());
+        let binder = TypeBinder::with_witness(tycker, abst);
+        let ty = Alloc::alloc(tycker, Forall(binder, ty), ctype, &());
         Ok((env, ty))
     }
 }
 impl<E: ConstructEnv> Construct<E, TypeId> for cs::TopTy {
     fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, TypeId)> {
         let (env, ctype) = CType.construct(tycker, env)?;
-        let coda: CoDataId = tycker.fresh();
-        tycker.statics.codatas.insert_new(coda, CoData::new([]));
-        let ty = Alloc::alloc(tycker, coda, ctype, env.ty());
+        let coda = tycker.statics.codatas.alloc(CoData::new([]));
+        let ty = Alloc::alloc(tycker, coda, ctype, &());
         Ok((env, ty))
     }
 }
@@ -664,7 +648,7 @@ where
         let (env, ty_1) = ty_1.construct(tycker, env)?;
         let (env, ty_2) = ty_2.construct(tycker, env)?;
         let (env, ctype) = CType.construct(tycker, env)?;
-        let ty = Alloc::alloc(tycker, Arrow(ty_1, ty_2), ctype, env.ty());
+        let ty = Alloc::alloc(tycker, Arrow(ty_1, ty_2), ctype, &());
         Ok((env, ty))
     }
 }
@@ -720,7 +704,7 @@ where
         let cs::Pat(cs::Ctor(ctor, body), ty) = self;
         let (env, body) = body.construct(tycker, env)?;
         let (env, ty) = ty.construct(tycker, env)?;
-        let pattern = Alloc::alloc(tycker, Ctor(ctor.into_name(), body), ty, env.ty());
+        let pattern = Alloc::alloc(tycker, Ctor(ctor.into_name(), body), ty, &());
         let data = DataHint(ty).resolve(tycker, env.ty())?;
         tycker.statics.data_pat_hints.insert_new(pattern, data);
         Ok((env, pattern))
@@ -777,7 +761,7 @@ impl<E: ConstructEnv> Construct<E, ValueId> for DefId {
         let AnnId::Type(ty) = tycker.statics.annotations_var[&def] else {
             unreachable!("a value definition is annotated with its type")
         };
-        let value = Alloc::alloc(tycker, def, ty, env.ty());
+        let value = Alloc::alloc(tycker, def, ty, &());
         Ok((env, value))
     }
 }
@@ -789,16 +773,16 @@ where
     fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, ValueId)> {
         let Thunk(body) = self;
         let (env, body) = body.construct(tycker, env)?;
-        let body_ty = tycker.statics.annotations_compu[&body];
+        let body_ty = tycker.statics.annotations_compu[body];
         let (env, ty) = cs::Thk(body_ty).construct(tycker, env)?;
-        let value = Alloc::alloc(tycker, Thunk(body), ty, env.ty());
+        let value = Alloc::alloc(tycker, Thunk(body), ty, &());
         Ok((env, value))
     }
 }
 impl<E: ConstructEnv> Construct<E, ValueId> for Triv {
     fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, ValueId)> {
         let (env, ty) = UnitTy.construct(tycker, env)?;
-        let value = Alloc::alloc(tycker, Triv, ty, env.ty());
+        let value = Alloc::alloc(tycker, Triv, ty, &());
         Ok((env, value))
     }
 }
@@ -818,7 +802,7 @@ where
             .map(|component| tycker.statics.annotations_value[component])
             .collect::<Vec<_>>();
         let (env, ty) = Prod(component_tys).construct(tycker, env)?;
-        let value = Alloc::alloc(tycker, ss::Value::VCons(components), ty, env.ty());
+        let value = Alloc::alloc(tycker, ss::Value::VCons(components), ty, &());
         Ok((env, value))
     }
 }
@@ -833,7 +817,7 @@ where
         let cs::Ann(cs::Ctor(ctor, body), ty) = self;
         let (env, body) = body.construct(tycker, env)?;
         let (env, ty) = ty.construct(tycker, env)?;
-        let value = Alloc::alloc(tycker, Ctor(ctor.into_name(), body), ty, env.ty());
+        let value = Alloc::alloc(tycker, Ctor(ctor.into_name(), body), ty, &());
         let data = DataHint(ty).resolve(tycker, env.ty())?;
         tycker.statics.data_hints.insert_new(value, data);
         Ok((env, value))
@@ -853,8 +837,8 @@ where
         let (env, bindee) = bindee.construct(tycker, env)?;
         let (env, binder) = binder.construct(tycker, env)?;
         let (env, tail) = tail(binder).construct(tycker, env)?;
-        let tail_ty = tycker.statics.annotations_value[&tail];
-        let value = Alloc::alloc(tycker, Let { binder, bindee, tail }, tail_ty, env.ty());
+        let tail_ty = tycker.statics.annotations_value[tail];
+        let value = Alloc::alloc(tycker, Let { binder, bindee, tail }, tail_ty, &());
         Ok((env, value))
     }
 }
@@ -876,7 +860,7 @@ where
         let (env, body) = body(vpat).construct(tycker, env)?;
         let body_ty = tycker.statics.annotations_compu[&body];
         let (env, ty) = Arrow(param_ty, body_ty).construct(tycker, env)?;
-        let compu = Alloc::alloc(tycker, Abs(vpat, body), ty, env.ty());
+        let compu = Alloc::alloc(tycker, Abs(vpat, body), ty, &());
         Ok((env, compu))
     }
 }
@@ -890,7 +874,7 @@ where
     fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, CompuId)> {
         let App(abs, arg) = self;
         let (env, abs) = abs.construct(tycker, env)?;
-        let abs_ty = tycker.statics.annotations_compu[&abs];
+        let abs_ty = tycker.statics.annotations_compu[abs];
         let Some((param_ty, body_ty)) = abs_ty.destruct_arrow(tycker) else {
             return tycker.err(TyckError::TypeExpected {
                 expected: "a computation arrow for an application".to_owned(),
@@ -898,9 +882,9 @@ where
             });
         };
         let (env, arg) = arg.construct(tycker, env)?;
-        let arg_ty = tycker.statics.annotations_value[&arg];
+        let arg_ty = tycker.statics.annotations_value[arg];
         Lub::lub(param_ty, arg_ty, tycker)?;
-        let compu = Alloc::alloc(tycker, App(abs, arg), body_ty, env.ty());
+        let compu = Alloc::alloc(tycker, App(abs, arg), body_ty, &());
         Ok((env, compu))
     }
 }
@@ -915,8 +899,8 @@ where
         let Fix(vpat, body) = self;
         let (env, vpat) = vpat.construct(tycker, env)?;
         let (env, body) = body(vpat).construct(tycker, env)?;
-        let body_ty = tycker.statics.annotations_compu[&body];
-        let compu = Alloc::alloc(tycker, Fix(vpat, body), body_ty, env.ty());
+        let body_ty = tycker.statics.annotations_compu[body];
+        let compu = Alloc::alloc(tycker, Fix(vpat, body), body_ty, &());
         Ok((env, compu))
     }
 }
@@ -928,11 +912,11 @@ where
     fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, CompuId)> {
         let Force(thk) = self;
         let (env, thk) = thk.construct(tycker, env)?;
-        let thk_ty = tycker.statics.annotations_value[&thk];
+        let thk_ty = tycker.statics.annotations_value[thk];
         let Some(body_ty) = thk_ty.destruct_thk_app(tycker) else {
             unreachable!("a forced value is a thunk")
         };
-        let compu = Alloc::alloc(tycker, Force(thk), body_ty, env.ty());
+        let compu = Alloc::alloc(tycker, Force(thk), body_ty, &());
         Ok((env, compu))
     }
 }
@@ -950,8 +934,8 @@ where
         let (env, bindee) = bindee.construct(tycker, env)?;
         let (env, binder) = binder.construct(tycker, env)?;
         let (env, tail) = tail(binder).construct(tycker, env)?;
-        let tail_ty = tycker.statics.annotations_compu[&tail];
-        let compu = Alloc::alloc(tycker, Let { binder, bindee, tail }, tail_ty, env.ty());
+        let tail_ty = tycker.statics.annotations_compu[tail];
+        let compu = Alloc::alloc(tycker, Let { binder, bindee, tail }, tail_ty, &());
         Ok((env, compu))
     }
 }
@@ -971,16 +955,16 @@ where
                 found: ty,
             });
         };
-        let coda = tycker.statics.codatas[&coda_id].to_owned();
+        let coda = tycker.statics.codatas[coda_id].to_owned();
         let arms = coda
-            .into_iter()
-            .map(|(dtor, ty)| {
-                let (_, tail) = (arm.clone())(dtor.clone(), ty).construct(tycker, env.clone())?;
-                Lub::lub(ty, tycker.statics.annotations_compu[&tail], tycker)?;
+            .iter()
+            .map(|&(dtor, ty)| {
+                let (_, tail) = (arm.clone())(dtor, ty).construct(tycker, env.clone())?;
+                Lub::lub(ty, tycker.statics.annotations_compu[tail], tycker)?;
                 Ok(CoMatcher { dtor, tail })
             })
             .collect::<Result<Vec<_>>>()?;
-        let compu = Alloc::alloc(tycker, CoMatch { arms }, ty, env.ty());
+        let compu = Alloc::alloc(tycker, CoMatch { arms }, ty, &());
         let _ = tycker.statics.codata_hints.upsert(compu, coda_id);
         Ok((env, compu))
     }
@@ -993,7 +977,7 @@ where
     fn construct(self, tycker: &mut Tycker<'_>, env: E) -> Result<(E, CompuId)> {
         let Dtor(head, dtor) = self;
         let (env, head) = head.construct(tycker, env)?;
-        let head_ty = tycker.statics.annotations_compu[&head];
+        let head_ty = tycker.statics.annotations_compu[head];
         let head_view = head_ty.unroll(tycker)?.subst_env(tycker, env.ty())?;
         let Type::CoData(coda_id) = tycker.type_filled(&head_view)?.to_owned() else {
             return tycker.err(TyckError::TypeExpected {
@@ -1002,11 +986,11 @@ where
             });
         };
         let _ = tycker.statics.codata_hints.upsert(head, coda_id);
-        let coda = tycker.statics.codatas[&coda_id].to_owned();
+        let coda = tycker.statics.codatas[coda_id].to_owned();
         let Some(ty) = coda.get(&dtor) else {
             return tycker.err(TyckError::UnknownCoDataDestructor(dtor));
         };
-        let compu = Alloc::alloc(tycker, Dtor(head, dtor), ty, env.ty());
+        let compu = Alloc::alloc(tycker, Dtor(head, dtor), ty, &());
         Ok((env, compu))
     }
 }
@@ -1027,7 +1011,7 @@ impl<E: ConstructEnv> Construct<E, CompuId> for cs::Top {
         let Ok(Type::CoData(codata)) = tycker.type_filled(&top) else {
             unreachable!("top is an empty codata")
         };
-        let compu = Alloc::alloc(tycker, CoMatch { arms: Vec::new() }, top, env.ty());
+        let compu = Alloc::alloc(tycker, CoMatch { arms: Vec::new() }, top, &());
         tycker.statics.codata_hints.insert_new(compu, codata);
         Ok((env, compu))
     }

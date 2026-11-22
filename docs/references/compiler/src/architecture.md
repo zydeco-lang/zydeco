@@ -80,7 +80,7 @@ so configurable optimization stages fit into the compiler's existing phase bound
 
 ### Typed Passes and Static Composition
 
-The [`CompilerPass<Input>` trait](../../../../lang/utils/src/pass.rs) exposes each transformation's input,
+The [`CompilerPass<Input>` trait](../../../../lang/foundation/src/pass.rs) exposes each transformation's input,
 associated `Output`, and domain `Error`.
 A pass value holds configuration and typed dependencies;
 `run(&mut self, input)` creates the temporary construction state for that invocation.
@@ -103,7 +103,7 @@ For an SPS program `sps` and its naming arenas, a Rust caller can select repeate
 
 ```rust
 use zydeco_stackir::{SpsLowPipeline, high::normalize::Normalizer};
-use zydeco_utils::{pass::CompilerPass, pipeline};
+use zydeco_foundation::{pass::CompilerPass, pipeline};
 
 let optimizations = pipeline![Normalizer, Normalizer];
 let mut lowering = SpsLowPipeline { scoped: &scoped, statics: &statics }
@@ -113,7 +113,7 @@ let sps_low = lowering.run_infallible(sps);
 
 ### Runtime Sequences
 
-[`PassSequence<'p, Ir, E>`](../../../../lang/utils/src/pass/sequence.rs) stores a vector
+[`PassSequence<'p, Ir, E>`](../../../../lang/foundation/src/pass/sequence.rs) stores a vector
 of configured passes sharing one input/output contract and error type.
 Static composition retains concrete pass types; a runtime sequence boxes passes at its storage boundary.
 `with_pass` appends an occurrence and retains its position, including duplicates,
@@ -127,7 +127,7 @@ for its temporary construction state.
 
 ### Observation and Failures
 
-[`with_observer`](../../../../lang/utils/src/pass/observe.rs) wraps a pass
+[`with_observer`](../../../../lang/foundation/src/pass/observe.rs) wraps a pass
 with typed before/after hooks for inspection, verification, or rendering.
 `PassLocation` identifies its occurrence with a name and structural index path;
 the wrapper counts invocations, including reuse across outer executions.
@@ -240,12 +240,11 @@ Use repeated runs when comparing timings; these measurements do not establish ge
 Focused checks cover ordering, failure boundaries, CLI selection, and applicable backend execution:
 
 ```sh
-cargo test -p zydeco-utils -p zydeco-stackir --lib
+cargo test -p zydeco-foundation -p zydeco-stackir --lib
 cargo test -p zydeco-cli --test passes
 ```
 
 The `zasm` target renders lowering without executing host effects, while the native
 and WebAssembly backends execute them.
-Numeric imports retained by an empty selection use the same arithmetic contracts
-as normalized primitive instructions, including trapping operations and wide scalar boxes,
-as described under [primitive calls](sps/operations-and-patterns.md#primitive-calls).
+Arithmetic operations always lower to typed inline primitives inside their closure bodies, including
+under an empty pass selection, as described under [primitive calls](sps/operations-and-patterns.md#primitive-calls).

@@ -4,8 +4,8 @@ use std::{
     sync::Arc,
 };
 use thiserror::Error;
+use zydeco_foundation::span::FileMap;
 use zydeco_surface::textual::{ParseError, StrictParser, fmt::PrettyFormatter, syntax::Parser};
-use zydeco_utils::span::FileMap;
 
 /// Whether formatting changed the source file on disk.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]

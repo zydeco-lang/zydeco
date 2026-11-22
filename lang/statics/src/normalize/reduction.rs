@@ -4,11 +4,19 @@ use super::*;
 
 impl TypeId {
     pub fn unroll(self, tycker: &mut Tycker<'_>) -> Result<TypeId> {
+        if !tycker.statics.types_pre.summary(self).intersects(
+            TypeSummary::HAS_FILL.union(TypeSummary::HAS_PROJ).union(TypeSummary::HAS_BETA_OR_SEAL),
+        ) {
+            return Ok(self);
+        }
+        zydeco_foundation::stack::maybe_grow(|| self.unroll_inner(tycker))
+    }
+
+    fn unroll_inner(self, tycker: &mut Tycker<'_>) -> Result<TypeId> {
         let kd = tycker.statics.type_kind(self);
-        let env = tycker.statics.env_at(self);
         let res = match tycker.type_filled(&self)?.to_owned() {
             | Type::Abst(abst) => {
-                match tycker.statics.seals.get(&abst) {
+                match tycker.statics.seals.get(abst) {
                     | Some(ty) => {
                         ty.unroll(tycker)?
                     }
@@ -22,7 +30,7 @@ impl TypeId {
                 if ty1 == ty1_ {
                     self
                 } else {
-                    let app = Alloc::alloc(tycker, App(ty1_, ty2), kd, &env);
+                    let app = Alloc::alloc(tycker, App(ty1_, ty2), kd, &());
                     app.normalize(tycker, kd)?
                 }
             }
@@ -53,7 +61,7 @@ impl TypeId {
                     | Type::Named(Named(found, inner)) if found == name => inner.unroll(tycker)?,
                     | _ => {
                         let payload_kind = tycker.statics.type_kind(self);
-                        Alloc::alloc(tycker, Proj(head, name), payload_kind, &env)
+                        Alloc::alloc(tycker, Proj(head, name), payload_kind, &())
                     }
                 }
             }
@@ -132,7 +140,6 @@ impl TypeApplicationSpine {
         }
 
         self.steps.into_iter().try_fold(self.function, |function, step| {
-            let env = tycker.statics.env_at(function);
             match tycker.statics.types_pre[&function].to_owned() {
                 | Fillable::Done(Type::Abs(TypeAbstraction { binder, body })) => {
                     let argument = binder.pattern.bind_argument(tycker, step.argument)?;
@@ -153,7 +160,7 @@ impl TypeApplicationSpine {
                             tycker,
                             App(function, step.argument),
                             step.result_kind,
-                            &env,
+                            &(),
                         ))
                     }
                 }
@@ -180,6 +187,10 @@ impl TypeApplicationSpine {
 
 impl TypeId {
     pub fn normalize(self, tycker: &mut Tycker<'_>, kd: KindId) -> Result<TypeId> {
+        zydeco_foundation::stack::maybe_grow(|| self.normalize_inner(tycker, kd))
+    }
+
+    fn normalize_inner(self, tycker: &mut Tycker<'_>, kd: KindId) -> Result<TypeId> {
         let res = match tycker.statics.types_pre[&self].to_owned() {
             | Fillable::Fill(_) => self,
             | Fillable::Done(ty) => match ty {
@@ -213,10 +224,7 @@ impl TypeId {
                         | Type::Named(Named(found, inner)) if found == name => {
                             inner.normalize(tycker, kd)?
                         }
-                        | _ => {
-                            let env = tycker.statics.env_at(self);
-                            Alloc::alloc(tycker, Proj(head, name), kd, &env)
-                        }
+                        | _ => Alloc::alloc(tycker, Proj(head, name), kd, &()),
                     }
                 }
             },
@@ -237,8 +245,7 @@ impl TypeId {
         self, tycker: &mut Tycker<'_>, argument: TypeId, result_kind: KindId,
     ) -> Result<TypeId> {
         if matches!(tycker.kind_filled(&result_kind)?, Kind::Arrow(_)) {
-            let env = tycker.statics.env_at(self);
-            Ok(Alloc::alloc(tycker, App(self, argument), result_kind, &env))
+            Ok(Alloc::alloc(tycker, App(self, argument), result_kind, &()))
         } else {
             self.normalize_app(tycker, argument, result_kind)
         }

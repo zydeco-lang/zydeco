@@ -3,7 +3,7 @@
 use super::*;
 use derive_more::{Deref, DerefMut, From, Index, IndexMut, Into};
 use std::ops::{Add, AddAssign};
-use zydeco_utils::prelude::With;
+use zydeco_foundation::prelude::With;
 
 /// Environment mapping definitions to annotations or substitutions.
 #[derive(Clone, Debug, From, Into, Deref, DerefMut, Index, IndexMut)]
@@ -334,62 +334,44 @@ impl PartialEq for TyEnv {
 
 impl Eq for TyEnv {}
 
+#[inline]
+fn mix_u64(mut value: u64) -> u64 {
+    value = (value ^ (value >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
+    value = (value ^ (value >> 27)).wrapping_mul(0x94d049bb133111eb);
+    value ^ (value >> 31)
+}
+
 impl std::hash::Hash for TyEnv {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        // Both components are unordered collections, so fold the item hashes
-        // with xor: equal environments hash equally regardless of traversal
-        // order, which the content-based equality requires.
+        use zydeco_foundation::dense::DenseId;
+
+        // Both components are unordered collections, so combine per-entry
+        // mixed hashes with wrapping addition: equal environments hash equally
+        // regardless of traversal order without zeroing identical halves.
         let mut acc = 0u64;
         for (def, ann) in self.defs.iter() {
-            let def = def.key_space().as_u64() ^ u64::from(def.raw().into_u32());
-            let ann = match ann {
-                | AnnId::Set => 1,
-                | AnnId::Kind(kind) => kind.key_space().as_u64() ^ 2,
-                | AnnId::Type(ty) => ty.key_space().as_u64() ^ 3,
+            let def_mix =
+                mix_u64(def.key_space().as_u64() ^ u64::from(def.raw().into_u32()).rotate_left(32));
+            let ann_mix = match ann {
+                | AnnId::Set => mix_u64(1),
+                | AnnId::Kind(kind) => mix_u64(u64::from(kind.raw_u32()) ^ 2),
+                | AnnId::Type(ty) => mix_u64(u64::from(ty.raw_u32()) ^ 3),
             };
-            acc ^= def ^ ann;
+            acc = acc.wrapping_add(mix_u64(def_mix ^ ann_mix.rotate_left(17)));
         }
         for skolem in self.skolems.0.iter() {
-            acc ^= skolem.key_space().as_u64() ^ u64::from(skolem.raw().into_u32());
+            let skolem_mix = mix_u64(u64::from(skolem.raw_u32()));
+            acc = acc.wrapping_add(skolem_mix);
         }
         acc.hash(state);
-    }
-}
-
-/// Cache of typing environments shared between the millions of per-node
-/// arena entries that repeat one of comparatively few environments. Interning
-/// them leaves the arena holding only shared pointers.
-#[derive(Clone, Debug, Default)]
-pub struct TyEnvInterner {
-    table: std::collections::HashMap<TyEnv, std::sync::Arc<TyEnv>>,
-    /// The most recently interned environment. Adjacent checking sites almost
-    /// always share one environment, so a pointer comparison against this
-    /// entry answers most requests without touching the hash table.
-    last: Option<(TyEnv, std::sync::Arc<TyEnv>)>,
-}
-
-impl TyEnvInterner {
-    pub fn intern(&mut self, env: &TyEnv) -> std::sync::Arc<TyEnv> {
-        // Adjacent sites usually share one environment; a pointer comparison
-        // against the previous entry answers those requests in O(1). Content
-        // equality is resolved by the hash table for everything else.
-        if let Some((last, shared)) = &self.last
-            && last.defs.0.ptr_eq(&env.defs.0)
-            && last.skolems.0.ptr_eq(&env.skolems.0)
-        {
-            return shared.clone();
-        }
-        let shared =
-            self.table.entry(env.clone()).or_insert_with(|| std::sync::Arc::new(env.clone()));
-        self.last = Some((env.clone(), shared.clone()));
-        shared.clone()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zydeco_utils::arena::IdAllocator;
+    use zydeco_foundation::arena::IdAllocator;
+    use zydeco_foundation::dense::DenseId;
 
     struct Fixture {
         defs: [DefId; 2],
@@ -402,8 +384,8 @@ mod tests {
             let mut allocator = IdAllocator::<StaticsScope>::new();
             Self {
                 defs: [allocator.alloc(), allocator.alloc()],
-                absts: [allocator.alloc(), allocator.alloc()],
-                types: [allocator.alloc(), allocator.alloc()],
+                absts: [AbstId::from_index(0), AbstId::from_index(1)],
+                types: [TypeId::from_index(0), TypeId::from_index(1)],
             }
         }
 
@@ -411,40 +393,6 @@ mod tests {
             TyEnv::from_iter([(self.defs[0], AnnId::Type(self.types[0]))])
                 .with_skolem(self.absts[0])
         }
-    }
-
-    #[test]
-    fn interning_shares_clones_and_preserves_content() {
-        let mut interner = TyEnvInterner::default();
-        let fixture = Fixture::new();
-        let env = fixture.sample();
-
-        let first = interner.intern(&env);
-        let clone = env.clone();
-        let second = interner.intern(&clone);
-
-        // Clones of one environment intern to the same shared value...
-        assert!(std::sync::Arc::ptr_eq(&first, &second));
-        // ...and the stored value keeps the environment's exact content.
-        assert_eq!(second.as_ref().get(&fixture.defs[0]), Some(&AnnId::Type(fixture.types[0])));
-        assert!(second.skolem_scope().contains(&fixture.absts[0]));
-    }
-
-    #[test]
-    fn interning_dedupes_independently_built_equal_environments() {
-        let mut interner = TyEnvInterner::default();
-        let fixture = Fixture::new();
-        let env = fixture.sample();
-
-        let first = interner.intern(&env);
-        // The same content rebuilt from scratch shares no structure, but the
-        // content comparison still interns it to the same shared value.
-        let rebuilt = fixture.sample();
-        let second = interner.intern(&rebuilt);
-
-        assert_eq!(env, rebuilt);
-        assert!(std::sync::Arc::ptr_eq(&first, &second));
-        assert_eq!(second.as_ref().get(&fixture.defs[0]), first.as_ref().get(&fixture.defs[0]));
     }
 
     #[test]
@@ -466,5 +414,52 @@ mod tests {
 
         let missing_skolem = TyEnv::from_iter(base.clone());
         assert!(!missing_skolem.is_extension_of(&base));
+    }
+
+    #[test]
+    fn hashing_distinguishes_same_keyspace_bindings_and_ignores_insertion_order() {
+        use rustc_hash::FxHasher;
+        use std::{
+            collections::hash_map::DefaultHasher,
+            hash::{Hash, Hasher},
+        };
+
+        fn hash_with<H: Hasher + Default>(env: &TyEnv) -> u64 {
+            let mut hasher = H::default();
+            env.hash(&mut hasher);
+            hasher.finish()
+        }
+
+        let mut allocator = IdAllocator::<StaticsScope>::new();
+        let def_a: DefId = allocator.alloc();
+        let def_b: DefId = allocator.alloc();
+        let type_0 = TypeId::from_index(0);
+        let type_1 = TypeId::from_index(1);
+        let kind_0 = KindId::from_index(0);
+        let kind_1 = KindId::from_index(1);
+
+        let env_type_0 = TyEnv::from_iter([(def_a, AnnId::Type(type_0))]);
+        let env_type_1 = TyEnv::from_iter([(def_a, AnnId::Type(type_1))]);
+        assert_ne!(hash_with::<FxHasher>(&env_type_0), hash_with::<FxHasher>(&env_type_1));
+        assert_ne!(
+            hash_with::<DefaultHasher>(&env_type_0),
+            hash_with::<DefaultHasher>(&env_type_1)
+        );
+
+        let env_kind_0 = TyEnv::from_iter([(def_a, AnnId::Kind(kind_0))]);
+        let env_kind_1 = TyEnv::from_iter([(def_a, AnnId::Kind(kind_1))]);
+        assert_ne!(hash_with::<FxHasher>(&env_kind_0), hash_with::<FxHasher>(&env_kind_1));
+        assert_ne!(
+            hash_with::<DefaultHasher>(&env_kind_0),
+            hash_with::<DefaultHasher>(&env_kind_1)
+        );
+
+        let forward =
+            TyEnv::from_iter([(def_a, AnnId::Type(type_0)), (def_b, AnnId::Kind(kind_1))]);
+        let reverse =
+            TyEnv::from_iter([(def_b, AnnId::Kind(kind_1)), (def_a, AnnId::Type(type_0))]);
+        assert_eq!(forward, reverse);
+        assert_eq!(hash_with::<FxHasher>(&forward), hash_with::<FxHasher>(&reverse));
+        assert_eq!(hash_with::<DefaultHasher>(&forward), hash_with::<DefaultHasher>(&reverse));
     }
 }

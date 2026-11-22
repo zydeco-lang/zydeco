@@ -6,10 +6,10 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
+use zydeco_foundation::prelude::{ArenaDense, ArenaSchema, FrozenArena};
 use zydeco_surface::textual::{DocumentationSite, ImportSite, LiteralSite, syntax as t};
-use zydeco_utils::prelude::{ArenaDense, ArenaSchema, FrozenArena};
 
-zydeco_utils::new_key_type! {
+zydeco_foundation::new_key_type! {
     pub struct SourceId;
     pub struct SourceImportId;
 }
@@ -31,7 +31,7 @@ pub struct SourceTemplate {
     pub path: PathBuf,
     pub source: String,
     /// File-local map decoding this template's spans for parse diagnostics.
-    pub file: zydeco_utils::span::FileMap,
+    pub file: zydeco_foundation::span::FileMap,
     pub spans: FrozenArena<t::SpanArena>,
     pub arena: FrozenArena<t::TextArena>,
     pub unit: t::SourceUnit,
@@ -41,7 +41,7 @@ pub struct SourceTemplate {
     pub literals: Vec<LiteralSite>,
     pub package_sites: Vec<zydeco_surface::textual::PackageSite>,
     /// File-level scope, retained when selecting a named package.
-    pub discovery: Vec<zydeco_utils::span::Sp<zydeco_surface::metadata::DiscoveryRule>>,
+    pub discovery: Vec<zydeco_foundation::span::Sp<zydeco_surface::metadata::DiscoveryRule>>,
 }
 
 /// The role inferred from a source file's extension.

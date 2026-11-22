@@ -1,49 +1,39 @@
 //! Shared builders and layered definition names for Stack IR.
 
 use super::syntax::*;
-use crate::{high::arena::SpsScope, static_syntax as ss};
-use zydeco_statics::arena::StaticsArena;
-use zydeco_surface::scoped::arena::{ScopedArena, ScopedScope};
+use crate::{high::arena::SpsScope, ir};
 
-/// Read-only layered definition names for an IR phase.
-///
-/// Each lowering stores only the names it synthesizes. Source and typed-
-/// elaboration names stay in their immutable owning arenas and are consulted
-/// on a miss, avoiding a clone of the complete source definition table.
+/// Read-only definition names for an IR phase.
 pub trait DefinitionNames {
-    fn generated_defs(&self) -> &ArenaSparse<ScopedScope, DefId>;
+    fn defs(&self) -> &ArenaSparse<SpsScope, DefId>;
 
-    fn def_name<'a>(
-        &'a self, scoped: &'a ScopedArena, statics: &'a StaticsArena, id: &DefId,
-    ) -> &'a VarName {
-        self.generated_defs().get(id).unwrap_or_else(|| statics.def_name(scoped, id))
+    fn def_name(&self, id: &DefId) -> VarName {
+        self.defs().get(id).copied().unwrap_or_else(|| VarName::new("_"))
     }
 }
 
-/// Build a stack IR node and optionally record its source site mapping.
+/// Build a stack IR node and optionally record its core site mapping.
 pub trait Construct<S, T, Arena>: Sized + Into<S> {
     type Site;
-    /// Allocate the node in the arena, recording a typed-site mapping if provided.
+    /// Allocate the node in the arena, recording a core-site mapping if provided.
     fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> T;
 }
 
-/// Generated definition names and typed-source provenance of one phase.
+/// Definition names and core provenance of one phase.
 #[derive(Debug)]
 pub struct AdminArena<P: Phase> {
     /// Allocator of this phase's nodes.
     pub(crate) node_allocator: IdAllocator<P::Scope>,
-    /// Allocator of the definitions that stack IR lowering introduces, carried from phase
-    /// to phase so that their identities stay distinct.
+    /// Allocator of the definitions carried across stack IR phases.
     pub(crate) def_allocator: IdAllocator<SpsScope>,
-    /// Names introduced by stack IR lowering. Source and typed-elaboration names stay
-    /// in their immutable phase arenas.
-    pub defs: ArenaSparse<ScopedScope, DefId>,
-    /// One source pattern may originate several generated patterns; every generated pattern
-    /// has at most one source pattern.
-    pub pats: ArenaForth<ss::PatId, P::VPatId>,
-    /// One source term may originate several generated nodes; every generated node has
-    /// at most one source term.
-    pub terms: ArenaForth<ss::TermId, TermId<P>>,
+    /// Names for definitions introduced or lowered into stack IR.
+    pub defs: ArenaSparse<SpsScope, DefId>,
+    /// One core pattern may originate several generated patterns; every generated pattern
+    /// has at most one core pattern.
+    pub pats: ArenaForth<ir::VPatId, P::VPatId>,
+    /// One core term may originate several generated nodes; every generated node has
+    /// at most one core term.
+    pub terms: ArenaForth<ir::TermId, TermId<P>>,
 }
 
 impl<P: Phase> AdminArena<P> {
@@ -84,13 +74,13 @@ impl<P: Phase> AdminArena<P> {
         self.defs.insert_new(id, name);
     }
 
-    /// The typed source term that originated a generated node, if any.
-    pub fn term_site(&self, id: impl Into<TermId<P>>) -> Option<ss::TermId> {
+    /// The core term that originated a generated node, if any.
+    pub fn term_site(&self, id: impl Into<TermId<P>>) -> Option<ir::TermId> {
         self.terms.back(&id.into()).copied()
     }
 
-    /// The typed source pattern that originated a generated pattern, if any.
-    pub fn pattern_site(&self, id: P::VPatId) -> Option<ss::PatId> {
+    /// The core pattern that originated a generated pattern, if any.
+    pub fn pattern_site(&self, id: P::VPatId) -> Option<ir::VPatId> {
         self.pats.back(&id).copied()
     }
 }
@@ -102,7 +92,7 @@ impl<P: Phase> Default for AdminArena<P> {
 }
 
 impl<P: Phase> DefinitionNames for AdminArena<P> {
-    fn generated_defs(&self) -> &ArenaSparse<ScopedScope, DefId> {
+    fn defs(&self) -> &ArenaSparse<SpsScope, DefId> {
         &self.defs
     }
 }
@@ -134,19 +124,19 @@ pub trait Nodes: Sized {
     ) -> &mut ArenaSparse<<Self::Phase as Phase>::Scope, <Self::Phase as Phase>::CompuId>;
 }
 
-/// Allocate one node of a phase and record its typed source site.
+/// Allocate one node of a phase and record its core source site.
 pub trait Builder<P: Phase> {
     fn build_pattern(
-        &mut self, node: ValuePattern<P::VPatId>, site: Option<ss::PatId>,
+        &mut self, node: ValuePattern<P::VPatId>, site: Option<ir::VPatId>,
     ) -> P::VPatId;
-    fn build_value(&mut self, node: Value<P>, site: Option<ss::TermId>) -> P::ValueId;
-    fn build_stack(&mut self, node: Stack<P>, site: Option<ss::TermId>) -> P::StackId;
-    fn build_computation(&mut self, node: Computation<P>, site: Option<ss::TermId>) -> P::CompuId;
+    fn build_value(&mut self, node: Value<P>, site: Option<ir::TermId>) -> P::ValueId;
+    fn build_stack(&mut self, node: Stack<P>, site: Option<ir::TermId>) -> P::StackId;
+    fn build_computation(&mut self, node: Computation<P>, site: Option<ir::TermId>) -> P::CompuId;
 }
 
 impl<P: Phase, A: AsMut<AdminArena<P>> + AsMut<P::Nodes>> Builder<P> for A {
     fn build_pattern(
-        &mut self, node: ValuePattern<P::VPatId>, site: Option<ss::PatId>,
+        &mut self, node: ValuePattern<P::VPatId>, site: Option<ir::VPatId>,
     ) -> P::VPatId {
         let id = AsMut::<AdminArena<P>>::as_mut(self).fresh_node();
         AsMut::<P::Nodes>::as_mut(self).vpats_mut().insert_new(id, node);
@@ -156,7 +146,7 @@ impl<P: Phase, A: AsMut<AdminArena<P>> + AsMut<P::Nodes>> Builder<P> for A {
         id
     }
 
-    fn build_value(&mut self, node: Value<P>, site: Option<ss::TermId>) -> P::ValueId {
+    fn build_value(&mut self, node: Value<P>, site: Option<ir::TermId>) -> P::ValueId {
         let id = AsMut::<AdminArena<P>>::as_mut(self).fresh_node();
         AsMut::<P::Nodes>::as_mut(self).values_mut().insert_new(id, node);
         if let Some(site) = site {
@@ -165,7 +155,7 @@ impl<P: Phase, A: AsMut<AdminArena<P>> + AsMut<P::Nodes>> Builder<P> for A {
         id
     }
 
-    fn build_stack(&mut self, node: Stack<P>, site: Option<ss::TermId>) -> P::StackId {
+    fn build_stack(&mut self, node: Stack<P>, site: Option<ir::TermId>) -> P::StackId {
         let id = AsMut::<AdminArena<P>>::as_mut(self).fresh_node();
         AsMut::<P::Nodes>::as_mut(self).stacks_mut().insert_new(id, node);
         if let Some(site) = site {
@@ -174,7 +164,7 @@ impl<P: Phase, A: AsMut<AdminArena<P>> + AsMut<P::Nodes>> Builder<P> for A {
         id
     }
 
-    fn build_computation(&mut self, node: Computation<P>, site: Option<ss::TermId>) -> P::CompuId {
+    fn build_computation(&mut self, node: Computation<P>, site: Option<ir::TermId>) -> P::CompuId {
         let id = AsMut::<AdminArena<P>>::as_mut(self).fresh_node();
         AsMut::<P::Nodes>::as_mut(self).compus_mut().insert_new(id, node);
         if let Some(site) = site {
@@ -194,7 +184,7 @@ macro_rules! phase_constructors {
             Arena: AsMut<$arena>,
             U: Into<$crate::syntax::ValuePattern<VPatId>>,
         {
-            type Site = $crate::static_syntax::PatId;
+            type Site = $crate::ir::VPatId;
             fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> VPatId {
                 $crate::arena::Builder::<$phase>::build_pattern(arena.as_mut(), self.into(), site)
             }
@@ -205,7 +195,7 @@ macro_rules! phase_constructors {
             Arena: AsMut<$arena>,
             U: Into<$crate::syntax::Value<$phase>>,
         {
-            type Site = $crate::static_syntax::TermId;
+            type Site = $crate::ir::TermId;
             fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> ValueId {
                 $crate::arena::Builder::<$phase>::build_value(arena.as_mut(), self.into(), site)
             }
@@ -216,7 +206,7 @@ macro_rules! phase_constructors {
             Arena: AsMut<$arena>,
             U: Into<$crate::syntax::Stack<$phase>>,
         {
-            type Site = $crate::static_syntax::TermId;
+            type Site = $crate::ir::TermId;
             fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> StackId {
                 $crate::arena::Builder::<$phase>::build_stack(arena.as_mut(), self.into(), site)
             }
@@ -228,7 +218,7 @@ macro_rules! phase_constructors {
             Arena: AsMut<$arena>,
             U: Into<$crate::syntax::Computation<$phase>>,
         {
-            type Site = $crate::static_syntax::TermId;
+            type Site = $crate::ir::TermId;
             fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> CompuId {
                 $crate::arena::Builder::<$phase>::build_computation(
                     arena.as_mut(),

@@ -13,11 +13,12 @@ ariadne = { workspace = true }
 ratatui = { workspace = true }
 thiserror = { workspace = true }
 zydeco-dynamics = { workspace = true }
+zydeco-ir = { workspace = true }
 zydeco-session = { workspace = true }
 zydeco-statics = { workspace = true }
 zydeco-surface = { workspace = true }
 zydeco-syntax = { workspace = true }
-zydeco-utils = { workspace = true }
+zydeco-foundation = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

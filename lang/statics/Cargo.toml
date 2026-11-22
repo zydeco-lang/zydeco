@@ -10,10 +10,11 @@ readme = { workspace = true }
 description = "static semantics and typed elaboration for Zydeco"
 
 [dependencies]
-zydeco-utils = { workspace = true }
+zydeco-foundation = { workspace = true }
 zydeco-derive = { workspace = true }
 zydeco-syntax = { workspace = true }
 zydeco-surface = { workspace = true }
+zydeco-ir = { workspace = true }
 salsa = { workspace = true }
 derive_more = { workspace = true, features = [
     "from",

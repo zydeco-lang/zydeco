@@ -87,6 +87,11 @@ impl ExternalFunction {
         Arena: AsMut<SpsArena>,
     {
         if let ExternalFunction::Host(role) = self
+            && let Some(operation) = PrimitiveOp::from_builtin(role)
+        {
+            return Primitive::make_function(arena, operation);
+        }
+        if let ExternalFunction::Host(role) = self
             && let Some(operation) = ComparisonOp::from_builtin(role)
         {
             return CompareBranch::make_function(arena, operation, scheme);
@@ -105,6 +110,41 @@ impl ExternalFunction {
     }
 }
 
+impl Primitive {
+    /// Materialize the pure two-argument arithmetic body directly so lowering and normalization
+    /// never go through a host-call ABI for primitives.
+    fn make_function<Arena: AsMut<SpsArena>>(arena: &mut Arena, operation: PrimitiveOp) -> ValueId {
+        use crate::protocol::ValueProtocol;
+        let [first, second] = ["__primitive_first__", "__primitive_second__"].map(|name| {
+            let admin = &mut arena.as_mut().admin;
+            let def = admin.fresh_def();
+            admin.insert_def(def, VarName::new(name));
+            def
+        });
+        let value = Primitive {
+            operation,
+            operands: [first.build(arena, None), second.build(arena, None)],
+        }
+        .build(arena, None);
+        let stack = StackVar.build(arena, None);
+        let body = SReturn { stack, value }.build(arena, None);
+        let scalar = match operation {
+            | PrimitiveOp::Integer(integer, _) => PrimitiveType::Integer(integer),
+            | PrimitiveOp::Float(float, _) => PrimitiveType::Float(float),
+        };
+        let protocol = ValueProtocol::Primitive(scalar);
+        let body = [first, second].into_iter().rev().fold(body, |tail, def| {
+            let binder = def.build(arena, None);
+            arena.as_mut().inner.pattern_protocols.insert_new(binder, protocol.clone());
+            let bindee = StackVar.build(arena, None);
+            Let { binder: Cons(binder, StackVar), bindee, tail }.build(arena, None)
+        });
+        let function = Closure { stack: StackVar, body }.build(arena, None);
+        arena.as_mut().inner.builtin_functions.insert_new(function, operation.builtin());
+        function
+    }
+}
+
 impl CompareBranch {
     /// Keep primitive selection in the builtin body, including at escaping uses
     /// and when optional normalization is disabled.
@@ -117,7 +157,7 @@ impl CompareBranch {
                 .map(|name| {
                     let admin = &mut arena.as_mut().admin;
                     let def = admin.fresh_def();
-                    admin.insert_def(def, VarName(name.into()));
+                    admin.insert_def(def, VarName::new(name));
                     def
                 });
         let [when_true_body, when_false_body] = [when_true, when_false].map(|def| {
@@ -172,7 +212,7 @@ impl MemoryStep {
             ["__memory_address__", "__memory_value__", "__memory_success__"].map(|name| {
                 let admin = &mut arena.as_mut().admin;
                 let def = admin.fresh_def();
-                admin.insert_def(def, VarName(name.into()));
+                admin.insert_def(def, VarName::new(name));
                 def
             });
         let thunk = success.build(arena, None);
@@ -231,7 +271,7 @@ impl AddrOffset {
         let [base, displacement] = ["__address_base__", "__byte_displacement__"].map(|name| {
             let admin = &mut arena.as_mut().admin;
             let def = admin.fresh_def();
-            admin.insert_def(def, VarName(name.into()));
+            admin.insert_def(def, VarName::new(name));
             def
         });
         let value = AddrOffset {

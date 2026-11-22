@@ -3,31 +3,35 @@
 use super::*;
 
 impl StaticElaborator<'_, '_> {
-    pub(super) fn computation(&mut self, source: CompuId, env: &Environment) -> Result<CompuId> {
-        let residual = self.computation_inner(source, env)?;
-        let ty = self.tycker.statics.annotations_compu[&residual];
+    pub(super) fn computation(
+        &mut self, source: CompuId, env: &Environment,
+    ) -> Result<ir::CompuId> {
+        zydeco_foundation::stack::maybe_grow(|| {
+            let _scope = self.enter_scope();
+            let result = self.computation_in_scope(source, env);
+            let frame = self.exit_scope();
+            result.map(|residual| self.wrap_compu_bindings(frame.bindings, residual))
+        })
+    }
+
+    fn computation_in_scope(&mut self, source: CompuId, env: &Environment) -> Result<ir::CompuId> {
+        let ty = self.ty(self.tycker.statics.annotations_compu[&source], env)?;
         if !self.runtime_type(ty) {
             return self
                 .fail(StaticEliminationError::RuntimeComputation { computation: source, ty });
         }
-        // Destructor heads can be arbitrary computations, including lets
-        // whose source root disappears during static reduction.
-        if let Some(hint) = self.tycker.statics.codata_hints.get(&source).copied() {
-            let _ = self.tycker.statics.codata_hints.upsert(residual, hint);
-        }
-        Ok(residual)
-    }
-
-    fn computation_inner(&mut self, source: CompuId, env: &Environment) -> Result<CompuId> {
-        let ty = self.ty(self.tycker.statics.annotations_compu[&source], env)?;
-        let mut bindings = Vec::new();
-        let node = match self.tycker.statics.compus[&source].clone() {
-            | Computation::Hole(_) => Computation::Hole(Hole),
+        let residual = match self.tycker.statics.compus[&source].clone() {
+            | Computation::Hole(_) => {
+                let id = self.alloc_core_compu(source, ir::Computation::Hole(Hole), ty, None);
+                if self.purpose == Purpose::Residualize && self.reduction_depth == 0 {
+                    self.core.retained_holes.push(ir::TermId::Compu(id));
+                }
+                id
+            }
             | Computation::Let(Let { binder, bindee, tail }) => {
-                let value = self.value(bindee, env, &mut bindings)?;
-                let value = self.share(value, &mut bindings)?;
-                let tail = self.match_arms(value, &[Matcher { binder, tail }], env, source)?;
-                return Ok(self.compu_bindings(bindings, tail));
+                let value = self.value(bindee, env)?;
+                let value = self.share(value)?;
+                self.match_arms(value, &[Matcher { binder, tail }], env, source)?
             }
             | Computation::VAbs(Abs(pattern, body)) => {
                 let domain = self.ty(self.tycker.statics.annotations_vpat[&pattern], env)?;
@@ -37,93 +41,155 @@ impl StaticElaborator<'_, '_> {
                         ty: domain,
                     });
                 }
-                let (binder, value) = self.variable(None, domain);
-                let body =
-                    self.match_arms(value, &[Matcher { binder: pattern, tail: body }], env, body)?;
-                let body = self.compu_bindings(bindings, body);
-                return Ok(self.alloc_compu(source, Computation::VAbs(Abs(binder, body)), ty));
+                let body_scope = self.enter_scope();
+                let name = self.pattern_var_hint(pattern);
+                let (binder, value) = self.named_variable(name, Some(pattern), domain, body_scope);
+                let body_ir =
+                    self.match_arms(value, &[Matcher { binder: pattern, tail: body }], env, source);
+                let frame = self.exit_scope();
+                let body_ir = self.wrap_compu_bindings(frame.bindings, body_ir?);
+                self.alloc_core_compu(source, ir::Computation::VAbs(Abs(binder, body_ir)), ty, None)
             }
-            | Computation::TAbs(Abs(pattern, body)) => {
-                Computation::TAbs(Abs(pattern, self.computation(body, env)?))
-            }
-            | Computation::TApp(App(function, argument)) => {
-                let function = self.computation(function, env)?;
-                Computation::TApp(App(function, self.ty(argument, env)?))
+            | Computation::TAbs(Abs(_, body)) | Computation::TApp(App(body, _)) => {
+                self.computation(body, env)?
             }
             | Computation::VApp(App(function, argument)) => {
-                let argument = self.value(argument, env, &mut bindings)?;
+                let argument = self.value(argument, env)?;
                 let argument = self.reify(&argument)?;
-                Computation::VApp(App(self.computation(function, env)?, argument))
+                let function = self.computation(function, env)?;
+                self.alloc_core_compu(
+                    source,
+                    ir::Computation::VApp(App(function, argument)),
+                    ty,
+                    None,
+                )
             }
             | Computation::Ret(Return(value)) => {
-                let value = self.value(value, env, &mut bindings)?;
-                Computation::Ret(Return(self.reify(&value)?))
+                let value = self.value(value, env)?;
+                let value = self.reify(&value)?;
+                self.alloc_core_compu(source, ir::Computation::Ret(Return(value)), ty, None)
             }
             | Computation::Force(Force(value)) => {
-                let value = self.value(value, env, &mut bindings)?;
-                Computation::Force(Force(self.reify(&value)?))
+                let value = self.value(value, env)?;
+                let value = self.reify(&value)?;
+                self.alloc_core_compu(source, ir::Computation::Force(Force(value)), ty, None)
             }
             | Computation::Do(Bind { binder: pattern, bindee, tail }) => {
                 let bindee = self.computation(bindee, env)?;
                 let domain = self.ty(self.tycker.statics.annotations_vpat[&pattern], env)?;
-                let (binder, value) = self.variable(None, domain);
-                let tail =
-                    self.match_arms(value, &[Matcher { binder: pattern, tail }], env, tail)?;
-                let tail = self.compu_bindings(bindings, tail);
-                return Ok(self.alloc_compu(
+                let tail_scope = self.enter_scope();
+                let name = self.pattern_var_hint(pattern);
+                let (binder, value) = self.named_variable(name, Some(pattern), domain, tail_scope);
+                let tail_ir =
+                    self.match_arms(value, &[Matcher { binder: pattern, tail }], env, source);
+                let frame = self.exit_scope();
+                let tail_ir = self.wrap_compu_bindings(frame.bindings, tail_ir?);
+                self.alloc_core_compu(
                     source,
-                    Computation::Do(Bind { binder, bindee, tail }),
+                    ir::Computation::Do(Bind { binder, bindee, tail: tail_ir }),
                     ty,
-                ));
+                    None,
+                )
             }
             | Computation::Fix(Fix(pattern, body)) => {
                 let domain = self.ty(self.tycker.statics.annotations_vpat[&pattern], env)?;
-                let (binder, value) = self.variable(None, domain);
+                let fix_scope = self.enter_scope();
+                let name = self.pattern_var_hint(pattern);
+                let (param, value) = self.named_var_only(name, domain, fix_scope);
                 let mut local = env.clone();
-                self.bind(pattern, value, &mut local, &mut bindings)?;
-                let body = self.computation(body, &local)?;
-                let body = self.compu_bindings(bindings, body);
-                return Ok(self.alloc_compu(source, Computation::Fix(Fix(binder, body)), ty));
+                let bound = self.bind(pattern, value, &mut local);
+                let body_ir = bound.and_then(|()| self.computation(body, &local));
+                let frame = self.exit_scope();
+                let body_ir = self.wrap_compu_bindings(frame.bindings, body_ir?);
+                self.alloc_core_compu(
+                    source,
+                    ir::Computation::Fix { param, body: body_ir },
+                    ty,
+                    None,
+                )
             }
             | Computation::CoMatch(CoMatch { arms }) => {
-                let arms = arms
-                    .into_iter()
-                    .map(|arm| {
-                        Ok(CoMatcher { dtor: arm.dtor, tail: self.computation(arm.tail, env)? })
-                    })
-                    .collect::<Result<_>>()?;
-                Computation::CoMatch(CoMatch { arms })
+                self.comatch_in_scope(source, ty, arms, env)?
             }
             | Computation::Dtor(Dtor(function, name)) => {
-                Computation::Dtor(Dtor(self.computation(function, env)?, name))
+                let function_ty = self.ty(self.tycker.statics.annotations_compu[&function], env)?;
+                let codata = self
+                    .tycker
+                    .statics
+                    .codata_hints
+                    .get(function)
+                    .copied()
+                    .or_else(|| self.resolve_codata_id(function_ty))
+                    .expect("checked destructor head has a codata classifier");
+                let tag = self.protocols.tag(&self.tycker.statics, codata, name);
+                let body = self.computation(function, env)?;
+                self.alloc_core_compu(source, ir::Computation::Dtor { body, tag }, ty, None)
             }
             | Computation::Match(Match { scrut, arms }) => {
-                let value = self.value(scrut, env, &mut bindings)?;
-                let value = self.share(value, &mut bindings)?;
-                // Keep ordinary runtime case analysis as one multiway match.
-                // Expanding each row into a complete tag test duplicates the
-                // remaining rows once per alternative during backend lowering.
-                if matches!(value.0.form, ValueForm::Runtime(_))
-                    && arms.iter().all(|arm| !self.has_view(arm.binder))
-                {
-                    let scrut = self.reify(&value)?;
-                    let arms = arms
-                        .into_iter()
-                        .map(|arm| {
-                            let mut local = env.clone();
-                            let binder = self.runtime_pattern(arm.binder, &mut local)?;
-                            Ok(Matcher { binder, tail: self.computation(arm.tail, &local)? })
-                        })
-                        .collect::<Result<_>>()?;
-                    let body =
-                        self.alloc_compu(source, Computation::Match(Match { scrut, arms }), ty);
-                    return Ok(self.compu_bindings(bindings, body));
-                }
-                let body = self.match_arms(value, &arms, env, source)?;
-                return Ok(self.compu_bindings(bindings, body));
+                self.computation_match(source, ty, scrut, arms, env)?
             }
         };
-        let body = self.alloc_compu(source, node, ty);
-        Ok(self.compu_bindings(bindings, body))
+        Ok(residual)
+    }
+
+    fn comatch_in_scope(
+        &mut self, source: CompuId, ty: TypeId, arms: Vec<CoMatcher<DtorName, CompuId>>,
+        env: &Environment,
+    ) -> Result<ir::CompuId> {
+        let codata = self
+            .tycker
+            .statics
+            .codata_hints
+            .get(source)
+            .copied()
+            .or_else(|| self.resolve_codata_id(ty))
+            .expect("checked comatch has a codata classifier");
+        let arms = arms
+            .into_iter()
+            .map(|arm| {
+                let tag = self.protocols.tag(&self.tycker.statics, codata, arm.dtor);
+                let tail = self.computation(arm.tail, env)?;
+                Ok(CoMatcher { dtor: tag, tail })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(self.alloc_core_compu(source, ir::Computation::CoMatch { arms }, ty, Some(codata)))
+    }
+
+    fn computation_match(
+        &mut self, source: CompuId, ty: TypeId, scrut: ValueId,
+        arms: Vec<Matcher<VPatId, CompuId>>, env: &Environment,
+    ) -> Result<ir::CompuId> {
+        let value = self.value(scrut, env)?;
+        let value = self.share(value)?;
+        // Keep ordinary runtime case analysis as one multiway match.
+        // Expanding each row into a complete tag test duplicates the
+        // remaining rows once per alternative during backend lowering.
+        if value.is_opaque_runtime() && arms.iter().all(|arm| !self.has_view(arm.binder)) {
+            let scrut = self.reify(&value)?;
+            let arms = arms
+                .into_iter()
+                .map(|arm| {
+                    let _arm_scope = self.enter_scope();
+                    let mut local = env.clone();
+                    let binder = self.runtime_pattern(arm.binder, &mut local);
+                    let tail = binder.and_then(|binder| {
+                        self.computation(arm.tail, &local).map(|tail| (binder, tail))
+                    });
+                    let frame = self.exit_scope();
+                    tail.map(|(binder, tail)| Matcher {
+                        binder,
+                        tail: self.wrap_compu_bindings(frame.bindings, tail),
+                    })
+                })
+                .collect::<Result<Vec<_>>>()?;
+            Ok(self.alloc_core_compu(
+                source,
+                ir::Computation::Match(Match { scrut, arms }),
+                ty,
+                None,
+            ))
+        } else {
+            self.match_arms(value, &arms, env, source)
+        }
     }
 }

@@ -53,28 +53,45 @@ pub mod utils {
         }
 
         pub fn check(self) {
-            let compiler = SourceProgram::compiler();
-            let analysis = compiler.analyze(&self.path).unwrap_or_else(|error| {
-                panic!("Error checking source {}: {error}", self.path.display())
+            SourceProgram::with_compiler(|compiler| {
+                let analysis = compiler.analyze(&self.path).unwrap_or_else(|error| {
+                    panic!("Error checking source {}: {error}", self.path.display())
+                });
+                let checked = compiler
+                    .checked_program(&analysis)
+                    .expect("successful analysis must be checked");
+                assert!(
+                    matches!(checked.root, TermAnnId::Value(_, _)),
+                    "Library source {} must export a value",
+                    self.path.display()
+                );
             });
-            let checked =
-                compiler.checked_program(&analysis).expect("successful analysis must be checked");
-            assert!(
-                matches!(checked.root, TermAnnId::Value(_, _)),
-                "Library source {} must export a value",
-                self.path.display()
-            );
         }
     }
 
     impl SourceProgram {
-        fn compiler() -> CommandCompiler {
-            let compiler = CommandCompiler::default();
-            let project = compiler
-                .session()
-                .project(&[Self::resolve("../workspace.zy".into())])
-                .expect("repository project");
-            compiler.with_project(project)
+        fn with_compiler<T>(action: impl FnOnce(&mut CommandCompiler) -> T) -> T {
+            thread_local! {
+                static WORKSPACE_COMPILER: std::cell::RefCell<Option<CommandCompiler>> =
+                    const { std::cell::RefCell::new(None) };
+            }
+            let mut compiler =
+                WORKSPACE_COMPILER.with(|cell| cell.borrow_mut().take()).unwrap_or_else(|| {
+                    let compiler = CommandCompiler::default();
+                    let project = compiler
+                        .session()
+                        .project(&[Self::resolve("../workspace.zy".into())])
+                        .expect("repository project");
+                    compiler.with_project(project)
+                });
+            let result = action(&mut compiler);
+            compiler.evict_lru();
+            let compiler = compiler
+                .with_representation(RepresentationStrategy::default())
+                .with_sps_scheme(SpsScheme::default())
+                .with_sps_passes(SpsPlan::default());
+            WORKSPACE_COMPILER.with(|cell| *cell.borrow_mut() = Some(compiler));
+            result
         }
 
         pub fn setup(relative: impl Into<PathBuf>) -> Self {
@@ -129,48 +146,92 @@ pub mod utils {
 
         /// Run the program, requiring a zero exit status.
         pub fn test(self, backend: ExecutionTarget) {
-            self.assert_interaction(backend, None);
+            self.assert_interactions([backend], None);
+        }
+
+        /// Run the program across all standard backends in one shared compilation pass.
+        pub fn test_all(self) {
+            self.assert_interactions(
+                [ExecutionTarget::Interpreter, ExecutionTarget::Exe, ExecutionTarget::WasmSps],
+                None,
+            );
+        }
+
+        /// Run the program across the requested backends in one shared compilation pass.
+        pub fn test_backends(self, backends: impl IntoIterator<Item = ExecutionTarget>) {
+            self.assert_interactions(backends, None);
         }
 
         /// Run the program, asserting the exact output and exit status.
         pub fn test_io(self, backend: ExecutionTarget, expected_output: &str, expected_code: i32) {
-            self.assert_interaction(backend, Some((expected_output, expected_code)));
+            self.assert_interactions([backend], Some((expected_output, expected_code)));
         }
 
-        fn assert_interaction(self, backend: ExecutionTarget, expected: Option<(&str, i32)>) {
+        /// Run the program across all standard backends in one shared compilation pass,
+        /// asserting the exact output and exit status.
+        pub fn test_io_all(self, expected_output: &str, expected_code: i32) {
+            self.assert_interactions(
+                [ExecutionTarget::Interpreter, ExecutionTarget::Exe, ExecutionTarget::WasmSps],
+                Some((expected_output, expected_code)),
+            );
+        }
+
+        fn assert_interactions(
+            self, backends: impl IntoIterator<Item = ExecutionTarget>,
+            expected: Option<(&str, i32)>,
+        ) {
             let fixture = self.path.display().to_string();
-            let run = self.run(backend).unwrap_or_else(|error| {
-                panic!("Error running source {fixture} with {backend:?}: {error}")
-            });
-            match expected {
-                | None => assert_eq!(
-                    run.code, 0,
-                    "source {fixture} with {backend:?} exited with {}:\nstdout:\n{}\nstderr:\n{}",
-                    run.code, run.output, run.stderr
-                ),
-                | Some((expected_output, expected_code)) => assert_eq!(
-                    (&*run.output, run.code),
-                    (expected_output, expected_code),
-                    "source {fixture} with {backend:?} interacted unexpectedly:\nstderr:\n{}",
-                    run.stderr
-                ),
+            let backends = backends.into_iter().collect::<Vec<_>>();
+            let runs = self
+                .run_backends(backends)
+                .unwrap_or_else(|error| panic!("Error preparing source {fixture}: {error}"));
+            for (backend, result) in runs {
+                let run = result.unwrap_or_else(|error| {
+                    panic!("Error running source {fixture} with {backend:?}: {error}")
+                });
+                match expected {
+                    | None => assert_eq!(
+                        run.code, 0,
+                        "source {fixture} with {backend:?} exited with {}:\nstdout:\n{}\nstderr:\n{}",
+                        run.code, run.output, run.stderr
+                    ),
+                    | Some((expected_output, expected_code)) => assert_eq!(
+                        (&*run.output, run.code),
+                        (expected_output, expected_code),
+                        "source {fixture} with {backend:?} interacted unexpectedly:\nstderr:\n{}",
+                        run.stderr
+                    ),
+                }
             }
         }
 
-        fn run(&self, backend: ExecutionTarget) -> Result<TestInteraction, CaseError> {
+        fn run_backends(
+            &self, backends: Vec<ExecutionTarget>,
+        ) -> Result<Vec<(ExecutionTarget, Result<TestInteraction, CaseError>)>, CaseError> {
             let SpsSelection { scheme, plan } = self.sps.clone();
-            let compiler = Self::compiler()
-                .with_representation(self.representation)
-                .with_sps_scheme(scheme)
-                .with_sps_passes(plan);
-            let executable = compiler.executable(&self.path)?;
-            let runner = ExecutionRunner::new(
-                &compiler,
-                [backend],
-                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../runtime"),
-            )?;
-            let run = runner.prepare(executable)?.pop().expect("fixture selects one backend");
-            Ok(run.test(&self.arguments, self.standard_input.as_deref().unwrap_or(""))?)
+            Self::with_compiler(|compiler| {
+                *compiler = std::mem::take(compiler)
+                    .with_representation(self.representation)
+                    .with_sps_scheme(scheme)
+                    .with_sps_passes(plan);
+                let executable = compiler.executable(&self.path)?;
+                let runner = ExecutionRunner::new(
+                    compiler,
+                    backends,
+                    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../runtime"),
+                )?;
+                let runs = runner.prepare(executable)?;
+                Ok(runs
+                    .into_iter()
+                    .map(|prepared| {
+                        let target = prepared.target;
+                        let interaction = prepared
+                            .test(&self.arguments, self.standard_input.as_deref().unwrap_or(""))
+                            .map_err(CaseError::from);
+                        (target, interaction)
+                    })
+                    .collect())
+            })
         }
     }
 
@@ -243,9 +304,24 @@ pub mod utils {
     pub struct SourceCase;
 
     impl SourceCase {
+        fn with_compiler<T>(action: impl FnOnce(&CommandCompiler) -> T) -> T {
+            thread_local! {
+                static CASE_COMPILER: std::cell::RefCell<Option<CommandCompiler>> =
+                    const { std::cell::RefCell::new(None) };
+            }
+            let mut compiler =
+                CASE_COMPILER.with(|cell| cell.borrow_mut().take()).unwrap_or_default();
+            let result = action(&compiler);
+            compiler.evict_lru();
+            CASE_COMPILER.with(|cell| *cell.borrow_mut() = Some(compiler));
+            result
+        }
+
         pub fn check(source: &str) -> Result<(), CaseError> {
             Self::with_source(SourceCasePrelude::Core, source, |path| {
-                CommandCompiler::default().analyze(path).map(|_| ()).map_err(CaseError::Compile)
+                Self::with_compiler(|compiler| {
+                    compiler.analyze(path).map(|_| ()).map_err(CaseError::Compile)
+                })
             })
         }
 
@@ -268,12 +344,13 @@ pub mod utils {
             CaseError,
         > {
             Self::with_source(SourceCasePrelude::Core, source, |path| {
-                let compiler = CommandCompiler::default();
-                let analysis = compiler.analyze(path).map_err(CaseError::Compile)?;
-                let checked = compiler
-                    .checked_program(&analysis)
-                    .expect("successful analysis must be checked");
-                Ok(((*checked.statics).clone(), checked.root))
+                Self::with_compiler(|compiler| {
+                    let analysis = compiler.analyze(path).map_err(CaseError::Compile)?;
+                    let checked = compiler
+                        .checked_program(&analysis)
+                        .expect("successful analysis must be checked");
+                    Ok(((*checked.statics).clone(), checked.root))
+                })
             })
         }
 
@@ -281,26 +358,31 @@ pub mod utils {
         /// the observed term and its classifier, on one line each.
         pub fn debug_observations(source: &str) -> Result<Vec<String>, CaseError> {
             Self::with_source(SourceCasePrelude::Core, source, |path| {
-                let compiler = CommandCompiler::default();
-                let analysis = compiler.analyze(path).map_err(CaseError::Compile)?;
-                let checked = compiler
-                    .checked_program(&analysis)
-                    .expect("successful analysis must be checked");
-                let formatter =
-                    zydeco_statics::fmt::Formatter::new(analysis.scoped(), &checked.statics);
-                Ok(analysis
-                    .observations()
-                    .iter()
-                    .filter_map(|observation| match observation {
-                        | TyckObservation::Debug { result: TermAnnId::Compu(term, ty), .. } => {
-                            Some(format!("{} : {}", term.ugly(&formatter), ty.ugly(&formatter)))
-                        }
-                        | TyckObservation::Debug { result: TermAnnId::Value(term, ty), .. } => {
-                            Some(format!("{} : {}", term.ugly(&formatter), ty.ugly(&formatter)))
-                        }
-                        | _ => None,
-                    })
-                    .collect())
+                Self::with_compiler(|compiler| {
+                    let analysis = compiler.analyze(path).map_err(CaseError::Compile)?;
+                    let checked = compiler
+                        .checked_program(&analysis)
+                        .expect("successful analysis must be checked");
+                    let formatter =
+                        zydeco_statics::fmt::Formatter::new(analysis.scoped(), &checked.statics);
+                    Ok(analysis
+                        .observations()
+                        .iter()
+                        .filter_map(|observation| match observation {
+                            | TyckObservation::Debug {
+                                result: TermAnnId::Compu(term, ty), ..
+                            } => {
+                                Some(format!("{} : {}", term.ugly(&formatter), ty.ugly(&formatter)))
+                            }
+                            | TyckObservation::Debug {
+                                result: TermAnnId::Value(term, ty), ..
+                            } => {
+                                Some(format!("{} : {}", term.ugly(&formatter), ty.ugly(&formatter)))
+                            }
+                            | _ => None,
+                        })
+                        .collect())
+                })
             })
         }
 
@@ -308,20 +390,21 @@ pub mod utils {
         /// `name`, as the editor's definition query reads it.
         pub fn type_definition_bodies(source: &str, name: &str) -> Result<Vec<String>, CaseError> {
             Self::with_source(SourceCasePrelude::Core, source, |path| {
-                let compiler = CommandCompiler::default();
-                let analysis = compiler.analyze(path).map_err(CaseError::Compile)?;
-                let checked = compiler
-                    .checked_program(&analysis)
-                    .expect("successful analysis must be checked");
-                let formatter =
-                    zydeco_statics::fmt::Formatter::new(analysis.scoped(), &checked.statics);
-                Ok(analysis
-                    .statics()
-                    .type_definitions
-                    .iter()
-                    .filter(|(def, _)| analysis.scoped().defs[*def].0 == name)
-                    .map(|(_, body)| body.ugly(&formatter))
-                    .collect())
+                Self::with_compiler(|compiler| {
+                    let analysis = compiler.analyze(path).map_err(CaseError::Compile)?;
+                    let checked = compiler
+                        .checked_program(&analysis)
+                        .expect("successful analysis must be checked");
+                    let formatter =
+                        zydeco_statics::fmt::Formatter::new(analysis.scoped(), &checked.statics);
+                    Ok(analysis
+                        .statics()
+                        .type_definitions
+                        .iter()
+                        .filter(|(def, _)| analysis.scoped().defs[*def].as_str() == name)
+                        .map(|(_, body)| body.ugly(&formatter))
+                        .collect())
+                })
             })
         }
 
@@ -330,19 +413,20 @@ pub mod utils {
         /// the source facts an editor reads, missing.
         pub fn unannotated_terms(source: &str, shapes: &[&str]) -> Result<Vec<String>, CaseError> {
             Self::with_source(SourceCasePrelude::Core, source, |path| {
-                let analysis =
-                    CommandCompiler::default().analyze(path).map_err(CaseError::Compile)?;
-                Ok(analysis
-                    .scoped()
-                    .terms
-                    .iter()
-                    .map(|(id, term)| (id, format!("{term:?}")))
-                    .filter(|(id, shape)| {
-                        shapes.iter().any(|prefix| shape.starts_with(prefix))
-                            && analysis.statics().term_annotation(*id).is_none()
-                    })
-                    .map(|(_, shape)| shape)
-                    .collect())
+                Self::with_compiler(|compiler| {
+                    let analysis = compiler.analyze(path).map_err(CaseError::Compile)?;
+                    Ok(analysis
+                        .scoped()
+                        .terms
+                        .iter()
+                        .map(|(id, term)| (id, format!("{term:?}")))
+                        .filter(|(id, shape)| {
+                            shapes.iter().any(|prefix| shape.starts_with(prefix))
+                                && analysis.statics().term_annotation(*id).is_none()
+                        })
+                        .map(|(_, shape)| shape)
+                        .collect())
+                })
             })
         }
 
@@ -353,51 +437,52 @@ pub mod utils {
             source: &str, name: &str,
         ) -> Result<(Vec<String>, usize), CaseError> {
             Self::with_source(SourceCasePrelude::Core, source, |path| {
-                let compiler = CommandCompiler::default();
-                let analysis = compiler.analyze(path).map_err(CaseError::Compile)?;
-                let checked = compiler
-                    .checked_program(&analysis)
-                    .expect("successful analysis must be checked");
-                let statics = &checked.statics;
-                let recorded = statics
-                    .tpats
-                    .iter()
-                    .map(|(typed, _)| statics.pats.source(&(*typed).into()))
-                    .chain(
-                        statics
-                            .kpats
-                            .iter()
-                            .map(|(typed, _)| statics.pats.source(&(*typed).into())),
-                    )
-                    .chain(
-                        statics
-                            .vpats
-                            .iter()
-                            .map(|(typed, _)| statics.pats.source(&(*typed).into())),
-                    )
-                    .flatten()
-                    .collect::<std::collections::HashSet<_>>();
-                let patterns = analysis
-                    .scoped()
-                    .pats
-                    .iter()
-                    .map(|(id, pattern)| (id, format!("{pattern:?}")))
-                    .filter(|(id, shape)| shape.starts_with("Ann(") && !recorded.contains(id))
-                    .map(|(_, shape)| shape)
-                    .collect();
-                let annotated = analysis
-                    .statics()
-                    .annotations_var
-                    .iter()
-                    .map(|(def, _)| *def)
-                    .collect::<std::collections::HashSet<_>>();
-                let definitions = analysis
-                    .scoped()
-                    .defs
-                    .iter()
-                    .filter(|(def, var)| var.0 == name && !annotated.contains(*def))
-                    .count();
-                Ok((patterns, definitions))
+                Self::with_compiler(|compiler| {
+                    let analysis = compiler.analyze(path).map_err(CaseError::Compile)?;
+                    let checked = compiler
+                        .checked_program(&analysis)
+                        .expect("successful analysis must be checked");
+                    let statics = &checked.statics;
+                    let recorded = statics
+                        .tpats
+                        .iter()
+                        .map(|(typed, _)| statics.pats.source(&typed.into()))
+                        .chain(
+                            statics
+                                .kpats
+                                .iter()
+                                .map(|(typed, _)| statics.pats.source(&typed.into())),
+                        )
+                        .chain(
+                            statics
+                                .vpats
+                                .iter()
+                                .map(|(typed, _)| statics.pats.source(&typed.into())),
+                        )
+                        .flatten()
+                        .collect::<std::collections::HashSet<_>>();
+                    let patterns = analysis
+                        .scoped()
+                        .pats
+                        .iter()
+                        .map(|(id, pattern)| (id, format!("{pattern:?}")))
+                        .filter(|(id, shape)| shape.starts_with("Ann(") && !recorded.contains(id))
+                        .map(|(_, shape)| shape)
+                        .collect();
+                    let annotated = analysis
+                        .statics()
+                        .annotations_var
+                        .iter()
+                        .map(|(def, _)| *def)
+                        .collect::<std::collections::HashSet<_>>();
+                    let definitions = analysis
+                        .scoped()
+                        .defs
+                        .iter()
+                        .filter(|(def, var)| var.as_str() == name && !annotated.contains(*def))
+                        .count();
+                    Ok((patterns, definitions))
+                })
             })
         }
 
@@ -407,7 +492,9 @@ pub mod utils {
 
         pub fn check_monadic(source: &str) -> Result<(), CaseError> {
             Self::with_source(SourceCasePrelude::Monadic, source, |path| {
-                CommandCompiler::default().analyze(path).map(|_| ()).map_err(CaseError::Compile)
+                Self::with_compiler(|compiler| {
+                    compiler.analyze(path).map(|_| ()).map_err(CaseError::Compile)
+                })
             })
         }
 
@@ -420,18 +507,20 @@ pub mod utils {
             std::fs::write(directory.path().join("imported.zy"), imported)?;
             let root = directory.path().join("case.zy");
             std::fs::write(&root, Self::wrap(SourceCasePrelude::Core, source))?;
-            CommandCompiler::default().analyze(&root).map(|_| ()).map_err(CaseError::Compile)
+            Self::with_compiler(|compiler| {
+                compiler.analyze(&root).map(|_| ()).map_err(CaseError::Compile)
+            })
         }
 
         pub fn run(source: &str) -> Result<(), CaseError> {
             Self::with_source(SourceCasePrelude::Core, source, |path| {
-                CommandCompiler::default().test(path, &[]).map_err(CaseError::Compile)
+                Self::with_compiler(|compiler| compiler.test(path, &[]).map_err(CaseError::Compile))
             })
         }
 
         pub fn run_monadic(source: &str) -> Result<(), CaseError> {
             Self::with_source(SourceCasePrelude::Monadic, source, |path| {
-                CommandCompiler::default().test(path, &[]).map_err(CaseError::Compile)
+                Self::with_compiler(|compiler| compiler.test(path, &[]).map_err(CaseError::Compile))
             })
         }
 
@@ -439,7 +528,9 @@ pub mod utils {
         /// compiled-backend entry point.
         pub fn lower(source: &str) -> Result<(), CaseError> {
             Self::with_source(SourceCasePrelude::Core, source, |path| {
-                CommandCompiler::default().lower(path).map(|_| ()).map_err(CaseError::Compile)
+                Self::with_compiler(|compiler| {
+                    compiler.lower(path).map(|_| ()).map_err(CaseError::Compile)
+                })
             })
         }
 
@@ -1034,24 +1125,12 @@ macro_rules! check_source {
 #[macro_export]
 macro_rules! runtime_source {
     ($name:ident, $source:expr) => {
-        mod $name {
-            $crate::__source_test!(
-                interpreter,
-                $source,
-                $crate::utils::ExecutionTarget::Interpreter
-            );
-            $crate::__source_test!(wasm_sps, $source, $crate::utils::ExecutionTarget::WasmSps);
-        }
-    };
-}
-
-#[doc(hidden)]
-#[macro_export]
-macro_rules! __source_test {
-    ($name:ident, $source:expr, $backend:expr) => {
         #[test]
         fn $name() {
-            $crate::utils::SourceProgram::setup($source).test($backend);
+            $crate::utils::SourceProgram::setup($source).test_backends([
+                $crate::utils::ExecutionTarget::Interpreter,
+                $crate::utils::ExecutionTarget::WasmSps,
+            ]);
         }
     };
 }
@@ -1059,35 +1138,12 @@ macro_rules! __source_test {
 #[macro_export]
 macro_rules! e2e_sources {
     ({ $($name:ident => $source:expr),* $(,)? }) => {
-        mod interpreter {
-            $(
-                $crate::__source_test!(
-                    $name,
-                    $source,
-                    $crate::utils::ExecutionTarget::Interpreter
-                );
-            )*
-        }
-
-        mod amd64 {
-            $(
-                $crate::__source_test!(
-                    $name,
-                    $source,
-                    $crate::utils::ExecutionTarget::Exe
-                );
-            )*
-        }
-
-        mod wasm_sps {
-            $(
-                $crate::__source_test!(
-                    $name,
-                    $source,
-                    $crate::utils::ExecutionTarget::WasmSps
-                );
-            )*
-        }
+        $(
+            #[test]
+            fn $name() {
+                $crate::utils::SourceProgram::setup($source).test_all();
+            }
+        )*
     };
 }
 
@@ -1096,35 +1152,22 @@ macro_rules! e2e_sources {
 #[macro_export]
 macro_rules! e2e_io_source {
     ($name:ident, $source:expr, $stdin:expr, $output:expr $(, $code:expr)?) => {
-        mod $name {
-            $crate::__source_io_test!(
-                interpreter, $source, $stdin, $output $(, $code)?,
-                $crate::utils::ExecutionTarget::Interpreter
-            );
-            $crate::__source_io_test!(
-                amd64, $source, $stdin, $output $(, $code)?,
-                $crate::utils::ExecutionTarget::Exe
-            );
-            $crate::__source_io_test!(
-                wasm_sps, $source, $stdin, $output $(, $code)?,
-                $crate::utils::ExecutionTarget::WasmSps
-            );
-        }
+        $crate::__source_io_test!($name, $source, $stdin, $output $(, $code)?);
     };
 }
 
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __source_io_test {
-    ($name:ident, $source:expr, $stdin:expr, $output:expr, $backend:expr) => {
-        $crate::__source_io_test!($name, $source, $stdin, $output, 0, $backend);
+    ($name:ident, $source:expr, $stdin:expr, $output:expr) => {
+        $crate::__source_io_test!($name, $source, $stdin, $output, 0);
     };
-    ($name:ident, $source:expr, $stdin:expr, $output:expr, $code:expr, $backend:expr) => {
+    ($name:ident, $source:expr, $stdin:expr, $output:expr, $code:expr) => {
         #[test]
         fn $name() {
             $crate::utils::SourceProgram::setup($source)
                 .with_stdin($stdin)
-                .test_io($backend, $output, $code);
+                .test_io_all($output, $code);
         }
     };
 }

@@ -71,7 +71,7 @@ impl TermChecker<'_> {
         let subst_vec = {
             let mut subst_vec = Vec::new();
             if let (Some(def), kd) = tpat.try_destruct_def(tycker) {
-                let ty_abst = Alloc::alloc(tycker, abst, kd, &self.info);
+                let ty_abst = Alloc::alloc(tycker, abst, kd, &());
                 subst_vec.push((def, ty_abst.into()));
             }
             subst_vec
@@ -79,27 +79,15 @@ impl TermChecker<'_> {
         let body = self.mk_add(subst_vec, body).tyck(tycker, Action::syn())?;
         match body {
             | TermAnnId::Kind(kd_2) => {
-                let input = crate::query::InternedPiSyn::new(
-                    tycker.db,
-                    crate::query::PiSynArm::KindArrow { kd_1, kd_2 },
-                    tpat,
-                    abst,
-                );
-                let outcome = tycker.judge(self.inner, input, crate::query::pi_syn_judgment);
-                let crate::query::PiSynOutcome::Kind { id, kind } = outcome else {
-                    unreachable!("the kind arrow of pi judgments is query-produced")
-                };
-                tycker.statics.kinds_pre.insert_new(id, ss::Fillable::Done(kind));
+                let id = Alloc::alloc(tycker, ss::Arrow(kd_1, kd_2), (), &());
                 Ok(TermAnnId::Kind(id))
             }
             | TermAnnId::Type(ty_2, kd_2) => {
                 self.check_pi_syn_forall(tycker, tpat, abst, ty_2, kd_2)
             }
-            | TermAnnId::Hole(_) => {
-                self.reject_pi_syn(tycker, crate::query::PiSynArm::MissingAnnotation, tpat, abst)
-            }
+            | TermAnnId::Hole(_) => tycker.err(TyckError::MissingAnnotation),
             | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
-                self.reject_pi_syn(tycker, crate::query::PiSynArm::SortMismatch, tpat, abst)
+                tycker.err(TyckError::SortMismatch)
             }
         }
     }
@@ -109,38 +97,21 @@ impl TermChecker<'_> {
         &self, tycker: &mut Tycker<'_>, tpat: ss::TPatId, abst: ss::AbstId, ty_2: ss::TypeId,
         kd_2: ss::KindId,
     ) -> Result<TermAnnId> {
-        let arm = match tycker.kind_filled(&kd_2)?.to_owned() {
+        match tycker.kind_filled(&kd_2)?.to_owned() {
             | ss::Kind::VType(_) => {
                 tycker.err(TyckError::Expressivity("value-level universal types use `val pi`"))?
             }
-            | ss::Kind::CType(_) => crate::query::PiSynArm::Forall { ty_2, kd_2 },
-            | ss::Kind::Arrow(_) | ss::Kind::Label(_) => crate::query::PiSynArm::KindMismatch,
-        };
-        let input = crate::query::InternedPiSyn::new(tycker.db, arm, tpat, abst);
-        match tycker.judge(self.inner, input, crate::query::pi_syn_judgment) {
-            | crate::query::PiSynOutcome::Type { id, ty, kd } => {
-                tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(ty), kd);
-                tycker.store_env(id, &self.info);
-                Ok(TermAnnId::Type(id, kd))
+            | ss::Kind::CType(_) => {
+                let id = Alloc::alloc(
+                    tycker,
+                    ss::Forall(ss::TypeBinder { pattern: tpat, witness: abst }, ty_2),
+                    kd_2,
+                    &(),
+                );
+                Ok(TermAnnId::Type(id, kd_2))
             }
-            | crate::query::PiSynOutcome::Error(error) => tycker.err(error),
-            | crate::query::PiSynOutcome::Kind { .. } => {
-                unreachable!("the type arm of pi judgments is query-produced")
-            }
+            | ss::Kind::Arrow(_) | ss::Kind::Label(_) => tycker.err(TyckError::KindMismatch),
         }
-    }
-
-    /// Report the rejection that the pi judgment produces for `arm`.
-    fn reject_pi_syn(
-        &self, tycker: &mut Tycker<'_>, arm: crate::query::PiSynArm, tpat: ss::TPatId,
-        abst: ss::AbstId,
-    ) -> Result<TermAnnId> {
-        let input = crate::query::InternedPiSyn::new(tycker.db, arm, tpat, abst);
-        let outcome = tycker.judge(self.inner, input, crate::query::pi_syn_judgment);
-        let crate::query::PiSynOutcome::Error(error) = outcome else {
-            unreachable!("the rejection arms of pi judgments are query-produced")
-        };
-        tycker.err(error)
     }
 
     /// Check a pi against `CType`: a type binder forms a universal type, a
@@ -160,7 +131,7 @@ impl TermChecker<'_> {
                 let subst_vec = {
                     let mut subst_vec = Vec::new();
                     if let (Some(def), kd) = tpat.try_destruct_def(tycker) {
-                        let ty_abst = Alloc::alloc(tycker, abst, kd, &self.info);
+                        let ty_abst = Alloc::alloc(tycker, abst, kd, &());
                         subst_vec.push((def, ty_abst.into()));
                     }
                     subst_vec
@@ -168,7 +139,7 @@ impl TermChecker<'_> {
                 let ty_2 = self.mk_add(subst_vec, body).tyck(tycker, Action::ana(ctype.into()))?;
                 let (ty_2, _ctype) = ty_2.try_as_type(tycker, TyckError::SortMismatch)?;
                 let binder = ss::TypeBinder { pattern: tpat, witness: abst };
-                let forall = Alloc::alloc(tycker, ss::Forall(binder, ty_2), ctype, &self.info);
+                let forall = Alloc::alloc(tycker, ss::Forall(binder, ty_2), ctype, &());
                 Ok(TermAnnId::Type(forall, ctype))
             }
             | PatAnnId::Value(_, _) => {

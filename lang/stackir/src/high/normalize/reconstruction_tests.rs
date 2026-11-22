@@ -116,8 +116,8 @@ fn normalization_folds_comparisons_and_preserves_unknown_operands_and_movement_b
 struct Snapshot {
     rendered: String,
     counts: [usize; 4],
-    terms: Vec<(u32, Option<ss::TermId>)>,
-    patterns: Vec<(u32, Option<ss::PatId>)>,
+    terms: Vec<(u32, Option<crate::ir::TermId>)>,
+    patterns: Vec<(u32, Option<crate::ir::VPatId>)>,
     value_protocols: Vec<(u32, ValueProtocol)>,
     pattern_protocols: Vec<(u32, ValueProtocol)>,
     compu_protocols: Vec<(u32, StackProtocol)>,
@@ -132,10 +132,7 @@ impl Snapshot {
 
     fn of(program: &SpsProgram) -> Self {
         let arena = program.arena();
-        let scoped = zydeco_surface::scoped::arena::ScopedArena::default();
-        let statics = zydeco_statics::arena::StaticsArena::default();
-        let formatter =
-            crate::high::fmt::Formatter::new(&arena.admin, &arena.inner, &scoped, &statics);
+        let formatter = crate::high::fmt::Formatter::new(&arena.admin, &arena.inner);
         // Keep all raw allocation slots and source identities, normalizing only
         // the independently allocated output key spaces of nodes and generated definitions.
         let rendered = program
@@ -187,13 +184,13 @@ impl Snapshot {
 
 #[test]
 fn normalization_preserves_reconstruction_sites_and_protocols() {
+    use zydeco_foundation::dense::DenseId;
     let mut arena = SpsArena::default();
-    let mut origins = IdAllocator::<zydeco_statics::arena::StaticsScope>::new();
-    let pattern_site = ss::PatId::Value(origins.alloc());
-    let value_site = ss::TermId::Value(origins.alloc());
-    let computation_site = ss::TermId::Compu(origins.alloc());
+    let pattern_site = crate::ir::VPatId::from_index(0);
+    let value_site = crate::ir::TermId::Value(crate::ir::ValueId::from_index(0));
+    let computation_site = crate::ir::TermId::Compu(crate::ir::CompuId::from_index(0));
     let parameter: DefId = arena.admin.fresh_def();
-    arena.admin.insert_def(parameter, VarName("argument".into()));
+    arena.admin.insert_def(parameter, VarName::new("argument"));
     let binder = parameter.build(&mut arena, Some(pattern_site));
     arena.inner.pattern_protocols.insert_new(binder, ValueProtocol::Unit);
     let value = parameter.build(&mut arena, Some(value_site));
@@ -203,7 +200,7 @@ fn normalization_preserves_reconstruction_sites_and_protocols() {
     let stack = StackVar.build(&mut arena, None);
     let body = Let { binder: Cons(binder, StackVar), bindee: stack, tail }.build(&mut arena, None);
     let param: DefId = arena.admin.fresh_def();
-    arena.admin.insert_def(param, VarName("recursive".into()));
+    arena.admin.insert_def(param, VarName::new("recursive"));
     let stack = StackVar.build(&mut arena, None);
     let root = SFix { param, stack, body }.build(&mut arena, Some(computation_site));
     let protocol = StackProtocol::Argument(
@@ -251,7 +248,7 @@ fn normalization_preserves_empty_and_wide_child_sequences() {
                             let value = Triv.build(&mut arena, None);
                             let stack = StackVar.build(&mut arena, None);
                             let tail = SReturn { stack, value }.build(&mut arena, None);
-                            let tag = DtorIdx { idx, name: DtorName(format!("arm{idx}")) };
+                            let tag = DtorIdx { idx, name: DtorName::new(format!("arm{idx}")) };
                             CoMatcher { dtor: Cons(tag, StackVar), tail }
                         })
                         .collect();
@@ -266,7 +263,7 @@ fn normalization_preserves_empty_and_wide_child_sequences() {
                             let stack = StackVar.build(&mut arena, None);
                             let tail = SReturn { stack, value }.build(&mut arena, None);
                             let payload: VPatId = Hole.build(&mut arena, None);
-                            let tag = CtorIdx { idx, name: CtorName(format!("+Arm{idx}")) };
+                            let tag = CtorIdx { idx, name: CtorName::new(format!("+Arm{idx}")) };
                             let binder = Ctor(tag, payload).build(&mut arena, None);
                             Matcher { binder, tail }
                         })

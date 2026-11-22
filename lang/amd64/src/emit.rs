@@ -919,9 +919,6 @@ impl<'a> Emit<'a> for Terminator {
                             .text
                             .push(Instr::Mov(MovArgs::ToReg(Reg::R11, Arg64::Reg(Reg::Rax))));
                     }
-                    | Some(SpareBox::Unused) => {
-                        em.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::R11, Arg64::Unsigned(0))))
-                    }
                     | None => {}
                 }
                 for i in 1..=*arity {

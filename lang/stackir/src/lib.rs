@@ -1,6 +1,6 @@
 #![doc = include_str!("README.md")]
 
-use zydeco_statics::syntax as static_syntax;
+pub use zydeco_ir as ir;
 
 /// Syntax shared by SPS and SPSLow.
 pub mod syntax;
@@ -38,5 +38,5 @@ pub mod high;
 pub use high::{
     arena::*,
     check::{FragmentError, FragmentErrors, FragmentProgram},
-    lower::{BuiltinRootLowerError, BuiltinRootLowerer, Lowerer, RootLowerer, SpsLoweringError},
+    lower::{Lowerer, RootLowerer},
 };

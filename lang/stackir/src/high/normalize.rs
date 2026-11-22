@@ -13,8 +13,7 @@ use super::{
 use crate::scheme::SpsScheme;
 use derive_more::{AsMut, AsRef};
 use std::{collections::HashMap, convert::Infallible, rc::Rc};
-use zydeco_statics::syntax as ss;
-use zydeco_utils::{fold::Explicit, pass::CompilerPass};
+use zydeco_foundation::{fold::Explicit, pass::CompilerPass};
 
 mod fold;
 mod pattern;
@@ -226,7 +225,15 @@ impl Normalization {
     /// Only a simple, singly used binding may transfer ownership of a body.
     fn shared(&self, id: ValueId, env: EnvId) -> Rc<KnownValue> {
         let known = self.known(id, env);
-        if matches!(known.as_ref(), KnownValue::Closure { .. }) { Rc::default() } else { known }
+        if matches!(known.as_ref(), KnownValue::Closure { .. }) {
+            if let Value::Var(def) = self.source.inner.values[&id] {
+                Rc::new(KnownValue::Alias(def))
+            } else {
+                Rc::default()
+            }
+        } else {
+            known
+        }
     }
 
     fn known(&self, id: ValueId, env: EnvId) -> Rc<KnownValue> {
@@ -308,7 +315,11 @@ impl Normalization {
             }
             known
         } else if matches!(known.as_ref(), KnownValue::Closure { .. }) {
-            Rc::default()
+            if let Value::Var(def) = self.source.inner.values[&value.node] {
+                Rc::new(KnownValue::Alias(def))
+            } else {
+                Rc::default()
+            }
         } else {
             known
         }
@@ -378,6 +389,66 @@ impl Normalization {
         true
     }
 
+    fn discardable_scoped(&self, value: ScopedValue) -> bool {
+        if self.discardable(value.node) {
+            return true;
+        }
+        matches!(
+            &self.source.inner.values[&value.node],
+            Value::Primitive(Primitive { operation, operands })
+                if operands.iter().all(|&operand| self.discardable(operand))
+                    && self
+                        .fold_primitive(
+                            *operation,
+                            operands.map(|node| ScopedValue { node, env: value.env }),
+                        )
+                        .is_some()
+        )
+    }
+
+    fn movable_scoped_stack(&self, mut stack: ScopedStack) -> bool {
+        loop {
+            stack = self.resolve_stack(stack);
+            match &self.source.inner.stacks[&stack.node] {
+                | Stack::Var(_) | Stack::Ext(StackExt::Kont(_)) => return true,
+                | Stack::Arg(Cons(value, rest)) => {
+                    if !self
+                        .discardable_scoped(ScopedValue { node: *value, env: stack.scope.values })
+                    {
+                        return false;
+                    }
+                    stack.node = *rest;
+                }
+                | Stack::Tag(Cons(_, rest)) => stack.node = *rest,
+            }
+        }
+    }
+
+    /// A thunk or procedure whose leading parameter pops are already present on `stack`
+    /// may bind those trapping arguments directly in source order before checking whether
+    /// the remaining stack can cross the rest of `body`.
+    fn can_enter_with_stack(&self, mut body: CompuId, mut stack: ScopedStack) -> bool {
+        loop {
+            if self.movable_scoped_stack(stack.clone()) {
+                return true;
+            }
+            let Computation::LetArg(Let { binder: Cons(_, StackVar), bindee, tail }) =
+                self.source.inner.compus[&body]
+            else {
+                return false;
+            };
+            if !matches!(self.source.inner.stacks[&bindee], Stack::Var(StackVar)) {
+                return false;
+            }
+            let resolved = self.resolve_stack(stack);
+            let Stack::Arg(Cons(_, rest)) = self.source.inner.stacks[&resolved.node] else {
+                return false;
+            };
+            body = tail;
+            stack = ScopedStack { node: rest, scope: resolved.scope };
+        }
+    }
+
     /// Substitution may delay constructing frames until their consumer runs.
     /// Only total value construction can move across an intervening computation.
     /// Continuation bodies stay suspended at this boundary.
@@ -409,7 +480,7 @@ impl Normalization {
             .into_iter()
             .map(|original| {
                 let fresh = self.arena.admin.fresh_def();
-                self.arena.admin.insert_def(fresh, VarName("__memory_read__".into()));
+                self.arena.admin.insert_def(fresh, VarName::new("__memory_read__"));
                 (original, fresh)
             })
             .collect();
@@ -471,24 +542,6 @@ impl Normalization {
         };
         operation.evaluate(&[first.clone(), second.clone()]).ok()
     }
-
-    /// Read arguments through ambient-stack substitutions without moving any trapping frames.
-    fn primitive_arguments(&self, stack: ScopedStack) -> Option<([ScopedValue; 2], ScopedStack)> {
-        let first = self.resolve_stack(stack);
-        let Stack::Arg(Cons(value, rest)) = self.source.inner.stacks[&first.node] else {
-            return None;
-        };
-        let first_value = ScopedValue { node: value, env: first.scope.values };
-        let second = self.resolve_stack(ScopedStack { node: rest, scope: first.scope });
-        let Stack::Arg(Cons(value, rest)) = self.source.inner.stacks[&second.node] else {
-            return None;
-        };
-        let second_value = ScopedValue { node: value, env: second.scope.values };
-        self.movable_stack(rest).then_some((
-            [first_value, second_value],
-            self.resolve_stack(ScopedStack { node: rest, scope: second.scope }),
-        ))
-    }
 }
 
 #[cfg(test)]
@@ -508,7 +561,7 @@ mod tests {
     impl Fixture {
         fn def(&mut self, name: &str) -> DefId {
             let def = self.arena.admin.fresh_def();
-            self.arena.admin.insert_def(def, VarName(name.into()));
+            self.arena.admin.insert_def(def, VarName::new(name));
             def
         }
 
@@ -520,15 +573,11 @@ mod tests {
         }
 
         fn primitive(&mut self) -> ValueId {
-            let stack = self.build(StackVar);
-            let body = self.build(ExternCall {
-                function: ExternalFunction::Host(BuiltinValueRole::Integer(
-                    IntegerType::Int,
-                    IntegerOperation::Add,
-                )),
-                stack,
-            });
-            self.build(Closure { stack: StackVar, body })
+            ExternalFunction::Host(BuiltinValueRole::Integer(
+                IntegerType::Int,
+                IntegerOperation::Add,
+            ))
+            .make_function(self.scheme, &mut self.arena)
         }
 
         fn force(&mut self, thunk: ValueId) -> CompuId {
@@ -579,7 +628,7 @@ mod tests {
         }
 
         fn ctor(index: usize) -> CtorIdx {
-            CtorIdx { idx: index, name: CtorName(format!("C{index}")) }
+            CtorIdx { idx: index, name: CtorName::new(format!("C{index}")) }
         }
 
         fn normalize(self, root: CompuId) -> SpsProgram {
@@ -1319,7 +1368,7 @@ mod tests {
     fn tag_beta_consumes_the_selected_tag_and_argument_frames() {
         for known in [false, true] {
             let mut fixture = Fixture::default();
-            let tag = DtorIdx { idx: 0, name: DtorName("selected".into()) };
+            let tag = DtorIdx { idx: 0, name: DtorName::new("selected") };
             let argument = fixture.def("argument");
             let returned = fixture.build(argument);
             let tail = fixture.ret(returned);
@@ -1430,7 +1479,7 @@ mod tests {
                     fixture.build(Let { binder: Cons(binder, StackVar), bindee, tail: body })
                 }
                 | Consumer::Destructor => {
-                    let tag = DtorIdx { idx: 0, name: DtorName("run".into()) };
+                    let tag = DtorIdx { idx: 0, name: DtorName::new("run") };
                     let scrut = fixture.build(Cons(tag.clone(), rest));
                     let arms = vec![CoMatcher { dtor: Cons(tag, StackVar), tail: body }];
                     fixture.build(SCoMatch { scrut, arms })
@@ -1576,5 +1625,77 @@ mod tests {
         });
         let program = fixture.normalize(root);
         assert_eq!(procedure_forms(&program), (1, 2));
+    }
+
+    #[test]
+    fn packed_closure_variable_retains_alias_for_projection_and_localizes() {
+        use crate::high::localize::Localizer;
+
+        let mut fixture = Fixture::default();
+        let f = fixture.def("f");
+        let a = fixture.def("a");
+        let b = fixture.def("b");
+        let p = fixture.def("p");
+        let closure = fixture.returning_thunk();
+
+        // `(f, ())` packs `f` despite `f` only appearing once in `values`.
+        let f_var: ValueId = fixture.build(f);
+        let unit: ValueId = fixture.build(Triv);
+        let packed = fixture.build(VCons::new(vec![f_var, unit], ProductLayout { arity: 2 }));
+
+        // Match `(f, ())` into `a`, then re-match `(f, ())` via `p` or bind `(a, _)` twice:
+        // pack `(f, ())` as `p`, then project `let (a, _) = p in let (b, _) = p in ...`
+        let p_pat = fixture.build(p);
+        let p_val_1: ValueId = fixture.build(p);
+        let p_val_2: ValueId = fixture.build(p);
+        let a_pat = fixture.build(a);
+        let hole_1 = fixture.build(Hole);
+        let pat_1 = fixture.build(VCons::new(vec![a_pat, hole_1], ProductLayout { arity: 2 }));
+        let b_pat = fixture.build(b);
+        let hole_2 = fixture.build(Hole);
+        let pat_2 = fixture.build(VCons::new(vec![b_pat, hole_2], ProductLayout { arity: 2 }));
+
+        // `b ! •` inside continuation of `a ! kont _ -> b ! •`.
+        let b_val: ValueId = fixture.build(b);
+        let second_call = fixture.force(b_val);
+        let hole_k = fixture.build(Hole);
+        let kont = fixture.build(Kont { binder: hole_k, body: second_call });
+        let a_val: ValueId = fixture.build(a);
+        let first_call = fixture.build(SForce { thunk: a_val, stack: kont });
+
+        let inner_match =
+            fixture.build(SProductMatch { scrut: p_val_2, binder: pat_2, body: first_call });
+        let outer_match =
+            fixture.build(SProductMatch { scrut: p_val_1, binder: pat_1, body: inner_match });
+        let bind_p = fixture.build(Let { binder: p_pat, bindee: packed, tail: outer_match });
+        let f_pat = fixture.build(f);
+        let root = fixture.build(Let { binder: f_pat, bindee: closure, tail: bind_p });
+
+        let normalized = fixture.normalize(root);
+        let norm_inner = &normalized.arena().inner;
+        assert!(
+            !norm_inner.values.iter().any(|(_, value)| matches!(value, Value::VCons(_))),
+            "packing and projecting `f` must be eliminated"
+        );
+        assert!(
+            !norm_inner
+                .compus
+                .iter()
+                .any(|(_, compu)| matches!(compu, Computation::ProductMatch(_))),
+            "product projections must disappear"
+        );
+        assert_eq!(
+            norm_inner
+                .values
+                .iter()
+                .filter(|(_, value)| matches!(value, Value::Ext(ValueExt::Closure(_))))
+                .count(),
+            1,
+            "`f`'s closure must be kept once rather than duplicated"
+        );
+
+        let fragment = FragmentProgram::try_new(normalized, SpsScheme::BranchJoin).unwrap();
+        let localized = Localizer.run(fragment).unwrap().into_program();
+        assert_eq!(procedure_forms(&localized), (1, 2));
     }
 }

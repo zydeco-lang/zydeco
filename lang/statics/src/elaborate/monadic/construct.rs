@@ -18,10 +18,10 @@ where
     fn construct(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TPatId)> {
         let cs::Pat(def, kd) = self;
         let (mut env, kd) = kd.construct(tycker, env)?;
-        let var = tycker.def_name(&def).clone();
+        let var = *tycker.def_name(&def);
         let copy = Alloc::alloc(tycker, var, kd.into(), &());
         env.subst += [(def, copy)];
-        let tpat = Alloc::alloc(tycker, copy, kd, &env.ty);
+        let tpat = Alloc::alloc(tycker, copy, kd, &());
         Ok((env, tpat))
     }
 }
@@ -36,10 +36,10 @@ where
     fn construct(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, VPatId)> {
         let cs::Pat(def, ty) = self;
         let (mut env, ty) = ty.construct(tycker, env)?;
-        let var = tycker.def_name(&def).clone();
+        let var = *tycker.def_name(&def);
         let copy = Alloc::alloc(tycker, var, ty.into(), &());
         env.subst += [(def, copy)];
-        let vpat = Alloc::alloc(tycker, copy, ty, &env.ty);
+        let vpat = Alloc::alloc(tycker, copy, ty, &());
         Ok((env, vpat))
     }
 }
@@ -108,8 +108,8 @@ impl ForallAbstraction {
         let body_ty = tycker.statics.annotations_compu[&body];
         let (env, ctype) = CType.construct(tycker, env)?;
         let binder = TypeBinder { pattern, witness };
-        let ty = Alloc::alloc(tycker, Forall(binder, body_ty), ctype, &env.ty);
-        let abstraction = Alloc::alloc(tycker, Abs(pattern, body), ty, &env.ty);
+        let ty = Alloc::alloc(tycker, Forall(binder, body_ty), ctype, &());
+        let abstraction = Alloc::alloc(tycker, Abs(pattern, body), ty, &());
         Ok((env, abstraction))
     }
 }
@@ -136,7 +136,7 @@ where
         Lub::lub(domain_kd, arg_kd, tycker)?;
         let payload = binder.pattern.bind_argument(tycker, arg)?;
         let ty = body_ty.subst_abst(tycker, (binder.witness, payload))?;
-        let application = Alloc::alloc(tycker, App(abs, arg), ty, &env.ty);
+        let application = Alloc::alloc(tycker, App(abs, arg), ty, &());
         Ok((env, application))
     }
 }

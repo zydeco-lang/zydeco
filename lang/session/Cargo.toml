@@ -10,7 +10,8 @@ readme = { workspace = true }
 description = "revisioned source and semantic analysis sessions for zydeco"
 
 [dependencies]
-zydeco-utils = { workspace = true }
+zydeco-foundation = { workspace = true }
+zydeco-ir = { workspace = true }
 zydeco-surface = { workspace = true }
 zydeco-statics = { workspace = true }
 ariadne = { workspace = true }

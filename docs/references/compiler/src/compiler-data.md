@@ -1,18 +1,25 @@
 # C2. Compiler Data, Identities, Arenas, and Source Provenance
 
-An ID's Rust type identifies its node category; its opaque key space and raw index identify an allocation.
-A source binder, a particular checking occurrence, and an emitted runtime value are different identities.
-[The arena utilities](../../../../lang/utils/src/arena.rs) separate issuing those IDs from owning
+An ID's Rust type identifies its node category.
+Surface and stack-IR identifiers carry an opaque key space and raw index, while static syntax identifiers (`AbstId`,
+`FillId`, `KindId`, `TypeId`, `KPatId`, `TPatId`, `VPatId`, `ValueId`, `CompuId`,
+`DataId`, and `CoDataId`) use four-byte dense [`DenseId`](../../../../lang/foundation/src/dense.rs) indices
+into [`StaticsArena`](../../../../lang/statics/src/arena.rs).
+Identifier names (`VarName`, `CtorName`, `DtorName`, `FieldName`) are backed
+by global [`Sym`](../../../../lang/foundation/src/symbol.rs) handles in `SymbolInterner`,
+reducing clones and equality comparisons to integer copies.
+[The arena utilities](../../../../lang/foundation/src/arena.rs) separate issuing keyed IDs from owning
 and accessing their storage.
 
 | Mechanism | Invariant |
 | --- | --- |
 | `IdAllocator<Scope>` | One non-cloneable sequential issuer owns a fresh key space and cursor. |
 | `KeySpaceRegistry<Site>` | Complete site equality reuses an identity; distinct sites and independent registries receive fresh key spaces. |
-| Derived allocation | The session registry, entity identity, checking occurrence, derivation family, and local slot reproduce an allocation. |
+| Dense statics and generated definitions | `StaticsArena` allocates four-byte `DenseId` indices in `DenseArena`, while `DefGenAllocator` derives reproducible `DefId`s from `KeySpaceRegistry<su::TermId>`. |
+| `TypeSummary` | Each node in `TypeArena` stores a one-byte summary bitmask propagating reachable fills, variables, abstract types, projections, beta/seal heads, and primitives. |
 | `Allocates<Id>` | A capability declares which categories an operation may issue. |
 | `ArenaSchema<Id>` | An owning representation declares the item stored under an ID. |
-| Dense storage | The backing arena supplies the raw index and rejects another arena's key space. |
+| Dense storage | The backing arena supplies the raw index and rejects another arena's key space or index type. |
 | Sparse, paged, and indexed storage | Producer-issued IDs retain their identity when storage changes. |
 | Associative side tables | Each write explicitly inserts, replaces, upserts, or ensures an association. |
 | `FrozenArena<A>` | Consumers receive storage without the builder's indexed-mutation capability. |
@@ -20,28 +27,17 @@ and accessing their storage.
 Sequential issuers normally live on a parser, resolver, or lowerer rather than its published arena.
 SPS retains its definition issuer until consuming closure conversion moves it into the low administrative arena;
 SPSLow syntax has a separate issuer and never reuses SPS syntax IDs.
-Statics producer queries derive occurrence IDs, while the checker materializes their returned fragments.
-Rechecking the same source entity in a distinct occurrence must not overwrite an earlier elaboration.
+Statics allocates dense nodes directly inside `StaticsArena` during a single checker run,
+using `DefGenAllocator` to give generated `DefId`s replay-stable identities across session eviction.
+Rechecking the same source entity in a distinct occurrence allocates fresh dense nodes
+without overwriting earlier elaborations.
 
-Query replay must recover the identifiers held by retained semantic facts, even after an arena memo is evicted.
-The session therefore owns a `DerivedIdRegistry`, shared through `Arc` by its database clones and checking runs.
-Statics owns the registry's site types: `DerivationFamily` distinguishes checker intermediates from producer nodes,
-and an entity site includes the full `EntityId` category and identity together with its checking occurrence.
-Allocations outside an entity use a separate root-site variant keyed by the checked source root.
-Intrinsic singleton sites pair that root with the full intrinsic key.
-These structural variants replace numeric sentinel identities and domain tags.
-
-The generic `KeySpaceRegistry<Site>` interns those complete keys.
-Hashing accelerates lookup; full key equality establishes identity, including when hashes collide.
-A mutex makes lookup and first issuance atomic, and the same non-recycling process-wide issuer supplies both interned
-and sequential key spaces.
-Distinct registered sites therefore cannot collide with each other or with sequential allocators;
-separate registries also receive disjoint identities.
-Within a site, callers assign distinct local slots to distinct allocations of one ID category.
-The checker caches both allocation-family key spaces when entering the site
-and advances only a local cursor for individual allocations.
-Key-space, occurrence, and slot exhaustion fail rather than wrapping; recursive-binding index conversion
-and slot arithmetic are checked as well.
+Session-owned `KeySpaceRegistry<su::TermId>` instances survive coarse query eviction
+and remain available until the last session owner is dropped.
+`KeySpaceRegistry<Site>` interns complete keys: hashing accelerates lookup, full key equality establishes identity,
+and an atomic mutex guarantees disjointness across independent registries and sequential allocators.
+Within a site, callers assign distinct local slots (`DefGenAllocator`) up to `u32::MAX`,
+failing cleanly on exhaustion rather than wrapping.
 
 Registry mappings survive query eviction and remain available until the last registry owner is dropped.
 They retain site identities rather than arena payloads, with memory proportional to the number of registered sites.
@@ -55,7 +51,7 @@ or duplicate results; one typed node may produce several IR nodes.
 Parsed entities use the tagged `EntityId` category rather than casts between definition, pattern, and term IDs.
 Generated definitions and phase-local provenance belong to the phase that creates them.
 
-[Span](../../../../lang/utils/src/span.rs) stores two `BytePos(u32)` endpoints: eight bytes per span.
+[Span](../../../../lang/foundation/src/span.rs) stores two `BytePos(u32)` endpoints: eight bytes per span.
 Compact byte positions avoid retaining a path, line, and column at every syntax node.
 A `FileMap` owns a file's path, retained text, global base, and line-start index;
 `SourceMap` orders files by their global base.
@@ -131,7 +127,12 @@ or memory claims additionally require measurements that include callback work an
 ## Resumable Folder Execution
 
 A folder that rebuilds a parent after visiting its children must retain the unfinished parent.
-The shared [folder execution interface](../../../../lang/utils/src/fold.rs) stores that continuation
+Statics judgments, normalizers, substitutions, unifiers, and elaborators run as natural recursive Rust functions guarded
+by [`zydeco_foundation::stack::maybe_grow`](../../../../lang/foundation/src/stack.rs),
+which grows heap stack segments dynamically past the 64 KiB red zone instead
+of building explicit state-machine frames or relying solely on `RUST_MIN_STACK`.
+For middle-end and backend transformations,
+the shared [folder execution interface](../../../../lang/foundation/src/fold.rs) stores continuations
 in an explicit vector, so input depth does not consume the native stack.
 It supports mutable compiler state without retaining a mutable borrow of the folder across child execution.
 
@@ -279,9 +280,11 @@ Neither a break nor a cycle balances pending exits or rolls back visitor state.
 Every run has fresh traversal bookkeeping, so a configuration can be reused after either outcome.
 Callers must distinguish a completed analysis from its partial state after stopping.
 
-[ContextCollector](../../../../lang/surface/src/scoped/context.rs) is the postorder free-variable analysis.
-It temporarily records bound and free definitions for patterns, and free definitions for terms.
-`finish` retains only the term summaries as `TermContexts`.
+[ContextCollector](../../../../lang/surface/src/scoped/context.rs) is the postorder free-variable
+and source-boundary analysis.
+It temporarily records bound definitions on patterns,
+and retains free definitions alongside `SourceBoundary` reachability flags for both terms
+and patterns inside `TermContexts`.
 These summaries are independent of the incoming environment, so `TermContexts::collect` uses unique-node traversal.
 Other analyses can share its traversal through `Together`.
 

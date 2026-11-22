@@ -25,8 +25,8 @@ impl<'a> Tyck<'a> for TyEnvT<ValuePiFormation> {
             }
             | PatAnnId::Type(pattern, _) => {
                 let witness = Alloc::alloc(tycker, pattern, (), &());
-                let payload_kind = tycker.statics.annotations_abst[&witness];
-                let payload = Alloc::alloc(tycker, witness, payload_kind, &self.info);
+                let payload_kind = tycker.statics.annotations_abst[witness];
+                let payload = Alloc::alloc(tycker, witness, payload_kind, &());
                 let argument = pattern.introduce_payload(tycker, payload);
                 let argument = argument?;
                 let body_env = TyEnvT::new(binder.info.clone(), Assign(pattern, argument))
@@ -82,7 +82,7 @@ impl<'a> Tyck<'a> for TyEnvT<ValuePiFormation> {
                 }
             }
         };
-        let pi = Alloc::alloc(tycker, pi, vtype, &self.info);
+        let pi = Alloc::alloc(tycker, pi, vtype, &());
         Ok(TermAnnId::Type(pi, vtype))
     }
 }
@@ -110,12 +110,12 @@ impl<'a> Tyck<'a> for TyEnvT<ComputationPiFormation> {
             | ss::Kind::CType(_) => match binder.package_telescope(tycker)? {
                 | None => {
                     binder.close_scope(tycker, codomain)?;
-                    Alloc::alloc(tycker, ss::Arrow(domain, codomain), codomain_kind, &self.info)
+                    Alloc::alloc(tycker, ss::Arrow(domain, codomain), codomain_kind, &())
                 }
                 | Some(witnesses) => {
                     let signature = ss::PackPi { domain, witnesses, codomain };
                     tycker.validate_builtin_signature(&signature)?;
-                    Alloc::alloc(tycker, signature, codomain_kind, &self.info)
+                    Alloc::alloc(tycker, signature, codomain_kind, &())
                 }
             },
             | ss::Kind::Arrow(_) | ss::Kind::Label(_) => tycker.err(TyckError::KindMismatch)?,

@@ -55,8 +55,8 @@ not a missing positivity guarantee to add to the reference.
   Commit `5e4f4e46` removed the abstract-machine Wasm backend,
   and [CLI backend selection](../../cli/README.md#selecting-an-execution-backend) now names `interpreter`,
   `exe` (AMD64), and `wasm-sps`.
-  The tests register exactly those three ([builtin.rs:82-103](../../lang/tests/tests/builtin.rs)
-  and [ffi_examples.rs:165](../../lang/tests/tests/ffi_examples.rs)).
+  The tests register exactly those three ([builtin.rs:82-103](../../lang/tests/tests/suite/builtin.rs)
+  and [ffi_examples.rs:165](../../lang/tests/tests/suite/ffi_examples.rs)).
   Repair both sentences to say three backends and keep the existing test and specimen lists.
 - [ ] **`--representation` scope.** The [C10 policy selection](../references/compiler/src/zasm.md#policy-selection)
   account says at `compiler.md:2493` that the CLI's `build --representation` applies
@@ -74,7 +74,7 @@ not a missing positivity guarantee to add to the reference.
   The file is a JavaScript re-implementation
   of the [L13 Rust Display spelling](../references/language/src/primitives-and-capabilities.md) (`language.md:1824`),
   imported by the [Node host](../../cli/wasm/wasm-host.mjs) at `wasm-host.mjs:3` and checked against Rust
-  by the [Wasm float-text parity test](../../lang/tests/tests/wasm_float_text.rs) at `wasm_float_text.rs:62`;
+  by the [Wasm float-text parity test](../../lang/tests/tests/suite/wasm_float_text.rs) at `wasm_float_text.rs:62`;
   the [execution runner](../../cli/src/execution.rs) bundles it for Wasm execution at `execution.rs:162`.
   [C13 module and host ABI](../references/compiler/src/webassembly.md#module-and-host-abi) already treats the Node host
   as a separate implementation.

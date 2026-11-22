@@ -30,9 +30,11 @@ impl<'arena> Punning<'arena> {
             return None;
         }
         match &self.arena.terms[&inner] {
-            | Term::Var(VarName(name)) if name == &field.0 => Some(PunnedTermPayload::Variable),
+            | Term::Var(name) if name.as_str() == field.as_str() => {
+                Some(PunnedTermPayload::Variable)
+            }
             | Term::Ann(Ann { tm, ty }) => match &self.arena.terms[tm] {
-                | Term::Var(VarName(name)) if name == &field.0 && self.is_trivia_free(*tm) => {
+                | Term::Var(name) if name.as_str() == field.as_str() && self.is_trivia_free(*tm) => {
                     Some(PunnedTermPayload::Annotated { variable: *tm, classifier: *ty })
                 }
                 | _ => None,
@@ -48,12 +50,13 @@ impl<'arena> Punning<'arena> {
             return None;
         }
         match &self.arena.pats[&inner] {
-            | Pattern::Var(definition) if self.arena.defs[definition].0 == field.0 => {
+            | Pattern::Var(definition) if self.arena.defs[definition].as_str() == field.as_str() => {
                 Some(PunnedPatternPayload::Variable)
             }
             | Pattern::Ann(Ann { tm, ty }) => match &self.arena.pats[tm] {
                 | Pattern::Var(definition)
-                    if self.arena.defs[definition].0 == field.0 && self.is_trivia_free(*tm) =>
+                    if self.arena.defs[definition].as_str() == field.as_str()
+                        && self.is_trivia_free(*tm) =>
                 {
                     Some(PunnedPatternPayload::Annotated { variable: *tm, classifier: *ty })
                 }

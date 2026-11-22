@@ -3,8 +3,8 @@
 This 2026-09-15 study measures raw memory kernels through the implemented storage/codec split,
 typed fields, fixed views, and checked array access.
 The source migration is `7d3e3772`; the address-binding planner change and these measurements are committed together.
-Check out the commit containing this study to reproduce its compiler and library.
-The [compiler reference](../../references/compiler/src/native-runtime.md#raw-memory-kernels) owns the implemented contract;
+Check out the commit containing this study to reproduce its compiler and library. The
+[compiler reference](../../references/compiler/src/native-runtime.md#raw-memory-kernels) owns the implemented contract;
 [memory compilation](../../proposals/memory-compilation.md#first-acceptance-target-and-order) owns the remaining costs.
 
 ## Workloads and boundaries
@@ -94,7 +94,7 @@ target/debug/zydeco run docs/evaluations/2026-09-15-typed-memory/header-raw.zy
 target/debug/zydeco run docs/evaluations/2026-09-15-typed-memory/header-typed.zy
 cargo test --offline -p zydeco-cli --test passes typed_memory_kernels
 cargo test --offline -p zydeco-cli --test passes scalar_memory
-cargo test --offline -p zydeco-tests --test general_memory
+cargo test --offline -p zydeco-tests --test suite -- general_memory::
 ```
 
 Keep later measurements separately; the earlier dated studies describe their recorded revisions.

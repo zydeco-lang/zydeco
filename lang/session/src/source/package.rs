@@ -12,11 +12,11 @@ pub use resolution::{
     PackageInstance, PackageInstanceId, ResolvedPackage, ResolvedPackageReference,
     ResolvedPackageRelation,
 };
+use zydeco_foundation::span::Sp;
 pub use zydeco_surface::metadata::{
     PackageName, PackagePath, PackageRelation, PackageRelationKind, PackageRole, SourceReference,
 };
 use zydeco_surface::textual::{ImportSite, syntax as t};
-use zydeco_utils::span::Sp;
 
 /// A file entry and optional package path for a resolution request.
 #[derive(

@@ -1,10 +1,10 @@
 use crate::source::{SourceGraph, SourceId, SourceKind, TextualProgramError};
 use std::collections::HashMap;
 use std::sync::Arc;
+use zydeco_foundation::arena::FrozenArena;
+use zydeco_foundation::span::{BytePos, FileSource, SourceMap, Span};
 use zydeco_surface::metadata::MetadataKind;
 use zydeco_surface::textual::syntax as t;
-use zydeco_utils::arena::FrozenArena;
-use zydeco_utils::span::{BytePos, FileSource, SourceMap, Span};
 
 /// The complete program in textual syntax, assembled as one source-term DAG.
 ///
@@ -169,10 +169,10 @@ impl<'graph> TextualProgramBuilder<'graph> {
         let bindee = self.parser.term(span.make(t::SourceBoundary(prelude).into()));
         let patterns = zydeco_surface::metadata::CorePrelude::closed_names()
             .map(|name| {
-                let definition = self.parser.def(span.make(t::VarName(name.into())));
+                let definition = self.parser.def(span.make(t::VarName::new(name)));
                 let pattern = self.parser.pat(span.make(t::Pattern::Var(definition)));
                 self.parser
-                    .pat(span.make(t::ProjectionPattern(t::FieldName(name.into()), pattern).into()))
+                    .pat(span.make(t::ProjectionPattern(t::FieldName::new(name), pattern).into()))
             })
             .collect();
         let binder = self.parser.pat(
@@ -211,7 +211,7 @@ impl<'graph> TextualProgramBuilder<'graph> {
 
     fn definition(&mut self, source: SourceId, definition: t::DefId) -> t::DefId {
         let file = &self.graph.sources[&source];
-        let name = file.arena.defs[&definition].clone();
+        let name = file.arena.defs[&definition];
         self.parser.def(self.span(source, definition.into()).make(name))
     }
 

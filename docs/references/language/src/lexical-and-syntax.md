@@ -15,7 +15,7 @@ Subsequent characters are ASCII letters, digits, `_`, apostrophe, `?`, `+`, `*`,
 `_` alone is a hole.
 A constructor starts with `+` and an uppercase letter; a destructor starts with `.` and a lowercase letter.
 `#field` marks a field name wherever it could be confused with a binder.
-Keywords are reserved; `def` and `define` are synonymous.
+Keywords are reserved.
 
 Integer tokens are optionally signed decimal digits.
 Floats require a fractional part with digits on both sides of the decimal point,

@@ -1,4 +1,4 @@
-//! Database inputs and shared interned keys for source checking and judgment queries.
+//! Database inputs and shared interned keys for source checking queries.
 
 use super::*;
 
@@ -8,8 +8,10 @@ use super::*;
 /// declared in this module, so the queries join the session's salsa graph.
 #[salsa::db]
 pub trait TyckDb: salsa::Database {
-    /// Shared identity registry, retained across memo eviction and database clones.
-    fn derived_ids(&self) -> &std::sync::Arc<crate::DerivedIdRegistry>;
+    /// Per-root key-space registry for definitions synthesized by checking/elaboration.
+    fn generated_def_spaces(
+        &self,
+    ) -> &std::sync::Arc<zydeco_foundation::arena::KeySpaceRegistry<su::TermId>>;
 
     /// The slot through which programs assembled outside the source pipeline
     /// cross into the query graph; salsa requires an active query to create
@@ -28,9 +30,6 @@ pub struct PendingParts {
 }
 
 /// The name-resolved program of one source snapshot.
-///
-/// Tracked-struct fields need neither `Eq` nor `Hash`, which the arenas do not
-/// provide, so this is how the checker's inputs enter the salsa graph.
 #[salsa::tracked]
 pub struct ScopedData<'db> {
     #[tracked]
@@ -53,13 +52,6 @@ pub struct InternedType<'db> {
     pub id: ss::TypeId,
 }
 
-/// An interned typed kind node, for use as a salsa query key.
-#[salsa::interned]
-pub struct InternedKind<'db> {
-    #[returns(clone)]
-    pub id: ss::KindId,
-}
-
 /// An interned scoped definition, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedDef<'db> {
@@ -72,69 +64,6 @@ pub struct InternedDef<'db> {
 pub struct InternedTerm<'db> {
     #[returns(clone)]
     pub id: su::TermId,
-}
-
-/// The type-checking environment at a judgment site, salsa-visible so that
-/// environment-dependent judgments can key on it.
-#[salsa::tracked]
-pub struct EnvData<'db> {
-    #[tracked]
-    #[no_eq]
-    #[returns(ref)]
-    pub env: TyEnv,
-}
-
-/// An interned type annotation, for use as a salsa query key.
-#[salsa::interned]
-pub struct InternedAnn<'db> {
-    #[returns(clone)]
-    pub id: ss::AnnId,
-}
-
-/// An interned allocation site, for use as a salsa query key.
-///
-/// Auxiliary checker entities (package-pi introductions and eliminations)
-/// allocate at the enclosing entity's site without being scoped entities
-/// themselves; this wrapper carries the site's registered producer key space.
-#[salsa::interned]
-pub struct InternedSite<'db> {
-    #[returns(clone)]
-    pub key_space: KeySpaceId,
-}
-
-/// An interned scoped pattern, for use as a salsa query key.
-#[salsa::interned]
-pub struct InternedPat<'db> {
-    #[returns(clone)]
-    pub id: su::PatId,
-}
-
-/// An interned term annotation, for use as a salsa query key.
-#[salsa::interned]
-pub struct InternedTermAnn<'db> {
-    #[returns(clone)]
-    pub id: ss::TermAnnId,
-}
-
-/// An interned pattern annotation, for use as a salsa query key.
-#[salsa::interned]
-pub struct InternedPatAnn<'db> {
-    #[returns(clone)]
-    pub id: ss::PatAnnId,
-}
-
-/// An interned value pattern identifier, for use as a salsa query key.
-#[salsa::interned]
-pub struct InternedVPat<'db> {
-    #[returns(clone)]
-    pub id: ss::VPatId,
-}
-
-/// An interned value identifier, for use as a salsa query key.
-#[salsa::interned]
-pub struct InternedValue<'db> {
-    #[returns(clone)]
-    pub id: ss::ValueId,
 }
 
 /// An interned hole-filling site, for use as a salsa query key.

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use thiserror::Error;
 use wasm_encoder::{
@@ -134,31 +134,42 @@ struct LocalPlan {
 }
 
 impl LocalPlan {
-    fn new(arena: &sps::SpsLowArena, scalar_count: usize) -> Result<Self, EmitError> {
+    fn for_case(
+        arena: &sps::SpsLowArena, labels: &HashMap<DefId, u32>, scalars: &ScalarPlans, case: Case,
+    ) -> Result<Self, EmitError> {
+        let mut collector = CaseNodeCollector {
+            arena,
+            labels,
+            scalars,
+            defs: HashSet::new(),
+            values: HashSet::new(),
+            stacks: HashSet::new(),
+            patterns: HashSet::new(),
+            visited_compus: HashSet::new(),
+            scalar_count: 0,
+        };
+        if let Some(entry) = case.entry {
+            for (_, pattern) in entry.words() {
+                collector.visit_pattern(pattern);
+            }
+        }
+        collector.visit_compu(case.body);
+
         let mut next = 1_u32;
 
-        let mut defs = arena
-            .inner
-            .vpats
-            .iter()
-            .filter_map(|(_, pattern)| match pattern {
-                | ValuePattern::Var(def) => Some(*def),
-                | _ => None,
-            })
-            .collect::<Vec<_>>();
+        let mut defs = collector.defs.into_iter().collect::<Vec<_>>();
         defs.sort_unstable();
-        defs.dedup();
         let variables = Self::assign(defs, &mut next, "SPS variable count")?;
 
-        let mut values = arena.inner.values.iter().map(|(id, _)| *id).collect::<Vec<_>>();
+        let mut values = collector.values.into_iter().collect::<Vec<_>>();
         values.sort_unstable();
         let values = Self::assign(values, &mut next, "SPS value count")?;
 
-        let mut stacks = arena.inner.stacks.iter().map(|(id, _)| *id).collect::<Vec<_>>();
+        let mut stacks = collector.stacks.into_iter().collect::<Vec<_>>();
         stacks.sort_unstable();
         let stacks = Self::assign(stacks, &mut next, "SPS stack count")?;
 
-        let mut patterns = arena.inner.vpats.iter().map(|(id, _)| *id).collect::<Vec<_>>();
+        let mut patterns = collector.patterns.into_iter().collect::<Vec<_>>();
         patterns.sort_unstable();
         let patterns = Self::assign(patterns, &mut next, "SPS pattern count")?;
 
@@ -170,7 +181,7 @@ impl LocalPlan {
         let transfer_first = Self::take(&mut next, "SPS local count")?;
         let transfer_second = Self::take(&mut next, "SPS local count")?;
         let scalar_base = next;
-        for _ in 0..scalar_count {
+        for _ in 0..collector.scalar_count {
             Self::take(&mut next, "SPS scalar local count")?;
         }
 
@@ -225,6 +236,240 @@ impl LocalPlan {
     }
 }
 
+struct CaseNodeCollector<'a> {
+    arena: &'a sps::SpsLowArena,
+    labels: &'a HashMap<DefId, u32>,
+    scalars: &'a ScalarPlans,
+    defs: HashSet<DefId>,
+    values: HashSet<ValueId>,
+    stacks: HashSet<StackId>,
+    patterns: HashSet<VPatId>,
+    visited_compus: HashSet<CompuId>,
+    scalar_count: usize,
+}
+
+impl CaseNodeCollector<'_> {
+    fn visit_compu(&mut self, root: CompuId) {
+        let mut work = vec![root];
+        while let Some(id) = work.pop() {
+            if !self.visited_compus.insert(id) {
+                continue;
+            }
+            if let Some(call) = self.scalars.memory(id) {
+                self.scalar_count = self.scalar_count.max(call.kernel.definitions());
+                for binding in &call.address_bindings {
+                    self.visit_value(binding.value);
+                    self.visit_pattern(binding.binder);
+                }
+                for &input in &call.inputs {
+                    self.visit_value(input);
+                }
+                self.visit_value(call.store_address);
+                self.visit_value(call.load_address);
+                work.push(call.next);
+                continue;
+            }
+            match &self.arena.inner.compus[&id] {
+                | Computation::Memory(sps::MemoryStep::Load { address, result, next, .. }) => {
+                    self.visit_value(*address);
+                    self.visit_pattern(*result);
+                    work.push(*next);
+                }
+                | Computation::Memory(sps::MemoryStep::Store { address, value, next, .. }) => {
+                    self.visit_value(*value);
+                    self.visit_value(*address);
+                    work.push(*next);
+                }
+                | Computation::Hole(sps::SHole(stack)) => {
+                    self.visit_stack(*stack);
+                }
+                | Computation::Ext(sps::CompuExt::LetLabel(sps::LetLabel {
+                    kind,
+                    body,
+                    tail,
+                    ..
+                })) => match kind {
+                    | sps::LabelKind::Local => {
+                        work.push(*body);
+                        work.push(*tail);
+                    }
+                    | sps::LabelKind::Closed => work.push(*tail),
+                },
+                | Computation::Ext(sps::CompuExt::JumpLabel(sps::JumpLabel { stack, .. })) => {
+                    self.visit_stack(*stack);
+                }
+                | Computation::Ext(sps::CompuExt::Jump(sps::Jump { target, argument, stack })) => {
+                    self.visit_value(argument.word().1);
+                    self.visit_stack(*stack);
+                    self.visit_value(*target);
+                }
+                | Computation::ProductMatch(sps::SProductMatch { scrut, binder, body }) => {
+                    self.visit_value(*scrut);
+                    self.visit_pattern(*binder);
+                    work.push(*body);
+                }
+                | Computation::Compare(sps::CompareBranch {
+                    operands,
+                    when_true,
+                    when_false,
+                    ..
+                }) => {
+                    for &operand in operands {
+                        self.visit_value(operand);
+                    }
+                    work.push(*when_true);
+                    work.push(*when_false);
+                }
+                | Computation::CoprodMatch(sps::SCoprodMatch { scrut, arms }) => {
+                    self.visit_value(*scrut);
+                    for arm in arms {
+                        self.visit_pattern(arm.binder);
+                        work.push(arm.tail);
+                    }
+                }
+                | Computation::LetValue(sps::LetValue { binder, bindee, tail }) => {
+                    if !self.scalars.elided(id) {
+                        self.visit_value(*bindee);
+                        self.visit_pattern(*binder);
+                    }
+                    work.push(*tail);
+                }
+                | Computation::LetStack(sps::LetStack { bindee, tail, .. })
+                | Computation::LetArg(sps::LetArg { bindee, tail, .. }) => {
+                    self.visit_stack(*bindee);
+                    if let Computation::LetArg(sps::LetArg {
+                        binder: sps::Cons(binder, _), ..
+                    }) = &self.arena.inner.compus[&id]
+                    {
+                        self.visit_pattern(*binder);
+                    }
+                    work.push(*tail);
+                }
+                | Computation::CoCase(sps::SCoMatch { scrut, arms }) => {
+                    self.visit_stack(*scrut);
+                    for arm in arms {
+                        work.push(arm.tail);
+                    }
+                }
+                | Computation::Ext(sps::CompuExt::OpenClosure(sps::OpenClosure {
+                    package,
+                    environment,
+                    code,
+                    body,
+                })) => {
+                    self.visit_value(*package);
+                    self.visit_pattern(*environment);
+                    self.visit_pattern(*code);
+                    work.push(*body);
+                }
+                | Computation::Ext(sps::CompuExt::OpenContinuation(sps::OpenContinuation {
+                    package,
+                    code,
+                    body,
+                })) => {
+                    self.visit_stack(*package);
+                    self.visit_pattern(*code);
+                    work.push(*body);
+                }
+                | Computation::ExternCall(sps::ExternCall { stack, .. }) => {
+                    self.visit_stack(*stack);
+                }
+            }
+        }
+    }
+
+    fn visit_value(&mut self, root: ValueId) {
+        let mut work = vec![root];
+        while let Some(id) = work.pop() {
+            if !self.values.insert(id) {
+                continue;
+            }
+            match &self.arena.inner.values[&id] {
+                | sps::Value::Var(def) => {
+                    if !self.labels.contains_key(def) {
+                        self.defs.insert(*def);
+                    }
+                }
+                | sps::Value::Ext(sps::ValueExt::ClosurePackage(sps::ClosurePackage {
+                    environment,
+                    code,
+                })) => {
+                    work.push(*environment);
+                    work.push(*code);
+                }
+                | sps::Value::Ctor(sps::Ctor(_, body)) => {
+                    work.push(*body);
+                }
+                | sps::Value::VCons(sps::VCons { items, .. }) => {
+                    work.extend(items.iter().copied());
+                }
+                | sps::Value::AddrOffset(sps::AddrOffset { base, displacement }) => {
+                    work.push(*base);
+                    work.push(*displacement);
+                }
+                | sps::Value::Primitive(_) => {
+                    let call = self.scalars.call(id);
+                    self.scalar_count = self.scalar_count.max(call.program.representations().len());
+                    work.extend(call.inputs.iter().copied());
+                }
+                | sps::Value::Hole(_)
+                | sps::Value::Triv(_)
+                | sps::Value::Literal(_)
+                | sps::Value::Ext(sps::ValueExt::Block(_)) => {}
+            }
+        }
+    }
+
+    fn visit_stack(&mut self, root: StackId) {
+        let mut work = vec![root];
+        while let Some(id) = work.pop() {
+            if !self.stacks.insert(id) {
+                continue;
+            }
+            match &self.arena.inner.stacks[&id] {
+                | sps::Stack::Var(_) => {}
+                | sps::Stack::Arg(sps::Cons(value, rest)) => {
+                    self.visit_value(*value);
+                    work.push(*rest);
+                }
+                | sps::Stack::Tag(sps::Cons(_, rest)) => {
+                    work.push(*rest);
+                }
+                | sps::Stack::Ext(sps::StackExt::ContinuationPackage(
+                    sps::ContinuationPackage { code, residual },
+                )) => {
+                    self.visit_value(*code);
+                    work.push(*residual);
+                }
+            }
+        }
+    }
+
+    fn visit_pattern(&mut self, root: VPatId) {
+        let mut work = vec![root];
+        while let Some(id) = work.pop() {
+            if !self.patterns.insert(id) {
+                continue;
+            }
+            match &self.arena.inner.vpats[&id] {
+                | ValuePattern::Hole(_) | ValuePattern::Triv(_) => {}
+                | ValuePattern::Var(def) => {
+                    self.defs.insert(*def);
+                }
+                | ValuePattern::Ctor(sps::Ctor(_, body)) => {
+                    work.push(*body);
+                }
+                | ValuePattern::Alias(sps::Alias(patterns)) => {
+                    work.extend(patterns.iter().copied());
+                }
+                | ValuePattern::VCons(sps::VCons { items, .. }) => {
+                    work.extend(items.iter().copied());
+                }
+            }
+        }
+    }
+}
+
 struct ModulePlan {
     cases: Vec<Case>,
     labels: HashMap<DefId, u32>,
@@ -236,7 +481,6 @@ struct ModulePlan {
     memory_functions: HashMap<MemoryAccess, u32>,
     import_count: u32,
     layout: MemoryLayout,
-    locals: LocalPlan,
     scalars: ScalarPlans,
 }
 
@@ -357,7 +601,6 @@ impl ModulePlan {
             .checked_add(Limits::u32(host_imports.len(), "host import count")?)
             .ok_or(WasmEmitError::Limit { what: "host import count", value: host_imports.len() })?;
         let scalars = ScalarPlans::new(program, boxing);
-        let locals = LocalPlan::new(arena, scalars.max_definitions())?;
 
         Ok(Self {
             cases,
@@ -370,7 +613,6 @@ impl ModulePlan {
             memory_functions,
             import_count,
             layout,
-            locals,
             scalars,
         })
     }
@@ -459,7 +701,7 @@ impl<'a> ModuleEncoder<'a> {
         code.function(&AllocFunction::new(HEAP_POINTER_GLOBAL).emit());
         code.function(&self.pair_function());
         for case in &self.plan.cases {
-            code.function(&CaseEncoder::new(self.program, &self.plan).encode(*case)?);
+            code.function(&CaseEncoder::new(self.program, &self.plan, *case)?.encode(*case)?);
         }
         code.function(&self.entry_function());
         module.section(&code);
@@ -549,6 +791,7 @@ impl<'a> ModuleEncoder<'a> {
 struct CaseEncoder<'a> {
     arena: &'a sps::SpsLowArena,
     plan: &'a ModulePlan,
+    locals: LocalPlan,
     function: Function,
     /// The number of structured control blocks around the current instruction.
     depth: u32,
@@ -557,9 +800,19 @@ struct CaseEncoder<'a> {
 }
 
 impl<'a> CaseEncoder<'a> {
-    fn new(program: &'a SpsLowProgram, plan: &'a ModulePlan) -> Self {
-        let function = Function::new([(plan.locals.local_count, ValType::I64)]);
-        Self { arena: program.arena(), plan, function, depth: 0, local_labels: HashMap::new() }
+    fn new(
+        program: &'a SpsLowProgram, plan: &'a ModulePlan, case: Case,
+    ) -> Result<Self, EmitError> {
+        let locals = LocalPlan::for_case(program.arena(), &plan.labels, &plan.scalars, case)?;
+        let function = Function::new([(locals.local_count, ValType::I64)]);
+        Ok(Self {
+            arena: program.arena(),
+            plan,
+            locals,
+            function,
+            depth: 0,
+            local_labels: HashMap::new(),
+        })
     }
 
     /// Emit a computation nested in one more structured control block.
@@ -583,10 +836,10 @@ impl<'a> CaseEncoder<'a> {
     }
 
     fn consume_argument(&mut self, binder: VPatId) -> Result<(), EmitError> {
-        self.function.instruction(&WasmInstruction::LocalSet(self.plan.locals.scratch_stack));
-        self.load_local_word(self.plan.locals.scratch_stack, 0);
+        self.function.instruction(&WasmInstruction::LocalSet(self.locals.scratch_stack));
+        self.load_local_word(self.locals.scratch_stack, 0);
         self.emit_pattern(binder)?;
-        self.load_local_word(self.plan.locals.scratch_stack, 1);
+        self.load_local_word(self.locals.scratch_stack, 1);
         self.function.instruction(&WasmInstruction::LocalSet(0));
         Ok(())
     }
@@ -607,11 +860,11 @@ impl<'a> CaseEncoder<'a> {
                         [&MemoryAccess { scalar, kind: AccessKind::Load }];
                     self.emit_value(address)?;
                     self.function.instruction(&WasmInstruction::Call(function));
-                    self.function.instruction(&WasmInstruction::LocalSet(self.plan.locals.result));
+                    self.function.instruction(&WasmInstruction::LocalSet(self.locals.result));
                     WordEmitter::new(&mut self.function, self.plan.alloc_function()).memory_encode(
                         scalar,
-                        self.plan.locals.result,
-                        self.plan.locals.pointer(),
+                        self.locals.result,
+                        self.locals.pointer(),
                     );
                     self.emit_pattern(result)?;
                     id = next;
@@ -622,7 +875,7 @@ impl<'a> CaseEncoder<'a> {
                     self.emit_value(value)?;
                     self.function.instruction(&WasmInstruction::Drop);
                     self.emit_value(address)?;
-                    let local = self.plan.locals.value(value)?;
+                    let local = self.locals.value(value)?;
                     WordEmitter::new(&mut self.function, self.plan.alloc_function())
                         .memory_decode(scalar, local);
                     self.function.instruction(&WasmInstruction::LocalGet(local));
@@ -696,8 +949,8 @@ impl<'a> CaseEncoder<'a> {
                     }
                     WordEmitter::new(&mut self.function, self.plan.alloc_function()).comparison(
                         operation,
-                        self.plan.locals.value(operands[0])?,
-                        self.plan.locals.value(operands[1])?,
+                        self.locals.value(operands[0])?,
+                        self.locals.value(operands[1])?,
                     );
                     self.function.instruction(&WasmInstruction::If(BlockType::Empty));
                     self.emit_nested(when_true)?;
@@ -738,15 +991,14 @@ impl<'a> CaseEncoder<'a> {
                 | Computation::CoCase(sps::SCoMatch { scrut, arms }) => {
                     self.emit_stack(scrut)?;
                     self.function
-                        .instruction(&WasmInstruction::LocalSet(self.plan.locals.scratch_stack));
-                    self.load_local_word(self.plan.locals.scratch_stack, 0);
-                    self.function
-                        .instruction(&WasmInstruction::LocalSet(self.plan.locals.scratch_word));
-                    self.load_local_word(self.plan.locals.scratch_stack, 1);
+                        .instruction(&WasmInstruction::LocalSet(self.locals.scratch_stack));
+                    self.load_local_word(self.locals.scratch_stack, 0);
+                    self.function.instruction(&WasmInstruction::LocalSet(self.locals.scratch_word));
+                    self.load_local_word(self.locals.scratch_stack, 1);
                     self.function.instruction(&WasmInstruction::LocalSet(0));
                     for sps::CoMatcher { dtor: sps::Cons(dtor, sps::StackVar), tail } in arms {
                         self.function
-                            .instruction(&WasmInstruction::LocalGet(self.plan.locals.scratch_word));
+                            .instruction(&WasmInstruction::LocalGet(self.locals.scratch_word));
                         self.function
                             .instruction(&WasmInstruction::I64Const(
                                 RuntimeWord::index(dtor.idx)? as i64
@@ -766,11 +1018,10 @@ impl<'a> CaseEncoder<'a> {
                     body,
                 })) => {
                     self.emit_value(package)?;
-                    self.function
-                        .instruction(&WasmInstruction::LocalSet(self.plan.locals.scratch_word));
-                    self.load_local_word(self.plan.locals.scratch_word, 0);
+                    self.function.instruction(&WasmInstruction::LocalSet(self.locals.scratch_word));
+                    self.load_local_word(self.locals.scratch_word, 0);
                     self.emit_pattern(environment)?;
-                    self.load_local_word(self.plan.locals.scratch_word, 1);
+                    self.load_local_word(self.locals.scratch_word, 1);
                     self.emit_pattern(code)?;
                     id = body;
                 }
@@ -781,10 +1032,10 @@ impl<'a> CaseEncoder<'a> {
                 })) => {
                     self.emit_stack(package)?;
                     self.function
-                        .instruction(&WasmInstruction::LocalSet(self.plan.locals.scratch_stack));
-                    self.load_local_word(self.plan.locals.scratch_stack, 0);
+                        .instruction(&WasmInstruction::LocalSet(self.locals.scratch_stack));
+                    self.load_local_word(self.locals.scratch_stack, 0);
                     self.emit_pattern(code)?;
-                    self.load_local_word(self.plan.locals.scratch_stack, 1);
+                    self.load_local_word(self.locals.scratch_stack, 1);
                     self.function.instruction(&WasmInstruction::LocalSet(0));
                     id = body;
                 }
@@ -816,7 +1067,7 @@ impl<'a> CaseEncoder<'a> {
     ) -> Result<(), EmitError> {
         self.emit_value(scrut)?;
         self.function.instruction(&WasmInstruction::Drop);
-        let scrut_local = self.plan.locals.value(scrut)?;
+        let scrut_local = self.locals.value(scrut)?;
         let constructors = arms
             .iter()
             .all(|arm| matches!(self.arena.inner.vpats[&arm.binder], ValuePattern::Ctor(_)));
@@ -850,7 +1101,7 @@ impl<'a> CaseEncoder<'a> {
     }
 
     fn emit_value(&mut self, id: ValueId) -> Result<(), EmitError> {
-        let target = self.plan.locals.value(id)?;
+        let target = self.locals.value(id)?;
         match self.arena.inner.values[&id].clone() {
             | sps::Value::Hole(_) => {
                 self.function.instruction(&WasmInstruction::Unreachable);
@@ -861,7 +1112,7 @@ impl<'a> CaseEncoder<'a> {
                         .instruction(&WasmInstruction::I64Const(RuntimeWord::code(*index) as i64));
                 } else {
                     self.function
-                        .instruction(&WasmInstruction::LocalGet(self.plan.locals.variable(def)?));
+                        .instruction(&WasmInstruction::LocalGet(self.locals.variable(def)?));
                 }
             }
             | sps::Value::Ext(sps::ValueExt::Block(Block { label, .. })) => {
@@ -919,12 +1170,11 @@ impl<'a> CaseEncoder<'a> {
         for (index, value) in items.into_iter().enumerate() {
             if index + 1 == explicit && explicit < layout.arity {
                 self.emit_value(value)?;
-                self.function
-                    .instruction(&WasmInstruction::LocalSet(self.plan.locals.scratch_word));
+                self.function.instruction(&WasmInstruction::LocalSet(self.locals.scratch_word));
                 for destination in index..layout.arity {
                     self.function.instruction(&WasmInstruction::LocalGet(target));
                     self.function.instruction(&WasmInstruction::I32WrapI64);
-                    self.load_local_word(self.plan.locals.scratch_word, destination - index);
+                    self.load_local_word(self.locals.scratch_word, destination - index);
                     self.function.instruction(&WasmInstruction::I64Store(ProductFields::word_at(
                         destination,
                     )?));
@@ -974,11 +1224,11 @@ impl<'a> CaseEncoder<'a> {
 
     fn emit_boxed(&mut self, bits: u64) {
         WordEmitter::new(&mut self.function, self.plan.alloc_function())
-            .boxed(bits, self.plan.locals.pointer());
+            .boxed(bits, self.locals.pointer());
     }
 
     fn emit_stack(&mut self, id: StackId) -> Result<(), EmitError> {
-        let target = self.plan.locals.stack(id)?;
+        let target = self.locals.stack(id)?;
         match self.arena.inner.stacks[&id].clone() {
             | sps::Stack::Var(sps::StackVar) => {
                 self.function.instruction(&WasmInstruction::LocalGet(0));
@@ -1008,14 +1258,13 @@ impl<'a> CaseEncoder<'a> {
     }
 
     fn emit_pattern(&mut self, id: VPatId) -> Result<(), EmitError> {
-        let bindee = self.plan.locals.pattern(id)?;
+        let bindee = self.locals.pattern(id)?;
         self.function.instruction(&WasmInstruction::LocalSet(bindee));
         match self.arena.inner.vpats[&id].clone() {
             | ValuePattern::Hole(_) | ValuePattern::Triv(_) => {}
             | ValuePattern::Var(def) => {
                 self.function.instruction(&WasmInstruction::LocalGet(bindee));
-                self.function
-                    .instruction(&WasmInstruction::LocalSet(self.plan.locals.variable(def)?));
+                self.function.instruction(&WasmInstruction::LocalSet(self.locals.variable(def)?));
             }
             | ValuePattern::Ctor(sps::Ctor(ctor, body)) => {
                 self.load_local_word(bindee, 0);
@@ -1056,11 +1305,11 @@ impl<'a> CaseEncoder<'a> {
     fn emit_extern(&mut self, role: BuiltinValueRole, stack: StackId) -> Result<(), EmitError> {
         let import = self.plan.host(role)?.clone();
         self.emit_stack(stack)?;
-        self.function.instruction(&WasmInstruction::LocalSet(self.plan.locals.scratch_stack));
+        self.function.instruction(&WasmInstruction::LocalSet(self.locals.scratch_stack));
         for _ in 0..import.arity {
-            self.load_local_word(self.plan.locals.scratch_stack, 0);
-            self.load_local_word(self.plan.locals.scratch_stack, 1);
-            self.function.instruction(&WasmInstruction::LocalSet(self.plan.locals.scratch_stack));
+            self.load_local_word(self.locals.scratch_stack, 0);
+            self.load_local_word(self.locals.scratch_stack, 1);
+            self.function.instruction(&WasmInstruction::LocalSet(self.locals.scratch_stack));
         }
         WordEmitter::new(&mut self.function, self.plan.alloc_function()).spare_box(import.spare);
         self.function.instruction(&WasmInstruction::Call(import.function));
@@ -1073,56 +1322,56 @@ impl<'a> CaseEncoder<'a> {
     }
 
     fn resume_returning_call(&mut self) {
-        self.function.instruction(&WasmInstruction::LocalSet(self.plan.locals.result));
-        self.load_local_word(self.plan.locals.scratch_stack, 0);
+        self.function.instruction(&WasmInstruction::LocalSet(self.locals.result));
+        self.load_local_word(self.locals.scratch_stack, 0);
         self.set_program_counter_from_code();
-        self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.result));
-        self.load_local_word(self.plan.locals.scratch_stack, 1);
+        self.function.instruction(&WasmInstruction::LocalGet(self.locals.result));
+        self.load_local_word(self.locals.scratch_stack, 1);
         self.function.instruction(&WasmInstruction::Call(self.plan.pair_function()));
         self.function.instruction(&WasmInstruction::GlobalSet(AMBIENT_STACK_GLOBAL));
         self.function.instruction(&WasmInstruction::Return);
     }
 
     fn resume_control_call(&mut self) {
-        self.function.instruction(&WasmInstruction::LocalSet(self.plan.locals.transfer_second));
-        self.function.instruction(&WasmInstruction::LocalSet(self.plan.locals.transfer_first));
-        self.function.instruction(&WasmInstruction::LocalSet(self.plan.locals.transfer_closure));
-        self.function.instruction(&WasmInstruction::LocalSet(self.plan.locals.transfer_count));
+        self.function.instruction(&WasmInstruction::LocalSet(self.locals.transfer_second));
+        self.function.instruction(&WasmInstruction::LocalSet(self.locals.transfer_first));
+        self.function.instruction(&WasmInstruction::LocalSet(self.locals.transfer_closure));
+        self.function.instruction(&WasmInstruction::LocalSet(self.locals.transfer_count));
 
-        self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.transfer_count));
+        self.function.instruction(&WasmInstruction::LocalGet(self.locals.transfer_count));
         self.function.instruction(&WasmInstruction::I64Const(2));
         self.function.instruction(&WasmInstruction::I64GtU);
         self.function.instruction(&WasmInstruction::If(BlockType::Empty));
         self.function.instruction(&WasmInstruction::Unreachable);
         self.function.instruction(&WasmInstruction::End);
 
-        self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.transfer_count));
+        self.function.instruction(&WasmInstruction::LocalGet(self.locals.transfer_count));
         self.function.instruction(&WasmInstruction::I64Const(2));
         self.function.instruction(&WasmInstruction::I64Eq);
         self.function.instruction(&WasmInstruction::If(BlockType::Empty));
-        self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.transfer_second));
-        self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.scratch_stack));
+        self.function.instruction(&WasmInstruction::LocalGet(self.locals.transfer_second));
+        self.function.instruction(&WasmInstruction::LocalGet(self.locals.scratch_stack));
         self.function.instruction(&WasmInstruction::Call(self.plan.pair_function()));
-        self.function.instruction(&WasmInstruction::LocalSet(self.plan.locals.scratch_stack));
+        self.function.instruction(&WasmInstruction::LocalSet(self.locals.scratch_stack));
         self.function.instruction(&WasmInstruction::End);
 
-        self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.transfer_count));
+        self.function.instruction(&WasmInstruction::LocalGet(self.locals.transfer_count));
         self.function.instruction(&WasmInstruction::I64Eqz);
         self.function.instruction(&WasmInstruction::I32Eqz);
         self.function.instruction(&WasmInstruction::If(BlockType::Empty));
-        self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.transfer_first));
-        self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.scratch_stack));
+        self.function.instruction(&WasmInstruction::LocalGet(self.locals.transfer_first));
+        self.function.instruction(&WasmInstruction::LocalGet(self.locals.scratch_stack));
         self.function.instruction(&WasmInstruction::Call(self.plan.pair_function()));
-        self.function.instruction(&WasmInstruction::LocalSet(self.plan.locals.scratch_stack));
+        self.function.instruction(&WasmInstruction::LocalSet(self.locals.scratch_stack));
         self.function.instruction(&WasmInstruction::End);
 
-        self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.transfer_closure));
-        self.function.instruction(&WasmInstruction::LocalSet(self.plan.locals.scratch_word));
-        self.load_local_word(self.plan.locals.scratch_word, 0);
-        self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.scratch_stack));
+        self.function.instruction(&WasmInstruction::LocalGet(self.locals.transfer_closure));
+        self.function.instruction(&WasmInstruction::LocalSet(self.locals.scratch_word));
+        self.load_local_word(self.locals.scratch_word, 0);
+        self.function.instruction(&WasmInstruction::LocalGet(self.locals.scratch_stack));
         self.function.instruction(&WasmInstruction::Call(self.plan.pair_function()));
         self.function.instruction(&WasmInstruction::GlobalSet(AMBIENT_STACK_GLOBAL));
-        self.load_local_word(self.plan.locals.scratch_word, 1);
+        self.load_local_word(self.locals.scratch_word, 1);
         self.set_program_counter_from_code();
         self.function.instruction(&WasmInstruction::Return);
     }
@@ -1145,18 +1394,18 @@ impl<'a> CaseEncoder<'a> {
         self.function.instruction(&WasmInstruction::Call(
             self.plan.memory_functions[&MemoryAccess { scalar, kind: AccessKind::Load }],
         ));
-        self.function.instruction(&WasmInstruction::LocalSet(self.plan.locals.scalar_base));
+        self.function.instruction(&WasmInstruction::LocalSet(self.locals.scalar_base));
         for (index, &input) in call.inputs.iter().enumerate() {
-            let local = self.plan.locals.scalar_base + index as u32 + 1;
-            self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.value(input)?));
+            let local = self.locals.scalar_base + index as u32 + 1;
+            self.function.instruction(&WasmInstruction::LocalGet(self.locals.value(input)?));
             self.function.instruction(&WasmInstruction::LocalSet(local));
             WordEmitter::new(&mut self.function, self.plan.alloc_function())
                 .memory_decode(call.kernel.region().inputs[index + 1].into(), local);
         }
         self.function
-            .instruction(&WasmInstruction::LocalGet(self.plan.locals.value(call.store_address)?));
+            .instruction(&WasmInstruction::LocalGet(self.locals.value(call.store_address)?));
         WordEmitter::new(&mut self.function, self.plan.alloc_function())
-            .scalar_kernel(&call.kernel, self.plan.locals.scalar_base);
+            .scalar_kernel(&call.kernel, self.locals.scalar_base);
         self.function.instruction(&WasmInstruction::Call(
             self.plan.memory_functions[&MemoryAccess { scalar, kind: AccessKind::Store }],
         ));
@@ -1171,15 +1420,14 @@ impl<'a> CaseEncoder<'a> {
             self.function.instruction(&WasmInstruction::Drop);
         }
         for (index, operand) in call.inputs.into_iter().enumerate() {
-            self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.value(operand)?));
-            self.function.instruction(&WasmInstruction::LocalSet(
-                self.plan.locals.scalar_base + index as u32,
-            ));
+            self.function.instruction(&WasmInstruction::LocalGet(self.locals.value(operand)?));
+            self.function
+                .instruction(&WasmInstruction::LocalSet(self.locals.scalar_base + index as u32));
         }
         WordEmitter::new(&mut self.function, self.plan.alloc_function()).scalar_region(
             &call.program,
-            self.plan.locals.scalar_base,
-            self.plan.locals.pointer(),
+            self.locals.scalar_base,
+            self.locals.pointer(),
         );
         Ok(())
     }
@@ -1312,5 +1560,53 @@ mod tests {
         let second = Emitter::new(&program).run().unwrap();
 
         assert_eq!(first, second);
+    }
+
+    #[test]
+    fn per_case_local_plan_isolates_tiny_blocks_from_large_roots() {
+        let mut fixture = Fixture::new();
+        let label: DefId = sps::IdAllocator::<zydeco_stackir::high::arena::SpsScope>::new().alloc();
+        let environment = sps::Hole.build(&mut fixture.arena, None);
+        let block_body = fixture.hole();
+        let block = sps::Block {
+            label,
+            entry: sps::EntryParameters::Closure { environment },
+            body: block_body,
+        }
+        .build(&mut fixture.arena, None);
+
+        let mut tail = fixture.hole();
+        for _ in 0..20 {
+            let bindee = sps::Triv.build(&mut fixture.arena, None);
+            let binder = sps::Hole.build(&mut fixture.arena, None);
+            tail = sps::LetValue { binder, bindee, tail }.build(&mut fixture.arena, None);
+        }
+        let binder = sps::Hole.build(&mut fixture.arena, None);
+        let root = sps::LetValue { binder, bindee: block, tail }.build(&mut fixture.arena, None);
+        let program = SpsLowProgram::try_new(fixture.arena, root, SpsScheme::BranchJoin).unwrap();
+        let module = Emitter::new(&program).run().unwrap();
+        Validator::new().validate_all(module.as_bytes()).unwrap();
+
+        let local_counts = Parser::new(0)
+            .parse_all(module.as_bytes())
+            .filter_map(|payload| match payload {
+                | Ok(Payload::CodeSectionEntry(body)) => {
+                    let count: u32 = body
+                        .get_locals_reader()
+                        .unwrap()
+                        .into_iter()
+                        .map(|entry| entry.unwrap().0)
+                        .sum();
+                    Some(count)
+                }
+                | _ => None,
+            })
+            .collect::<Vec<_>>();
+        // alloc, pair, root case (0), tiny block case (1), entry.
+        assert_eq!(local_counts.len(), 5);
+        let root_locals = local_counts[2];
+        let block_locals = local_counts[3];
+        assert!(root_locals > 40, "expected large root local count, got {root_locals}");
+        assert!(block_locals < 12, "expected tiny block local count (< 12), got {block_locals}");
     }
 }

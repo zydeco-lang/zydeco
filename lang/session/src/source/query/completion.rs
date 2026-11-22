@@ -7,6 +7,7 @@ use crate::source::{
 };
 use std::{ops::Range, path::Path, sync::Arc};
 use thiserror::Error;
+use zydeco_foundation::{arena::ArenaAccess, span::FileMap};
 use zydeco_statics::{
     arena::StaticsArena,
     check::{AnnotationCompatibility, CompletionTyping},
@@ -20,7 +21,6 @@ use zydeco_surface::{
         TokenKind, syntax::Parser,
     },
 };
-use zydeco_utils::{arena::ArenaAccess, span::FileMap};
 
 /// Visible names and optional classifiers owned by one current-source completion query.
 #[derive(Debug)]
@@ -165,7 +165,7 @@ fn complete_source(
         .scope
         .definitions
         .into_iter()
-        .filter(|definition| definition.name.0.starts_with(&prefix))
+        .filter(|definition| definition.name.starts_with(&prefix))
         .collect::<Vec<_>>();
     let semantics = program.ok().filter(|_| implicit_os || !candidates.is_empty()).map(|program| {
         let data = ScopedData::new(
@@ -199,11 +199,11 @@ fn complete_source(
                 .map(|semantics| semantics.compatibility(candidate.definition))
                 .unwrap_or_default()
         };
-        (left.name.0 != prefix, compatibility(left), left.distance, &left.name.0).cmp(&(
-            right.name.0 != prefix,
+        (left.name.as_str() != prefix, compatibility(left), left.distance, &left.name).cmp(&(
+            right.name.as_str() != prefix,
             compatibility(right),
             right.distance,
-            &right.name.0,
+            &right.name,
         ))
     });
     Ok(Some(Arc::new(CompletionAnalysis {

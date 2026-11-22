@@ -1,0 +1,31 @@
+[package]
+name = "zydeco-foundation"
+version = { workspace = true }
+rust-version = { workspace = true }
+edition = { workspace = true }
+# homepage = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+readme = { workspace = true }
+description = "foundational data structures, arenas, symbols, spans, and traversal utilities for zydeco"
+
+[dependencies]
+dashmap = { workspace = true }
+indexmap = { workspace = true }
+la-arena = { workspace = true }
+rustc-hash = { workspace = true }
+stacker = { workspace = true }
+thiserror = { workspace = true }
+derive_more = { workspace = true, features = [
+    "as_ref",
+    "debug",
+    "deref",
+    "deref_mut",
+    "display",
+    "from",
+    "index",
+    "into_iterator",
+] }
+
+[lints]
+workspace = true

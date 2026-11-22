@@ -810,7 +810,7 @@ Focused tests of the implemented foundations are:
 
 ```sh
 cargo test -p zydeco-machine --lib
-cargo test -p zydeco-tests --test stack_protocols -- --skip every_backend
+cargo test -p zydeco-tests --test suite -- stack_protocols:: --skip every_backend
 ```
 
 The source factory above can be saved as a complete term and checked with `zydeco check`.

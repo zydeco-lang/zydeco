@@ -6,7 +6,7 @@ use crate::syntax::*;
 pub(crate) struct ScalarMemory;
 
 impl ScalarMemory {
-    pub(crate) fn store(arguments: Vec<SemValue>) -> Result<Computation, i32> {
+    pub(crate) fn store(arguments: Vec<SemValue>) -> Result<HostAction, i32> {
         let [address, SemValue::Literal(literal), success] = arguments.as_slice() else {
             unreachable!("checked scalar encoder received a non-scalar")
         };
@@ -37,7 +37,7 @@ impl ScalarMemory {
 
     pub(crate) fn load(
         primitive: PrimitiveType, arguments: Vec<SemValue>,
-    ) -> Result<Computation, RuntimeError> {
+    ) -> Result<HostAction, RuntimeError> {
         let [address, success] = arguments.as_slice() else {
             unreachable!("checked scalar load received invalid arguments")
         };

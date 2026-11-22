@@ -9,7 +9,7 @@ an IR snapshot alone does not prove effect order.
 | --- | --- |
 | Grammar or formatting | Surface parser agreement, recovery contracts, semantic/comment preservation, idempotence |
 | Typing, scope, or a source rejection | [Source fixtures](../../../../lang/tests/cases) or the relevant Rust integration target, with exact diagnostic codes |
-| Typed-arena invariant | A seeded mutation and a clean counterpart in [arena invariant tests](../../../../lang/tests/tests/arena_invariants.rs) |
+| Typed-arena invariant | A seeded mutation and a clean counterpart in [arena invariant tests](../../../../lang/tests/tests/suite/arena_invariants.rs) |
 | SPS reduction or representation | SPS and SPSLow invariant checks, blocked-rewrite cases, and runtime observations |
 | Native layout or allocation | Preparation/model unit tests and targeted native-model or GC integration tests |
 | Host or FFI operation | Signature rejection tests, adapter tests, declared I/O, and target-specific execution |
@@ -55,7 +55,7 @@ including any string-literal escaping their inputs require.
 
 The memory and effects wrappers are the initial template users.
 Their rendered programs go through the existing source harness, preserving each Rust test's pipeline checks.
-[Template integration tests](../../../../lang/tests/tests/templates.rs) also pair an accepted body
+[Template integration tests](../../../../lang/tests/tests/suite/templates.rs) also pair an accepted body
 with an exact-code rejection, then check both expectations after formatting and verify formatter idempotence.
 Raw `.zy.in` files are skeletons rather than complete Zydeco terms, so only their rendered sources enter these checks;
 they are not discovered as standalone case fixtures or parser/formatter corpus files.

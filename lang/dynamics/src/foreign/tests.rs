@@ -68,11 +68,9 @@ impl ForeignFixture {
         &mut self, symbol: &str, parameters: Vec<ForeignParameter>, arguments: Vec<ds::SemValue>,
     ) -> u64 {
         let import = Self::import(symbol, parameters);
-        let ds::Computation::Ret(Return(value)) = self.runtime.invoke(&import, arguments).unwrap()
+        let ds::SemValue::Literal(Literal::Integer(IntegerLiteral::UInt(result))) =
+            self.runtime.invoke(&import, arguments).unwrap()
         else {
-            panic!("C call must return through Ret")
-        };
-        let ds::Value::Lit(Literal::Integer(IntegerLiteral::UInt(result))) = *value else {
             panic!("C call must preserve the UInt result representation")
         };
         result
@@ -80,7 +78,7 @@ impl ForeignFixture {
 
     fn call_result(
         &mut self, symbol: &str, result: ForeignResult, argument: Option<IntegerLiteral>,
-    ) -> Rc<ds::Value> {
+    ) -> ds::SemValue {
         let parameters = argument
             .iter()
             .map(|value| ForeignParameter::Integer(value.integer_type().unwrap()))
@@ -91,11 +89,7 @@ impl ForeignFixture {
             .into_iter()
             .map(|value| ds::SemValue::Literal(Literal::Integer(value)))
             .collect();
-        let ds::Computation::Ret(Return(value)) = self.runtime.invoke(&import, arguments).unwrap()
-        else {
-            panic!("C call must return through Ret")
-        };
-        value
+        self.runtime.invoke(&import, arguments).unwrap()
     }
 }
 
@@ -126,7 +120,7 @@ fn preserves_every_integer_width_and_signedness() {
                 Some(literal),
             );
             assert!(
-                matches!(*returned, ds::Value::Lit(Literal::Integer(actual)) if actual == literal)
+                matches!(returned, ds::SemValue::Literal(Literal::Integer(actual)) if actual == literal)
             );
         }
     }
@@ -143,7 +137,7 @@ fn preserves_every_integer_width_and_signedness() {
             ForeignResult::Integer(integer),
             None,
         );
-        assert!(matches!(*returned, ds::Value::Lit(Literal::Integer(actual))
+        assert!(matches!(returned, ds::SemValue::Literal(Literal::Integer(actual))
             if actual == IntegerLiteral::from_value(expected, integer)));
     }
 }
@@ -156,13 +150,15 @@ fn void_calls_execute_and_resume_with_unit() {
     {
         let literal = IntegerLiteral::Int(value);
         let returned = fixture.call_result("zyffi_save", ForeignResult::Unit, Some(literal));
-        assert!(matches!(*returned, ds::Value::Triv(Triv)));
+        assert!(matches!(returned, ds::SemValue::Triv(Triv)));
         let returned = fixture.call_result(
             "zyffi_saved_value",
             ForeignResult::Integer(IntegerType::Int),
             None,
         );
-        assert!(matches!(*returned, ds::Value::Lit(Literal::Integer(actual)) if actual == literal));
+        assert!(
+            matches!(returned, ds::SemValue::Literal(Literal::Integer(actual)) if actual == literal)
+        );
     }
 }
 
@@ -360,13 +356,9 @@ fn mutable_c_output_preserves_failed_preflight_and_initializes_fields() {
             ds::SemValue::Literal(Literal::Integer(IntegerLiteral::UInt8(7))),
             ds::SemValue::Literal(Literal::Integer(IntegerLiteral::UInt32(42))),
         ];
-        let ds::Computation::Ret(Return(value)) =
-            fixture.runtime.invoke(&import, arguments).unwrap()
-        else {
-            panic!("C result must return");
-        };
+        let value = fixture.runtime.invoke(&import, arguments).unwrap();
         assert!(
-            matches!(*value, ds::Value::Lit(Literal::Integer(IntegerLiteral::Int32(actual))) if actual == expected)
+            matches!(value, ds::SemValue::Literal(Literal::Integer(IntegerLiteral::Int32(actual))) if actual == expected)
         );
         if capacity == 7 {
             assert_eq!(unsafe { address.bytes(8) }, &[0x58; 8]);

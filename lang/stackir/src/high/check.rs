@@ -7,8 +7,7 @@ use super::syntax::*;
 use super::traverse::{Edge, Node, Occurrence, Scopes, Traversal, Visitor};
 use super::variables::FreeVars;
 use crate::scheme::{FrameShape, PlacementError, SpsScheme, StackConsumer, StackShape};
-use zydeco_statics::{arena::StaticsArena, surface_syntax::ScopedArena};
-use zydeco_surface::diagnostic::Diagnostics;
+use zydeco_foundation::diagnostic::Diagnostics;
 
 /// A lexical Stack IR tree that lies in the fragment of the scheme that compiled it.
 #[derive(Debug)]
@@ -216,17 +215,17 @@ impl Visitor<Sps> for FragmentValidator<'_> {
 /// Check that the given stack IR arena is well-formed enough for debugging.
 ///
 /// This function panics if the root computation has free variables.
-pub fn check(program: &SpsProgram, scoped: &ScopedArena, statics: &StaticsArena) {
-    check_closed_root(program, scoped, statics);
+pub fn check(program: &SpsProgram) {
+    check_closed_root(program);
 }
 
 /// Ensure that the program root is closed (has no free variables).
-fn check_closed_root(program: &SpsProgram, scoped: &ScopedArena, statics: &StaticsArena) {
+fn check_closed_root(program: &SpsProgram) {
     let fv = program.root().free_vars(program.arena());
     let fv_str = fv
         .iter()
         .map(|def| {
-            let name = program.arena().admin.def_name(scoped, statics, def);
+            let name = program.arena().admin.def_name(def);
             format!("{}{}", name.plain(), def.concise())
         })
         .collect::<Vec<_>>()

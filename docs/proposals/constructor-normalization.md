@@ -14,8 +14,8 @@ case b | True() -> p4 ! • | False() -> p5 ! • end
 ```
 
 The tag and unit payload suffice to choose the false arm, but the current normalizer retains the match.
-The [local-reduction contract](../references/compiler/src/sps/normalization-and-demand.md#local-reductions) deliberately distinguishes knowing a tag
-from extracting a stored payload.
+The [local-reduction contract](../references/compiler/src/sps/normalization-and-demand.md#local-reductions)
+deliberately distinguishes knowing a tag from extracting a stored payload.
 That distinction protects evaluation and sharing; the proposed extension should remove redundant tests
 without discarding that protection.
 
@@ -63,11 +63,12 @@ and the [pattern decision folder](../../lang/stackir/src/high/normalize/decision
 Extend their semantic facts rather than teaching each caller a separate alias-chasing simplifier.
 Payload availability and consumer demand should remain distinguishable inputs to a reduction decision.
 
-Reuse the [normalization reconstruction schedule](../references/compiler/src/sps/normalization-and-demand.md#normalization-reconstruction):
-producer facts flow forward, and completed consumers determine demands.
-If an unused-payload decision requires the rebuilt arm, represent the deferred decision in an explicit folder frame;
-do not run a nested normalization traversal or guess demand before rebuilding the consumer.
-New structural analysis should use the shared SPS traversal, and any reconstruction should follow the
+Reuse the
+[normalization reconstruction schedule](../references/compiler/src/sps/normalization-and-demand.md#normalization-reconstruction):
+producer facts flow forward, and completed consumers determine demands. If an unused-payload decision requires the
+rebuilt arm, represent the deferred decision in an explicit folder frame; do not run a nested normalization traversal or
+guess demand before rebuilding the consumer. New structural analysis should use the shared SPS traversal, and any
+reconstruction should follow the
 [resumable folder interface](../references/compiler/src/compiler-data.md#resumable-folder-execution).
 
 Facts must respect definition identity, shadowing, closure boundaries, and their producing environment.
@@ -94,7 +95,7 @@ Validate observable effects, failure order, and payload sharing rather than only
 As an integration target, compile the original short-circuit program with `--sps-scheme dup`
 and require its first false arm to jump directly to the shared false target, with no intervening known-Boolean dispatch.
 Keep its runtime truth table and skipped-invalid-input checks
-in [`short_circuit.rs`](../../lang/tests/tests/short_circuit.rs).
+in [`short_circuit.rs`](../../lang/tests/tests/suite/short_circuit.rs).
 The branch-join scheme additionally needs the separate join-point transformation.
 
 ## Decisions before implementation

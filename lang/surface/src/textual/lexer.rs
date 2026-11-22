@@ -4,7 +4,7 @@ use std::{
     ops::Range,
 };
 use thiserror::Error;
-use zydeco_utils::span::{Sp, Span};
+use zydeco_foundation::span::{Sp, Span};
 
 /// Tokens produced by the surface lexer.
 #[derive(Logos, zydeco_derive::TokenMetadata, Clone, Debug, PartialEq)]
@@ -42,8 +42,6 @@ pub enum Tok<'input> {
     #[token("as")]
     As,
     #[token("def")]
-    #[token("define")]
-    #[token_metadata(canonical = "def")]
     Define,
     #[token("let")]
     Let,

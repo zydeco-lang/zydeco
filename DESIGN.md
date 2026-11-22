@@ -580,12 +580,11 @@ See [compiler pass composition](docs/references/compiler/src/architecture.md#com
 ### Query-Based Analysis
 
 Source and statics queries share one Salsa database and revision system.
-Allocation-producing judgments return fragments for the checker to materialize;
-stateful inference and elaboration retain a mutable algorithmic core.
-[Query ownership](docs/references/compiler/src/sessions-and-queries.md#query-and-checker-ownership)
-defines this boundary,
-and [analysis retention](docs/references/compiler/src/sessions-and-queries.md#analysis-facts-and-materialization)
-distinguishes keyed tooling facts from full typed-tree consumers and fine-grained memos.
+File loading, parsing, resolution, and whole-source static checking (`check_source`,
+`check_library`, and `check_unit`) run as coarse Salsa queries over `ScopedData`.
+Stateful inference, elaboration, and dense statics allocation stay inside one mutable `Tycker` run,
+while [analysis retention](docs/references/compiler/src/sessions-and-queries.md#analysis-facts-and-materialization)
+distinguishes keyed tooling facts from full typed-tree consumers.
 
 The [checker module guide](lang/statics/src/check/README.md) locates local judgments.
 [Finalization](docs/references/compiler/src/checking-and-inference.md#finalization) resolves
@@ -675,13 +674,16 @@ explains its lifecycle, and the [CLI guide](cli/README.md#interactive-repl) list
 
 ### Arena and ID invariants
 
-Compiler-owned IDs contain an opaque `KeySpaceId` and a raw arena index; the Rust ID type identifies the node category.
-There are two allocation strategies. `IdAllocator<Scope>` is a non-cloneable sequential issuer:
-construction claims one process-unique key space, and allocation advances its local cursor.
-The statics checker instead uses `DerivedAllocator`, while judgment queries construct derived IDs directly.
-Both derive identity from an entity's full ID, its checking occurrence, a derivation-family tag, and a local slot.
-Replaying the same site reproduces its IDs without a shared sequential cursor;
-repeated checks of an entity use distinct occurrences.
+Surface and stack-IR compiler IDs carry a `KeySpaceId` and a raw arena index; static identifiers (`AbstId`,
+`FillId`, `KindId`, `TypeId`, `KPatId`, `TPatId`, `VPatId`, `ValueId`, `CompuId`,
+`DataId`, and `CoDataId`) use four-byte dense indices (`DenseId`) into `StaticsArena`,
+while source and generated `DefId`s share keyed allocation alongside global `Sym` identifier interning.
+There are two allocation strategies for keyed IDs.
+`IdAllocator<Scope>` is a non-cloneable sequential issuer: construction claims one process-unique key space,
+and allocation advances its local cursor.
+The statics checker instead pairs dense `DenseArena` tables with `DefGenAllocator`,
+which issues generated `DefId`s sequentially from a root-keyed `KeySpaceRegistry<su::TermId>`
+so replaying the same checked source reproduces its generated definitions across eviction.
 
 Two separate type-level relations constrain IDs:
 
@@ -851,7 +853,7 @@ Lookup work scales with inspected pointer references, while copying, scanning,
 and destination-index maintenance scale with the live graph.
 Each index occupies 32 KiB per 1 MiB semispace, adding 3.125% to the space reservation.
 The implementation and boundary, reuse, and lookup-work regressions live in [runtime/gc.rs](runtime/gc.rs);
-the workspace runs those tests through the `native_gc` target in `zydeco-tests`.
+the workspace runs those tests through the `native_gc` module of the `suite` target in `zydeco-tests`.
 
 ### Text and Bytes
 
@@ -951,7 +953,7 @@ and `memory`, but the embedding must supply the imports before invoking either f
 
 | Path | Role |
 | --- | --- |
-| `lang/` | Compiler phases, interpreter, emitters, utilities, test harnesses, and data-driven case fixtures under `lang/tests/cases/`. |
+| `lang/` | Compiler foundation (`zydeco-foundation`), frontend, statics, interpreter, emitters, and test harnesses under `lang/tests/cases/`. |
 | `lang/machine/` | Rust representations and host-resumption descriptions shared by compiler phases and native stubs. |
 | `lib/` | Standard library, reusable examples, and regression projects under `lib/tests/`. |
 | `cli/` | Source checking, shared backend execution, the bundled Node host, formatting, and compilation commands. |

@@ -72,7 +72,7 @@ impl SpecializeMeta for PreludeMeta {
                 let [Meta::Ident(source)] = args.as_slice() else {
                     unreachable!("the from catalog validates one lexical identifier")
                 };
-                Ok(Self::From(VarName(source.clone())))
+                Ok(Self::From(VarName::new(source)))
             }
             | _ => unreachable!("the prelude catalog validates an exclusive option"),
         }

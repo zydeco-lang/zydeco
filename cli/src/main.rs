@@ -240,11 +240,6 @@ impl Application {
             return Ok(None);
         }
         let executable = self.compiler.executable_program(&analysis)?;
-        zydeco_statics::BuiltinPackagePlan::for_executable(
-            &executable.statics,
-            &executable.signature,
-        )
-        .map_err(|error| CompileError::Link(error.into()))?;
         Ok(Some(executable))
     }
 
@@ -494,22 +489,22 @@ impl Application {
                 | BuildTarget::Exe => {
                     let artifact = self.artifact_name(path)?;
                     let native = backend.emit_amd64(options.operating_system);
+                    let platform = zydeco_cli::library::LibraryPlatform::for_target(
+                        options.architecture,
+                        options.operating_system,
+                    )?;
+                    let runtime_digest =
+                        zydeco_cli::library::LibraryDigest::runtime(&options.runtime_dir)?;
                     libraries.validate_imports(
                         &native.foreign_imports,
-                        zydeco_cli::library::LibraryPlatform::for_target(
-                            options.architecture,
-                            options.operating_system,
-                        )?,
-                        Some(&zydeco_cli::library::LibraryDigest::runtime(&options.runtime_dir)?),
+                        platform,
+                        Some(&runtime_digest),
                         false,
                     )?;
                     libraries.validate_units(
                         &native.unit_imports,
-                        zydeco_cli::library::LibraryPlatform::for_target(
-                            options.architecture,
-                            options.operating_system,
-                        )?,
-                        Some(&zydeco_cli::library::LibraryDigest::runtime(&options.runtime_dir)?),
+                        platform,
+                        Some(&runtime_digest),
                         true,
                     )?;
                     let executable = options.link_amd64_resolved(

@@ -1,10 +1,10 @@
 #![doc = include_str!("README.md")]
 
-pub mod statics_syntax {
-    pub use zydeco_statics::syntax::*;
-}
+pub use zydeco_ir as ir;
 
-/// Dynamic syntax and runtime state for the evaluator.
+/// Persistent radix-trie lexical environments keyed by [`zydeco_ir::VarId`].
+pub mod env;
+/// Dynamic runtime values, host continuations, and state.
 pub mod syntax;
 pub use syntax::{ProgKont, Runtime};
 /// Host-owned values and capabilities used by runtime primitives.
@@ -16,19 +16,9 @@ pub mod foreign;
 pub use foreign::ForeignRuntimeError;
 /// Implementations of runtime builtin primitives.
 mod impls;
-mod representation;
 mod memory;
-/// Linking from statics syntax to dynamic runtime syntax.
-pub mod link;
-pub use link::*;
-/// Small-step evaluator for dynamic computations.
+mod representation;
+/// Small-step evaluator for [`zydeco_ir::CoreProgram`].
 pub mod eval;
-pub use eval::*;
-/// Formatting for dynamic syntax and runtime values.
+/// Formatting for runtime semantic values.
 pub mod fmt;
-
-pub(crate) use statics_syntax as ss;
-pub(crate) use syntax as ds;
-
-// Todo: generalize Rc/Arc using family trait
-// Reference: https://jedsek.xyz/posts/rust-typed-magic/gats/#family-trait

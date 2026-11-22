@@ -22,7 +22,6 @@ in [ideas](../ideas/README.md).
 | 2026-09-15 | [Typed fields and header-array updates](2026-09-15-typed-memory/README.md) | Independent storage/codecs, allocation-free local kernels, checked raw/typed header comparison, and remaining whole-path allocation sites. |
 
 Two earlier studies, the 2026-10-21 cleanup audit and the 2026-10-25 size analysis, were retired on 2026-11-05.
-Their remaining decisions and evidence live
-in [Artifact boundary and mainline admission](../proposals/artifact-boundary.md)
-and [Checker query retirement](../proposals/checker-query-retirement.md); their original reports
+Their remaining architectural threads are folded
+into [Master architecture refactor](../proposals/architecture-refactor.md); their original reports
 and reproduction scripts remain in version history.

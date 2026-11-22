@@ -110,7 +110,7 @@ impl TypeFolder for DependencyCollector {
 }
 
 impl Dependencies {
-    fn collect(tycker: &mut Tycker<'_>, source: TypeId, env: &TyEnv) -> Result<Self> {
+    fn collect(tycker: &mut Tycker<'_>, source: TypeId) -> Result<Self> {
         let mut result = Self::default();
         let mut collector =
             DependencyCollector { pending: vec![(source, BTreeSet::new())], ..Default::default() };
@@ -122,7 +122,7 @@ impl Dependencies {
             let node = tycker.type_filled(&ty)?;
             match node {
                 | Type::Abst(abst) if !bound.contains(&abst) => {
-                    if tycker.statics.seals.get(&abst).is_some() {
+                    if tycker.statics.seals.get(abst).is_some() {
                         result.edges.push((abst, bound));
                     } else {
                         result.free.insert(abst);
@@ -131,7 +131,7 @@ impl Dependencies {
                 | _ => {
                     collector.bound = bound;
                     let kind = tycker.statics.type_kind(ty);
-                    collector.fold_children(tycker, ty, node, kind, env)?;
+                    collector.fold_children(tycker, ty, node, kind)?;
                 }
             }
         }
@@ -155,9 +155,7 @@ impl TypeFolder for ReferencedDeclarations {
 }
 
 impl ReferencedDeclarations {
-    fn collect(
-        tycker: &mut Tycker<'_>, env: &TyEnv, root: CheckedNode,
-    ) -> Result<BTreeSet<AbstId>> {
+    fn collect(tycker: &mut Tycker<'_>, root: CheckedNode) -> Result<BTreeSet<AbstId>> {
         let mut collector = Self { pending: vec![root] };
         let mut visited = HashSet::new();
         let mut declarations = BTreeSet::new();
@@ -169,17 +167,11 @@ impl ReferencedDeclarations {
                 | CheckedNode::Type(ty) => {
                     let node = tycker.type_filled(&ty)?;
                     if let Type::Abst(seal) = node {
-                        if tycker.statics.seals.get(&seal).is_some() {
+                        if tycker.statics.seals.get(seal).is_some() {
                             declarations.insert(seal);
                         }
                     } else {
-                        collector.fold_children(
-                            tycker,
-                            ty,
-                            node,
-                            tycker.statics.type_kind(ty),
-                            env,
-                        )?;
+                        collector.fold_children(tycker, ty, node, tycker.statics.type_kind(ty))?;
                     }
                 }
                 | CheckedNode::Value(value) => {
@@ -207,7 +199,7 @@ impl NominalTranslation {
     ) -> Result<MonEnv> {
         let ownership = Ownership::collect(tycker, root);
         let mut pending =
-            ReferencedDeclarations::collect(tycker, &env.ty, body)?.into_iter().collect::<Vec<_>>();
+            ReferencedDeclarations::collect(tycker, body)?.into_iter().collect::<Vec<_>>();
         let mut sources = BTreeMap::new();
         let mut dependencies = BTreeMap::new();
         while let Some(seal) = pending.pop() {
@@ -217,13 +209,13 @@ impl NominalTranslation {
             if !tycker
                 .statics
                 .abst_hints
-                .get(&seal)
+                .get(seal)
                 .is_some_and(|owner| ownership.definitions.contains(owner))
             {
                 return tycker.err(TyckError::NotInlinableSeal(seal));
             }
             let body = tycker.statics.seals[&seal];
-            let found = Dependencies::collect(tycker, body, &env.ty)?;
+            let found = Dependencies::collect(tycker, body)?;
             pending.extend(found.edges.iter().map(|(seal, _)| *seal));
             sources.insert(seal, body);
             dependencies.insert(seal, found);
@@ -271,7 +263,7 @@ impl NominalTranslation {
             .map(|(index, source)| {
                 if let Some(family) = tycker.monadic_families.get(source) {
                     let mut family = family.clone();
-                    family.method = DtorName(format!(".nominal_{index}"));
+                    family.method = DtorName::new(format!(".nominal_{index}"));
                     return (*source, family);
                 }
                 let dependencies = dependencies[source].free.iter().copied().collect::<Vec<_>>();
@@ -284,13 +276,13 @@ impl NominalTranslation {
                 let kind = Arrow(monad_kind, Arrow(algebra_kind, kind)).build(tycker, &env.ty);
                 let hint = tycker.statics.abst_hints.get(source).copied();
                 let target: AbstId = Alloc::alloc(tycker, hint, kind, &());
-                let constructor = Alloc::alloc(tycker, target, kind, &env.ty);
+                let constructor = Alloc::alloc(tycker, target, kind, &());
                 (
                     *source,
                     NominalFamily {
                         constructor,
                         dependencies,
-                        method: DtorName(format!(".nominal_{index}")),
+                        method: DtorName::new(format!(".nominal_{index}")),
                     },
                 )
             })
@@ -303,16 +295,16 @@ impl NominalTranslation {
             Self::check_head(tycker, source, body)?;
             let family = env.nominals[&source].clone();
             let mut local = env.clone();
-            let monad = Self::parameter(tycker, &local, monad_kind, None);
-            local.monad_ty = Alloc::alloc(tycker, monad.witness, monad_kind, &local.ty);
+            let monad = Self::parameter(tycker, monad_kind, None);
+            local.monad_ty = Alloc::alloc(tycker, monad.witness, monad_kind, &());
             // Existentials and polymorphic functions insert structure fields
             // whose types use the lexically selected Algebra constructor.
-            let algebra = Self::parameter(tycker, &local, algebra_kind, None);
-            local.basis.algebra = Alloc::alloc(tycker, algebra.witness, algebra_kind, &local.ty);
+            let algebra = Self::parameter(tycker, algebra_kind, None);
+            local.basis.algebra = Alloc::alloc(tycker, algebra.witness, algebra_kind, &());
             let mut parameters = vec![monad, algebra];
             for dependency in &family.dependencies {
                 let kind = tycker.statics.annotations_abst[dependency];
-                let binder = Self::parameter(tycker, &local, kind, Some(*dependency));
+                let binder = Self::parameter(tycker, kind, Some(*dependency));
                 local.subst_abst.insert_mut(*dependency, binder.witness);
                 parameters.push(binder);
             }
@@ -320,12 +312,8 @@ impl NominalTranslation {
             for binder in parameters.into_iter().rev() {
                 let kind = Arrow(binder.domain_kind(tycker), tycker.statics.type_kind(definition))
                     .build(tycker, &env.ty);
-                definition = Alloc::alloc(
-                    tycker,
-                    TypeAbstraction { binder, body: definition },
-                    kind,
-                    &env.ty,
-                );
+                definition =
+                    Alloc::alloc(tycker, TypeAbstraction { binder, body: definition }, kind, &());
             }
             let Type::Abst(target) = tycker.type_filled(&family.constructor)? else {
                 unreachable!()
@@ -351,16 +339,14 @@ impl NominalTranslation {
         }
     }
 
-    fn parameter(
-        tycker: &mut Tycker<'_>, env: &MonEnv, kind: KindId, source: Option<AbstId>,
-    ) -> TypeBinder {
-        let hint = source.and_then(|source| tycker.statics.abst_hints.get(&source).copied());
+    fn parameter(tycker: &mut Tycker<'_>, kind: KindId, source: Option<AbstId>) -> TypeBinder {
+        let hint = source.and_then(|source| tycker.statics.abst_hints.get(source).copied());
         let name = hint
-            .map(|hint| tycker.def_name(&hint).clone())
-            .unwrap_or_else(|| VarName("nominal_parameter".to_owned()));
+            .map(|hint| *tycker.def_name(&hint))
+            .unwrap_or_else(|| VarName::new("nominal_parameter"));
         let definition: DefId = Alloc::alloc(tycker, name, kind.into(), &());
         let witness = Alloc::alloc(tycker, definition, kind, &());
-        TypeBinder::with_witness(tycker, witness, &env.ty)
+        TypeBinder::with_witness(tycker, witness)
     }
 
     pub(super) fn apply(
@@ -415,13 +401,12 @@ impl NominalTranslation {
                 let (_, target) = Self::apply(tycker, local.clone(), *source)?;
                 let (_, signature) = cs::Signature { ty: target }.construct(tycker, local)?;
                 let signature = parameters.signature(tycker, &env, signature);
-                Ok((family.method.clone(), signature))
+                Ok((family.method, signature))
             })
             .collect::<Result<Vec<_>>>()?;
-        let codata = tycker.fresh();
-        tycker.statics.codatas.insert_new(codata, CoData::new(signatures));
+        let codata = tycker.statics.codatas.alloc(CoData::new(signatures));
         let ctype = CType.build(tycker, &env.ty);
-        let dictionary_ty = Alloc::alloc(tycker, Type::CoData(codata), ctype, &env.ty);
+        let dictionary_ty = Alloc::alloc(tycker, Type::CoData(codata), ctype, &());
         let (env, dictionary_thunk_ty) = cs::Thk(dictionary_ty).construct(tycker, env)?;
         let (mut recursive, self_pattern) =
             cs::Pat("algebras", dictionary_thunk_ty).construct(tycker, env.clone())?;
@@ -439,18 +424,18 @@ impl NominalTranslation {
                     tycker,
                     *source,
                     tycker.statics.type_kind(tycker.statics.seals[source]),
-                    &local.ty,
+                    &(),
                 );
                 let (_, body) = Self::structure_body(tycker, local, source_ty)?;
                 let body = parameters.computation(tycker, &recursive, body);
                 let expected = tycker.statics.codatas[&codata].get(&family.method).unwrap();
                 Lub::lub(expected, tycker.statics.annotations_compu[&body], tycker)?;
-                Ok(CoMatcher { dtor: family.method.clone(), tail: body })
+                Ok(CoMatcher { dtor: family.method, tail: body })
             })
             .collect::<Result<Vec<_>>>()?;
-        let body = Alloc::alloc(tycker, CoMatch { arms: methods }, dictionary_ty, &env.ty);
+        let body = Alloc::alloc(tycker, CoMatch { arms: methods }, dictionary_ty, &());
         let _ = tycker.statics.codata_hints.upsert(body, codata);
-        let fixed = Alloc::alloc(tycker, Fix(self_pattern, body), dictionary_ty, &env.ty);
+        let fixed = Alloc::alloc(tycker, Fix(self_pattern, body), dictionary_ty, &());
         let (_, value) = Thunk(fixed).construct(tycker, env.clone())?;
         let (mut env, pattern) =
             cs::Pat("nominal_algebras", dictionary_thunk_ty).construct(tycker, env)?;
@@ -465,13 +450,13 @@ impl NominalTranslation {
         let mut parameters = StructureParameters::default();
         let mut kind = tycker.statics.type_kind(source);
         while let Kind::Arrow(Arrow(domain, codomain)) = tycker.kind_filled(&kind)? {
-            let binder = Self::parameter(tycker, &env, domain, None);
+            let binder = Self::parameter(tycker, domain, None);
             let (local, structure) =
                 cs::StrPat("structure", binder.witness, None).construct(tycker, env)?;
             env = local;
             parameters.0.push((binder.clone(), structure));
-            let argument = Alloc::alloc(tycker, binder.witness, domain, &env.ty);
-            source = Alloc::alloc(tycker, App(source, argument), codomain, &env.ty);
+            let argument = Alloc::alloc(tycker, binder.witness, domain, &());
+            source = Alloc::alloc(tycker, App(source, argument), codomain, &());
             kind = codomain;
         }
         let (_, body) = match tycker.kind_filled(&kind)? {
@@ -503,7 +488,7 @@ impl StructureParameters {
         let mut parameters = Self::default();
         for dependency in dependencies {
             let kind = tycker.statics.annotations_abst[dependency];
-            let binder = NominalTranslation::parameter(tycker, &env, kind, Some(*dependency));
+            let binder = NominalTranslation::parameter(tycker, kind, Some(*dependency));
             env.subst_abst.insert_mut(*dependency, binder.witness);
             let (local, structure) =
                 cs::StrPat("structure", binder.witness, None).construct(tycker, env)?;
@@ -517,7 +502,7 @@ impl StructureParameters {
         let ctype = CType.build(tycker, &env.ty);
         for (binder, structure) in self.0.iter().rev() {
             body = Arrow(tycker.statics.annotations_vpat[structure], body).build(tycker, &env.ty);
-            body = Alloc::alloc(tycker, Forall(binder.clone(), body), ctype, &env.ty);
+            body = Alloc::alloc(tycker, Forall(binder.clone(), body), ctype, &());
         }
         body
     }
@@ -530,9 +515,9 @@ impl StructureParameters {
                 tycker.statics.annotations_compu[&body],
             )
             .build(tycker, &env.ty);
-            body = Alloc::alloc(tycker, Abs(*structure, body), ty, &env.ty);
-            let ty = Alloc::alloc(tycker, Forall(binder.clone(), ty), ctype, &env.ty);
-            body = Alloc::alloc(tycker, Abs(binder.pattern, body), ty, &env.ty);
+            body = Alloc::alloc(tycker, Abs(*structure, body), ty, &());
+            let ty = Alloc::alloc(tycker, Forall(binder.clone(), ty), ctype, &());
+            body = Alloc::alloc(tycker, Abs(binder.pattern, body), ty, &());
         }
         body
     }

@@ -49,7 +49,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for DefId {
 
 impl<'a> Pretty<'a, Formatter<'a>> for Context {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let zydeco_utils::context::Context(defs) = self;
+        let zydeco_foundation::context::Context(defs) = self;
         RcDoc::intersperse(defs.iter().map(|id| id.pretty(f)), RcDoc::text(", "))
     }
 }

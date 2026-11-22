@@ -1,8 +1,8 @@
 use super::*;
 use crate::{completion::Completer, hover::HoverLineWidth};
 use tower_lsp::lsp_types::Position;
+use zydeco_foundation::span::LineCol;
 use zydeco_surface::textual::{StrictParser, syntax::Parser};
-use zydeco_utils::span::LineCol;
 
 struct Fixture {
     directory: tempfile::TempDir,

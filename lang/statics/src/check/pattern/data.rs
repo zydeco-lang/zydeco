@@ -8,53 +8,28 @@ impl PatternChecker<'_> {
         skolems: PatternSkolems,
     ) -> Result<CheckedPattern> {
         Ok(match switch {
-            | Switch::Syn => {
-                let pat = crate::query::InternedPat::new(tycker.db, self.inner);
-                let Some(error) = crate::query::pat_ctor_syn_judgment(tycker.db, tycker.data, pat)
-                else {
-                    unreachable!("constructor pattern judgments are query-produced")
-                };
-                tycker.err(error)?
-            }
+            | Switch::Syn => tycker.err(TyckError::MissingAnnotation)?,
             | Switch::Ana(ann) => {
                 let AnnId::Type(ann_ty) = ann else { tycker.err(TyckError::SortMismatch)? };
                 let ann_ty_unroll = ann_ty.unroll(tycker)?.subst_env(tycker, &self.info)?;
-                let ss::Type::Data(data_id) = &tycker.type_filled(&ann_ty_unroll)? else {
+                let &ss::Type::Data(data_id) = &tycker.type_filled(&ann_ty_unroll)? else {
                     tycker.err(TyckError::TypeExpected {
                         expected: "data type definition".to_string(),
                         found: ann_ty_unroll,
                     })?
                 };
                 let su::Ctor(ctor, args) = pat;
-                use std::collections::HashMap;
-                let arm_ty = match tycker.statics.datas[data_id]
-                    .clone()
-                    .into_iter()
-                    .collect::<HashMap<_, _>>()
-                    .get(&ctor)
-                    .cloned()
-                {
-                    | Some(ty) => ty,
-                    | None => tycker.err(TyckError::UnknownDataConstructor(ctor.clone()))?,
+                let Some(arm_ty) = tycker.statics.datas[data_id].get(&ctor) else {
+                    tycker.err(TyckError::UnknownDataConstructor(ctor))?
                 };
                 let args_out_ann = self.mk(args).tyck(
                     tycker,
-                    PatternAction::ana(arm_ty.to_owned().into()).with_skolems(skolems.clone()),
+                    PatternAction::ana(arm_ty.into()).with_skolems(skolems.clone()),
                 )?;
                 let (args, _) = args_out_ann.as_value();
-                let input = crate::query::InternedPatCtorInput::new(
-                    tycker.db,
-                    ctor.to_owned(),
-                    args,
-                    ann_ty,
-                    data_id.to_owned(),
-                );
-                let outcome = tycker.judge(self.inner, input, crate::query::pat_ctor_ana_judgment);
-                tycker.statics.vpats.insert_new(outcome.id, outcome.pat);
-                tycker.statics.annotations_vpat.insert_new(outcome.id, outcome.ann);
-                tycker.statics.env_vpat.insert_new(outcome.id, self.info.clone());
-                tycker.statics.data_pat_hints.insert_new(outcome.id, data_id.to_owned());
-                args_out_ann.with_annotation(PatAnnId::Value(outcome.id, outcome.ann))
+                let id = Alloc::alloc(tycker, ss::Ctor(ctor, args), ann_ty, &());
+                tycker.statics.data_pat_hints.insert_new(id, data_id);
+                args_out_ann.with_annotation(PatAnnId::Value(id, ann_ty))
             }
         })
     }
@@ -84,7 +59,7 @@ impl PatternChecker<'_> {
                             tycker,
                             ss::ValuePattern::Lit(Literal::Integer(i)),
                             expected,
-                            &self.info,
+                            &(),
                         );
                         self.mk(PatternCheck::new(PatAnnId::Value(lit, expected)))
                     }
@@ -102,14 +77,7 @@ impl PatternChecker<'_> {
         switch: Switch<AnnId>, skolems: PatternSkolems,
     ) -> Result<CheckedPattern> {
         Ok(match switch {
-            | Switch::Syn => {
-                let pat = crate::query::InternedPat::new(tycker.db, self.inner);
-                let Some(error) = crate::query::pat_alias_syn_judgment(tycker.db, tycker.data, pat)
-                else {
-                    unreachable!("alias pattern judgments are query-produced")
-                };
-                tycker.err(error)?
-            }
+            | Switch::Syn => tycker.err(TyckError::MissingAnnotation)?,
             | Switch::Ana(AnnId::Type(expected)) => {
                 let members =
                     ExistentialProjectionPattern::members(tycker, patterns.iter().copied());
@@ -143,16 +111,13 @@ impl PatternChecker<'_> {
                             Ok((info, output, opened))
                         },
                     )?;
-                    let input =
-                        crate::query::InternedPatAliasInput::new(tycker.db, output, expected);
-                    let outcome =
-                        tycker.judge(self.inner, input, crate::query::pat_alias_ana_judgment);
-                    tycker.statics.vpats.insert_new(outcome.id, outcome.pat);
-                    tycker.statics.annotations_vpat.insert_new(outcome.id, outcome.ann);
-                    tycker.statics.env_vpat.insert_new(outcome.id, self.info.clone());
+                    let alias = ss::Alias(
+                        ss::ConsN::from_vec(output).expect("an alias pattern is non-empty"),
+                    );
+                    let id = Alloc::alloc(tycker, alias, expected, &());
                     TyEnvT::new(
                         pattern_env,
-                        PatternCheck::with_opened(PatAnnId::Value(outcome.id, outcome.ann), opened),
+                        PatternCheck::with_opened(PatAnnId::Value(id, expected), opened),
                     )
                 }
             }

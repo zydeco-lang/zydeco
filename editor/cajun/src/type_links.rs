@@ -8,7 +8,6 @@ use zydeco_statics::{
 };
 use zydeco_surface::scoped::syntax::DefId;
 use zydeco_syntax::{App, Arrow, Label, Named, Prod, Proj};
-use zydeco_utils::arena::ArenaAccess;
 
 pub(crate) struct TypeReferences {
     definitions: BTreeSet<DefId>,
@@ -72,7 +71,7 @@ impl<'arena> TypeReferenceCollector<'arena> {
         if !self.kinds.insert(kind) {
             return;
         }
-        match self.statics.kinds_pre.get(&kind) {
+        match self.statics.kinds_pre.get(kind) {
             | Some(Fillable::Done(Kind::Arrow(Arrow(domain, codomain)))) => {
                 self.visit_kind(*domain);
                 self.visit_kind(*codomain);
@@ -86,7 +85,7 @@ impl<'arena> TypeReferenceCollector<'arena> {
         if !self.kind_patterns.insert(pattern) {
             return;
         }
-        match self.statics.kpats.get(&pattern) {
+        match self.statics.kpats.get(pattern) {
             | Some(KindPattern::Var(definition)) => {
                 self.definitions.insert(*definition);
             }
@@ -98,7 +97,7 @@ impl<'arena> TypeReferenceCollector<'arena> {
         if !self.type_patterns.insert(pattern) {
             return;
         }
-        match self.statics.tpats.get(&pattern) {
+        match self.statics.tpats.get(pattern) {
             | Some(TypePattern::Var(definition)) => {
                 self.definitions.insert(*definition);
             }
@@ -109,7 +108,7 @@ impl<'arena> TypeReferenceCollector<'arena> {
 
     fn visit_type_binder(&mut self, binder: &TypeBinder) {
         self.visit_type_pattern(binder.pattern);
-        if let Some(kind) = self.statics.annotations_tpat.get(&binder.pattern) {
+        if let Some(kind) = self.statics.annotations_tpat.get(binder.pattern) {
             self.visit_kind(*kind);
         }
     }
@@ -118,10 +117,10 @@ impl<'arena> TypeReferenceCollector<'arena> {
         if !self.abstracts.insert(abstract_type) {
             return;
         }
-        self.statics.abst_hints.get(&abstract_type).into_iter().for_each(|definition| {
+        self.statics.abst_hints.get(abstract_type).into_iter().for_each(|definition| {
             self.definitions.insert(*definition);
         });
-        self.statics.seals.get(&abstract_type).copied().into_iter().for_each(|definition| {
+        self.statics.seals.get(abstract_type).copied().into_iter().for_each(|definition| {
             self.sealed_types.insert(abstract_type);
             self.visit_type(definition);
         });
@@ -131,7 +130,7 @@ impl<'arena> TypeReferenceCollector<'arena> {
         if !self.types.insert(ty) {
             return;
         }
-        let Some(Fillable::Done(ty)) = self.statics.types_pre.get(&ty) else {
+        let Some(Fillable::Done(ty)) = self.statics.types_pre.get(ty) else {
             return;
         };
         match ty {
@@ -142,7 +141,7 @@ impl<'arena> TypeReferenceCollector<'arena> {
                     .iter()
                     .filter_map(|(abstract_type, hint)| {
                         (*hint == *definition && self.statics.seals.get(abstract_type).is_some())
-                            .then_some(*abstract_type)
+                            .then_some(abstract_type)
                     })
                     .collect::<Vec<_>>()
                     .into_iter()
@@ -218,7 +217,7 @@ impl<'arena> TypeReferenceCollector<'arena> {
         if !self.datas.insert(data) {
             return;
         }
-        if let Some(data) = self.statics.datas.get(&data) {
+        if let Some(data) = self.statics.datas.get(data) {
             data.iter().for_each(|(_, ty)| self.visit_type(*ty));
         }
     }
@@ -227,7 +226,7 @@ impl<'arena> TypeReferenceCollector<'arena> {
         if !self.codatas.insert(codata) {
             return;
         }
-        if let Some(codata) = self.statics.codatas.get(&codata) {
+        if let Some(codata) = self.statics.codatas.get(codata) {
             codata.iter().for_each(|(_, ty)| self.visit_type(*ty));
         }
     }

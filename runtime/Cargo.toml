@@ -6,7 +6,6 @@ build = "build.rs"
 
 [workspace.dependencies]
 zydeco-machine = { path = "../lang/machine", features = ["runtime"] }
-rand = "0.10"
 
 [features]
 default = ["process-entry"]
@@ -23,7 +22,6 @@ crate-type = ["rlib", "staticlib"]
 
 [dependencies]
 zydeco-machine = { workspace = true }
-rand = { workspace = true }
 
 # LLVM's local ThinLTO can discard the undecorated exports referenced only by
 # generated assembly. Keep them visible to the native linker in optimized builds.

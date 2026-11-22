@@ -1,6 +1,6 @@
 //! Required dependency facts, consumed before each block is elaborated.
 use super::{BindingSite, observers::ResolvedReference, syntax::*};
-use zydeco_utils::prelude::DepGraph;
+use zydeco_foundation::prelude::DepGraph;
 
 #[derive(Default)]
 pub(super) struct DependencyAnalyzer {
@@ -50,7 +50,11 @@ impl DependencyAnalyzer {
                     }
                 }
             }
-            let independent = graph.nodes().difference(&dependent).copied().collect::<Vec<_>>();
+            let independent = graph
+                .nodes()
+                .into_iter()
+                .filter(|node| !dependent.contains(node))
+                .collect::<Vec<_>>();
             for user in users {
                 graph.add(user, independent.iter().copied());
             }

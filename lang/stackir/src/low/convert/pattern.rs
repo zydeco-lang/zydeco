@@ -1,10 +1,10 @@
 //! Rename pattern binders while reconstructing their first-order syntax.
 
 use super::*;
-use zydeco_utils::fold::{Folder, Step};
+use zydeco_foundation::fold::{Folder, Step};
 
-pub(super) struct PatternFolder<'a, 'source> {
-    pub conversion: &'a mut ClosureConversion<'source>,
+pub(super) struct PatternFolder<'a> {
+    pub conversion: &'a mut ClosureConversion,
 }
 
 pub(super) enum PatternFrame {
@@ -20,7 +20,7 @@ pub(super) enum PatternFrame {
     },
 }
 
-impl Folder for PatternFolder<'_, '_> {
+impl Folder for PatternFolder<'_> {
     type Input = high::VPatId;
     type Output = PatternTranslation;
     type Frame = PatternFrame;
@@ -73,7 +73,7 @@ impl Folder for PatternFolder<'_, '_> {
     }
 }
 
-impl PatternFolder<'_, '_> {
+impl PatternFolder<'_> {
     fn advance(
         &mut self, source: high::VPatId, position: usize, patterns: Vec<low::VPatId>,
         bindings: Vec<(high::DefId, high::DefId)>,

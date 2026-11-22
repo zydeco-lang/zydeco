@@ -7,12 +7,12 @@ use std::{
     sync::Arc,
 };
 use thiserror::Error;
+use zydeco_foundation::span::Span;
 use zydeco_statics::syntax::TermAnnId;
 use zydeco_surface::textual::{
     BuiltinDirectiveError, ImportDirectiveError, IntrinsicDirectiveError, LiteralDirectiveError,
     PackageDirectiveError, ParseError, SourceNumber, syntax::SpanArena,
 };
-use zydeco_utils::span::Span;
 
 /// One presentation-ready source failure, retaining its own primary location.
 #[derive(Clone, Debug)]

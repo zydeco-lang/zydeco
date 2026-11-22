@@ -130,7 +130,8 @@ fn copies_merge_after_resolving_dependencies_and_preserve_each_route() {
     assert!(instances.windows(2).all(|pair| pair[0].source == pair[1].source));
     assert!(instances.iter().any(|i| i.context.package.to_string() == "/a"));
     assert!(instances.iter().any(|i| i.context.package.to_string() == "/b"));
-    let declarations = analysis.scoped().defs.iter().filter(|(_, name)| name.0 == "value").count();
+    let declarations =
+        analysis.scoped().defs.iter().filter(|(_, name)| name.as_str() == "value").count();
     assert_eq!(declarations, 1, "merged copies receive semantics once");
 }
 
@@ -156,7 +157,10 @@ fn different_resolved_dependencies_keep_copies_and_semantic_identities_distinct(
         .map(|i| i.source)
         .collect::<std::collections::HashSet<_>>();
     assert_eq!(sources.len(), 2);
-    assert_eq!(analysis.scoped().defs.iter().filter(|(_, name)| name.0 == "value").count(), 2);
+    assert_eq!(
+        analysis.scoped().defs.iter().filter(|(_, name)| name.as_str() == "value").count(),
+        2
+    );
 }
 
 #[test]
@@ -307,18 +311,17 @@ fn shared_imported_computations_execute_at_each_dynamic_occurrence() {
     let session = CompilerSession::default();
     let analysis = session.analyze(&root).unwrap();
     let executable = session.executable_program(&analysis).unwrap();
-    let dynamic = zydeco_dynamics::BuiltinRootLinker {
-        scoped: executable.scoped,
-        statics: executable.statics,
-        root: executable.root,
-        signature: executable.signature,
-    }
-    .run()
-    .unwrap();
     let mut input = std::io::Cursor::new(Vec::<u8>::new());
     let mut output = Vec::new();
-    let outcome =
-        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamic).run();
+    let outcome = zydeco_dynamics::Runtime::new(
+        &mut input,
+        &mut output,
+        &mut Vec::new(),
+        &[],
+        &executable.core,
+    )
+    .with_packages(std::slice::from_ref(&executable.builtin))
+    .run();
     assert!(matches!(outcome, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert_eq!(String::from_utf8(output).unwrap(), "tick\ntick\n");
     let instances = analysis

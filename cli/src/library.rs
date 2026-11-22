@@ -529,34 +529,11 @@ impl LibraryBuilder<'_> {
     fn runtime_support(
         &self, directory: &Path, name: &str, platform: LibraryPlatform,
     ) -> Result<(), LibraryError> {
-        let directory = directory.join("runtime");
-        BuildOptions { build_dir: directory.clone(), ..self.options.clone() }.prepare()?;
-        NativeTool::Cargo.run(
-            Command::new("cargo")
-                .args([
-                    "build",
-                    "--lib",
-                    "--no-default-features",
-                    "--release",
-                    "--target",
-                    platform.triple(),
-                ])
-                .arg("--manifest-path")
-                .arg(directory.join("Cargo.toml"))
-                .env(
-                    "CARGO_ENCODED_RUSTFLAGS",
-                    [
-                        "-Cpanic=abort".to_owned(),
-                        "-Crelocation-model=pic".to_owned(),
-                        format!("--remap-path-prefix={}=/zydeco-runtime", directory.display()),
-                    ]
-                    .join("\x1f"),
-                ),
-        )?;
-        std::fs::copy(
-            directory.join("target").join(platform.triple()).join("release/libzydeco_runtime.a"),
-            directory.parent().unwrap().join(name),
-        )?;
+        let runtime_build = directory.join("runtime");
+        let build = BuildOptions { build_dir: runtime_build.clone(), ..self.options.clone() };
+        build.prepare()?;
+        let cached = build.ensure_cached_runtime(&runtime_build, platform.triple())?;
+        std::fs::copy(&cached.staticlib, directory.join(name))?;
         Ok(())
     }
 }

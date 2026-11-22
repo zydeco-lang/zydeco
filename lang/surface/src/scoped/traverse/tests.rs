@@ -29,7 +29,7 @@ impl Fixture {
 
     fn variable(&mut self, name: &str) -> (DefId, PatId, TermId) {
         let def = self.allocator.alloc();
-        self.arena.defs.insert_new(def, VarName(name.into()));
+        self.arena.defs.insert_new(def, VarName::new(name));
         (def, self.pattern(def), self.term(Term::Var(def)))
     }
 
@@ -201,7 +201,7 @@ fn copattern_telescope_summaries_discharge_earlier_binders() {
             spine: CoPatternSpine {
                 head: CoPatternItem::Pat(first),
                 tail: vec![
-                    CoPatternItem::Dtor(DtorName("next".into())),
+                    CoPatternItem::Dtor(DtorName::new("next")),
                     CoPatternItem::Pat(second_pattern),
                 ],
             },

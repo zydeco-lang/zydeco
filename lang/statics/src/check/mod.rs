@@ -10,7 +10,6 @@ use {
     crate::surface_syntax::{ScopedArena, SpanArena},
     crate::validate::CoverageChecker,
     zydeco_surface::metadata::{BuiltinMeta, FfiMeta, MetadataKind},
-    zydeco_utils::prelude::ArenaAccess,
 };
 
 /// Checker lifecycle and source finalization.
@@ -65,12 +64,18 @@ mod dump;
 mod copattern;
 use copattern::CopatternElaborator;
 
+/// Undo entry recorded while unifying inside [`FillId::fill`].
+pub(crate) enum FillUndo {
+    Solus { id: FillId, prev: Option<AnnId> },
+    FillScope { id: FillId, prev: Option<SkolemScope> },
+}
+
 /// Type-checking driver that consumes scoped syntax and produces typed arenas.
 #[derive(AsRef, AsMut)]
 pub struct Tycker<'a> {
-    /// Issuer of site-derived identifiers for this type-checking run.
-    #[as_mut(DerivedAllocator)]
-    allocator: DerivedAllocator,
+    /// Issuer of generated [`DefId`]s for this type-checking run.
+    #[as_mut(DefGenAllocator)]
+    allocator: DefGenAllocator,
     /// The salsa database this check runs within.
     pub db: &'a dyn crate::query::TyckDb,
     /// The name-resolved program snapshot being checked.
@@ -84,10 +89,13 @@ pub struct Tycker<'a> {
     pub statics: StaticsArena,
     pub(crate) intrinsics: IntrinsicStatics,
     /// call stack for debugging tycker and error tracking
-    pub tasks: rpds::VectorSync<TyckTask>,
-    /// how many times each scoped entity has been checked; supplies the
-    /// derivation occurrence so re-checked entities get distinct sites
-    check_counts: ArenaAssoc<su::EntityId, u32>,
+    pub tasks: Vec<TyckTask>,
+    /// Source terms visited during judgment checking, used by recovery.
+    visited_terms: rustc_hash::FxHashSet<su::TermId>,
+    /// Current transparent kind-pattern bindings active during checking/elaboration.
+    pub(crate) kind_bindings: rustc_hash::FxHashMap<DefId, KindId>,
+    /// Current transparent type-pattern bindings active during checking/elaboration.
+    pub(crate) type_bindings: rustc_hash::FxHashMap<DefId, TypeId>,
     /// Classifiers of pattern annotations decided before their pattern is
     /// checked.
     ///
@@ -101,8 +109,15 @@ pub struct Tycker<'a> {
     /// Resolved terms selected for canonical synthesis, including imported
     /// providers, classifier queries, and monadic blocks.
     checked_terms: CheckedTermRepository,
+    /// Monotonic rollback log for speculative fill and scope updates during unification.
+    pub(crate) fill_trail: Vec<FillUndo>,
+    pub(crate) fill_depth: usize,
+    /// Incremented on every inference solution commit or rollback to invalidate caches.
+    pub(crate) solus_epoch: u64,
+    /// Non-diverged structural LUB cache, cleared whenever inference state changes.
+    pub(crate) lub_cache: rustc_hash::FxHashMap<(TypeId, TypeId), TypeId>,
     /// meta stack
-    pub metas: rpds::VectorSync<su::Meta>,
+    pub metas: Vec<su::Meta>,
     /// Results of field-search materializations under the current inference state.
     field_materializations: DeferredEnvMaterializationCache,
     completion: Option<completion::CompletionCapture>,
@@ -112,6 +127,7 @@ pub struct Tycker<'a> {
     pub(crate) observations: Vec<TyckObservation>,
     pub(crate) monadic_families:
         std::collections::BTreeMap<ss::AbstId, crate::elaborate::monadic::nominal::NominalFamily>,
+    pub(crate) monadic_memo: Option<crate::elaborate::monadic::MonadicMemo>,
     pending_foreign_imports: Vec<PendingForeignImport>,
 }
 

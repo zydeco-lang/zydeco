@@ -3,11 +3,12 @@
 //! See [`StaticsArena`] for documentations of each field.
 
 use super::syntax::*;
+use crate::SkolemScope;
 use crate::surface_syntax as su;
-use crate::{SkolemScope, TyEnv};
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use rustc_hash::FxBuildHasher;
 use std::{
+    borrow::Borrow,
     marker::PhantomData,
     num::NonZeroU32,
     ops::{Deref, DerefMut, Index, IndexMut},
@@ -15,69 +16,24 @@ use std::{
 };
 
 use zydeco_derive::{AsMutSelf, AsRefSelf};
+pub use zydeco_foundation::dense::{DenseArena, DenseId, IdBitSet, SecondaryMap};
 pub use zydeco_surface::arena::*;
+pub use zydeco_surface::scoped::arena::*;
 
 /* ---------------------------------- Arena --------------------------------- */
 
-/// Allocation and owning storage scope for typed syntax.
+/// Owning storage scope marker Retained for [`DefId`] test allocation fixtures.
 #[derive(Debug)]
 pub enum StaticsScope {}
 
-impl Allocates<KindId> for StaticsScope {}
-impl Allocates<FillId> for StaticsScope {}
-impl Allocates<AbstId> for StaticsScope {}
-impl Allocates<DataId> for StaticsScope {}
-impl Allocates<CoDataId> for StaticsScope {}
-impl Allocates<KPatId> for StaticsScope {}
-impl Allocates<TPatId> for StaticsScope {}
-impl Allocates<TypeId> for StaticsScope {}
-impl Allocates<VPatId> for StaticsScope {}
-impl Allocates<ValueId> for StaticsScope {}
-impl Allocates<CompuId> for StaticsScope {}
 impl Allocates<DefId> for StaticsScope {}
-
-impl ArenaSchema<KindId> for StaticsScope {
-    type Item = Fillable<Kind>;
-}
-impl ArenaSchema<KPatId> for StaticsScope {
-    type Item = KindPattern;
-}
-impl ArenaSchema<TPatId> for StaticsScope {
-    type Item = TypePattern;
-}
-impl ArenaSchema<TypeId> for StaticsScope {
-    type Item = Fillable<Type>;
-}
-impl ArenaSchema<VPatId> for StaticsScope {
-    type Item = ValuePattern;
-}
-impl ArenaSchema<ValueId> for StaticsScope {
-    type Item = Value;
-}
-impl ArenaSchema<CompuId> for StaticsScope {
-    type Item = Computation;
-}
-impl ArenaSchema<AbstId> for StaticsScope {
-    type Item = ();
-}
-impl ArenaSchema<FillId> for StaticsScope {
-    type Item = InferenceSite;
-}
-impl ArenaSchema<DataId> for StaticsScope {
-    type Item = Data;
-}
-impl ArenaSchema<CoDataId> for StaticsScope {
-    type Item = CoData;
-}
-
-pub use zydeco_surface::scoped::arena::*;
 
 /// Static associations introduced by `@[builtin(...)]` package-signature
 /// annotations.
 #[derive(Clone, Debug, Default)]
 pub struct BuiltinRoles {
-    witnesses: ArenaAssoc<AbstId, BuiltinRole>,
-    values: ArenaAssoc<TypeId, BuiltinValueRole>,
+    witnesses: SecondaryMap<AbstId, BuiltinRole>,
+    values: SecondaryMap<TypeId, BuiltinValueRole>,
 }
 
 impl BuiltinRoles {
@@ -98,11 +54,11 @@ impl BuiltinRoles {
     }
 
     pub fn witness(&self, witness: AbstId) -> Option<BuiltinRole> {
-        zydeco_utils::arena::ArenaAccess::get(&self.witnesses, &witness).copied()
+        self.witnesses.get(witness).copied()
     }
 
     pub fn value(&self, entry: TypeId) -> Option<BuiltinValueRole> {
-        zydeco_utils::arena::ArenaAccess::get(&self.values, &entry).copied()
+        self.values.get(entry).copied()
     }
 
     pub fn transfer_value(
@@ -116,7 +72,7 @@ impl BuiltinRoles {
 
     pub fn type_witnesses(&self, role: BuiltinTypeRole) -> impl Iterator<Item = AbstId> + '_ {
         self.witnesses.iter().filter_map(move |(witness, found)| {
-            (*found == BuiltinRole::Type(role)).then_some(*witness)
+            (*found == BuiltinRole::Type(role)).then_some(witness)
         })
     }
 
@@ -138,21 +94,14 @@ impl BuiltinRoles {
 
 /// Compact owning storage for pre-normalization kinds.
 ///
-/// `VType` and `CType` dominate this arena and carry no payload. Sparse hash
-/// buckets retain only a compact node for those variants; fill sites, arrows,
-/// and labels occupy a dense side vector whose stable borrow is reconstructed
-/// by [`KindArena::get`] and [`KindArena::iter`].
+/// `VType` and `CType` dominate this arena and carry no payload. Dense slots
+/// retain only a 4-byte node for those variants; fill sites, arrows, and labels
+/// occupy a dense side vector whose stable borrow is reconstructed by
+/// [`KindArena::get`] and [`KindArena::iter`].
 #[derive(Clone, Debug, Default)]
 pub struct KindArena {
-    nodes: ArenaSparse<KindStorageScope, KindId>,
+    nodes: DenseArena<KindId, KindNode>,
     payloads: Vec<Fillable<Kind>>,
-}
-
-#[derive(Debug)]
-enum KindStorageScope {}
-
-impl ArenaSchema<KindId> for KindStorageScope {
-    type Item = KindNode;
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -191,18 +140,27 @@ impl KindNode {
 }
 
 impl KindArena {
-    pub fn insert_new(&mut self, id: KindId, value: Fillable<Kind>) {
+    pub fn alloc(&mut self, value: Fillable<Kind>) -> KindId {
         let (node, payload) = KindNode::split(value, self.payloads.len());
-        self.nodes.insert_new(id, node);
+        let id = self.nodes.alloc(node);
         self.payloads.extend(payload);
+        id
     }
 
-    pub fn get(&self, id: &KindId) -> Option<&Fillable<Kind>> {
+    pub fn reserve_capacity(&mut self, additional: usize) {
+        self.nodes.reserve_capacity(additional);
+    }
+
+    pub fn get(&self, id: impl Borrow<KindId>) -> Option<&Fillable<Kind>> {
         self.nodes.get(id).map(|node| self.value(node))
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&KindId, &Fillable<Kind>)> {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (KindId, &Fillable<Kind>)> + '_ {
         self.nodes.iter().map(move |(id, node)| (id, self.value(node)))
+    }
+
+    pub fn ids(&self) -> impl ExactSizeIterator<Item = KindId> + '_ {
+        self.nodes.ids()
     }
 
     pub fn len(&self) -> usize {
@@ -210,7 +168,7 @@ impl KindArena {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.nodes.len() == 0
+        self.nodes.is_empty()
     }
 
     fn value(&self, node: &KindNode) -> &Fillable<Kind> {
@@ -219,6 +177,14 @@ impl KindArena {
             | KindNode::CType => &FILLED_CTYPE,
             | KindNode::Payload(index) => &self.payloads[index.offset()],
         }
+    }
+}
+
+impl Index<KindId> for KindArena {
+    type Output = Fillable<Kind>;
+
+    fn index(&self, id: KindId) -> &Self::Output {
+        self.get(id).expect("key not found")
     }
 }
 
@@ -300,38 +266,130 @@ impl TermFactsArena {
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 struct TypeKindIndex(u32);
 
-/// One typed node and its classifier, co-located under the same [`TypeId`].
+/// Compact upper-bound summary bits for constructs reachable from one [`TypeId`]
+/// within [`TypeArena`].
+///
+/// Unsolved fills and external `Data`/`CoData` references conservatively set all bits
+/// so normalization, substitution, and scope queries never skip reachable work.
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+pub struct TypeSummary(u8);
+
+impl TypeSummary {
+    pub const NONE: Self = Self(0);
+    pub const HAS_FILL: Self = Self(1 << 0);
+    pub const HAS_FREE_VAR: Self = Self(1 << 1);
+    pub const HAS_FREE_ABST: Self = Self(1 << 2);
+    pub const HAS_PROJ: Self = Self(1 << 3);
+    pub const HAS_BETA_OR_SEAL: Self = Self(1 << 4);
+    pub const HAS_PRIMITIVE: Self = Self(1 << 5);
+    pub const ALL: Self = Self(0b0011_1111);
+
+    #[inline]
+    pub const fn union(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+
+    #[inline]
+    pub const fn contains(self, flag: Self) -> bool {
+        (self.0 & flag.0) == flag.0
+    }
+
+    #[inline]
+    pub const fn intersects(self, mask: Self) -> bool {
+        (self.0 & mask.0) != 0
+    }
+}
+
+/// One typed node, its kind index, and its 1-byte structural summary, co-located under [`TypeId`].
 #[derive(Clone, Debug)]
 struct TypeNode {
     value: Fillable<Type>,
     kind: TypeKindIndex,
+    summary: TypeSummary,
 }
 
-/// Paged type storage with compact, arena-local kind annotation indexes.
-///
-/// Type payloads and their kind annotations have exactly the same key domain.
-/// Keeping them in one record removes a parallel page hierarchy, while the
-/// local kind table stores the 16-byte [`KindId`] once per distinct annotation
-/// rather than once per type occurrence.
+/// Dense type storage with compact, arena-local kind annotation indexes.
 #[derive(Clone, Debug, Default)]
 pub struct TypeArena {
-    nodes: ArenaPagedAssoc<TypeId, TypeNode>,
+    nodes: DenseArena<TypeId, TypeNode>,
     kinds: Vec<KindId>,
     kind_indexes: rustc_hash::FxHashMap<KindId, TypeKindIndex>,
 }
 
 impl TypeArena {
-    pub fn insert_new(&mut self, id: TypeId, value: Fillable<Type>, kind: KindId) {
+    pub fn alloc(&mut self, value: Fillable<Type>, kind: KindId) -> TypeId {
         let kind = self.intern_kind(kind);
-        self.nodes.insert_new(id, TypeNode { value, kind });
+        let summary = self.compute_summary(&value);
+        self.nodes.alloc(TypeNode { value, kind, summary })
     }
 
     pub fn replace_existing(&mut self, id: TypeId, value: Fillable<Type>) {
-        self.nodes[&id].value = value;
+        let summary = self.compute_summary(&value);
+        let node = &mut self.nodes[id];
+        node.value = value;
+        node.summary = summary;
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (TypeId, &Fillable<Type>)> {
+    #[inline]
+    pub fn summary(&self, id: TypeId) -> TypeSummary {
+        self.nodes[id].summary
+    }
+
+    fn compute_summary(&self, value: &Fillable<Type>) -> TypeSummary {
+        let Fillable::Done(ty) = value else {
+            return TypeSummary::ALL;
+        };
+        match ty {
+            | Type::Var(_) => TypeSummary::HAS_FREE_VAR,
+            | Type::Abst(_) => TypeSummary::HAS_FREE_ABST.union(TypeSummary::HAS_BETA_OR_SEAL),
+            | Type::Primitive(_) => TypeSummary::HAS_PRIMITIVE,
+            | Type::Thk(_) | Type::Ret(_) | Type::Unit(_) | Type::Opaque(_) | Type::OS(_) => {
+                TypeSummary::NONE
+            }
+            | Type::App(App(function, argument)) => self
+                .summary(*function)
+                .union(self.summary(*argument))
+                .union(TypeSummary::HAS_BETA_OR_SEAL),
+            | Type::Proj(Proj(head, _)) => self
+                .summary(*head)
+                .union(TypeSummary::HAS_PROJ)
+                .union(TypeSummary::HAS_BETA_OR_SEAL),
+            | Type::Abs(TypeAbstraction { body, .. })
+            | Type::Named(Named(_, body))
+            | Type::Label(Label(_, body))
+            | Type::Forall(Forall(_, body))
+            | Type::ManifestKind(ManifestKind { body, .. }) => self.summary(*body),
+            | Type::ValPi(pi) => {
+                let domain = match &pi.binder {
+                    | ValPiBinder::Type(_) => TypeSummary::NONE,
+                    | ValPiBinder::Value(parameter) => self.summary(parameter.domain),
+                };
+                domain.union(self.summary(pi.codomain))
+            }
+            | Type::Arrow(Arrow(domain, codomain)) => {
+                self.summary(*domain).union(self.summary(*codomain))
+            }
+            | Type::PackPi(pi) => self.summary(pi.domain).union(self.summary(pi.codomain)),
+            | Type::Prod(Prod(items)) => {
+                items.iter().fold(TypeSummary::NONE, |acc, item| acc.union(self.summary(*item)))
+            }
+            | Type::Exists(exists) => {
+                let mode = match &exists.mode {
+                    | ExistsMode::Abstract => TypeSummary::NONE,
+                    | ExistsMode::Manifest(definition) => self.summary(*definition),
+                };
+                mode.union(self.summary(exists.body))
+            }
+            | Type::Data(_) | Type::CoData(_) => TypeSummary::ALL,
+        }
+    }
+
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (TypeId, &Fillable<Type>)> + '_ {
         self.nodes.iter().map(|(id, node)| (id, &node.value))
+    }
+
+    pub fn ids(&self) -> impl ExactSizeIterator<Item = TypeId> + '_ {
+        self.nodes.ids()
     }
 
     pub fn len(&self) -> usize {
@@ -339,14 +397,22 @@ impl TypeArena {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.nodes.len() == 0
+        self.nodes.is_empty()
     }
 
-    pub fn reserve_pages(&mut self, additional: usize) {
-        self.nodes.reserve_pages(additional);
+    pub fn reserve(&mut self, additional: usize) {
+        self.nodes.reserve_capacity(additional);
     }
 
-    fn kind_at(&self, id: &TypeId) -> Option<KindId> {
+    pub fn get(&self, id: impl Borrow<TypeId>) -> Option<&Fillable<Type>> {
+        self.nodes.get(id).map(|node| &node.value)
+    }
+
+    pub fn get_mut(&mut self, id: impl Borrow<TypeId>) -> Option<&mut Fillable<Type>> {
+        self.nodes.get_mut(id).map(|node| &mut node.value)
+    }
+
+    fn kind_at(&self, id: impl Borrow<TypeId>) -> Option<KindId> {
         let index = self.nodes.get(id)?.kind.0 as usize;
         self.kinds.get(index).copied()
     }
@@ -382,6 +448,14 @@ impl TypeArena {
     }
 }
 
+impl Index<TypeId> for TypeArena {
+    type Output = Fillable<Type>;
+
+    fn index(&self, id: TypeId) -> &Self::Output {
+        &self.nodes[id].value
+    }
+}
+
 impl Index<&TypeId> for TypeArena {
     type Output = Fillable<Type>;
 
@@ -390,21 +464,15 @@ impl Index<&TypeId> for TypeArena {
     }
 }
 
-impl IndexMut<&TypeId> for TypeArena {
-    fn index_mut(&mut self, id: &TypeId) -> &mut Self::Output {
+impl IndexMut<TypeId> for TypeArena {
+    fn index_mut(&mut self, id: TypeId) -> &mut Self::Output {
         &mut self.nodes[id].value
     }
 }
 
-impl ArenaAccess<&TypeId, Fillable<Type>> for TypeArena {
-    fn get(&self, id: &TypeId) -> Option<&Fillable<Type>> {
-        self.nodes.get(id).map(|node| &node.value)
-    }
-}
-
-impl ArenaAccessMut<&TypeId, Fillable<Type>> for TypeArena {
-    fn get_mut(&mut self, id: &TypeId) -> Option<&mut Fillable<Type>> {
-        self.nodes.get_mut(id).map(|node| &mut node.value)
+impl IndexMut<&TypeId> for TypeArena {
+    fn index_mut(&mut self, id: &TypeId) -> &mut Self::Output {
+        &mut self.nodes[id].value
     }
 }
 
@@ -415,16 +483,12 @@ impl ArenaAccessMut<&TypeId, Fillable<Type>> for TypeArena {
 /// such as import boundaries leave the provider's location intact.
 #[derive(Clone, Debug)]
 pub struct SourceProvenance<Source, Typed> {
-    latest_by_category:
-        [IndexMap<ArenaIdIdentity, Source, FxBuildHasher>; TypedEntityCategory::COUNT],
+    latest_by_category: [Vec<Option<Source>>; TypedEntityCategory::COUNT],
     marker: PhantomData<fn() -> Typed>,
 }
 
-/// An ephemeral pattern or term dispatcher split into its storage shard and
-/// category-independent arena identity.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 struct TypedEntityKey {
-    identity: ArenaIdIdentity,
+    index: usize,
     category: TypedEntityCategory,
 }
 
@@ -450,33 +514,42 @@ impl TypedEntityCategory {
 
 impl From<PatId> for TypedEntityKey {
     fn from(id: PatId) -> Self {
-        let (id, category) = match id {
-            | PatId::Kind(id) => (ArenaIdIdentity::new(id), TypedEntityCategory::KindPattern),
-            | PatId::Type(id) => (ArenaIdIdentity::new(id), TypedEntityCategory::TypePattern),
-            | PatId::Value(id) => (ArenaIdIdentity::new(id), TypedEntityCategory::ValuePattern),
-        };
-        Self { identity: id, category }
+        match id {
+            | PatId::Kind(id) => {
+                Self { index: id.index(), category: TypedEntityCategory::KindPattern }
+            }
+            | PatId::Type(id) => {
+                Self { index: id.index(), category: TypedEntityCategory::TypePattern }
+            }
+            | PatId::Value(id) => {
+                Self { index: id.index(), category: TypedEntityCategory::ValuePattern }
+            }
+        }
     }
 }
 
 impl From<TermId> for TypedEntityKey {
     fn from(id: TermId) -> Self {
-        let (id, category) = match id {
-            | TermId::Kind(id) => (ArenaIdIdentity::new(id), TypedEntityCategory::KindTerm),
-            | TermId::Type(id) => (ArenaIdIdentity::new(id), TypedEntityCategory::TypeTerm),
-            | TermId::Value(id) => (ArenaIdIdentity::new(id), TypedEntityCategory::ValueTerm),
-            | TermId::Compu(id) => (ArenaIdIdentity::new(id), TypedEntityCategory::CompuTerm),
-        };
-        Self { identity: id, category }
+        match id {
+            | TermId::Kind(id) => {
+                Self { index: id.index(), category: TypedEntityCategory::KindTerm }
+            }
+            | TermId::Type(id) => {
+                Self { index: id.index(), category: TypedEntityCategory::TypeTerm }
+            }
+            | TermId::Value(id) => {
+                Self { index: id.index(), category: TypedEntityCategory::ValueTerm }
+            }
+            | TermId::Compu(id) => {
+                Self { index: id.index(), category: TypedEntityCategory::CompuTerm }
+            }
+        }
     }
 }
 
 impl<Source, Typed> Default for SourceProvenance<Source, Typed> {
     fn default() -> Self {
-        Self {
-            latest_by_category: std::array::from_fn(|_| IndexMap::default()),
-            marker: PhantomData,
-        }
+        Self { latest_by_category: std::array::from_fn(|_| Vec::new()), marker: PhantomData }
     }
 }
 
@@ -485,15 +558,19 @@ where
     Source: Copy,
 {
     fn record_compact(&mut self, source: Source, typed: TypedEntityKey) {
-        let _ = self.latest_by_category[typed.category.index()].insert(typed.identity, source);
+        let slots = &mut self.latest_by_category[typed.category.index()];
+        if typed.index >= slots.len() {
+            slots.resize(typed.index + 1, None);
+        }
+        slots[typed.index] = Some(source);
     }
 
     fn source_compact(&self, typed: TypedEntityKey) -> Option<Source> {
-        self.latest_by_category[typed.category.index()].get(&typed.identity).copied()
+        self.latest_by_category[typed.category.index()].get(typed.index).copied().flatten()
     }
 
     fn shrink_to_fit(&mut self) {
-        self.latest_by_category.iter_mut().for_each(IndexMap::shrink_to_fit);
+        self.latest_by_category.iter_mut().for_each(Vec::shrink_to_fit);
     }
 }
 
@@ -526,8 +603,6 @@ where
 /// Immutable normalized classifiers retained for editor queries.
 ///
 /// The checker records these facts once, after every type has been normalized.
-/// Sorted parallel slices avoid charging a hash-table bucket and its spare
-/// capacity for each 56-byte type while preserving borrowed lookup.
 #[derive(Clone, Debug, Default)]
 pub struct NormalizedAnnotations {
     ids: Box<[TypeId]>,
@@ -556,10 +631,6 @@ impl NormalizedAnnotations {
 
 /// Source-bounded static facts retained after the typed occurrence tree is
 /// discarded.
-///
-/// A check builds this generation mutably. Once the check is published, the
-/// full materialization and its retained [`StaticsArena::clone_keyed_indexes`]
-/// view share one immutable allocation.
 #[derive(Clone, Debug, Default)]
 pub struct StaticsIndexes {
     /// Representative source pattern for each typed pattern. Rechecking
@@ -579,47 +650,45 @@ pub struct StaticsIndexes {
     pub coverage_errors: Vec<crate::validate::CoverageError>,
 
     /// arena for abstract types
-    pub absts: ArenaSparse<StaticsScope, AbstId>,
+    pub absts: DenseArena<AbstId, ()>,
     /// the abstract types generated from sealed types
-    pub seals: ArenaAssoc<AbstId, TypeId>,
+    pub seals: SecondaryMap<AbstId, TypeId>,
     /// name hints for abstract types
-    pub abst_hints: ArenaAssoc<AbstId, DefId>,
+    pub abst_hints: SecondaryMap<AbstId, DefId>,
     /// abstract types introduced by existential elimination
-    pub existential_skolems: ArenaAssoc<AbstId, ()>,
+    pub existential_skolems: IdBitSet<AbstId>,
     /// Builtin roles attached to existential witnesses and named value entries.
     pub builtin_roles: BuiltinRoles,
     /// Foreign implementations whose classifiers have a supported marshalling protocol.
-    pub foreign_imports: ArenaAssoc<ValueId, zydeco_syntax::CheckedImport>,
-    /// arena for context-constrained flexible metavariables and their source sites;
-    /// only types and kinds are now fillable hole-filling sites, allocated with
-    /// derived identifiers so fill states can be query keys
-    pub fills: ArenaSparse<StaticsScope, FillId>,
+    pub foreign_imports: SecondaryMap<ValueId, zydeco_syntax::CheckedImport>,
+    /// arena for context-constrained flexible metavariables and their source sites
+    pub fills: DenseArena<FillId, InferenceSite>,
     /// the annotation assigned to each solved filling site
-    pub solus: ArenaAssoc<FillId, AnnId>,
+    pub solus: SecondaryMap<FillId, AnnId>,
     /// existential witnesses that each type hole is allowed to mention
-    pub fill_scopes: ArenaAssoc<FillId, SkolemScope>,
+    pub fill_scopes: SecondaryMap<FillId, SkolemScope>,
     /// which holes are introduced by the user and should be reported
-    pub fill_hints: ArenaAssoc<FillId, ()>,
+    pub fill_hints: IdBitSet<FillId>,
     /// arena for `data`; plural plural
-    pub datas: ArenaSparse<StaticsScope, DataId>,
+    pub datas: DenseArena<DataId, Data>,
     /// arena for `codata`; plural plural
-    pub codatas: ArenaSparse<StaticsScope, CoDataId>,
+    pub codatas: DenseArena<CoDataId, CoData>,
     /// hints for values that need data annotations
-    pub data_hints: ArenaAssoc<ValueId, DataId>,
+    pub data_hints: SecondaryMap<ValueId, DataId>,
     /// hints for value patterns that need data annotations
-    pub data_pat_hints: ArenaAssoc<VPatId, DataId>,
+    pub data_pat_hints: SecondaryMap<VPatId, DataId>,
     /// hints for computations that need codata annotations
-    pub codata_hints: ArenaAssoc<CompuId, CoDataId>,
+    pub codata_hints: SecondaryMap<CompuId, CoDataId>,
     /// matches generated to cover value patterns in generalized comatch clauses
-    pub copattern_matches: ArenaAssoc<CompuId, ()>,
+    pub copattern_matches: IdBitSet<CompuId>,
     /// package-dependent binders consumed directly from generalized comatch clauses
-    pub copattern_pack_pi_binders: ArenaAssoc<CompuId, VPatId>,
+    pub copattern_pack_pi_binders: SecondaryMap<CompuId, VPatId>,
     /// immutable value aliases available to static inspection
     pub value_aliases: ArenaAssoc<DefId, ValueId>,
     /// package witnesses retained by whole-value aliases in selective package patterns
     pub package_aliases: ArenaAssoc<DefId, Vec<StaticTermId>>,
     /// abstract witness arity contributed by each package-pattern boundary
-    pub package_pattern_opened_arity: ArenaAssoc<VPatId, usize>,
+    pub package_pattern_opened_arity: SecondaryMap<VPatId, usize>,
     /// checked bodies of type definitions available to static inspection
     pub type_definitions: ArenaAssoc<DefId, TypeId>,
     /// arena for inlinable definitions, typically global (necessity modality) definitions
@@ -627,9 +696,9 @@ pub struct StaticsIndexes {
     /// definitions that are marked global
     pub global_defs: ArenaAssoc<DefId, ()>,
     /// terms that are marked global
-    pub global_terms: ArenaAssoc<TermId, ()>,
+    pub global_terms: IndexSet<TermId, FxBuildHasher>,
     /// hints associating typed terms with definition names
-    pub def_hints: ArenaAssoc<TermId, DefId>,
+    pub def_hints: IndexMap<TermId, DefId, FxBuildHasher>,
     /// Definition names synthesized during typed elaboration. Source definitions
     /// remain in the immutable scoped arena; keeping this small delta here avoids
     /// cloning every resolved syntax and context table just to add names.
@@ -639,7 +708,7 @@ pub struct StaticsIndexes {
     /// annotations for variable definitions
     pub annotations_var: ArenaAssoc<DefId, AnnId>,
     /// annotations for abstract types
-    pub annotations_abst: ArenaAssoc<AbstId, KindId>,
+    pub annotations_abst: SecondaryMap<AbstId, KindId>,
 }
 
 /// Typed arena plus annotation tables and translation metadata.
@@ -648,56 +717,38 @@ pub struct StaticsArena {
     /// Source-bounded facts shared with retained analyses after checking.
     indexes: Arc<StaticsIndexes>,
 
-    /// Shared executable elaboration of the checked source root. Source
+    /// Shared executable residual program produced by static elaboration. Source
     /// annotations and original nodes remain available for static queries.
-    pub static_elaboration: Option<crate::elaborate::static_values::StaticElaboration>,
+    pub core: Option<Arc<zydeco_ir::CoreProgram>>,
 
     /// kind arena before normalization
     pub kinds_pre: KindArena,
     /// manifest kind-pattern arena
-    pub kpats: ArenaSparse<StaticsScope, KPatId>,
+    pub kpats: DenseArena<KPatId, KindPattern>,
     /// type pattern arena
-    pub tpats: ArenaSparse<StaticsScope, TPatId>,
+    pub tpats: DenseArena<TPatId, TypePattern>,
     /// type arena before normalization
     pub types_pre: TypeArena,
     /// value pattern arena
-    pub vpats: ArenaSparse<StaticsScope, VPatId>,
+    pub vpats: DenseArena<VPatId, ValuePattern>,
     /// value arena
-    pub values: ArenaSparse<StaticsScope, ValueId>,
+    pub values: DenseArena<ValueId, Value>,
     /// computation arena
-    pub compus: ArenaSparse<StaticsScope, CompuId>,
+    pub compus: DenseArena<CompuId, Computation>,
     /// kind annotations for type patterns
-    pub annotations_tpat: ArenaAssoc<TPatId, KindId>,
+    pub annotations_tpat: SecondaryMap<TPatId, KindId>,
     /// type annotations for value patterns
-    pub annotations_vpat: ArenaAssoc<VPatId, TypeId>,
+    pub annotations_vpat: SecondaryMap<VPatId, TypeId>,
     /// type annotations for values
-    pub annotations_value: ArenaAssoc<ValueId, TypeId>,
+    pub annotations_value: SecondaryMap<ValueId, TypeId>,
     /// type annotations for computations
-    pub annotations_compu: ArenaAssoc<CompuId, TypeId>,
-
-    // typing environments during type checking
-    /// typing environments for manifest kind patterns
-    pub env_kpat: ArenaAssoc<KPatId, TyEnv>,
-    /// typing environments for type patterns
-    pub env_tpat: ArenaAssoc<TPatId, TyEnv>,
-    /// typing environments for types, interned so structurally identical
-    /// environments from distinct sites share one allocation
-    pub env_type: ArenaPagedAssoc<TypeId, std::sync::Arc<TyEnv>>,
-    /// content-addressed cache behind [`Self::env_type`]; checker-transient
-    /// and stripped with the environments after checking
-    pub env_interner: crate::environment::TyEnvInterner,
-    /// typing environments for value patterns
-    pub env_vpat: ArenaAssoc<VPatId, TyEnv>,
-    /// typing environments for values
-    pub env_value: ArenaAssoc<ValueId, TyEnv>,
-    /// typing environments for computations
-    pub env_compu: ArenaAssoc<CompuId, TyEnv>,
+    pub annotations_compu: SecondaryMap<CompuId, TypeId>,
 
     // normalized kinds and types after type checking
     /// normalized kind delta for IDs whose pre-normalization form changed
-    pub kinds_normalized: ArenaAssoc<KindId, Kind>,
+    pub kinds_normalized: SecondaryMap<KindId, Kind>,
     /// normalized type free of holes
-    pub types_normalized: ArenaAssoc<TypeId, Type>,
+    pub types_normalized: SecondaryMap<TypeId, Type>,
 }
 
 impl Deref for StaticsArena {
@@ -715,59 +766,20 @@ impl DerefMut for StaticsArena {
 }
 
 impl StaticsArena {
-    /// Select the common residual computation before interpretation or lowering.
-    pub fn execution_compu(&self, source: CompuId) -> CompuId {
-        match &self.static_elaboration {
-            | Some(crate::elaborate::static_values::StaticElaboration {
-                source: TermAnnId::Compu(original, _),
-                residual: Some(TermAnnId::Compu(residual, _)),
-            }) if *original == source => *residual,
-            | _ => source,
-        }
-    }
-
-    /// Select the residual of a representable checked value, falling back to
-    /// the source for inspection when no matching residual is recorded.
-    /// Linking requires a recorded residual rather than this fallback.
-    pub fn execution_value(&self, source: ValueId) -> ValueId {
-        match &self.static_elaboration {
-            | Some(crate::elaborate::static_values::StaticElaboration {
-                source: TermAnnId::Value(original, _),
-                residual: Some(TermAnnId::Value(residual, _)),
-            }) if *original == source => *residual,
-            | _ => source,
-        }
-    }
-
-    /// Pre-reserve retained, source-shaped storage from the name-resolved
-    /// program. Term facts know their exact external ID extents; generated
-    /// type pages can reserve only their estimated outer key-space count.
-    /// Checker-transient type environments grow from their actual inserts.
+    /// Pre-reserve retained, source-shaped storage from the name-resolved program.
     pub fn reserve(&mut self, scoped: &su::ScopedArena) {
-        let type_key_spaces = scoped.terms.len().saturating_add(1) / 2;
-        self.types_pre.reserve_pages(type_key_spaces);
+        self.types_pre.reserve(scoped.terms.len());
         self.term_facts.reserve_ids(scoped.terms.iter().map(|(term, _)| term));
-    }
-
-    /// Intern one typing environment and return the shared value for storage
-    /// in [`Self::env_type`].
-    pub fn intern_env(&mut self, env: &TyEnv) -> std::sync::Arc<TyEnv> {
-        self.env_interner.intern(env)
-    }
-
-    /// Materialize one stored typing environment as an owned value.
-    pub fn env_at(&self, id: TypeId) -> TyEnv {
-        self.env_type[&id].as_ref().clone()
     }
 
     /// The kind annotation co-located with one type node.
     pub fn type_kind(&self, id: TypeId) -> KindId {
-        self.types_pre.kind_at(&id).expect("type node has no kind annotation")
+        self.types_pre.kind_at(id).expect("type node has no kind annotation")
     }
 
     /// The kind annotation of a type node, when the node is present.
     pub fn type_kind_at(&self, id: TypeId) -> Option<KindId> {
-        self.types_pre.kind_at(&id)
+        self.types_pre.kind_at(id)
     }
 
     /// Clone only the keyed indexes of a finished check, leaving the much
@@ -779,7 +791,7 @@ impl StaticsArena {
     /// The normalized form of one type, falling back to the pre-normalization
     /// form for nodes the normalization phase left unchanged.
     pub fn normalized_at(&self, id: TypeId) -> Option<&Type> {
-        self.types_normalized.get(&id).or_else(|| match self.types_pre.get(&id)? {
+        self.types_normalized.get(id).or_else(|| match self.types_pre.get(id)? {
             | Fillable::Done(ty) => Some(ty),
             | Fillable::Fill(_) => None,
         })
@@ -788,7 +800,7 @@ impl StaticsArena {
     /// The normalized form of one kind, falling back to its unchanged
     /// pre-normalization form when no delta is stored.
     pub fn normalized_kind_at(&self, id: KindId) -> Option<&Kind> {
-        self.kinds_normalized.get(&id).or_else(|| match self.kinds_pre.get(&id)? {
+        self.kinds_normalized.get(id).or_else(|| match self.kinds_pre.get(id)? {
             | Fillable::Done(kind) => Some(kind),
             | Fillable::Fill(_) => None,
         })
@@ -825,11 +837,7 @@ impl StaticsArena {
             .into_iter()
             .filter_map(|annotation| match self.normalized_at(annotation) {
                 | Some(normalized) => Some((annotation, normalized.clone())),
-                // Incomplete terms can retain an unsolved classifier after normalization.
-                // Its absence is an ordinary missing editor fact, not a normalized type.
-                | None if matches!(self.types_pre.get(&annotation), Some(Fillable::Fill(_))) => {
-                    None
-                }
+                | None if matches!(self.types_pre.get(annotation), Some(Fillable::Fill(_))) => None,
                 | None => panic!("top annotation was not normalized"),
             })
             .unzip();
@@ -848,16 +856,6 @@ impl StaticsArena {
     pub fn def_name<'a>(&'a self, scoped: &'a su::ScopedArena, id: &DefId) -> &'a su::VarName {
         self.generated_defs.get(id).unwrap_or_else(|| &scoped.defs[id])
     }
-
-    /// Clone the definition-name table owned by the linked dynamic program.
-    /// Backend IRs instead retain phase-local deltas over these shared arenas.
-    pub fn dynamic_definitions(
-        &self, scoped: &su::ScopedArena,
-    ) -> ArenaSparse<su::ScopedScope, DefId> {
-        let mut definitions = scoped.defs.clone();
-        definitions += self.generated_defs.clone();
-        definitions
-    }
 }
 
 #[cfg(test)]
@@ -869,59 +867,40 @@ mod tests {
         assert!(std::mem::size_of::<KindNode>() <= 8);
         assert!(std::mem::size_of::<KindNode>() < std::mem::size_of::<Fillable<Kind>>());
 
-        let mut allocator = IdAllocator::<StaticsScope>::new();
-        let vtype: KindId = allocator.alloc();
-        let ctype: KindId = allocator.alloc();
-        let arrow: KindId = allocator.alloc();
-        let label: KindId = allocator.alloc();
-        let fill: FillId = allocator.alloc();
-        let pending: KindId = allocator.alloc();
         let mut kinds = KindArena::default();
-
-        kinds.insert_new(vtype, Fillable::Done(Kind::VType(VType)));
-        kinds.insert_new(ctype, Fillable::Done(Kind::CType(CType)));
-        kinds.insert_new(arrow, Fillable::Done(Kind::Arrow(Arrow(vtype, ctype))));
-        kinds.insert_new(
-            label,
-            Fillable::Done(Kind::Label(Label(FieldName("field".to_owned()), vtype))),
-        );
-        kinds.insert_new(pending, Fillable::Fill(fill));
+        let vtype = kinds.alloc(Fillable::Done(Kind::VType(VType)));
+        let ctype = kinds.alloc(Fillable::Done(Kind::CType(CType)));
+        let arrow = kinds.alloc(Fillable::Done(Kind::Arrow(Arrow(vtype, ctype))));
+        let label = kinds.alloc(Fillable::Done(Kind::Label(Label(FieldName::new("field"), vtype))));
+        let fill = FillId::from_index(0);
+        let pending = kinds.alloc(Fillable::Fill(fill));
 
         assert_eq!(kinds.len(), 5);
         assert_eq!(kinds.payloads.len(), 3);
-        assert!(matches!(kinds[&vtype], Fillable::Done(Kind::VType(_))));
-        assert!(matches!(kinds[&ctype], Fillable::Done(Kind::CType(_))));
-        assert!(matches!(kinds[&arrow], Fillable::Done(Kind::Arrow(_))));
-        assert!(matches!(kinds[&label], Fillable::Done(Kind::Label(_))));
-        assert!(matches!(kinds[&pending], Fillable::Fill(id) if id == fill));
+        assert!(matches!(kinds[vtype], Fillable::Done(Kind::VType(_))));
+        assert!(matches!(kinds[ctype], Fillable::Done(Kind::CType(_))));
+        assert!(matches!(kinds[arrow], Fillable::Done(Kind::Arrow(_))));
+        assert!(matches!(kinds[label], Fillable::Done(Kind::Label(_))));
+        assert!(matches!(kinds[pending], Fillable::Fill(id) if id == fill));
         assert_eq!(kinds.iter().count(), 5);
     }
 
     #[test]
     fn type_nodes_store_compact_kind_indexes() {
-        assert!(
-            std::mem::size_of::<Option<TypeNode>>()
-                < std::mem::size_of::<Option<Fillable<Type>>>()
-                    + std::mem::size_of::<Option<KindId>>()
-        );
+        assert!(std::mem::size_of::<TypeKindIndex>() <= 4);
 
-        let mut allocator = IdAllocator::<StaticsScope>::new();
-        let kind: KindId = allocator.alloc();
-        let first: TypeId = allocator.alloc();
-        let second: TypeId = allocator.alloc();
-        let third: TypeId = allocator.alloc();
+        let kind = KindId::from_index(0);
         let mut types = TypeArena::default();
+        let first = types.alloc(Fillable::Done(Type::Unit(UnitTy)), kind);
+        let second = types.alloc(Fillable::Done(Type::Unit(UnitTy)), kind);
 
-        [first, second].into_iter().for_each(|id| {
-            types.insert_new(id, Fillable::Done(Type::Unit(UnitTy)), kind);
-        });
         assert_eq!(types.kinds, vec![kind]);
-        assert_eq!(types.kind_at(&first), Some(kind));
-        assert_eq!(types.kind_at(&second), Some(kind));
+        assert_eq!(types.kind_at(first), Some(kind));
+        assert_eq!(types.kind_at(second), Some(kind));
 
         types.strip_kind_index();
-        assert_eq!(types.kind_at(&first), Some(kind));
-        types.insert_new(third, Fillable::Done(Type::Unit(UnitTy)), kind);
+        assert_eq!(types.kind_at(first), Some(kind));
+        let _third = types.alloc(Fillable::Done(Type::Unit(UnitTy)), kind);
         assert_eq!(types.kinds, vec![kind]);
     }
 
@@ -936,17 +915,14 @@ mod tests {
 
     #[test]
     fn source_provenance_retains_the_latest_representative() {
-        assert_eq!(std::mem::size_of::<ArenaIdIdentity>(), 12);
-        assert_eq!(std::mem::size_of::<TypedEntityKey>(), 16);
-        assert_eq!(std::mem::size_of::<PatId>(), 16);
-        assert_eq!(std::mem::size_of::<TermId>(), 16);
+        assert_eq!(std::mem::size_of::<PatId>(), 8);
+        assert_eq!(std::mem::size_of::<TermId>(), 8);
 
         let mut source = IdAllocator::<su::BitterScope>::new();
         let first_source: su::PatId = source.alloc();
         let second_source: su::PatId = source.alloc();
-        let mut typed = IdAllocator::<StaticsScope>::new();
-        let first_typed = PatId::Kind(typed.alloc());
-        let second_typed = PatId::Value(typed.alloc());
+        let first_typed = PatId::Kind(KPatId::from_index(0));
+        let second_typed = PatId::Value(VPatId::from_index(0));
         let mut provenance: SourceProvenance<su::PatId, PatId> = SourceProvenance::default();
 
         provenance.record(first_source, first_typed);
@@ -969,14 +945,11 @@ mod tests {
         let second_term = surface.alloc();
         let third_term = surface.alloc();
         let kind_term = surface.alloc();
-        let mut allocator = IdAllocator::<StaticsScope>::new();
-        let kind: KindId = allocator.alloc();
-        let first_annotation: TypeId = allocator.alloc();
-        let second_annotation: TypeId = allocator.alloc();
         let mut statics = StaticsArena::default();
+        let kind = statics.kinds_pre.alloc(Fillable::Done(Kind::VType(VType)));
+        let first_annotation = statics.types_pre.alloc(Fillable::Done(Type::Unit(UnitTy)), kind);
+        let second_annotation = statics.types_pre.alloc(Fillable::Done(Type::Thk(ThkTy)), kind);
 
-        statics.types_pre.insert_new(first_annotation, Fillable::Done(Type::Unit(UnitTy)), kind);
-        statics.types_pre.insert_new(second_annotation, Fillable::Done(Type::Thk(ThkTy)), kind);
         statics.record_term_annotation(first_term, TermAnnId::Type(second_annotation, kind));
         statics.record_term_annotation(second_term, TermAnnId::Type(first_annotation, kind));
         statics.record_term_annotation(third_term, TermAnnId::Type(second_annotation, kind));
@@ -993,15 +966,12 @@ mod tests {
         let mut surface = IdAllocator::<su::ScopedScope>::new();
         let unresolved_term = surface.alloc();
         let resolved_term = surface.alloc();
-        let mut allocator = IdAllocator::<StaticsScope>::new();
-        let kind: KindId = allocator.alloc();
-        let unresolved: TypeId = allocator.alloc();
-        let resolved: TypeId = allocator.alloc();
-        let fill: FillId = allocator.alloc();
         let mut statics = StaticsArena::default();
+        let kind = statics.kinds_pre.alloc(Fillable::Done(Kind::VType(VType)));
+        let fill = statics.fills.alloc(InferenceSite::Term(unresolved_term));
+        let unresolved = statics.types_pre.alloc(Fillable::Fill(fill), kind);
+        let resolved = statics.types_pre.alloc(Fillable::Done(Type::Unit(UnitTy)), kind);
 
-        statics.types_pre.insert_new(unresolved, Fillable::Fill(fill), kind);
-        statics.types_pre.insert_new(resolved, Fillable::Done(Type::Unit(UnitTy)), kind);
         statics.record_term_annotation(unresolved_term, TermAnnId::Type(unresolved, kind));
         statics.record_term_annotation(resolved_term, TermAnnId::Type(resolved, kind));
         statics.retain_normalized_annotations();
@@ -1009,7 +979,7 @@ mod tests {
         assert!(statics.normalized_annotation_at(unresolved).is_none());
         assert!(matches!(statics.normalized_annotation_at(resolved), Some(Type::Unit(_))));
         assert_eq!(statics.annotation_norms.len(), 1);
-        assert!(matches!(statics.types_pre.get(&unresolved), Some(Fillable::Fill(_))));
+        assert!(matches!(statics.types_pre.get(unresolved), Some(Fillable::Fill(_))));
     }
 
     #[test]
@@ -1017,9 +987,8 @@ mod tests {
     fn missing_annotation_nodes_remain_an_invariant_violation() {
         let mut surface = IdAllocator::<su::ScopedScope>::new();
         let term = surface.alloc();
-        let mut allocator = IdAllocator::<StaticsScope>::new();
-        let kind: KindId = allocator.alloc();
-        let missing: TypeId = allocator.alloc();
+        let kind = KindId::from_index(0);
+        let missing = TypeId::from_index(0);
         let mut statics = StaticsArena::default();
         statics.record_term_annotation(term, TermAnnId::Type(missing, kind));
         statics.retain_normalized_annotations();
@@ -1028,8 +997,8 @@ mod tests {
     #[test]
     fn term_facts_keep_sparse_slots_compact_and_replace_in_place() {
         assert_eq!(std::mem::size_of::<Option<TermFactsIndex>>(), 4);
-        assert_eq!(std::mem::size_of::<TermAnnId>(), 28);
-        assert_eq!(std::mem::size_of::<TermFacts>(), 28);
+        assert_eq!(std::mem::size_of::<TermAnnId>(), 12);
+        assert_eq!(std::mem::size_of::<TermFacts>(), 12);
         assert!(
             std::mem::size_of::<Option<TermFactsIndex>>()
                 < std::mem::size_of::<Option<TermFacts>>()
@@ -1037,9 +1006,8 @@ mod tests {
 
         let mut surface = IdAllocator::<su::ScopedScope>::new();
         let term = surface.alloc();
-        let mut allocator = IdAllocator::<StaticsScope>::new();
-        let first: KindId = allocator.alloc();
-        let second: KindId = allocator.alloc();
+        let first = KindId::from_index(0);
+        let second = KindId::from_index(1);
         let mut statics = StaticsArena::default();
 
         statics.record_term_annotation(term, TermAnnId::Kind(first));

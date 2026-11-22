@@ -1,5 +1,5 @@
+pub use zydeco_foundation::span::{Sp, Span};
 pub use zydeco_syntax::*;
-pub use zydeco_utils::span::{Sp, Span};
 
 use crate::surface_syntax as su;
 use derive_more::From;
@@ -8,7 +8,7 @@ use derive_more::From;
 
 pub type DefId = su::DefId;
 // PatId and TermId are unsorted, so we've got the following:
-zydeco_utils::new_key_type! {
+zydeco_foundation::define_idx! {
     pub struct KindId;
     pub struct KPatId;
     pub struct TPatId;
@@ -57,7 +57,7 @@ pub enum TermAnnId {
     Value(ValueId, TypeId),
     Compu(CompuId, TypeId),
 }
-zydeco_utils::new_key_type! {
+zydeco_foundation::define_idx! {
     /// Identifier for abstract types, including:
     /// 1. sealed types, and
     /// 2. type instantiations for forall and exists.
@@ -379,15 +379,17 @@ pub struct ManifestKind {
 }
 
 /// data | C_1 ty | ... end
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Data {
-    arms: rpds::VectorSync<(CtorName, TypeId)>,
+    arms: std::sync::Arc<[(CtorName, TypeId)]>,
+    by_name: std::sync::Arc<[u32]>,
 }
 
 /// `codata | .d_1 cp : ty | ... end`
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct CoData {
-    arms: rpds::VectorSync<(DtorName, TypeId)>,
+    arms: std::sync::Arc<[(DtorName, TypeId)]>,
+    by_name: std::sync::Arc<[u32]>,
 }
 
 mod impls_structs {
@@ -460,14 +462,26 @@ mod impls_structs {
 
     impl Data {
         pub fn new(arms: impl IntoIterator<Item = (CtorName, TypeId)>) -> Self {
-            Self { arms: arms.into_iter().collect() }
+            let arms: std::sync::Arc<[(CtorName, TypeId)]> = arms.into_iter().collect();
+            let mut order: Vec<u32> = (0..u32::try_from(arms.len())
+                .expect("data arm count exceeded u32 range"))
+                .collect();
+            order.sort_by(|&lhs, &rhs| arms[lhs as usize].0.cmp(&arms[rhs as usize].0));
+            Self { arms, by_name: order.into() }
         }
+
         pub fn get(&self, ctor: &CtorName) -> Option<TypeId> {
-            self.arms.iter().find_map(|(name, ty)| (name == ctor).then_some(*ty))
+            let pos =
+                self.by_name.partition_point(|&arm_idx| &self.arms[arm_idx as usize].0 < ctor);
+            let &arm_idx = self.by_name.get(pos)?;
+            let (name, ty) = &self.arms[arm_idx as usize];
+            (name == ctor).then_some(*ty)
         }
-        pub fn iter(&self) -> impl Iterator<Item = &(CtorName, TypeId)> {
-            self.into_iter()
+
+        pub fn iter(&self) -> std::slice::Iter<'_, (CtorName, TypeId)> {
+            self.arms.iter()
         }
+
         pub fn len(&self) -> usize {
             self.arms.len()
         }
@@ -482,29 +496,41 @@ mod impls_structs {
         type IntoIter = std::vec::IntoIter<Self::Item>;
 
         fn into_iter(self) -> Self::IntoIter {
-            self.arms.iter().cloned().collect::<Vec<_>>().into_iter()
+            self.arms.iter().copied().collect::<Vec<_>>().into_iter()
         }
     }
 
     impl<'a> IntoIterator for &'a Data {
         type Item = &'a (CtorName, TypeId);
-        type IntoIter = <&'a rpds::VectorSync<(CtorName, TypeId)> as IntoIterator>::IntoIter;
+        type IntoIter = std::slice::Iter<'a, (CtorName, TypeId)>;
 
         fn into_iter(self) -> Self::IntoIter {
-            (&self.arms).into_iter()
+            self.arms.iter()
         }
     }
 
     impl CoData {
         pub fn new(arms: impl IntoIterator<Item = (DtorName, TypeId)>) -> Self {
-            Self { arms: arms.into_iter().collect() }
+            let arms: std::sync::Arc<[(DtorName, TypeId)]> = arms.into_iter().collect();
+            let mut order: Vec<u32> = (0..u32::try_from(arms.len())
+                .expect("codata arm count exceeded u32 range"))
+                .collect();
+            order.sort_by(|&lhs, &rhs| arms[lhs as usize].0.cmp(&arms[rhs as usize].0));
+            Self { arms, by_name: order.into() }
         }
+
         pub fn get(&self, dtor: &DtorName) -> Option<TypeId> {
-            self.arms.iter().find_map(|(name, ty)| (name == dtor).then_some(*ty))
+            let pos =
+                self.by_name.partition_point(|&arm_idx| &self.arms[arm_idx as usize].0 < dtor);
+            let &arm_idx = self.by_name.get(pos)?;
+            let (name, ty) = &self.arms[arm_idx as usize];
+            (name == dtor).then_some(*ty)
         }
-        pub fn iter(&self) -> impl Iterator<Item = &(DtorName, TypeId)> {
-            self.into_iter()
+
+        pub fn iter(&self) -> std::slice::Iter<'_, (DtorName, TypeId)> {
+            self.arms.iter()
         }
+
         pub fn len(&self) -> usize {
             self.arms.len()
         }
@@ -519,16 +545,16 @@ mod impls_structs {
         type IntoIter = std::vec::IntoIter<Self::Item>;
 
         fn into_iter(self) -> Self::IntoIter {
-            self.arms.iter().cloned().collect::<Vec<_>>().into_iter()
+            self.arms.iter().copied().collect::<Vec<_>>().into_iter()
         }
     }
 
     impl<'a> IntoIterator for &'a CoData {
         type Item = &'a (DtorName, TypeId);
-        type IntoIter = <&'a rpds::VectorSync<(DtorName, TypeId)> as IntoIterator>::IntoIter;
+        type IntoIter = std::slice::Iter<'a, (DtorName, TypeId)>;
 
         fn into_iter(self) -> Self::IntoIter {
-            (&self.arms).into_iter()
+            self.arms.iter()
         }
     }
 }
@@ -595,8 +621,8 @@ mod type_layout_tests {
 
     #[test]
     fn rare_payloads_keep_type_slots_compact() {
-        assert_eq!(std::mem::size_of::<TypeBinder>(), 24);
-        assert_eq!(std::mem::size_of::<ManifestKind>(), 36);
+        assert_eq!(std::mem::size_of::<TypeBinder>(), 8);
+        assert_eq!(std::mem::size_of::<ManifestKind>(), 12);
         assert!(std::mem::size_of::<Type>() <= 48);
         assert!(std::mem::size_of::<Fillable<Type>>() <= 48);
     }
@@ -627,7 +653,7 @@ pub struct ViewPattern {
 }
 
 /// One binder introduced by a first-class value abstraction.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum ValBinder {
     Type(TPatId),
     Value(VPatId),

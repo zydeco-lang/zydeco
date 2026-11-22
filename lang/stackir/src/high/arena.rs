@@ -1,7 +1,7 @@
 //! Owning arenas and constructors for lexical SPS.
 
 use super::syntax::*;
-use crate::static_syntax as ss;
+use crate::ir;
 use derive_more::{AsMut, AsRef};
 use zydeco_derive::{AsMutSelf, AsRefSelf};
 
@@ -15,6 +15,9 @@ impl Allocates<StackId> for SpsScope {}
 impl Allocates<CompuId> for SpsScope {}
 impl Allocates<DefId> for SpsScope {}
 
+impl ArenaSchema<DefId> for SpsScope {
+    type Item = VarName;
+}
 impl ArenaSchema<VPatId> for SpsScope {
     type Item = ValuePattern;
 }
@@ -28,12 +31,10 @@ impl ArenaSchema<CompuId> for SpsScope {
     type Item = Computation;
 }
 
-/// Generated definition names and typed-source provenance for lexical SPS.
+/// Generated definition names and core provenance for lexical SPS.
 pub type AdminArena = crate::arena::AdminArena<Sps>;
 
 /// All arenas for the stack-passing style ZIR.
-/// The definitions and patterns are equivalent to the ones in
-/// [`zydeco_statics::arena::StaticsArena`].
 #[derive(Debug, Default, AsRef, AsMut, AsRefSelf, AsMutSelf)]
 pub struct SpsArena {
     /// administrative arena
@@ -147,7 +148,7 @@ impl SpsProgram {
 impl SpsArena {
     /// Wrap `tail` in stack let-bindings naming `frames`, the first outermost.
     pub(crate) fn name_frames(
-        &mut self, frames: Vec<StackId>, tail: CompuId, site: Option<ss::TermId>,
+        &mut self, frames: Vec<StackId>, tail: CompuId, site: Option<ir::TermId>,
     ) -> CompuId {
         frames.into_iter().rev().fold(tail, |tail, frame| {
             Let { binder: StackVar, bindee: frame, tail }.build(self, site)

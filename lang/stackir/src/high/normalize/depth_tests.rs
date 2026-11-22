@@ -128,7 +128,7 @@ fn deep_unknown_branches_join_sibling_demands_on_a_small_stack() {
                 .map(|(idx, tail)| {
                     let payload: VPatId = Hole.build(&mut arena, None);
                     let binder =
-                        Ctor(CtorIdx { idx, name: CtorName(format!("+Tag{idx}")) }, payload)
+                        Ctor(CtorIdx { idx, name: CtorName::new(format!("+Tag{idx}")) }, payload)
                             .build(&mut arena, None);
                     Matcher { binder, tail }
                 })

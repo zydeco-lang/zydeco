@@ -37,6 +37,9 @@ opt-level = 1
 [profile.dev.package.zydeco-session]
 incremental = false
 
+[profile.dev.package.zydeco-ir]
+incremental = false
+
 [profile.dev.package.zydeco-stackir]
 incremental = false
 
@@ -73,6 +76,9 @@ opt-level = 1
 incremental = false
 
 [profile.test.package.zydeco-session]
+incremental = false
+
+[profile.test.package.zydeco-ir]
 incremental = false
 
 [profile.test.package.zydeco-stackir]

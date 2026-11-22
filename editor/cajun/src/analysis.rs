@@ -8,6 +8,10 @@ use tower_lsp::lsp_types::{
     HoverContents, Location, MarkupContent, MarkupKind, NumberOrString, Position,
     PrepareRenameResponse, Range, SemanticToken, SymbolKind, Url, WorkspaceEdit,
 };
+use zydeco_foundation::{
+    arena::ArenaAccess,
+    span::{FileMap, LineCol, Span},
+};
 use zydeco_session::{
     AnalysisError, CompilerSession, ProgramAnalysis, SourceDiagnosticSite, SourceLoadErrors,
 };
@@ -22,10 +26,6 @@ use zydeco_surface::{
     textual::syntax::EntityId,
 };
 use zydeco_syntax::Pretty;
-use zydeco_utils::{
-    arena::ArenaAccess,
-    span::{FileMap, LineCol, Span},
-};
 
 use crate::{
     cursor::RangeEnd,
@@ -273,7 +273,7 @@ impl ProjectState {
             return None;
         }
         self.definition_location(occurrence.definition)?;
-        let placeholder = self.scoped().defs[&occurrence.definition].0.clone();
+        let placeholder = self.scoped().defs[&occurrence.definition].as_str().to_owned();
         Some(PrepareRenameResponse::RangeWithPlaceholder { range: occurrence.range, placeholder })
     }
 
@@ -286,8 +286,8 @@ impl ProjectState {
         if self.is_implicit_definition(occurrence.definition) {
             return Err(RenameRejection::Synthesized);
         }
-        let current = self.scoped().defs[&occurrence.definition].0.clone();
-        let renamer = Renamer::adopt(&current, new_name)?;
+        let current = self.scoped().defs[&occurrence.definition];
+        let renamer = Renamer::adopt(current.as_str(), new_name)?;
         let declaration =
             self.definition_location(occurrence.definition).ok_or(RenameRejection::Synthesized)?;
         let uses = self
@@ -319,7 +319,7 @@ impl ProjectState {
         let definition_type =
             session.type_definition_of_def(&self.root, occurrence.definition).ok().flatten();
         let annotation_width =
-            HoverSignature::annotation_width(&name.0, line_width, definition_type.is_some());
+            HoverSignature::annotation_width(name.as_str(), line_width, definition_type.is_some());
         let mut annotation_text = String::new();
         annotation.pretty(&formatter).render_fmt(annotation_width, &mut annotation_text).ok()?;
         let definition = definition_type.and_then(|definition| {
@@ -345,7 +345,7 @@ impl ProjectState {
             })
             .filter_map(|sealed| self.sealed_type_equation(sealed, &formatter, line_width));
         let mut signature =
-            HoverSignature::with_definitions(&name.0, &annotation_text, definitions)
+            HoverSignature::with_definitions(name.as_str(), &annotation_text, definitions)
                 .with_definition(definition)
                 .with_sealed_types(sealed_types)
                 .markdown();
@@ -464,7 +464,7 @@ impl ProjectState {
                 (self.span_file(span) == Some(file_path.clone()))
                     .then(|| {
                         let range = self.span_range(span)?;
-                        Some(Self::document_symbol(name.0.clone(), range))
+                        Some(Self::document_symbol(name.as_str().to_owned(), range))
                     })
                     .flatten()
             })
@@ -627,7 +627,7 @@ impl ProjectState {
     }
 
     fn type_definition_link(&self, definition: DefId) -> Option<TypeDefinitionLink> {
-        let name = self.scoped().defs.get(&definition)?.0.clone();
+        let name = self.scoped().defs.get(&definition)?.as_str().to_owned();
         let location = self.definition_location(definition)?;
         Some(TypeDefinitionLink::new(name, location.uri, location.range.start))
     }
@@ -747,8 +747,8 @@ mod tests {
         PrepareRenameResponse, Range, SemanticToken, SemanticTokensLegend, TextEdit, Url,
         WorkspaceEdit,
     };
+    use zydeco_foundation::span::{FileMap, LineCol};
     use zydeco_session::SourceDiagnosticSite;
-    use zydeco_utils::span::{FileMap, LineCol};
 
     #[test]
     fn desugaring_failures_publish_separate_editor_diagnostics() {

@@ -8,10 +8,10 @@ use zydeco_syntax::{ForeignImport, ForeignLibraryName, ForeignSymbolName};
 use {
     crate::host::HostValue,
     libffi::middle::{Arg, Cif, CodePtr, Ret, Type, arg},
-    std::{collections::HashMap, ffi::CString, ptr::NonNull, rc::Rc},
+    std::{collections::HashMap, ffi::CString, ptr::NonNull},
     zydeco_syntax::{
         ForeignAbi, ForeignComponent, ForeignResult, ForeignSignature, IntegerLiteral, IntegerType,
-        Literal, Return, Triv,
+        Literal, Triv,
     },
 };
 
@@ -62,7 +62,7 @@ impl ForeignRuntime {
     #[cfg(unix)]
     pub(crate) fn invoke(
         &mut self, import: &ForeignImport, arguments: Vec<ds::SemValue>,
-    ) -> Result<ds::Computation, ForeignRuntimeError> {
+    ) -> Result<ds::SemValue, ForeignRuntimeError> {
         if import.target.abi != ForeignAbi::C {
             return Err(ForeignRuntimeError::NativeUnit);
         }
@@ -70,16 +70,15 @@ impl ForeignRuntime {
         let arguments = ForeignArguments::new(&import.signature, &arguments)
             .map_err(|_| ForeignRuntimeError::InvalidArguments(import.target.symbol.clone()))?;
         let function = self.function(import)?;
-        let result = function
+        function
             .invoke(&arguments)
-            .ok_or_else(|| ForeignRuntimeError::InvalidResult(import.target.symbol.clone()))?;
-        Ok(ds::Computation::Ret(Return(Rc::new(result))))
+            .ok_or_else(|| ForeignRuntimeError::InvalidResult(import.target.symbol.clone()))
     }
 
     #[cfg(not(unix))]
     pub(crate) fn invoke(
         &mut self, _import: &ForeignImport, _arguments: Vec<ds::SemValue>,
-    ) -> Result<ds::Computation, ForeignRuntimeError> {
+    ) -> Result<ds::SemValue, ForeignRuntimeError> {
         Err(ForeignRuntimeError::UnsupportedPlatform)
     }
 
@@ -154,7 +153,7 @@ impl ForeignFunction {
         }
     }
 
-    fn invoke(&self, arguments: &ForeignArguments) -> Option<ds::Value> {
+    fn invoke(&self, arguments: &ForeignArguments) -> Option<ds::SemValue> {
         let arguments = arguments.scalars.iter().map(ForeignScalar::as_arg).collect::<Vec<_>>();
         // SAFETY: the call interface and scalar storage follow the same checked signature.
         // The declaration author must ensure that the external symbol actually obeys that
@@ -164,7 +163,7 @@ impl ForeignFunction {
             let integer = match self.result {
                 | ForeignResult::Unit => {
                     self.interface.call_return_into(self.code, &arguments, Ret::void());
-                    return Some(ds::Value::Triv(Triv));
+                    return Some(ds::SemValue::Triv(Triv));
                 }
                 // libffi's typed call reserves a register-sized result slot for narrow integers.
                 | ForeignResult::Integer(integer) => match integer {
@@ -202,7 +201,7 @@ impl ForeignFunction {
             };
             let integer =
                 integer.with_type(integer.integer_type().expect("foreign integer is resolved"))?;
-            Some(ds::Value::Lit(Literal::Integer(integer)))
+            Some(ds::SemValue::Literal(Literal::Integer(integer)))
         }
     }
 }

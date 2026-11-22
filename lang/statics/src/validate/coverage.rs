@@ -2,7 +2,6 @@
 
 use crate::{arena::StaticsArena, syntax::*};
 use std::{collections::HashSet, fmt};
-use zydeco_utils::arena::ArenaAccess;
 
 const MAX_REPORTED_MISSING_PATTERNS: usize = 8;
 
@@ -130,14 +129,14 @@ impl<'a> CoverageChecker<'a> {
         self.statics
             .compus
             .iter()
-            .flat_map(|(computation, term)| self.validate_computation(*computation, term))
+            .flat_map(|(computation, term)| self.validate_computation(computation, term))
             .chain(self.statics.values.iter().flat_map(|(value, node)| {
                 let Value::Match(Match { scrut, arms }) = node else {
                     return Vec::new();
                 };
                 let expected = self.statics.data_hints.get(scrut).copied().map(HeadSpace::Data);
                 self.validate_pattern_matrix(
-                    (*value).into(),
+                    value.into(),
                     arms.iter().map(|arm| arm.binder),
                     expected,
                     false,
@@ -157,7 +156,7 @@ impl<'a> CoverageChecker<'a> {
         let binder_errors = self
             .statics
             .copattern_pack_pi_binders
-            .get(&computation)
+            .get(computation)
             .copied()
             .map(|binder| {
                 self.validate_pattern_matrix(
@@ -174,12 +173,12 @@ impl<'a> CoverageChecker<'a> {
     fn validate_match(
         &self, computation: CompuId, scrutinee: ValueId, arms: &[Matcher<VPatId, CompuId>],
     ) -> Vec<CoverageError> {
-        let expected = self.statics.data_hints.get(&scrutinee).copied().map(HeadSpace::Data);
+        let expected = self.statics.data_hints.get(scrutinee).copied().map(HeadSpace::Data);
         self.validate_pattern_matrix(
             computation.into(),
             arms.iter().map(|Matcher { binder, .. }| *binder),
             expected,
-            self.statics.copattern_matches.get(&computation).is_some(),
+            self.statics.copattern_matches.contains(computation),
         )
     }
 
@@ -227,16 +226,16 @@ impl<'a> CoverageChecker<'a> {
     fn validate_comatch(
         &self, computation: CompuId, arms: &[CoMatcher<DtorName, CompuId>],
     ) -> Vec<CoverageError> {
-        let Some(codata) = self.statics.codata_hints.get(&computation).copied() else {
+        let Some(codata) = self.statics.codata_hints.get(computation).copied() else {
             return Vec::new();
         };
-        let supplied = arms.iter().map(|arm| arm.dtor.clone()).collect::<HashSet<_>>();
+        let supplied = arms.iter().map(|arm| arm.dtor).collect::<HashSet<_>>();
         let mut declared = HashSet::new();
         let missing = self.statics.codatas[&codata]
             .iter()
             .filter_map(|(destructor, _)| {
-                (declared.insert(destructor.clone()) && !supplied.contains(destructor))
-                    .then_some(destructor.clone())
+                (declared.insert(*destructor) && !supplied.contains(destructor))
+                    .then_some(*destructor)
             })
             .collect::<Vec<_>>();
 
@@ -245,8 +244,7 @@ impl<'a> CoverageChecker<'a> {
         let duplicates = arms
             .iter()
             .filter_map(|arm| {
-                (!seen.insert(arm.dtor.clone()) && duplicate_names.insert(arm.dtor.clone()))
-                    .then_some(arm.dtor.clone())
+                (!seen.insert(arm.dtor) && duplicate_names.insert(arm.dtor)).then_some(arm.dtor)
             })
             .collect::<Vec<_>>();
 
@@ -285,15 +283,15 @@ impl MatrixPattern {
                 Self::Wildcard
             }
             | ValuePattern::Named(Named(name, inner)) => {
-                Self::Named(name.clone(), Box::new(Self::from_typed(*inner, statics)))
+                Self::Named(*name, Box::new(Self::from_typed(*inner, statics)))
             }
             | ValuePattern::Ctor(Ctor(name, argument)) => Self::Constructor {
                 data: statics
                     .data_pat_hints
-                    .get(&pattern)
+                    .get(pattern)
                     .copied()
                     .expect("typed constructor patterns retain their data definition"),
-                name: name.clone(),
+                name: *name,
                 argument: Box::new(Self::from_typed(*argument, statics)),
             },
             | ValuePattern::Triv(_) => Self::Unit,
@@ -317,7 +315,7 @@ impl MatrixPattern {
             | Self::Constructor { data, .. } => Some(HeadSpace::Data(*data)),
             | Self::Unit => Some(HeadSpace::Unit),
             | Self::Product(items) => Some(HeadSpace::Product(items.len())),
-            | Self::Named(name, _) => Some(HeadSpace::Named(name.clone())),
+            | Self::Named(name, _) => Some(HeadSpace::Named(*name)),
             | Self::Package(_) => Some(HeadSpace::Package),
         }
     }
@@ -340,14 +338,13 @@ impl HeadSpace {
                 statics.datas[data]
                     .iter()
                     .filter_map(|(name, _)| {
-                        seen.insert(name.clone())
-                            .then_some(Constructor::Data { name: name.clone() })
+                        seen.insert(*name).then_some(Constructor::Data { name: *name })
                     })
                     .collect()
             }
             | Self::Unit => vec![Constructor::Unit],
             | Self::Product(arity) => vec![Constructor::Product(*arity)],
-            | Self::Named(name) => vec![Constructor::Named(name.clone())],
+            | Self::Named(name) => vec![Constructor::Named(*name)],
             | Self::Package => vec![Constructor::Package],
         }
     }
@@ -398,13 +395,13 @@ impl Constructor {
         let rest = row.split_off(self.arity());
         let head = match self {
             | Self::Data { name } => CoveragePattern::Constructor(
-                name.clone(),
+                *name,
                 Box::new(row.into_iter().next().expect("data constructors have one argument")),
             ),
             | Self::Unit => CoveragePattern::Unit,
             | Self::Product(_) => CoveragePattern::Product(row),
             | Self::Named(name) => CoveragePattern::Named(
-                name.clone(),
+                *name,
                 Box::new(row.into_iter().next().expect("named patterns have one payload")),
             ),
             | Self::Package => CoveragePattern::Package(Box::new(

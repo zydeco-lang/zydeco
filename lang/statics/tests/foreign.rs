@@ -1,7 +1,7 @@
 mod common;
 
 use common::TestFixture;
-use zydeco_statics::{Alloc, ForeignClassifier, ForeignClassifierError, TyEnv, Tycker, syntax::*};
+use zydeco_statics::{Alloc, ForeignClassifier, ForeignClassifierError, Tycker, syntax::*};
 
 #[derive(Clone, Copy)]
 enum Parameter {
@@ -13,17 +13,16 @@ enum Parameter {
 
 impl Parameter {
     fn classifier(self, tycker: &mut Tycker<'_>, vtype: KindId) -> TypeId {
-        let environment = TyEnv::new();
         if let Self::Scalar(primitive) = self {
-            return Alloc::alloc(tycker, PrimitiveTy(primitive), vtype, &environment);
+            return Alloc::alloc(tycker, PrimitiveTy(primitive), vtype, &());
         }
         let witness: AbstId = Alloc::alloc(tycker, None::<DefId>, vtype, &());
         if !matches!(self, Self::UntrustedAddress) {
             tycker.statics.builtin_roles.attach_type(witness, BuiltinTypeRole::Addr).unwrap();
         }
-        let address = Alloc::alloc(tycker, witness, vtype, &environment);
+        let address = Alloc::alloc(tycker, witness, vtype, &());
         if matches!(self, Self::AddressPair) {
-            Alloc::alloc(tycker, Prod(vec![address, address]), vtype, &environment)
+            Alloc::alloc(tycker, Prod(vec![address, address]), vtype, &())
         } else {
             address
         }
@@ -37,18 +36,17 @@ impl ForeignFixture {
         tycker: &mut Tycker<'_>, parameters: &[Parameter], result: PrimitiveType,
     ) -> TypeId {
         let (vtype, ctype) = TestFixture::kinds(tycker);
-        let environment = TyEnv::new();
         let thk_kind = Alloc::alloc(tycker, Arrow(ctype, vtype), (), &());
         let ret_kind = Alloc::alloc(tycker, Arrow(vtype, ctype), (), &());
-        let thk = Alloc::alloc(tycker, ThkTy, thk_kind, &environment);
-        let ret = Alloc::alloc(tycker, RetTy, ret_kind, &environment);
-        let result = Alloc::alloc(tycker, PrimitiveTy(result), vtype, &environment);
-        let result = Alloc::alloc(tycker, App(ret, result), ctype, &environment);
+        let thk = Alloc::alloc(tycker, ThkTy, thk_kind, &());
+        let ret = Alloc::alloc(tycker, RetTy, ret_kind, &());
+        let result = Alloc::alloc(tycker, PrimitiveTy(result), vtype, &());
+        let result = Alloc::alloc(tycker, App(ret, result), ctype, &());
         let body = parameters.iter().rev().fold(result, |body, &parameter| {
             let parameter = parameter.classifier(tycker, vtype);
-            Alloc::alloc(tycker, Arrow(parameter, body), ctype, &environment)
+            Alloc::alloc(tycker, Arrow(parameter, body), ctype, &())
         });
-        Alloc::alloc(tycker, App(thk, body), vtype, &environment)
+        Alloc::alloc(tycker, App(thk, body), vtype, &())
     }
 
     fn target() -> ForeignTarget {

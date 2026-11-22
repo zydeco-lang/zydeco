@@ -173,13 +173,13 @@ MetaSegment: String = {
     "is" => "is".into(),
 };
 
-VarName: VarName = <MixedId> => VarName(<>);
-FieldName: FieldName = <name:VarName> => FieldName(name.0);
+VarName: VarName = <MixedId> => VarName::new(<>);
+FieldName: FieldName = <name:VarName> => FieldName::from_sym(name.sym());
 // `#field` marks a field name that stands on the left of `=` or `::`,
 // where a bare identifier would read as a variable or binder instead.
-MarkedFieldName: FieldName = <name:"FieldId"> => FieldName(name[1..].to_string());
-CtorName: CtorName = <"CtorId"> => CtorName(<>.into());
-DtorName: DtorName = <"DtorId"> => DtorName(<>.into());
+MarkedFieldName: FieldName = <name:"FieldId"> => FieldName::new(&name[1..]);
+CtorName: CtorName = <"CtorId"> => CtorName::new(<>);
+DtorName: DtorName = <"DtorId"> => DtorName::new(<>);
 
 NameDef<T>: NameDef<T> = <T> => NameDef(<>);
 
@@ -443,8 +443,6 @@ Term: ParsedNode<Term> = {
     "{" <TermId> "}" => ParsedNode::Syntax(Thunk(<>).into()),
     // context-forming block
     "begin" <TermAnnId> "end" => ParsedNode::Syntax(Block(<>).into()),
-    // abstraction (alternative syntax)
-    "comatch" <params:CoPatId> "=>" <term:TermId> "end" => ParsedNode::Syntax(Abs(<>).into()),
     // structural types
     "data" <Data> "end" => ParsedNode::Syntax(<>.into()),
     "codata" <CoData> "end" => ParsedNode::Syntax(<>.into()),

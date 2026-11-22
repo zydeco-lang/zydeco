@@ -1,7 +1,7 @@
 //! Decide patterns from borrowed producer facts, retaining source-order uncertainty.
 
 use super::*;
-use zydeco_utils::fold::{Folder, Step};
+use zydeco_foundation::fold::{Folder, Step};
 
 /// A logical suffix can be inspected without allocating a temporary product fact.
 #[derive(Clone, Copy)]

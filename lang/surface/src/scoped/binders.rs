@@ -23,7 +23,7 @@ impl Binders for PatId {
             | Pattern::Triv(Triv) => rpds::HashTrieMapSync::new_sync(),
             | Pattern::Var(pat) => {
                 let def = pat;
-                rpds::HashTrieMapSync::new_sync().insert(arena.defs[def].clone(), *def)
+                rpds::HashTrieMapSync::new_sync().insert(arena.defs[def], *def)
             }
             | Pattern::Named(pat) => {
                 let Named(_name, inner) = pat;
@@ -38,14 +38,14 @@ impl Binders for PatId {
             | Pattern::Alias(Alias(pat)) => {
                 pat.iter().fold(rpds::HashTrieMapSync::new_sync(), |binders, item| {
                     item.binders(arena).iter().fold(binders, |binders, (name, definition)| {
-                        binders.insert(name.clone(), *definition)
+                        binders.insert(*name, *definition)
                     })
                 })
             }
             | Pattern::Cons(pat) => {
                 pat.iter().fold(rpds::HashTrieMapSync::new_sync(), |binders, item| {
                     item.binders(arena).iter().fold(binders, |binders, (name, definition)| {
-                        binders.insert(name.clone(), *definition)
+                        binders.insert(*name, *definition)
                     })
                 })
             }

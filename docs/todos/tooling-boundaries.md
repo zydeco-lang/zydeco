@@ -5,28 +5,10 @@ The code paths were inspected at `e2dd8979` on 2026-11-05 and are unchanged at `
 Each entry names its governing reference, the observed code path, and a bounded repair;
 the [reference ownership map](../references/README.md#rule-ownership) locates the owning canonical account.
 
-## Duplicate runtime digest and platform computation
-
-[C11 compilation-unit preparation and artifacts](../references/compiler/src/native-emission.md#compilation-unit-preparation-and-artifacts)
-and the [CLI native executable workflow](../../cli/README.md#native-executables) govern the native build boundary.
-On every `build -t exe`, the CLI build path
-at [cli/src/main.rs:499-514](../../cli/src/main.rs) computes `LibraryPlatform::for_target`
-and `LibraryDigest::runtime` twice: once as arguments to `validate_imports` and once as arguments to `validate_units`.
-Both calls describe the same target and the same runtime directory, so each artifact resolves the platform
-and rehashes the runtime source directory a second time.
-
-Repair: bind the platform and digest once before the two validations, pass the same values to both,
-and keep the current imports-then-units ordering.
-Both constructors are fallible ([library.rs:56](../../cli/src/library.rs)
-for the platform and [library.rs:226](../../cli/src/library.rs) for the digest),
-so hoisting preserves their errors before either validation runs.
-The change has no other behavior effect.
-
 ## Installed binaries and the build checkout
 
-[C3 source loading](../references/compiler/src/sessions-and-queries.md#source-loading-and-package-selection) owns the default prelude loader, and
-[C15 interactive tooling](../references/compiler/src/tooling.md)
-owns the REPL surfaces.
+[C3 source loading](../references/compiler/src/sessions-and-queries.md#source-loading-and-package-selection) owns the
+default prelude loader, and [C15 interactive tooling](../references/compiler/src/tooling.md) owns the REPL surfaces.
 The [prelude loader](../../lang/session/src/source/prelude.rs) computes the standard-library root
 from `env!("CARGO_MANIFEST_DIR")` at `prelude.rs:13`, so a CLI installed
 with `cargo install --path cli` resolves `lib/std` against the checkout that compiled it.

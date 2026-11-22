@@ -6,11 +6,11 @@ use crate::{
 };
 use derive_more::{AsMut, AsRef};
 use std::collections::HashMap;
-use zydeco_utils::err::{CollectReported, Report, ReportedError};
+use zydeco_foundation::err::{CollectReported, Report, ReportedError};
 
 type Result<T> = std::result::Result<T, ReportedError>;
+use zydeco_foundation::prelude::{CompilerPass, FrozenArena};
 use zydeco_syntax::{IntrinsicRole, SpanView};
-use zydeco_utils::prelude::{CompilerPass, FrozenArena};
 
 mod telescopes;
 mod bindings;
@@ -524,7 +524,7 @@ mod impls {
 
     impl DesugarFolder<'_> {
         pub fn lookup_def(&self, id: t::DefId) -> t::VarName {
-            self.textual.defs[&id].clone()
+            self.textual.defs[&id]
         }
         pub fn lookup_pat(&self, id: t::PatId) -> t::Pattern {
             self.textual.pats[&id].clone()

@@ -27,7 +27,6 @@ The [ownership map](references/README.md#rule-ownership) connects source rules t
 | [Evaluations](evaluations/README.md) | Inspect dated experiments, measurements, and reproduction artifacts |
 | [Component guides](../lang) | Locate local implementation modules |
 | [OOPSLA artifact overview](../lib/tests/oopsla/README.md) | Follow paper-specific examples and evaluation instructions |
-| [Legacy notes](legacy) | Inspect historical language designs |
 
 ## Writing and maintaining documentation
 

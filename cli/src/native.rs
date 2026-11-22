@@ -3,6 +3,8 @@ use std::{
     fmt::{Display, Formatter},
     path::{Path, PathBuf},
     process::{Command, ExitStatus, Stdio},
+    sync::{Mutex, OnceLock},
+    time::{Duration, Instant},
 };
 use thiserror::Error;
 
@@ -129,33 +131,204 @@ impl BuildOptions {
         NativeTool::Archive
             .run(Command::new("ar").arg("crs").arg(&library_path).arg(&object_path))?;
 
-        let mut cargo = Command::new("cargo");
-        cargo
-            .env("ZYDECO_STATIC_LIB", &library)
-            .env("ZYDECO_LIB_DIR", ".")
-            .env(
-                "ZYDECO_DYNAMIC_LIBS",
-                foreign_libraries
-                    .iter()
-                    .filter(|library| !libraries.contains(library))
-                    .map(zydeco_syntax::ForeignLibraryName::as_str)
-                    .collect::<Vec<_>>()
-                    .join(","),
-            )
-            .arg("build")
-            .arg("--manifest-path")
-            .arg(self.build_dir.join("Cargo.toml"))
-            .arg("--target")
-            .arg(cargo_target);
-        let mut flags = libraries.rust_flags();
-        flags.push("-Cpanic=abort".into());
-        cargo.env("CARGO_ENCODED_RUSTFLAGS", flags.join("\x1f"));
-        NativeTool::Cargo.run(&mut cargo)?;
+        let mut rustc = Command::new("rustc");
+        let cached = self.ensure_cached_runtime(&self.build_dir, cargo_target)?;
+        let staged_executable = self.build_dir.join(format!(".{artifact}.main.exe"));
+        rustc
+            .arg(self.build_dir.join("main.rs"))
+            .args([
+                "--crate-name",
+                "main",
+                "--crate-type",
+                "bin",
+                "--edition",
+                "2024",
+                "--target",
+                cargo_target,
+                "-C",
+                "opt-level=0",
+                "-C",
+                "panic=abort",
+                "-C",
+                "lto=off",
+            ])
+            .arg("-L")
+            .arg(format!("dependency={}", cached.dir.display()))
+            .arg("--extern")
+            .arg(format!("zydeco_runtime={}", cached.rlib.display()))
+            .arg("-L")
+            .arg(format!("native={}", self.build_dir.display()))
+            .arg("-l")
+            .arg(format!("static={library}"));
+        for foreign in foreign_libraries.iter().filter(|foreign| !libraries.contains(foreign)) {
+            rustc.arg("-l").arg(format!("dylib={}", foreign.as_str()));
+        }
+        for flag in libraries.rust_flags() {
+            rustc.arg(flag);
+        }
+        rustc.arg("-o").arg(&staged_executable);
+        if let Err(error) = NativeTool::Rustc.run(&mut rustc) {
+            let _ = std::fs::remove_file(&staged_executable);
+            return Err(error);
+        }
 
-        let cargo_executable =
-            self.build_dir.join("target").join(cargo_target).join("debug").join("main");
-        Self::publish_executable(&cargo_executable, &executable_path)?;
+        Self::publish_executable(&staged_executable, &executable_path)?;
         Ok(Executable { path: executable_path })
+    }
+
+    pub(crate) fn ensure_cached_runtime(
+        &self, prepared_dir: &Path, target_triple: &str,
+    ) -> Result<CachedRuntime, NativeError> {
+        let runtime_digest = crate::library::LibraryDigest::runtime(&self.runtime_dir)
+            .map_err(NativeError::ReadRuntimeDirectory)?;
+        let compiler_version = rustc_version()?;
+        let cache_key = crate::library::LibraryDigest::bytes(
+            format!("{runtime_digest}\0{target_triple}\0{compiler_version}").as_bytes(),
+        );
+        let cache_root = runtime_cache_root();
+        let entry_dir = cache_root.join(&cache_key);
+        let cached = CachedRuntime::at(entry_dir.clone());
+        if cached.is_ready() {
+            return Ok(cached);
+        }
+
+        static RUNTIME_CACHE_LOCK: Mutex<()> = Mutex::new(());
+        let _thread_guard = RUNTIME_CACHE_LOCK.lock().unwrap_or_else(|poison| poison.into_inner());
+        if cached.is_ready() {
+            return Ok(cached);
+        }
+
+        std::fs::create_dir_all(&cache_root).map_err(NativeError::PrepareBuildDirectory)?;
+        let lock_dir = cache_root.join(format!(".{cache_key}.lock"));
+        let _process_guard = acquire_cache_lock(&lock_dir, &cached)?;
+        if cached.is_ready() {
+            return Ok(cached);
+        }
+
+        let stage_dir = lock_dir.join("stage");
+        let machine_out = stage_dir.join("machine_out");
+        std::fs::create_dir_all(&machine_out).map_err(NativeError::PrepareBuildDirectory)?;
+        let entry_symbol = zydeco_machine::native::ENTRY_SYMBOL;
+        let export_entry_symbol = zydeco_machine::native::EXPORT_ENTRY_SYMBOL;
+        let contract = format!(
+            "pub const ENTRY_SYMBOL: &str = {entry_symbol:?};\n\
+             #[cfg(feature = \"runtime\")]\nunsafe extern \"sysv64\" {{\n\
+             #[link_name = {:?}]\n\
+             pub fn entry() -> Word;\n}}\n\
+             pub const EXPORT_ENTRY_SYMBOL: &str = {export_entry_symbol:?};\n\
+             #[macro_export]\nmacro_rules! export_native_entry {{ ($item:item) => {{\n\
+             #[unsafe(export_name = {:?})] $item\n}}; }}\n",
+            format!("\x01{entry_symbol}"),
+            format!("\x01{export_entry_symbol}"),
+        );
+        std::fs::write(machine_out.join("contract.rs"), contract)
+            .map_err(NativeError::PrepareBuildDirectory)?;
+
+        let machine_rlib = stage_dir.join("libzydeco_machine.rlib");
+        NativeTool::Rustc.run(
+            Command::new("rustc")
+                .arg(prepared_dir.join("machine/src/lib.rs"))
+                .args([
+                    "--crate-name",
+                    "zydeco_machine",
+                    "--crate-type",
+                    "rlib",
+                    "--edition",
+                    "2024",
+                    "--target",
+                    target_triple,
+                    "--cfg",
+                    "feature=\"runtime\"",
+                    "-C",
+                    "opt-level=2",
+                    "-C",
+                    "codegen-units=1",
+                    "-C",
+                    "panic=abort",
+                    "-C",
+                    "lto=off",
+                    "-C",
+                    "relocation-model=pic",
+                ])
+                .env("OUT_DIR", &machine_out)
+                .arg("-o")
+                .arg(&machine_rlib),
+        )?;
+
+        let runtime_rlib = stage_dir.join("libzydeco_runtime.rlib");
+        NativeTool::Rustc.run(
+            Command::new("rustc")
+                .arg(prepared_dir.join("stub.rs"))
+                .args([
+                    "--crate-name",
+                    "zydeco_runtime",
+                    "--crate-type",
+                    "rlib",
+                    "--edition",
+                    "2024",
+                    "--target",
+                    target_triple,
+                    "--cfg",
+                    "feature=\"process-entry\"",
+                    "-C",
+                    "opt-level=2",
+                    "-C",
+                    "codegen-units=1",
+                    "-C",
+                    "panic=abort",
+                    "-C",
+                    "lto=off",
+                    "-C",
+                    "relocation-model=pic",
+                ])
+                .arg("--extern")
+                .arg(format!("zydeco_machine={}", machine_rlib.display()))
+                .arg("-o")
+                .arg(&runtime_rlib),
+        )?;
+
+        let runtime_staticlib = stage_dir.join("libzydeco_runtime.a");
+        NativeTool::Rustc.run(
+            Command::new("rustc")
+                .arg(prepared_dir.join("stub.rs"))
+                .args([
+                    "--crate-name",
+                    "zydeco_runtime",
+                    "--crate-type",
+                    "staticlib",
+                    "--edition",
+                    "2024",
+                    "--target",
+                    target_triple,
+                    "-C",
+                    "opt-level=2",
+                    "-C",
+                    "codegen-units=1",
+                    "-C",
+                    "panic=abort",
+                    "-C",
+                    "lto=off",
+                    "-C",
+                    "relocation-model=pic",
+                ])
+                .arg("--remap-path-prefix")
+                .arg(format!("{}=/zydeco-runtime", prepared_dir.display()))
+                .arg("--extern")
+                .arg(format!("zydeco_machine={}", machine_rlib.display()))
+                .arg("-o")
+                .arg(&runtime_staticlib),
+        )?;
+
+        std::fs::create_dir_all(&entry_dir).map_err(NativeError::PrepareBuildDirectory)?;
+        for (source, destination) in [
+            (&machine_rlib, &cached.machine_rlib),
+            (&runtime_rlib, &cached.rlib),
+            (&runtime_staticlib, &cached.staticlib),
+        ] {
+            std::fs::copy(source, destination).map_err(NativeError::CopyRuntimeFile)?;
+        }
+        std::fs::write(&cached.ready_marker, b"ok").map_err(NativeError::PrepareBuildDirectory)?;
+        Ok(cached)
     }
 
     fn publish_executable(source: &Path, destination: &Path) -> Result<(), NativeError> {
@@ -172,6 +345,92 @@ impl BuildOptions {
         std::fs::write(&path, module).map_err(NativeError::WriteBackendOutput)?;
         Ok(WasmArtifact { path })
     }
+}
+
+pub(crate) struct CachedRuntime {
+    pub(crate) dir: PathBuf,
+    pub(crate) machine_rlib: PathBuf,
+    pub(crate) rlib: PathBuf,
+    pub(crate) staticlib: PathBuf,
+    ready_marker: PathBuf,
+}
+
+impl CachedRuntime {
+    fn at(dir: PathBuf) -> Self {
+        Self {
+            machine_rlib: dir.join("libzydeco_machine.rlib"),
+            rlib: dir.join("libzydeco_runtime.rlib"),
+            staticlib: dir.join("libzydeco_runtime.a"),
+            ready_marker: dir.join(".ready"),
+            dir,
+        }
+    }
+
+    fn is_ready(&self) -> bool {
+        self.ready_marker.is_file()
+            && self.machine_rlib.is_file()
+            && self.rlib.is_file()
+            && self.staticlib.is_file()
+    }
+}
+
+struct CacheLockGuard(PathBuf);
+
+impl Drop for CacheLockGuard {
+    fn drop(&mut self) {
+        if !self.0.as_os_str().is_empty() {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+}
+
+fn runtime_cache_root() -> PathBuf {
+    std::env::var_os("ZYDECO_RUNTIME_CACHE_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| std::env::temp_dir().join("zydeco-runtime-cache-v1"))
+}
+
+fn acquire_cache_lock(
+    lock_dir: &Path, cached: &CachedRuntime,
+) -> Result<CacheLockGuard, NativeError> {
+    let deadline = Instant::now() + Duration::from_secs(180);
+    loop {
+        match std::fs::create_dir(lock_dir) {
+            | Ok(()) => return Ok(CacheLockGuard(lock_dir.to_path_buf())),
+            | Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                if cached.is_ready() || Instant::now() >= deadline {
+                    if cached.is_ready() {
+                        // Return a dummy non-locked guard path so the caller sees `is_ready()`.
+                        return Ok(CacheLockGuard(PathBuf::new()));
+                    }
+                    let _ = std::fs::remove_dir_all(lock_dir);
+                    continue;
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            | Err(error) => return Err(NativeError::PrepareBuildDirectory(error)),
+        }
+    }
+}
+
+fn rustc_version() -> Result<&'static str, NativeError> {
+    static VERSION: OnceLock<String> = OnceLock::new();
+    if let Some(version) = VERSION.get() {
+        return Ok(version.as_str());
+    }
+    let output = Command::new("rustc")
+        .args(["-v", "-V"])
+        .output()
+        .map_err(|source| NativeError::StartTool { tool: NativeTool::Rustc, source })?;
+    if !output.status.success() {
+        return Err(NativeError::ToolFailed {
+            tool: NativeTool::Rustc,
+            status: output.status,
+            stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+        });
+    }
+    let version = String::from_utf8_lossy(&output.stdout).into_owned();
+    Ok(VERSION.get_or_init(|| version).as_str())
 }
 
 #[cfg(all(test, unix))]
@@ -314,6 +573,7 @@ pub enum NativeTool {
     Nasm,
     Archive,
     Cargo,
+    Rustc,
     Linker,
 }
 
@@ -339,6 +599,7 @@ impl Display for NativeTool {
             | Self::Nasm => "nasm",
             | Self::Archive => "ar",
             | Self::Cargo => "cargo",
+            | Self::Rustc => "rustc",
             | Self::Linker => "cc",
         })
     }

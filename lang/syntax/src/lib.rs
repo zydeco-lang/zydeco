@@ -21,19 +21,24 @@ pub use unit::*;
 mod impls;
 use derive_more::From;
 use strum::{IntoEnumIterator, VariantArray as _};
+use zydeco_foundation::symbol::Sym;
 
 /* --------------------------------- Binder --------------------------------- */
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct VarName(pub String);
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct FieldName(pub String);
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(transparent)]
+pub struct VarName(Sym);
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(transparent)]
+pub struct FieldName(Sym);
 /// `+C`, including the plus
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct CtorName(pub String);
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(transparent)]
+pub struct CtorName(Sym);
 /// `.dtor`, including the dot
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct DtorName(pub String);
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(transparent)]
+pub struct DtorName(Sym);
 
 /* ------------------------------- Structural ------------------------------- */
 
@@ -746,31 +751,6 @@ impl BuiltinValueRole {
     pub fn spare_box(self) -> Option<SpareBox> {
         match self {
             | Self::Int64FromInt | Self::UInt64FromUInt => Some(SpareBox::Opaque),
-            | Self::Integer(
-                integer,
-                IntegerOperation::Add
-                | IntegerOperation::Sub
-                | IntegerOperation::Mul
-                | IntegerOperation::Div
-                | IntegerOperation::Mod,
-            ) if integer.representation()
-                == zydeco_machine::word::ScalarRepresentation::OpaqueBox =>
-            {
-                Some(SpareBox::Opaque)
-            }
-            | Self::Float(
-                float,
-                FloatOperation::Add
-                | FloatOperation::Sub
-                | FloatOperation::Mul
-                | FloatOperation::Div,
-            ) => Some(
-                if float.representation() == zydeco_machine::word::ScalarRepresentation::OpaqueBox {
-                    SpareBox::Opaque
-                } else {
-                    SpareBox::Unused
-                },
-            ),
             | _ => None,
         }
     }
@@ -781,8 +761,6 @@ impl BuiltinValueRole {
 pub enum SpareBox {
     /// A spare box pointer the builtin may fill with a boxed result.
     Opaque,
-    /// A zero spare the builtin ignores; the result always fits an immediate.
-    Unused,
 }
 
 impl std::fmt::Display for BuiltinValueRole {
@@ -1478,21 +1456,15 @@ mod numeric_tests {
             assert_eq!(integer.bits(), 64);
             assert_eq!(integer.storage_bits(), 64);
             for &operation in IntegerOperation::VARIANTS {
-                let expected = match operation {
-                    | IntegerOperation::Add
-                    | IntegerOperation::Sub
-                    | IntegerOperation::Mul
-                    | IntegerOperation::Div
-                    | IntegerOperation::Mod => Some(SpareBox::Opaque),
-                    | _ => None,
-                };
-                assert_eq!(BuiltinValueRole::Integer(integer, operation).spare_box(), expected);
+                assert_eq!(BuiltinValueRole::Integer(integer, operation).spare_box(), None);
             }
         }
         assert_eq!(
             BuiltinValueRole::Float(FloatType::Float64, FloatOperation::Add).spare_box(),
-            Some(SpareBox::Opaque)
+            None
         );
+        assert_eq!(BuiltinValueRole::Int64FromInt.spare_box(), Some(SpareBox::Opaque));
+        assert_eq!(BuiltinValueRole::UInt64FromUInt.spare_box(), Some(SpareBox::Opaque));
     }
 
     #[test]

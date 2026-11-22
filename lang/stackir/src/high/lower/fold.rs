@@ -1,7 +1,8 @@
-//! Occurrence-based reconstruction of residual typed terms with resumable continuations.
+//! Occurrence-based reconstruction of residual core terms with resumable continuations.
 
 use super::*;
-use zydeco_utils::fold::{Explicit, Folder, Step};
+use crate::ir::syntax as ir;
+use zydeco_foundation::fold::{Explicit, Folder, Step};
 
 /// Match decisions share plans, never generated SPS nodes. Flat storage also makes
 /// cloning and dropping a long fallthrough chain independent of the Rust stack.
@@ -11,9 +12,9 @@ pub(super) struct MatchPlanId(usize);
 #[derive(Clone, Copy)]
 enum MatchPlan {
     Fail,
-    Tail(ss::CompuId),
+    Tail(ir::CompuId),
     Continue(DefId),
-    Pattern { scrutinee: DefId, pattern: ss::VPatId, success: MatchPlanId, failure: MatchPlanId },
+    Pattern { scrutinee: DefId, pattern: ir::VPatId, success: MatchPlanId, failure: MatchPlanId },
 }
 
 #[derive(Clone, Copy)]
@@ -29,16 +30,9 @@ pub(super) enum PatternParent {
     Hole,
     Var(DefId),
     Triv,
-    /// A named or static-cons pattern, which lowers to its only child.
-    Forward,
     Ctor(CtorIdx),
-    Alias {
-        count: usize,
-    },
-    VCons {
-        count: usize,
-        layout: ProductLayout,
-    },
+    Alias { count: usize },
+    VCons { count: usize, layout: ProductLayout },
 }
 
 /// The kind of an unfinished value and the source fields it keeps; its children arrive as
@@ -47,20 +41,16 @@ pub(super) enum ValueParent {
     Hole,
     Var(DefId),
     Triv,
-    Lit(ss::Literal),
-    /// A named or static-cons value, which lowers to its only child.
-    Forward,
+    Lit(ir::Literal),
     /// A value let, whose bindee, tail, and binder arrive in that order.
     Let,
-    /// A static value operation that static elimination should have removed.
-    Residual,
     Thunk,
     Ctor(CtorIdx),
     VCons {
         count: usize,
         layout: ProductLayout,
     },
-    Proj(ss::ProjTarget),
+    Proj(Vec<ProductProjection>),
 }
 
 /// Each finish frame consumes the completed children of exactly one occurrence.
@@ -69,176 +59,174 @@ pub(super) enum ValueParent {
 /// re-establishes the source node's variant. Frames that walk a source vector carry its id
 /// and the next position instead of the vector.
 pub(super) enum Work {
-    Pattern(ss::VPatId),
+    Pattern(ir::VPatId),
     /// Lower the children of an alias or product pattern in order.
-    PatternChildren(ss::VPatId, usize),
+    PatternChildren(ir::VPatId, usize),
     FinishPattern {
-        source: ss::VPatId,
+        source: ir::VPatId,
         parent: PatternParent,
     },
-    Value(ss::ValueId),
+    Value(ir::ValueId),
     /// Lower the items of a product value in order.
-    ValueChildren(ss::ValueId, usize),
+    ValueChildren(ir::ValueId, usize),
     ValueLetTail {
-        source: ss::ValueId,
-        binder: ss::VPatId,
-        tail: ss::ValueId,
+        source: ir::ValueId,
+        binder: ir::VPatId,
+        tail: ir::ValueId,
     },
     ValueLetPattern {
-        source: ss::ValueId,
-        binder: ss::VPatId,
+        source: ir::ValueId,
+        binder: ir::VPatId,
     },
     FinishValue {
-        source: ss::ValueId,
+        source: ir::ValueId,
         parent: ValueParent,
     },
-    Computation(ss::CompuId, StackId),
+    Computation(ir::CompuId, StackId),
     BinderBody {
-        binder: ss::VPatId,
-        body: ss::CompuId,
+        binder: ir::VPatId,
+        body: ir::CompuId,
         stack: StackId,
-        site: Option<ss::TermId>,
+        site: Option<ir::TermId>,
         role: &'static str,
     },
     LetBody {
-        binder: ss::VPatId,
+        binder: ir::VPatId,
         bindee: ValueId,
-        tail: ss::CompuId,
+        tail: ir::CompuId,
         stack: StackId,
-        site: Option<ss::TermId>,
+        site: Option<ir::TermId>,
     },
     ValueSteps(Vec<ValueStep>),
     /// Name a pushed frame around the lowered body, binding the frame's value steps outside it.
     NameStack {
         frame: StackId,
         steps: Vec<ValueStep>,
-        site: Option<ss::TermId>,
+        site: Option<ir::TermId>,
     },
     Bind(ValueBinding),
     Abstraction {
         stack: StackId,
-        site: Option<ss::TermId>,
+        site: Option<ir::TermId>,
     },
     Application {
-        body: ss::CompuId,
+        body: ir::CompuId,
         stack: StackId,
-        site: Option<ss::TermId>,
+        site: Option<ir::TermId>,
     },
     Fix {
-        source: ss::CompuId,
+        source: ir::CompuId,
         param: DefId,
         stack: StackId,
     },
     Force {
         stack: StackId,
-        site: Option<ss::TermId>,
+        site: Option<ir::TermId>,
     },
     Return {
         stack: StackId,
-        site: Option<ss::TermId>,
+        site: Option<ir::TermId>,
     },
     Do {
-        bindee: ss::CompuId,
-        site: Option<ss::TermId>,
+        bindee: ir::CompuId,
+        site: Option<ir::TermId>,
     },
     LetBindee {
-        binder: ss::VPatId,
-        tail: ss::CompuId,
+        binder: ir::VPatId,
+        tail: ir::CompuId,
         stack: StackId,
-        site: Option<ss::TermId>,
+        site: Option<ir::TermId>,
     },
     Let {
         bindee: ValueId,
-        site: Option<ss::TermId>,
+        site: Option<ir::TermId>,
     },
     MatchScrutinee {
-        arms: Vec<Matcher<ss::VPatId, ss::CompuId>>,
+        arms: Vec<Matcher<ir::VPatId, ir::CompuId>>,
         kind: MatchKind,
         stack: StackId,
-        site: Option<ss::TermId>,
+        site: Option<ir::TermId>,
     },
     MatchBody {
         scrut: ValueId,
-        arms: Vec<Matcher<ss::VPatId, ss::CompuId>>,
+        arms: Vec<Matcher<ir::VPatId, ir::CompuId>>,
         kind: MatchKind,
         stack: StackId,
-        site: Option<ss::TermId>,
+        site: Option<ir::TermId>,
     },
     ProductMatchTail {
         scrut: ValueId,
-        tail: ss::CompuId,
+        tail: ir::CompuId,
         stack: StackId,
-        site: Option<ss::TermId>,
+        site: Option<ir::TermId>,
     },
     CoproductArms {
-        remaining: std::vec::IntoIter<Matcher<ss::VPatId, ss::CompuId>>,
+        remaining: std::vec::IntoIter<Matcher<ir::VPatId, ir::CompuId>>,
         scrut: ValueId,
         count: usize,
         stack: StackId,
-        site: Option<ss::TermId>,
+        site: Option<ir::TermId>,
     },
     ProductMatch {
         scrut: ValueId,
-        site: Option<ss::TermId>,
+        site: Option<ir::TermId>,
     },
     MatchArm {
-        binder: ss::VPatId,
-        tail: ss::CompuId,
+        binder: ir::VPatId,
+        tail: ir::CompuId,
         stack: StackId,
     },
     MatchArmBody {
-        tail: ss::CompuId,
+        tail: ir::CompuId,
         stack: StackId,
     },
     CoproductMatch {
         scrut: ValueId,
         count: usize,
         stack: StackId,
-        site: Option<ss::TermId>,
+        site: Option<ir::TermId>,
     },
     CoMatchArm {
-        codata: ss::CoDataId,
-        name: DtorName,
-        tail: ss::CompuId,
-        site: Option<ss::TermId>,
+        tag: DtorIdx,
+        tail: ir::CompuId,
+        site: Option<ir::TermId>,
     },
     CoMatch {
-        source: ss::CompuId,
+        source: ir::CompuId,
         count: usize,
         stack: StackId,
     },
     CoMatchArms {
-        remaining: std::vec::IntoIter<CoMatcher<DtorName, ss::CompuId>>,
-        codata: ss::CoDataId,
-        source: ss::CompuId,
+        remaining: std::vec::IntoIter<CoMatcher<DtorIdx, ir::CompuId>>,
+        source: ir::CompuId,
         count: usize,
         stack: StackId,
-        site: Option<ss::TermId>,
+        site: Option<ir::TermId>,
     },
     MatchPlan {
         plan: MatchPlanId,
         stack: StackId,
-        site: Option<ss::TermId>,
+        site: Option<ir::TermId>,
     },
     PlannedProduct {
         scrutinee: DefId,
         binder: VPatId,
-        site: Option<ss::TermId>,
+        site: Option<ir::TermId>,
     },
     /// Lower a constructor pattern's arms once its fallback rows are complete.
     ConstructorFallback {
         case: ConstructorCase,
-        data: ss::DataId,
-        name: CtorName,
-        argument: ss::VPatId,
+        data: ir::DataId,
+        tag: CtorIdx,
+        argument: ir::VPatId,
         success: MatchPlanId,
     },
     ConstructorArm {
         tag: CtorIdx,
-        payload: Option<(ss::VPatId, MatchPlanId)>,
+        payload: Option<(ir::VPatId, MatchPlanId)>,
         failure: MatchPlanId,
         stack: StackId,
-        site: Option<ss::TermId>,
+        site: Option<ir::TermId>,
     },
     ConstructorArms {
         case: ConstructorCase,
@@ -258,7 +246,7 @@ pub(super) enum Work {
         operator: ValueId,
         failure: MatchPlanId,
         stack: StackId,
-        site: Option<ss::TermId>,
+        site: Option<ir::TermId>,
     },
     LiteralFailure {
         scrutinee: DefId,
@@ -266,7 +254,7 @@ pub(super) enum Work {
         operator: ValueId,
         then: ValueId,
         stack: StackId,
-        site: Option<ss::TermId>,
+        site: Option<ir::TermId>,
     },
 }
 
@@ -276,12 +264,12 @@ pub(super) struct ConstructorCase {
     scrutinee: DefId,
     continuation: DefId,
     stack: StackId,
-    site: Option<ss::TermId>,
+    site: Option<ir::TermId>,
 }
 
 pub(super) struct ConstructorBranch {
     tag: CtorIdx,
-    payload: Option<(ss::VPatId, MatchPlanId)>,
+    payload: Option<(ir::VPatId, MatchPlanId)>,
 }
 
 pub(super) struct LoweringFolder<'lo, 'source> {
@@ -305,7 +293,7 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
         }
     }
 
-    pub(super) fn lower(mut self, root: ss::CompuId, stack: StackId) -> CompuId {
+    pub(super) fn lower(mut self, root: ir::CompuId, stack: StackId) -> CompuId {
         Explicit::run(&mut self, Work::Computation(root, stack));
         assert!(self.patterns.is_empty() && self.values.is_empty() && self.tags.is_empty());
         let root = self.computation();
@@ -332,7 +320,7 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
     }
 
     fn binder_body(
-        &mut self, binder: ss::VPatId, body: ss::CompuId, stack: StackId, site: Option<ss::TermId>,
+        &mut self, binder: ir::VPatId, body: ir::CompuId, stack: StackId, site: Option<ir::TermId>,
         role: &'static str,
     ) -> Step<Self> {
         if self.lo.pattern_needs_match_plan(binder) {
@@ -348,91 +336,62 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
         }
     }
 
-    /// The index of constructor `name` in the declaration order of `data`.
-    fn ctor_idx(&self, data: ss::DataId, name: CtorName) -> CtorIdx {
-        let idx = self.lo.statics.datas[&data]
-            .iter()
-            .position(|(tag, _)| tag == &name)
-            .expect("Constructor tag not found");
-        CtorIdx { idx, name }
-    }
-
-    fn visit_pattern(&mut self, source: ss::VPatId) -> Step<Self> {
-        let parent = match &self.lo.statics.vpats[&source] {
-            | ss::ValuePattern::Hole(_) => PatternParent::Hole,
-            | ss::ValuePattern::Var(def) => PatternParent::Var(*def),
-            | ss::ValuePattern::Triv(_) => PatternParent::Triv,
-            | ss::ValuePattern::Named(Named(_, child))
-            | ss::ValuePattern::SCons(ss::ConsN(_, child)) => {
+    fn visit_pattern(&mut self, source: ir::VPatId) -> Step<Self> {
+        let parent = match &self.lo.core.vpats[source] {
+            | ir::ValuePattern::Hole(_) => PatternParent::Hole,
+            | ir::ValuePattern::Var(var) => PatternParent::Var(self.lo.def(*var)),
+            | ir::ValuePattern::Triv(_) => PatternParent::Triv,
+            | ir::ValuePattern::Ctor { tag, payload, .. } => {
                 return Step::Call {
-                    input: Work::Pattern(*child),
-                    frame: Work::FinishPattern { source, parent: PatternParent::Forward },
+                    input: Work::Pattern(*payload),
+                    frame: Work::FinishPattern { source, parent: PatternParent::Ctor(tag.clone()) },
                 };
             }
-            | ss::ValuePattern::Ctor(Ctor(name, child)) => {
-                let tag = self.ctor_idx(self.lo.statics.data_pat_hints[&source], name.clone());
-                return Step::Call {
-                    input: Work::Pattern(*child),
-                    frame: Work::FinishPattern { source, parent: PatternParent::Ctor(tag) },
-                };
-            }
-            | ss::ValuePattern::Alias(_) | ss::ValuePattern::VCons(_) => {
+            | ir::ValuePattern::Alias(_) | ir::ValuePattern::VCons(_) => {
                 return Step::TailCall(Work::PatternChildren(source, 0));
             }
-            | ss::ValuePattern::View(_) => unreachable!("static elaboration eliminates views"),
-            | ss::ValuePattern::Lit(_) => unreachable!("literal patterns require a match plan"),
+            | ir::ValuePattern::Lit(_) => unreachable!("literal patterns require a match plan"),
         };
         Step::TailCall(Work::FinishPattern { source, parent })
     }
 
-    fn visit_value(&mut self, source: ss::ValueId) -> Step<Self> {
-        let site = Some(ss::TermId::Value(source));
-        if let Some(import) = self.lo.statics.foreign_imports.get(&source).cloned() {
-            let stack = StackVar.build(self.lo, site);
-            let function = match import {
-                | CheckedImport::C(import) => ExternalFunction::Foreign(import),
-                | CheckedImport::Zydeco(import) => ExternalFunction::Unit(import),
-            };
-            let body = ExternCall { function, stack }.build(self.lo, site);
-            let value = Closure { stack: StackVar, body }.build(self.lo, site);
-            let protocol = self.lo.protocols.value(self.lo.statics.annotations_value[&source]);
-            self.lo.arena.inner.value_protocols.insert_new(value, protocol);
-            self.values.push(ValuePlan::pure(value));
-            return Step::Return(());
-        }
-        let (child, parent) = match &self.lo.statics.values[&source] {
-            | ss::Value::Named(Named(_, child)) | ss::Value::SCons(ss::ConsN(_, child)) => {
-                (Some(*child), ValueParent::Forward)
+    fn visit_value(&mut self, source: ir::ValueId) -> Step<Self> {
+        let site = Some(ir::TermId::Value(source));
+        let (child, parent) = match &self.lo.core.values[source] {
+            | ir::Value::Foreign(import) => {
+                let stack = StackVar.build(self.lo, site);
+                let function = match import.clone() {
+                    | ir::CheckedImport::C(import) => ExternalFunction::Foreign(import),
+                    | ir::CheckedImport::Zydeco(import) => ExternalFunction::Unit(import),
+                };
+                let body = ExternCall { function, stack }.build(self.lo, site);
+                let value = Closure { stack: StackVar, body }.build(self.lo, site);
+                if let Some(protocol) = self.lo.core.value_protocols.get(source) {
+                    self.lo.arena.inner.value_protocols.insert_new(value, protocol.clone());
+                }
+                self.values.push(ValuePlan::pure(value));
+                return Step::Return(());
             }
-            | ss::Value::Ctor(Ctor(name, child)) => {
-                let tag = self.ctor_idx(self.lo.statics.data_hints[&source], name.clone());
-                (Some(*child), ValueParent::Ctor(tag))
-            }
-            | ss::Value::Proj(Proj(child, field)) => {
-                (Some(*child), ValueParent::Proj(field.target.clone()))
-            }
-            | ss::Value::Let(Let { binder, bindee, tail }) => {
+            | ir::Value::Ctor { tag, payload } => (Some(*payload), ValueParent::Ctor(tag.clone())),
+            | ir::Value::Proj { head, steps } => (Some(*head), ValueParent::Proj(steps.clone())),
+            | ir::Value::Let(Let { binder, bindee, tail }) => {
                 return Step::Call {
                     input: Work::Value(*bindee),
                     frame: Work::ValueLetTail { source, binder: *binder, tail: *tail },
                 };
             }
-            | ss::Value::Thunk(Thunk(body)) => {
+            | ir::Value::Thunk(Thunk(body)) => {
                 let stack = StackVar.build(self.lo, site);
                 return Step::Call {
                     input: Work::Computation(*body, stack),
                     frame: Work::FinishValue { source, parent: ValueParent::Thunk },
                 };
             }
-            | ss::Value::VCons(_) => return Step::TailCall(Work::ValueChildren(source, 0)),
-            | ss::Value::Hole(_) => (None, ValueParent::Hole),
-            | ss::Value::Var(def) => (None, ValueParent::Var(*def)),
-            | ss::Value::Triv(_) => (None, ValueParent::Triv),
-            | ss::Value::Lit(literal) => (None, ValueParent::Lit(literal.clone())),
-            | ss::Value::ValAbs(_)
-            | ss::Value::ValApp(_)
-            | ss::Value::Match(_)
-            | ss::Value::IntOp(_) => (None, ValueParent::Residual),
+            | ir::Value::VCons(_) => return Step::TailCall(Work::ValueChildren(source, 0)),
+            | ir::Value::Hole(_) => (None, ValueParent::Hole),
+            | ir::Value::Var(var) => (None, ValueParent::Var(self.lo.def(*var))),
+            | ir::Value::Triv(_) => (None, ValueParent::Triv),
+            | ir::Value::Lit(literal) => (None, ValueParent::Lit(literal.clone())),
         };
         let frame = Work::FinishValue { source, parent };
         match child {
@@ -441,11 +400,11 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
         }
     }
 
-    fn visit_computation(&mut self, source: ss::CompuId, stack: StackId) -> Step<Self> {
-        let site = Some(ss::TermId::Compu(source));
-        match self.lo.statics.compus[&source].clone() {
-            | ss::Computation::Hole(_) => self.computations.push(SHole(stack).build(self.lo, site)),
-            | ss::Computation::VAbs(Abs(param, body)) => {
+    fn visit_computation(&mut self, source: ir::CompuId, stack: StackId) -> Step<Self> {
+        let site = Some(ir::TermId::Compu(source));
+        match self.lo.core.compus[source].clone() {
+            | ir::Computation::Hole(_) => self.computations.push(SHole(stack).build(self.lo, site)),
+            | ir::Computation::VAbs(Abs(param, body)) => {
                 let body_stack = StackVar.build(self.lo, site);
                 return Step::Call {
                     input: Work::BinderBody {
@@ -458,40 +417,30 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
                     frame: Work::Abstraction { stack, site },
                 };
             }
-            | ss::Computation::VApp(App(body, arg)) => {
+            | ir::Computation::VApp(App(body, arg)) => {
                 return Step::Call {
                     input: Work::Value(arg),
                     frame: Work::Application { body, stack, site },
                 };
             }
-            | ss::Computation::TAbs(Abs(_, body)) | ss::Computation::TApp(App(body, _)) => {
-                return Step::TailCall(Work::Computation(body, stack));
-            }
-            | ss::Computation::Fix(Fix(param, body)) => {
-                let param = match &self.lo.statics.vpats[&param] {
-                    | ss::ValuePattern::Var(def) => *def,
-                    | _ => {
-                        let fmt =
-                            zydeco_statics::fmt::Formatter::new(self.lo.scoped, self.lo.statics);
-                        panic!("Fix param must be a variable, found:\n{}", param.ugly(&fmt));
-                    }
-                };
+            | ir::Computation::Fix { param, body } => {
+                let param = self.lo.def(param);
                 let body_stack = StackVar.build(self.lo, site);
                 return Step::Call {
                     input: Work::Computation(body, body_stack),
                     frame: Work::Fix { source, param, stack },
                 };
             }
-            | ss::Computation::Force(Force(body)) => {
+            | ir::Computation::Force(Force(body)) => {
                 return Step::Call { input: Work::Value(body), frame: Work::Force { stack, site } };
             }
-            | ss::Computation::Ret(Return(body)) => {
+            | ir::Computation::Ret(Return(body)) => {
                 return Step::Call {
                     input: Work::Value(body),
                     frame: Work::Return { stack, site },
                 };
             }
-            | ss::Computation::Do(Bind { binder, bindee, tail }) => {
+            | ir::Computation::Do(Bind { binder, bindee, tail }) => {
                 return Step::Call {
                     input: Work::BinderBody {
                         binder,
@@ -503,13 +452,13 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
                     frame: Work::Do { bindee, site },
                 };
             }
-            | ss::Computation::Let(Let { binder, bindee, tail }) => {
+            | ir::Computation::Let(Let { binder, bindee, tail }) => {
                 return Step::Call {
                     input: Work::Value(bindee),
                     frame: Work::LetBindee { binder, tail, stack, site },
                 };
             }
-            | ss::Computation::Match(Match { scrut, arms }) => {
+            | ir::Computation::Match(Match { scrut, arms }) => {
                 let mixed = arms.iter().any(|arm| self.lo.is_coprod_pattern(arm.binder))
                     && arms.iter().any(|arm| !self.lo.is_coprod_pattern(arm.binder));
                 let kind = if mixed
@@ -526,10 +475,8 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
                     frame: Work::MatchScrutinee { arms, kind, stack, site },
                 };
             }
-            | ss::Computation::CoMatch(CoMatch { arms }) => {
-                let codata = self.lo.statics.codata_hints[&source];
+            | ir::Computation::CoMatch { arms } => {
                 return Step::TailCall(Work::CoMatchArms {
-                    codata,
                     source,
                     count: arms.len(),
                     stack,
@@ -537,9 +484,7 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
                     remaining: arms.into_iter(),
                 });
             }
-            | ss::Computation::Dtor(Dtor(body, name)) => {
-                let codata = self.lo.statics.codata_hints[&body];
-                let tag = self.lo.protocols.tag(codata, name);
+            | ir::Computation::Dtor { body, tag } => {
                 let frame = Cons(tag, stack).build(self.lo, site);
                 return match self.lo.push(frame, site) {
                     | Pushed::Extended(stack) => Step::TailCall(Work::Computation(body, stack)),
@@ -554,7 +499,7 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
     }
 
     fn visit_match_plan(
-        &mut self, plan: MatchPlanId, stack: StackId, site: Option<ss::TermId>,
+        &mut self, plan: MatchPlanId, stack: StackId, site: Option<ir::TermId>,
     ) -> Step<Self> {
         let (scrutinee, pattern, success, failure) = match self.plans[plan.0] {
             | MatchPlan::Fail => {
@@ -573,39 +518,32 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
                 (scrutinee, pattern, success, failure)
             }
         };
-        match self.lo.statics.vpats[&pattern].clone() {
-            | ss::ValuePattern::Hole(_) | ss::ValuePattern::Triv(_) => {
+        match self.lo.core.vpats[pattern].clone() {
+            | ir::ValuePattern::Hole(_) | ir::ValuePattern::Triv(_) => {
                 Step::TailCall(Work::MatchPlan { plan: success, stack, site })
             }
-            | ss::ValuePattern::Var(definition) => {
+            | ir::ValuePattern::Var(var) => {
                 let bindee = scrutinee.build(self.lo, site);
-                let binder = definition.build(self.lo, None);
+                let binder = self.lo.def(var).build(self.lo, None);
                 Step::Call {
                     input: Work::MatchPlan { plan: success, stack, site },
                     frame: Work::Bind(ValueBinding { binder, bindee, site }),
                 }
             }
-            | ss::ValuePattern::Named(Named(_, inner))
-            | ss::ValuePattern::SCons(ss::ConsN(_, inner)) => {
-                let plan =
-                    self.plan(MatchPlan::Pattern { scrutinee, pattern: inner, success, failure });
-                Step::TailCall(Work::MatchPlan { plan, stack, site })
-            }
-            | ss::ValuePattern::Alias(Alias(patterns)) => {
+            | ir::ValuePattern::Alias(Alias(patterns)) => {
                 let plan = patterns.into_iter().rev().fold(success, |success, pattern| {
                     self.plan(MatchPlan::Pattern { scrutinee, pattern, success, failure })
                 });
                 Step::TailCall(Work::MatchPlan { plan, stack, site })
             }
-            | ss::ValuePattern::VCons(patterns) => {
-                let layout = self.lo.product_layout(self.lo.statics.annotations_vpat[&pattern]);
-                let components = patterns
+            | ir::ValuePattern::VCons(ir::VCons { items, layout }) => {
+                let components = items
                     .iter()
                     .map(|_| self.lo.alloc_admin_def("__match_component__"))
                     .collect::<Vec<_>>();
                 let fields = components.iter().map(|def| def.build(self.lo, None)).collect();
                 let binder = VCons::new(fields, layout).build(self.lo, None);
-                let plan = patterns.into_iter().zip(components).rev().fold(
+                let plan = items.into_iter().zip(components).rev().fold(
                     success,
                     |success, (pattern, scrutinee)| {
                         self.plan(MatchPlan::Pattern { scrutinee, pattern, success, failure })
@@ -616,10 +554,9 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
                     frame: Work::PlannedProduct { scrutinee, binder, site },
                 }
             }
-            | ss::ValuePattern::Ctor(Ctor(name, argument)) => {
+            | ir::ValuePattern::Ctor { data, tag, payload } => {
                 // Bind remaining rows once; unmatched tags and rejected payloads
                 // resume that closure with their own ambient branch stack.
-                let data = self.lo.statics.data_pat_hints[&pattern];
                 let continuation = self.lo.alloc_admin_def("__match_fallback__");
                 let failure_stack = StackVar.build(self.lo, site);
                 Step::Call {
@@ -627,15 +564,14 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
                     frame: Work::ConstructorFallback {
                         case: ConstructorCase { scrutinee, continuation, stack, site },
                         data,
-                        name,
-                        argument,
+                        tag,
+                        argument: payload,
                         success,
                     },
                 }
             }
-            | ss::ValuePattern::View(_) => unreachable!("static elaboration eliminates views"),
-            | ss::ValuePattern::Lit(literal) => {
-                let ss::Literal::Integer(integer) = literal else {
+            | ir::ValuePattern::Lit(literal) => {
+                let ir::Literal::Integer(integer) = literal else {
                     unreachable!("a checked literal pattern carries an integer literal")
                 };
                 let integer_type = integer
@@ -670,22 +606,19 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
 
     // Patterns
 
-    fn resume_pattern_children(&mut self, source: ss::VPatId, position: usize) -> Step<Self> {
+    fn resume_pattern_children(&mut self, source: ir::VPatId, position: usize) -> Step<Self> {
         // The next child to lower, or the finished parent once every child is complete.
-        let next = match &self.lo.statics.vpats[&source] {
-            | ss::ValuePattern::Alias(Alias(children)) => {
+        let next = match &self.lo.core.vpats[source] {
+            | ir::ValuePattern::Alias(Alias(children)) => {
                 let ConsN(head, tail) = children;
                 let child =
                     if position == head.len() { Some(*tail) } else { head.get(position).copied() };
                 child.ok_or(PatternParent::Alias { count: children.len() })
             }
-            | ss::ValuePattern::VCons(children) => {
-                children.get(position).copied().ok_or_else(|| {
-                    let ty = self.lo.statics.annotations_vpat[&source];
-                    let layout = self.lo.product_layout(ty);
-                    PatternParent::VCons { count: children.len(), layout }
-                })
-            }
+            | ir::ValuePattern::VCons(VCons { items, layout }) => items
+                .get(position)
+                .copied()
+                .ok_or(PatternParent::VCons { count: items.len(), layout: *layout }),
             | _ => {
                 unreachable!(
                     "a pattern-children frame is pushed only for an alias or product pattern"
@@ -701,15 +634,11 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
         }
     }
 
-    fn resume_finish_pattern(&mut self, source: ss::VPatId, parent: PatternParent) -> Step<Self> {
+    fn resume_finish_pattern(&mut self, source: ir::VPatId, parent: PatternParent) -> Step<Self> {
         let pattern: ValuePattern = match parent {
             | PatternParent::Hole => Hole.into(),
             | PatternParent::Var(def) => def.into(),
             | PatternParent::Triv => Triv.into(),
-            | PatternParent::Forward => {
-                let child = self.pattern();
-                self.lo.arena.inner.vpats[&child].clone()
-            }
             | PatternParent::Ctor(tag) => {
                 let child = self.pattern();
                 Ctor(tag, child).into()
@@ -723,9 +652,9 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
                 VCons::new(children, layout).into()
             }
         };
-        let pattern = pattern.build(self.lo, Some(ss::PatId::Value(source)));
-        if let Some(&ty) = self.lo.statics.annotations_vpat.get(&source) {
-            self.lo.arena.inner.pattern_protocols.insert_new(pattern, self.lo.protocols.value(ty));
+        let pattern = pattern.build(self.lo, Some(source));
+        if let Some(protocol) = self.lo.core.pattern_protocols.get(source) {
+            self.lo.arena.inner.pattern_protocols.insert_new(pattern, protocol.clone());
         }
         self.patterns.push(pattern);
         Step::Return(())
@@ -733,40 +662,38 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
 
     // Values
 
-    fn resume_value_children(&mut self, source: ss::ValueId, position: usize) -> Step<Self> {
-        let ss::Value::VCons(children) = &self.lo.statics.values[&source] else {
+    fn resume_value_children(&mut self, source: ir::ValueId, position: usize) -> Step<Self> {
+        let ir::Value::VCons(VCons { items, layout }) = &self.lo.core.values[source] else {
             unreachable!("a value-children frame is pushed only for a product value")
         };
-        if let Some(&child) = children.get(position) {
+        if let Some(&child) = items.get(position) {
             return Step::Call {
                 input: Work::Value(child),
                 frame: Work::ValueChildren(source, position + 1),
             };
         }
-        let layout = self.lo.product_layout(self.lo.statics.annotations_value[&source]);
-        let parent = ValueParent::VCons { count: children.len(), layout };
+        let parent = ValueParent::VCons { count: items.len(), layout: *layout };
         Step::TailCall(Work::FinishValue { source, parent })
     }
 
     fn resume_value_let_tail(
-        &mut self, source: ss::ValueId, binder: ss::VPatId, tail: ss::ValueId,
+        &mut self, source: ir::ValueId, binder: ir::VPatId, tail: ir::ValueId,
     ) -> Step<Self> {
         Step::Call { input: Work::Value(tail), frame: Work::ValueLetPattern { source, binder } }
     }
 
-    fn resume_value_let_pattern(&mut self, source: ss::ValueId, binder: ss::VPatId) -> Step<Self> {
+    fn resume_value_let_pattern(&mut self, source: ir::ValueId, binder: ir::VPatId) -> Step<Self> {
         Step::Call {
             input: Work::Pattern(binder),
             frame: Work::FinishValue { source, parent: ValueParent::Let },
         }
     }
 
-    fn resume_finish_value(&mut self, source: ss::ValueId, parent: ValueParent) -> Step<Self> {
-        let site = Some(ss::TermId::Value(source));
+    fn resume_finish_value(&mut self, source: ir::ValueId, parent: ValueParent) -> Step<Self> {
+        let site = Some(ir::TermId::Value(source));
         let plan = match parent {
             | ValueParent::Hole => ValuePlan::pure(Hole.build(self.lo, site)),
             | ValueParent::Var(def) => ValuePlan::pure(def.build(self.lo, site)),
-            | ValueParent::Forward => self.value(),
             | ValueParent::Let => {
                 let tail = self.value();
                 let bindee = self.value();
@@ -776,10 +703,6 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
                     steps: bindee.steps.into_iter().chain([binding]).chain(tail.steps).collect(),
                     value: tail.value,
                 }
-            }
-            | ValueParent::Residual => {
-                self.lo.lower_errors.push(SpsLoweringError::ResidualStaticValue { value: source });
-                ValuePlan::pure(Hole.build(self.lo, site))
             }
             | ValueParent::Thunk => {
                 let body = self.computation();
@@ -794,19 +717,21 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
                 ValuePlan::sequence(children)
                     .map(|children| VCons::new(children, layout).build(self.lo, site))
             }
-            | ValueParent::Proj(target) => {
-                target.products.into_iter().fold(self.value(), |head, projection| {
-                    let layout = self.lo.product_layout(projection.product);
-                    let (binding, projected) =
-                        self.lo.projection_binding(head.value, projection.position, layout, site);
+            | ValueParent::Proj(steps) => {
+                steps.into_iter().fold(self.value(), |head, projection| {
+                    let (binding, projected) = self.lo.projection_binding(
+                        head.value,
+                        projection.position,
+                        projection.layout,
+                        site,
+                    );
                     head.with_binding(binding, projected)
                 })
             }
             | ValueParent::Lit(literal) => ValuePlan::pure(literal.build(self.lo, site)),
         };
-        if let Some(&ty) = self.lo.statics.annotations_value.get(&source) {
-            let _ =
-                self.lo.arena.inner.value_protocols.upsert(plan.value, self.lo.protocols.value(ty));
+        if let Some(protocol) = self.lo.core.value_protocols.get(source) {
+            let _ = self.lo.arena.inner.value_protocols.upsert(plan.value, protocol.clone());
         }
         self.values.push(plan);
         Step::Return(())
@@ -821,7 +746,7 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
     }
 
     fn resume_name_stack(
-        &mut self, frame: StackId, steps: Vec<ValueStep>, site: Option<ss::TermId>,
+        &mut self, frame: StackId, steps: Vec<ValueStep>, site: Option<ir::TermId>,
     ) -> Step<Self> {
         let tail = self.computation();
         let named = self.lo.arena.name_frames(vec![frame], tail, site);
@@ -835,7 +760,7 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
         Step::Return(())
     }
 
-    fn resume_abstraction(&mut self, stack: StackId, site: Option<ss::TermId>) -> Step<Self> {
+    fn resume_abstraction(&mut self, stack: StackId, site: Option<ir::TermId>) -> Step<Self> {
         let binder = Cons(self.pattern(), StackVar);
         let tail = self.computation();
         self.computations.push(Let { binder, bindee: stack, tail }.build(self.lo, site));
@@ -843,7 +768,7 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
     }
 
     fn resume_application(
-        &mut self, body: ss::CompuId, stack: StackId, site: Option<ss::TermId>,
+        &mut self, body: ir::CompuId, stack: StackId, site: Option<ir::TermId>,
     ) -> Step<Self> {
         let arg = self.value();
         let frame = Cons(arg.value, stack).build(self.lo, site);
@@ -859,31 +784,31 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
         }
     }
 
-    fn resume_fix(&mut self, source: ss::CompuId, param: DefId, stack: StackId) -> Step<Self> {
+    fn resume_fix(&mut self, source: ir::CompuId, param: DefId, stack: StackId) -> Step<Self> {
         let body = self.computation();
         let fix = SFix { param, stack, body }.build(self.lo, Some(source.into()));
-        if let Some(&ty) = self.lo.statics.annotations_compu.get(&source) {
-            self.lo.arena.inner.compu_protocols.insert_new(fix, self.lo.protocols.stack(ty));
+        if let Some(protocol) = self.lo.core.compu_protocols.get(source) {
+            self.lo.arena.inner.compu_protocols.insert_new(fix, protocol.clone());
         }
         self.computations.push(fix);
         Step::Return(())
     }
 
-    fn resume_force(&mut self, stack: StackId, site: Option<ss::TermId>) -> Step<Self> {
+    fn resume_force(&mut self, stack: StackId, site: Option<ir::TermId>) -> Step<Self> {
         let body = self.value();
         let tail = SForce { thunk: body.value, stack }.build(self.lo, site);
         self.computations.push(body.bind(self.lo, tail));
         Step::Return(())
     }
 
-    fn resume_return(&mut self, stack: StackId, site: Option<ss::TermId>) -> Step<Self> {
+    fn resume_return(&mut self, stack: StackId, site: Option<ir::TermId>) -> Step<Self> {
         let body = self.value();
         let tail = SReturn { stack, value: body.value }.build(self.lo, site);
         self.computations.push(body.bind(self.lo, tail));
         Step::Return(())
     }
 
-    fn resume_do(&mut self, bindee: ss::CompuId, site: Option<ss::TermId>) -> Step<Self> {
+    fn resume_do(&mut self, bindee: ir::CompuId, site: Option<ir::TermId>) -> Step<Self> {
         let binder = self.pattern();
         let body = self.computation();
         let frame = Kont { binder, body }.build(self.lo, site);
@@ -897,7 +822,7 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
     }
 
     fn resume_let_bindee(
-        &mut self, binder: ss::VPatId, tail: ss::CompuId, stack: StackId, site: Option<ss::TermId>,
+        &mut self, binder: ir::VPatId, tail: ir::CompuId, stack: StackId, site: Option<ir::TermId>,
     ) -> Step<Self> {
         let bindee = self.value();
         Step::Call {
@@ -907,8 +832,8 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
     }
 
     fn resume_let_body(
-        &mut self, binder: ss::VPatId, bindee: ValueId, tail: ss::CompuId, stack: StackId,
-        site: Option<ss::TermId>,
+        &mut self, binder: ir::VPatId, bindee: ValueId, tail: ir::CompuId, stack: StackId,
+        site: Option<ir::TermId>,
     ) -> Step<Self> {
         Step::Call {
             input: Work::BinderBody { binder, body: tail, stack, site, role: "__view_let__" },
@@ -916,7 +841,7 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
         }
     }
 
-    fn resume_let(&mut self, bindee: ValueId, site: Option<ss::TermId>) -> Step<Self> {
+    fn resume_let(&mut self, bindee: ValueId, site: Option<ir::TermId>) -> Step<Self> {
         let binder = self.pattern();
         let tail = self.computation();
         self.computations.push(ValueBinding { binder, bindee, site }.bind(self.lo, tail));
@@ -926,8 +851,8 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
     // Matches
 
     fn resume_match_scrutinee(
-        &mut self, arms: Vec<Matcher<ss::VPatId, ss::CompuId>>, kind: MatchKind, stack: StackId,
-        site: Option<ss::TermId>,
+        &mut self, arms: Vec<Matcher<ir::VPatId, ir::CompuId>>, kind: MatchKind, stack: StackId,
+        site: Option<ir::TermId>,
     ) -> Step<Self> {
         let scrut = self.value();
         Step::Call {
@@ -937,8 +862,8 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
     }
 
     fn resume_match_body(
-        &mut self, scrut: ValueId, arms: Vec<Matcher<ss::VPatId, ss::CompuId>>, kind: MatchKind,
-        stack: StackId, site: Option<ss::TermId>,
+        &mut self, scrut: ValueId, arms: Vec<Matcher<ir::VPatId, ir::CompuId>>, kind: MatchKind,
+        stack: StackId, site: Option<ir::TermId>,
     ) -> Step<Self> {
         match kind {
             | MatchKind::Planned => {
@@ -979,7 +904,7 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
     }
 
     fn resume_product_match_tail(
-        &mut self, scrut: ValueId, tail: ss::CompuId, stack: StackId, site: Option<ss::TermId>,
+        &mut self, scrut: ValueId, tail: ir::CompuId, stack: StackId, site: Option<ir::TermId>,
     ) -> Step<Self> {
         Step::Call {
             input: Work::Computation(tail, stack),
@@ -987,7 +912,7 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
         }
     }
 
-    fn resume_product_match(&mut self, scrut: ValueId, site: Option<ss::TermId>) -> Step<Self> {
+    fn resume_product_match(&mut self, scrut: ValueId, site: Option<ir::TermId>) -> Step<Self> {
         let binder = self.pattern();
         let body = self.computation();
         self.computations.push(SProductMatch { scrut, binder, body }.build(self.lo, site));
@@ -995,8 +920,8 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
     }
 
     fn resume_coproduct_arms(
-        &mut self, mut remaining: std::vec::IntoIter<Matcher<ss::VPatId, ss::CompuId>>,
-        scrut: ValueId, count: usize, stack: StackId, site: Option<ss::TermId>,
+        &mut self, mut remaining: std::vec::IntoIter<Matcher<ir::VPatId, ir::CompuId>>,
+        scrut: ValueId, count: usize, stack: StackId, site: Option<ir::TermId>,
     ) -> Step<Self> {
         match remaining.next() {
             | Some(Matcher { binder, tail }) => {
@@ -1011,17 +936,17 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
     }
 
     fn resume_match_arm(
-        &mut self, binder: ss::VPatId, tail: ss::CompuId, stack: StackId,
+        &mut self, binder: ir::VPatId, tail: ir::CompuId, stack: StackId,
     ) -> Step<Self> {
         Step::Call { input: Work::Pattern(binder), frame: Work::MatchArmBody { tail, stack } }
     }
 
-    fn resume_match_arm_body(&mut self, tail: ss::CompuId, stack: StackId) -> Step<Self> {
+    fn resume_match_arm_body(&mut self, tail: ir::CompuId, stack: StackId) -> Step<Self> {
         Step::TailCall(Work::Computation(tail, stack))
     }
 
     fn resume_coproduct_match(
-        &mut self, scrut: ValueId, count: usize, stack: StackId, site: Option<ss::TermId>,
+        &mut self, scrut: ValueId, count: usize, stack: StackId, site: Option<ir::TermId>,
     ) -> Step<Self> {
         let arms = self.match_arms(count);
         let branch = SCoprodMatch { scrut, arms }.build(self.lo, site);
@@ -1032,29 +957,27 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
     // Comatches
 
     fn resume_co_match_arms(
-        &mut self, mut remaining: std::vec::IntoIter<CoMatcher<DtorName, ss::CompuId>>,
-        codata: ss::CoDataId, source: ss::CompuId, count: usize, stack: StackId,
-        site: Option<ss::TermId>,
+        &mut self, mut remaining: std::vec::IntoIter<CoMatcher<DtorIdx, ir::CompuId>>,
+        source: ir::CompuId, count: usize, stack: StackId, site: Option<ir::TermId>,
     ) -> Step<Self> {
         match remaining.next() {
-            | Some(CoMatcher { dtor: name, tail }) => Step::Call {
-                input: Work::CoMatchArm { codata, name, tail, site },
-                frame: Work::CoMatchArms { remaining, codata, source, count, stack, site },
+            | Some(CoMatcher { dtor: tag, tail }) => Step::Call {
+                input: Work::CoMatchArm { tag, tail, site },
+                frame: Work::CoMatchArms { remaining, source, count, stack, site },
             },
             | None => Step::TailCall(Work::CoMatch { source, count, stack }),
         }
     }
 
     fn resume_co_match_arm(
-        &mut self, codata: ss::CoDataId, name: DtorName, tail: ss::CompuId,
-        site: Option<ss::TermId>,
+        &mut self, tag: DtorIdx, tail: ir::CompuId, site: Option<ir::TermId>,
     ) -> Step<Self> {
-        self.tags.push(self.lo.protocols.tag(codata, name));
+        self.tags.push(tag);
         let stack = StackVar.build(self.lo, site);
         Step::TailCall(Work::Computation(tail, stack))
     }
 
-    fn resume_co_match(&mut self, source: ss::CompuId, count: usize, stack: StackId) -> Step<Self> {
+    fn resume_co_match(&mut self, source: ir::CompuId, count: usize, stack: StackId) -> Step<Self> {
         let tags = self.tags.split_off(self.tags.len() - count);
         let tails = self.computations.split_off(self.computations.len() - count);
         let arms = tags
@@ -1063,8 +986,9 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
             .map(|(tag, tail)| CoMatcher { dtor: Cons(tag, StackVar), tail })
             .collect();
         let case = SCoMatch { scrut: stack, arms }.build(self.lo, Some(source.into()));
-        let protocol = self.lo.protocols.codata(self.lo.statics.codata_hints[&source]);
-        self.lo.arena.inner.compu_protocols.insert_new(case, protocol);
+        if let Some(protocol) = self.lo.core.compu_protocols.get(source) {
+            self.lo.arena.inner.compu_protocols.insert_new(case, protocol.clone());
+        }
         self.computations.push(case);
         Step::Return(())
     }
@@ -1072,7 +996,7 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
     // Match plans
 
     fn resume_planned_product(
-        &mut self, scrutinee: DefId, binder: VPatId, site: Option<ss::TermId>,
+        &mut self, scrutinee: DefId, binder: VPatId, site: Option<ir::TermId>,
     ) -> Step<Self> {
         let body = self.computation();
         let scrut = scrutinee.build(self.lo, site);
@@ -1081,19 +1005,20 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
     }
 
     fn resume_constructor_fallback(
-        &mut self, case: ConstructorCase, data: ss::DataId, name: CtorName, argument: ss::VPatId,
+        &mut self, case: ConstructorCase, data: ir::DataId, tag: CtorIdx, argument: ir::VPatId,
         success: MatchPlanId,
     ) -> Step<Self> {
         let body = self.computation();
         let fallback = Closure { stack: StackVar, body }.build(self.lo, case.site);
         let failure = self.plan(MatchPlan::Continue(case.continuation));
-        let constructors = &self.lo.statics.datas[&data];
+        let constructors = &self.lo.core.datas[data];
+        debug_assert_eq!(constructors[tag.idx], tag.name);
         let remaining = constructors
             .iter()
             .enumerate()
-            .map(|(idx, (candidate, _))| ConstructorBranch {
-                tag: CtorIdx { idx, name: candidate.clone() },
-                payload: (candidate == &name).then_some((argument, success)),
+            .map(|(idx, &candidate)| ConstructorBranch {
+                tag: CtorIdx { idx, name: candidate },
+                payload: (idx == tag.idx).then_some((argument, success)),
             })
             .collect::<Vec<_>>()
             .into_iter();
@@ -1102,8 +1027,8 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
     }
 
     fn resume_constructor_arm(
-        &mut self, tag: CtorIdx, payload: Option<(ss::VPatId, MatchPlanId)>, failure: MatchPlanId,
-        stack: StackId, site: Option<ss::TermId>,
+        &mut self, tag: CtorIdx, payload: Option<(ir::VPatId, MatchPlanId)>, failure: MatchPlanId,
+        stack: StackId, site: Option<ir::TermId>,
     ) -> Step<Self> {
         let (binder, plan) = if let Some((pattern, success)) = payload {
             let scrutinee = self.lo.alloc_admin_def("__match_payload__");
@@ -1149,7 +1074,7 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
 
     fn resume_literal_success(
         &mut self, scrutinee: DefId, integer: IntegerLiteral, operator: ValueId,
-        failure: MatchPlanId, stack: StackId, site: Option<ss::TermId>,
+        failure: MatchPlanId, stack: StackId, site: Option<ir::TermId>,
     ) -> Step<Self> {
         let body = self.computation();
         let then = Closure { stack: StackVar, body }.build(self.lo, site);
@@ -1162,7 +1087,7 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
 
     fn resume_literal_failure(
         &mut self, scrutinee: DefId, integer: IntegerLiteral, operator: ValueId, then: ValueId,
-        stack: StackId, site: Option<ss::TermId>,
+        stack: StackId, site: Option<ir::TermId>,
     ) -> Step<Self> {
         let body = self.computation();
         let otherwise = Closure { stack: StackVar, body }.build(self.lo, site);
@@ -1242,19 +1167,17 @@ impl Folder for LoweringFolder<'_, '_> {
             | Work::CoproductMatch { scrut, count, stack, site } => {
                 self.resume_coproduct_match(scrut, count, stack, site)
             }
-            | Work::CoMatchArm { codata, name, tail, site } => {
-                self.resume_co_match_arm(codata, name, tail, site)
-            }
+            | Work::CoMatchArm { tag, tail, site } => self.resume_co_match_arm(tag, tail, site),
             | Work::CoMatch { source, count, stack } => self.resume_co_match(source, count, stack),
-            | Work::CoMatchArms { remaining, codata, source, count, stack, site } => {
-                self.resume_co_match_arms(remaining, codata, source, count, stack, site)
+            | Work::CoMatchArms { remaining, source, count, stack, site } => {
+                self.resume_co_match_arms(remaining, source, count, stack, site)
             }
             | Work::MatchPlan { plan, stack, site } => self.visit_match_plan(plan, stack, site),
             | Work::PlannedProduct { scrutinee, binder, site } => {
                 self.resume_planned_product(scrutinee, binder, site)
             }
-            | Work::ConstructorFallback { case, data, name, argument, success } => {
-                self.resume_constructor_fallback(case, data, name, argument, success)
+            | Work::ConstructorFallback { case, data, tag, argument, success } => {
+                self.resume_constructor_fallback(case, data, tag, argument, success)
             }
             | Work::ConstructorArm { tag, payload, failure, stack, site } => {
                 self.resume_constructor_arm(tag, payload, failure, stack, site)

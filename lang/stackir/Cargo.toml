@@ -11,18 +11,15 @@ description = "zydeco in stack-passing style"
 
 [dependencies]
 rustc-hash = { workspace = true }
-zydeco-utils = { workspace = true }
+zydeco-foundation = { workspace = true }
 zydeco-syntax = { workspace = true }
-zydeco-surface = { workspace = true }
-zydeco-statics = { workspace = true }
+zydeco-ir = { workspace = true }
 zydeco-derive = { workspace = true }
 derive_more = { workspace = true, features = ["as_ref", "display", "from"] }
 pretty = { workspace = true }
 serde = { workspace = true }
-serde_plain = { workspace = true }
 indexmap = { workspace = true }
 thiserror = { workspace = true }
-ariadne = { workspace = true }
 
 [lints]
 workspace = true

@@ -32,7 +32,7 @@ impl ClauseState {
     fn next_step(&self) -> CopatternStep {
         match self.items.front() {
             | Some(su::CoPatternItem::Pat(_)) => CopatternStep::Pattern,
-            | Some(su::CoPatternItem::Dtor(dtor)) => CopatternStep::Destructor(dtor.clone()),
+            | Some(su::CoPatternItem::Dtor(dtor)) => CopatternStep::Destructor(*dtor),
             | None => CopatternStep::End,
         }
     }
@@ -158,13 +158,9 @@ impl CopatternElaborator {
                 Ok(ss::Matcher { binder, tail })
             })
             .collect_reported::<Vec<_>>()?;
-        let computation = Alloc::alloc(
-            tycker,
-            ss::Match { scrut: scrutinee, arms },
-            self.expected,
-            &self.allocation_env,
-        );
-        tycker.statics.copattern_matches.insert_new(computation, ());
+        let computation =
+            Alloc::alloc(tycker, ss::Match { scrut: scrutinee, arms }, self.expected, &());
+        tycker.statics.copattern_matches.ensure(computation);
         self.record(tycker, computation);
         Ok(computation)
     }
@@ -193,19 +189,19 @@ impl CopatternElaborator {
                         .collect(),
                 ),
                 vtype,
-                env,
+                &(),
             );
             let mut components =
                 fields.into_iter().rev().map(|(value, _)| value).collect::<Vec<_>>();
             components.push(tail);
-            let tuple = Alloc::alloc(tycker, ss::Value::VCons(components), product_type, env);
+            let tuple = Alloc::alloc(tycker, ss::Value::VCons(components), product_type, &());
             (tuple, product_type)
         }
     }
 
     fn combine_patterns(
         &self, tycker: &mut Tycker<'_>, patterns: Vec<ss::VPatId>, product_type: ss::TypeId,
-        env: &ss::TyEnv,
+        _env: &ss::TyEnv,
     ) -> ss::VPatId {
         let mut patterns = patterns.into_iter().rev();
         let tail = patterns.next().expect("a nonempty copattern pattern tuple has a tail");
@@ -215,7 +211,7 @@ impl CopatternElaborator {
         } else {
             let mut components = items;
             components.push(tail);
-            Alloc::alloc(tycker, ss::ValuePattern::VCons(components), product_type, env)
+            Alloc::alloc(tycker, ss::ValuePattern::VCons(components), product_type, &())
         }
     }
 
@@ -262,8 +258,7 @@ impl CopatternElaborator {
                 Ok(ss::CoMatcher { dtor, tail })
             })
             .collect_reported::<Vec<_>>()?;
-        let computation =
-            Alloc::alloc(tycker, ss::CoMatch { arms }, self.expected, &self.allocation_env);
+        let computation = Alloc::alloc(tycker, ss::CoMatch { arms }, self.expected, &());
         tycker.statics.codata_hints.insert_new(computation, codata);
         self.record(tycker, computation);
         Ok(computation)
@@ -279,16 +274,12 @@ impl CopatternElaborator {
                 tycker,
                 ss::Match { scrut: argument.value, arms: Vec::new() },
                 codomain,
-                &argument.body_env,
+                &(),
             );
-            tycker.statics.copattern_matches.insert_new(body, ());
+            tycker.statics.copattern_matches.ensure(body);
             self.record(tycker, body);
-            let abstraction = Alloc::alloc(
-                tycker,
-                ss::Abs(argument.binder, body),
-                self.expected,
-                &self.allocation_env,
-            );
+            let abstraction =
+                Alloc::alloc(tycker, ss::Abs(argument.binder, body), self.expected, &());
             self.record(tycker, abstraction);
             return Ok(abstraction);
         }
@@ -317,26 +308,17 @@ impl CopatternElaborator {
             .collect_reported::<Vec<_>>()?;
         let body =
             self.with_clauses(codomain, clauses, argument.body_env.clone()).elaborate(tycker)?;
-        let abstraction = Alloc::alloc(
-            tycker,
-            ss::Abs(argument.binder, body),
-            self.expected,
-            &self.allocation_env,
-        );
+        let abstraction = Alloc::alloc(tycker, ss::Abs(argument.binder, body), self.expected, &());
         self.record(tycker, abstraction);
         Ok(abstraction)
     }
 
     fn fresh_argument(&self, tycker: &mut Tycker<'_>, domain: ss::TypeId) -> Result<FreshArgument> {
-        let definition = Alloc::alloc(
-            tycker,
-            ss::VarName("$copattern_argument".to_string()),
-            domain.into(),
-            &(),
-        );
-        let binder = Alloc::alloc(tycker, definition, domain, &self.allocation_env);
+        let definition =
+            Alloc::alloc(tycker, ss::VarName::new("$copattern_argument"), domain.into(), &());
+        let binder = Alloc::alloc(tycker, definition, domain, &());
         let body_env = self.allocation_env.clone() + [(definition, domain.into())];
-        let value = Alloc::alloc(tycker, definition, domain, &body_env);
+        let value = Alloc::alloc(tycker, definition, domain, &());
         let domain_view = domain.unroll(tycker)?.subst_env(tycker, &self.allocation_env)?;
         if let ss::Type::Data(data) = tycker.type_filled(&domain_view)?.to_owned() {
             tycker.statics.data_hints.insert_new(value, data);
@@ -375,8 +357,7 @@ impl CopatternElaborator {
         let binder = first_binder.expect("a nonempty forall copattern has a binder");
         let env = self.extend_forall_env(tycker, &source_binder, binder, &self.allocation_env)?;
         let body = self.with_clauses(body, clauses, env).elaborate(tycker)?;
-        let abstraction =
-            Alloc::alloc(tycker, ss::Abs(binder, body), self.expected, &self.allocation_env);
+        let abstraction = Alloc::alloc(tycker, ss::Abs(binder, body), self.expected, &());
         self.record(tycker, abstraction);
         Ok(abstraction)
     }
@@ -386,7 +367,7 @@ impl CopatternElaborator {
         env: &ss::TyEnv,
     ) -> Result<ss::TyEnv> {
         let payload_kind = source_binder.payload_kind(tycker);
-        let witness = Alloc::alloc(tycker, source_binder.witness, payload_kind, env);
+        let witness = Alloc::alloc(tycker, source_binder.witness, payload_kind, &());
         let argument = source_binder.pattern.introduce_payload(tycker, witness);
         let argument = argument?;
         Ok(TyEnvT::new(env.clone(), Assign(binder, argument)).tyck(tycker, ())?.info)
@@ -434,8 +415,7 @@ impl CopatternElaborator {
         clause.env = checked.info;
         let env = clause.env.clone();
         let body = self.with_clauses(signature.codomain, vec![clause], env).elaborate(tycker)?;
-        let abstraction =
-            Alloc::alloc(tycker, ss::Abs(binder, body), self.expected, &self.allocation_env);
+        let abstraction = Alloc::alloc(tycker, ss::Abs(binder, body), self.expected, &());
         tycker.statics.copattern_pack_pi_binders.insert_new(abstraction, binder);
         self.record(tycker, abstraction);
         Ok(abstraction)

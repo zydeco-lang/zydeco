@@ -1,7 +1,7 @@
 //! Rebuild pattern occurrences while retaining definitions and source evidence.
 
 use super::*;
-use zydeco_utils::fold::{Folder, Step};
+use zydeco_foundation::fold::{Folder, Step};
 
 pub(super) struct PatternFolder<'a> {
     pub norm: &'a mut Normalization,

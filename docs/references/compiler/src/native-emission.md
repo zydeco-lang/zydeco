@@ -99,7 +99,7 @@ Every other frame entry starts with both parities, because blocks and closed lab
 from several activations; a program reached with both parities aligns its host calls dynamically.
 [Native packaging](../../../../cli/src/native.rs) bundles the runtime and shared model
 and invokes the target toolchain using [the CLI build workflow](../../../../cli/README.md#native-executables).
-[Native-model tests](../../../../lang/tests/tests/native_model.rs) check preparation and transitions;
+[Native-model tests](../../../../lang/tests/tests/suite/native_model.rs) check preparation and transitions;
 [native frame proposal](../../../proposals/native-frames.md) retains alternative storage and evaluation decisions.
 Model regressions reject mismatched layouts, uninitialized reads, stale or out-of-order suspension IDs,
 and reservation overflow without corrupting callers.

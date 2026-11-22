@@ -66,13 +66,9 @@ impl<'a> Tyck<'a> for TyEnvT<su::Binding> {
 
                 // seal the type if needed
                 let bindee = if is_sealed {
-                    let abst: AbstId = tycker.fresh();
-                    tycker.statics.absts.insert_new(abst, ());
-                    if let (Some(def), _kd) = binder.try_destruct_def(tycker) {
-                        tycker.statics.abst_hints.insert_new(abst, def);
-                    }
+                    let abst = Alloc::alloc(tycker, binder.try_destruct_def(tycker).0, kd, &());
                     tycker.record_seal(abst, ty);
-                    Alloc::alloc(tycker, abst, kd, &env.info)
+                    Alloc::alloc(tycker, abst, kd, &())
                 } else {
                     bindee
                 };
@@ -149,7 +145,7 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<Vec<su::Binding>>> {
 
         let mut binder_map = HashMap::new();
         let mut abst_map = HashMap::new();
-        for (binding_index, binding) in bindings.iter().enumerate() {
+        for binding in bindings {
             let id = binding.id;
             let su::BindingForm::Definition(su::Definition { binder, bindee }) = binding.inner
             else {
@@ -185,23 +181,11 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<Vec<su::Binding>>> {
             // register the def with abstract type
             let (def, kd) = binder.try_destruct_def(tycker);
             if let Some(def) = def {
-                let index =
-                    crate::query::InternedBindingIndex::with_usize(tycker.db, binding_index);
-                let Some((abst, abst_ty, next_abst_ty)) =
-                    crate::query::rec_group_abst_judgment_at(tycker.db, tycker.query_site(), index)
-                else {
-                    unreachable!("recursive-group identities are query-produced")
-                };
-                tycker.statics.absts.insert_new(abst, ());
-                tycker.statics.abst_hints.insert_new(abst, def);
-                tycker.statics.types_pre.insert_new(
-                    abst_ty,
-                    ss::Fillable::Done(ss::Type::Abst(abst)),
-                    kd,
-                );
-                tycker.store_env(abst_ty, &env.info);
+                let abst = Alloc::alloc(tycker, def, kd, &());
+                let abst_ty: ss::TypeId = Alloc::alloc(tycker, abst, kd, &());
                 env.info += [(def, abst_ty.into())];
-                abst_map.insert(id, (abst, next_abst_ty, kd));
+                tycker.type_bindings.insert(def, abst_ty);
+                abst_map.insert(id, (abst, kd));
             }
         }
         for binding in bindings {
@@ -228,14 +212,9 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<Vec<su::Binding>>> {
                 let _ = tycker.statics.type_definitions.upsert(def, bindee_subst);
             }
             // add the types to the seal arena
-            let (abst, abst_ty, kd) = abst_map[&id];
+            let (abst, kd) = abst_map[&id];
             tycker.record_seal(abst, bindee_subst);
-            tycker.statics.types_pre.insert_new(
-                abst_ty,
-                ss::Fillable::Done(ss::Type::Abst(abst)),
-                kd,
-            );
-            tycker.store_env(abst_ty, &env.info);
+            let abst_ty = Alloc::alloc(tycker, abst, kd, &());
             // add the type into the environment
             let TyEnvT { info: new_env, inner: () } =
                 env.mk(Assign(binder, abst_ty)).tyck(tycker, ())?;
@@ -254,6 +233,7 @@ impl<'a> Tyck<'a> for TyEnvT<Assign<ss::KPatId, ss::KindId>> {
         match tycker.statics.kpats[&assigner] {
             | ss::KindPattern::Hole(_) => Ok(self.mk(())),
             | ss::KindPattern::Var(definition) => {
+                tycker.kind_bindings.insert(definition, assignee);
                 let mut env = self.info.clone();
                 env += [(definition, assignee.into())];
                 Ok(TyEnvT::new(env, ()))
@@ -281,6 +261,7 @@ impl<'a> Tyck<'a> for TyEnvT<Assign<ss::TPatId, ss::TypeId>> {
                 // def_kd should correctly be the type of assignee
                 let assignee_kd = { tycker.statics.type_kind(assignee) };
                 Lub::lub(def_kd, assignee_kd, tycker)?;
+                tycker.type_bindings.insert(def, assignee);
                 let mut env = self.info.clone();
                 env += [(def, assignee.into())];
                 Ok(TyEnvT { info: env, inner: () })

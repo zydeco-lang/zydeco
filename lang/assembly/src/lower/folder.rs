@@ -5,7 +5,7 @@
 
 use super::*;
 use std::vec::IntoIter;
-use zydeco_utils::fold::{Folder, Step};
+use zydeco_foundation::fold::{Folder, Step};
 
 /// Internal IDs never consume an assembly allocation slot. Links are affine:
 /// a value hole may abandon a consumer, but no consumer may run twice.
@@ -323,13 +323,7 @@ impl Folder for Lowering<'_, '_> {
                 self.emit(Push(Atom::Sym(symbol)), context, ContextUpdate::Keep, next)
             }
             | Frame::ResumeEntry { label, bindings, context, next } => {
-                let name = self
-                    .lo
-                    .sps_low
-                    .admin
-                    .def_name(self.lo.scoped, self.lo.statics, &label)
-                    .plain()
-                    .to_owned();
+                let name = self.lo.sps_low.admin.def_name(&label).plain().to_owned();
                 let symbol = child.build(self.lo, (Some(name), Some(label)));
                 let captures = bindings.iter().map(|(_, source)| *source).collect();
                 self.lo
@@ -345,13 +339,7 @@ impl Folder for Lowering<'_, '_> {
                 )
             }
             | Frame::Label { label, kind, tail, context } => {
-                let name = self
-                    .lo
-                    .sps_low
-                    .admin
-                    .def_name(self.lo.scoped, self.lo.statics, &label)
-                    .plain()
-                    .to_owned();
+                let name = self.lo.sps_low.admin.def_name(&label).plain().to_owned();
                 let _symbol = child.build(self.lo, (Some(name), Some(label)));
                 if kind == sk::LabelKind::Closed && self.lo.native_frames {
                     self.lo.arena.frame_entries.insert(child, crate::frames::Entry::Fresh);

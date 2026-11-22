@@ -1,11 +1,14 @@
 use crate::{
     host::HostRuntime,
-    syntax::{Computation, Prim, RcValue, RuntimeError, SemValue, Thunk, Value},
+    syntax::{HostAction, RuntimeError, SemValue, ThunkBody},
 };
-use std::io::{BufRead, Write};
+use std::{
+    io::{BufRead, Write},
+    rc::Rc,
+};
 use zydeco_syntax::{
     BuiltinValueRole, ComparisonOp, FloatOperation, IntegerOperation, IntegerType, PrimitiveError,
-    PrimitiveOp, PrimitiveType, Return,
+    PrimitiveOp, PrimitiveType,
 };
 
 /// Typed access to host operations used to construct the Builtin package.
@@ -17,16 +20,15 @@ pub enum BuiltinFailure {
 }
 
 impl BuiltinRuntime {
-    pub fn package_value(role: BuiltinValueRole) -> RcValue {
-        let primitive: Computation = Prim { role }.into();
-        std::rc::Rc::new(Value::Thunk(Thunk(std::rc::Rc::new(primitive))))
+    pub fn package_value(role: BuiltinValueRole) -> SemValue {
+        SemValue::Thunk(Rc::new(ThunkBody::Builtin(role)))
     }
 
     pub fn invoke(
         role: BuiltinValueRole, args: Vec<SemValue>, input: &mut dyn BufRead,
         output: &mut dyn Write, error_output: &mut dyn Write, argv: &[String],
         host: &mut HostRuntime,
-    ) -> Result<Computation, BuiltinFailure> {
+    ) -> Result<HostAction, BuiltinFailure> {
         use crate::impls::*;
         use crate::representation::ScalarMemory;
         use BuiltinValueRole as Role;
@@ -127,14 +129,12 @@ impl BuiltinRuntime {
         .map_err(BuiltinFailure::Exit)
     }
 
-    fn arithmetic(
-        operation: PrimitiveOp, args: Vec<SemValue>,
-    ) -> Result<Computation, RuntimeError> {
+    fn arithmetic(operation: PrimitiveOp, args: Vec<SemValue>) -> Result<HostAction, RuntimeError> {
         let [SemValue::Literal(first), SemValue::Literal(second)] = args.as_slice() else {
             unreachable!("checked arithmetic receives two literal operands")
         };
         match operation.evaluate(&[first.clone(), second.clone()]) {
-            | Ok(value) => Ok(Return(std::rc::Rc::new(Value::Lit(value))).into()),
+            | Ok(value) => Ok(HostAction::Return(SemValue::Literal(value))),
             | Err(PrimitiveError::DivisionByZero) => Err(RuntimeError::IntegerDivisionByZero),
             | Err(PrimitiveError::RemainderByZero) => Err(RuntimeError::IntegerRemainderByZero),
             | Err(PrimitiveError::OperandType) => {
@@ -195,12 +195,13 @@ mod tests {
                             IntegerOperation::Mod,
                             Err(BuiltinFailure::Runtime(RuntimeError::IntegerRemainderByZero)),
                         ) => {}
-                        | (2, operation, Ok(Computation::Ret(Return(value)))) => {
-                            let Value::Lit(Literal::Integer(value)) = value.as_ref() else {
-                                panic!("arithmetic must return an integer literal")
-                            };
+                        | (
+                            2,
+                            operation,
+                            Ok(HostAction::Return(SemValue::Literal(Literal::Integer(value)))),
+                        ) => {
                             let expected = if operation == IntegerOperation::Div { 3 } else { 1 };
-                            assert_eq!(*value, IntegerLiteral::from_value(expected, integer));
+                            assert_eq!(value, IntegerLiteral::from_value(expected, integer));
                         }
                         | _ => panic!("arithmetic returned the wrong result or failure"),
                     }

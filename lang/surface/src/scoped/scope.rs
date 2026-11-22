@@ -149,14 +149,14 @@ impl NameScope<'_> {
                 let binding = self.lookup(name)?;
                 Some(VisibleDefinition {
                     definition: binding.definition,
-                    name: name.clone(),
+                    name: *name,
                     distance: binding.distance,
                 })
             })
             .collect();
         ScopeSnapshot {
             definitions,
-            implicit_os: self.local.prelude.enabled && self.lookup(&VarName("OS".into())).is_none(),
+            implicit_os: self.local.prelude.enabled && self.lookup(&VarName::new("OS")).is_none(),
         }
     }
 }

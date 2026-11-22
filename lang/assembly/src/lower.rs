@@ -9,11 +9,9 @@ use super::{
 };
 use derive_more::{AsMut, AsRef};
 use std::collections::HashMap;
+use zydeco_foundation::fold::{Explicit, Step};
 use zydeco_machine::closure::Closure;
 use zydeco_stackir::{SpsLowProgram, arena::DefinitionNames as _, low::syntax as sk};
-use zydeco_statics::arena::StaticsArena;
-use zydeco_surface::scoped::arena::ScopedArena;
-use zydeco_utils::fold::{Explicit, Step};
 
 mod folder;
 use folder::*;
@@ -29,8 +27,6 @@ pub struct Lowerer<'a> {
     #[as_ref]
     #[as_mut]
     pub arena: AssemblyArena,
-    pub scoped: &'a ScopedArena,
-    pub statics: &'a StaticsArena,
     pub sps_low: &'a sk::SpsLowArena,
     pub root: sk::CompuId,
     unboxing: crate::unbox::LocalUnboxing,
@@ -43,15 +39,13 @@ pub struct Lowerer<'a> {
 
 impl<'a> Lowerer<'a> {
     pub fn with_policy<P: crate::representation::RepresentationPolicy + ?Sized>(
-        scoped: &'a ScopedArena, statics: &'a StaticsArena, sps_low: &'a SpsLowProgram, policy: &P,
+        sps_low: &'a SpsLowProgram, policy: &P,
     ) -> Self {
         let arena = AssemblyArena::default();
         let unboxing = crate::unbox::LocalUnboxing::with_policy(sps_low, policy);
         Self {
             allocator: IdAllocator::new(),
             arena,
-            scoped,
-            statics,
             sps_low: sps_low.arena(),
             root: sps_low.root(),
             unboxing,
@@ -83,8 +77,7 @@ impl Lowering<'_, '_> {
                 self.emit(Pop(var), context, ContextUpdate::Bind(var), next)
             }
             | VPat::Var(def) => {
-                let name =
-                    self.lo.sps_low.admin.def_name(self.lo.scoped, self.lo.statics, &def).clone();
+                let name = self.lo.sps_low.admin.def_name(&def);
                 if let Some(&arity) = self.lo.unboxing.unboxed_vars.get(&def) {
                     let vars = (0..arity)
                         .map(|index| {
@@ -147,13 +140,7 @@ impl Lowering<'_, '_> {
                 }
             }
             | Value::Ext(sk::ValueExt::Block(sk::Block { label, entry, body })) => {
-                let name = self
-                    .lo
-                    .sps_low
-                    .admin
-                    .def_name(self.lo.scoped, self.lo.statics, &label)
-                    .plain()
-                    .to_owned();
+                let name = self.lo.sps_low.admin.def_name(&label).plain().to_owned();
                 let symbol = Reserved.build(self.lo, (Some(name.clone()), Some(label)));
                 let body = self.save(Continuation::Body(body));
                 let body = entry
@@ -255,12 +242,7 @@ impl Lowering<'_, '_> {
                     let DefId::Var(source) = self.lo.arena.defs[&capture.source] else {
                         panic!("capture must have an activation slot")
                     };
-                    let name = self
-                        .lo
-                        .sps_low
-                        .admin
-                        .def_name(self.lo.scoped, self.lo.statics, &capture.binding)
-                        .clone();
+                    let name = self.lo.sps_low.admin.def_name(&capture.binding);
                     let binding = name.build(self.lo, Some(capture.binding));
                     (binding, source)
                 })

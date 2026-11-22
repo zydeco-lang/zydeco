@@ -1,34 +1,18 @@
-use crate::syntax::*;
+use crate::{builtin::BuiltinRuntime, env::EvalEnv, syntax::*};
 use std::{
     io::{BufRead, Write},
     rc::Rc,
 };
-use zydeco_statics::environment::Env;
+use zydeco_ir::{BuiltinPackagePlan, BuiltinPackageValue, CoreProgram, CoreRoot, syntax as ir};
 
-/// Trait for stepping a term until a result is produced.
-pub trait Eval<'rt>: Sized {
-    type Out;
-    fn step<'e>(self, runtime: &'e mut Runtime<'rt>) -> Step<Self, Self::Out>;
-    /// Evaluate by repeatedly stepping until a final result is returned.
-    fn eval<'e>(self, runtime: &'e mut Runtime<'rt>) -> Self::Out {
-        let mut res = self;
-        loop {
-            match res.step(runtime) {
-                | Step::Done(out) => break out,
-                | Step::Step(next) => res = next,
-            }
-        }
-    }
+enum Focus {
+    Compu(ir::CompuId),
+    Thunk(Rc<ThunkBody>),
+    Return(SemValue),
+    Done(ProgKont),
 }
 
-/// A single evaluation step: either done or produce a new term to step.
-pub enum Step<T, Out> {
-    Done(Out),
-    Step(T),
-}
-
-impl<'rt> Runtime<'rt> {
-    /// Construct a new runtime with empty environment and stack.
+impl<'prog, 'rt> Runtime<'prog, 'rt> {
     /// Resolve explicit logical library identities to exact, preflighted artifact paths.
     pub fn with_foreign_libraries(
         mut self,
@@ -38,293 +22,497 @@ impl<'rt> Runtime<'rt> {
         self
     }
 
+    /// Supply host package values applied in order before entering the program root.
+    pub fn with_packages(mut self, plans: &[BuiltinPackagePlan]) -> Self {
+        self.packages = plans.iter().map(|plan| Self::materialize_package(&plan.value)).collect();
+        self
+    }
+
     pub fn new(
         input: &'rt mut dyn BufRead, output: &'rt mut dyn Write, stderr: &'rt mut dyn Write,
-        args: &'rt [String], program: DynamicsProgram,
+        args: &'rt [String], program: &'prog CoreProgram,
     ) -> Self {
-        Runtime {
+        Self {
             input,
             output,
             stderr,
             args,
             host: crate::host::HostRuntime::new(),
             foreign: crate::foreign::ForeignRuntime::new(),
-            stack: rpds::VectorSync::new_sync(),
-            env: Env::new(),
+            stack: Vec::new(),
+            env: EvalEnv::new(),
+            packages: Vec::new(),
             program,
         }
     }
-    /// Evaluate the program's computation root.
+
+    fn materialize_package(value: &BuiltinPackageValue) -> SemValue {
+        match value {
+            | BuiltinPackageValue::Unit => SemValue::Triv(Triv),
+            | BuiltinPackageValue::Operation(role) => BuiltinRuntime::package_value(*role),
+            | BuiltinPackageValue::Product(items) => {
+                SemValue::VCons(items.iter().map(Self::materialize_package).collect())
+            }
+        }
+    }
+
+    /// Evaluate the program's root node until completion, exit, or runtime error.
     pub fn run(&mut self) -> ProgKont {
-        let root = self.program.root().clone();
-        root.as_ref().clone().eval(self)
-    }
-
-    fn pop_stack(&mut self) -> Option<SemCompu> {
-        let frame = self.stack.last().cloned();
-        if frame.is_some() {
-            let dropped = self.stack.drop_last_mut();
-            debug_assert!(dropped);
+        for package in self.packages.drain(..).rev() {
+            self.stack.push(SemCompu::App(package));
         }
-        frame
+        let initial = match self.program.root() {
+            | CoreRoot::Compu(root) => Focus::Compu(root),
+            | CoreRoot::Value(root) => {
+                let value = self.eval_value(root);
+                Focus::Return(value)
+            }
+        };
+        self.run_from(initial)
     }
-}
 
-/// Helper to bind a runtime value to a value pattern.
-struct Assign<S, T>(S, T);
-
-impl<'rt> Eval<'rt> for Assign<RcVPat, SemValue> {
-    type Out = Result<(), ()>;
-    fn step<'e>(self, runtime: &'e mut Runtime<'rt>) -> Step<Self, Self::Out> {
-        use ValuePattern as VPat;
-        let Assign(vpat, sem) = self;
-        match vpat.as_ref() {
-            | VPat::Hole(Hole) => {}
-            | VPat::Var(def) => {
-                runtime.env += [(*def, sem)];
-            }
-            | VPat::Ctor(Ctor(ctor, vpat)) => match sem {
-                | SemValue::Ctor(Ctor(ctor_, body)) => {
-                    if ctor != &ctor_ {
-                        return Step::Done(Err(()));
-                    }
-                    match Assign(vpat.to_owned(), body.as_ref().clone()).eval(runtime) {
-                        | Ok(()) => {}
-                        | Err(()) => return Step::Done(Err(())),
-                    }
-                }
-                | SemValue::Thunk(_)
-                | SemValue::Triv(_)
-                | SemValue::VCons(_)
-                | SemValue::Literal(_)
-                | SemValue::Host(_) => unreachable!(),
-            },
-            | VPat::Lit(pattern) => match sem {
-                | SemValue::Literal(found) => {
-                    if found != *pattern {
-                        return Step::Done(Err(()));
-                    }
-                }
-                // A value of another shape can never equal a literal, so the
-                // arm simply fails rather than reporting an impossible state.
-                | SemValue::Thunk(_)
-                | SemValue::Ctor(_)
-                | SemValue::Triv(_)
-                | SemValue::VCons(_)
-                | SemValue::Host(_) => return Step::Done(Err(())),
-            },
-            | VPat::Alias(Alias(patterns)) => {
-                for pattern in patterns {
-                    match Assign(pattern.to_owned(), sem.clone()).eval(runtime) {
-                        | Ok(()) => {}
-                        | Err(()) => return Step::Done(Err(())),
-                    }
-                }
-            }
-            | VPat::Triv(Triv) => match sem {
-                | SemValue::Triv(Triv) => {}
-                | SemValue::Thunk(_)
-                | SemValue::Ctor(_)
-                | SemValue::VCons(_)
-                | SemValue::Literal(_)
-                | SemValue::Host(_) => {
-                    return Step::Done(Err(()));
-                }
-            },
-            | VPat::VCons(patterns) => match sem {
-                | SemValue::VCons(values) => {
-                    if patterns.len() != values.len() {
-                        return Step::Done(Err(()));
-                    }
-                    for (pattern, value) in patterns.iter().zip(values.iter()) {
-                        match Assign(pattern.to_owned(), value.clone()).eval(runtime) {
-                            | Ok(()) => {}
-                            | Err(()) => return Step::Done(Err(())),
-                        }
-                    }
-                }
-                | SemValue::Thunk(_)
-                | SemValue::Ctor(_)
-                | SemValue::Triv(_)
-                | SemValue::Literal(_)
-                | SemValue::Host(_) => unreachable!(),
-            },
-        }
-        Step::Done(Ok(()))
-    }
-}
-
-impl<'rt> Eval<'rt> for Value {
-    type Out = SemValue;
-
-    fn step<'e>(self, runtime: &'e mut Runtime<'rt>) -> Step<Self, Self::Out> {
-        match self {
-            | Value::Hole(Hole) => {
-                panic!("Hole in value")
-            }
-            | Value::Var(var) => {
-                Step::Done(runtime.env.get(&var).expect("variable does not exist").clone())
-            }
-            | Value::Let(Let { binder, bindee, tail }) => {
-                let outer = runtime.env.clone();
-                let bindee = bindee.as_ref().clone().eval(runtime);
-                Assign(binder, bindee).eval(runtime).expect("pattern match failed in value let");
-                let value = tail.as_ref().clone().eval(runtime);
-                runtime.env = outer;
-                Step::Done(value)
-            }
-            | Value::Thunk(Thunk(body)) => {
-                Step::Done(EnvThunk { body, env: runtime.env.clone() }.into())
-            }
-            | Value::Ctor(Ctor(ctor, arg)) => {
-                let arg = Rc::new(arg.as_ref().clone().eval(runtime));
-                Step::Done(Ctor(ctor, arg).into())
-            }
-            | Value::Triv(Triv) => Step::Done(Triv.into()),
-            | Value::VCons(items) => {
-                let items =
-                    items.into_iter().map(|item| item.as_ref().clone().eval(runtime)).collect();
-                Step::Done(SemValue::VCons(items))
-            }
-            | Value::Proj(Proj(head, position)) => {
-                let head = head.as_ref().clone().eval(runtime);
-                let SemValue::VCons(components) = head else {
-                    panic!("type-checked product projection must project a product")
-                };
-                let projected = components
-                    .get(position)
-                    .expect("type-checked product projection must have a matching component")
-                    .clone();
-                Step::Done(projected)
-            }
-            | Value::Lit(lit) => Step::Done(lit.into()),
-            | Value::SemValue(sem) => Step::Done(sem),
+    fn run_from(&mut self, mut focus: Focus) -> ProgKont {
+        loop {
+            focus = match focus {
+                | Focus::Compu(compu) => self.step_compu(compu),
+                | Focus::Return(value) => self.step_return(value),
+                | Focus::Thunk(thunk) => self.step_thunk(thunk),
+                | Focus::Done(result) => return result,
+            };
         }
     }
-}
 
-impl<'rt> Eval<'rt> for Computation {
-    type Out = ProgKont;
-
-    fn step<'e>(self, runtime: &'e mut Runtime<'rt>) -> Step<Self, Self::Out> {
-        match self {
-            | Computation::Hole(Hole) => {
-                panic!("Hole in computation")
-            }
-            | Computation::VAbs(Abs(param, body)) => match runtime.pop_stack() {
+    fn step_compu(&mut self, compu: ir::CompuId) -> Focus {
+        match &self.program.compus[compu] {
+            | ir::Computation::Hole(Hole) => panic!("Hole in computation"),
+            | ir::Computation::VAbs(Abs(param, body)) => match self.stack.pop() {
                 | Some(SemCompu::App(arg)) => {
-                    let () =
-                        Assign(param, arg).eval(runtime).expect("pattern match failed in function");
-                    Step::Step(body.as_ref().clone())
+                    self.assign_pattern(*param, &arg).expect("pattern match failed in function");
+                    Focus::Compu(*body)
                 }
                 | _ => panic!("App not at stacktop"),
             },
-            | Computation::VApp(App(body, arg)) => {
-                let arg = arg.as_ref().clone().eval(runtime);
-                runtime.stack.push_back_mut(SemCompu::App(arg));
-                Step::Step(body.as_ref().clone())
+            | ir::Computation::VApp(App(body, arg)) => {
+                let arg = self.eval_value(*arg);
+                self.stack.push(SemCompu::App(arg));
+                Focus::Compu(*body)
             }
-            | Computation::Ret(Return(v)) => {
-                let v = v.as_ref().clone().eval(runtime);
-                match runtime.pop_stack() {
-                    | Some(SemCompu::Kont(comp, env, vpat)) => {
-                        runtime.env = env;
-                        let () =
-                            Assign(vpat, v).eval(runtime).expect("pattern match failed in return");
-                        Step::Step(comp.as_ref().clone())
-                    }
-                    | None => Step::Done(ProgKont::Ret(v)),
-                    | _ => panic!("Kont not at stacktop"),
-                }
+            | ir::Computation::Ret(Return(v)) => Focus::Return(self.eval_value(*v)),
+            | ir::Computation::Force(Force(v)) => {
+                let value = self.eval_value(*v);
+                let SemValue::Thunk(ref thunk) = value else { panic!("Force on non-thunk") };
+                Focus::Thunk(Rc::clone(thunk))
             }
-            | Computation::Force(Force(v)) => {
-                let v = v.as_ref().clone().eval(runtime);
-                let SemValue::Thunk(thunk) = v else { panic!("Force on non-thunk") };
-                runtime.env = thunk.env;
-                Step::Step(thunk.body.as_ref().clone())
+            | ir::Computation::Let(Let { binder, bindee, tail }) => {
+                let bindee = self.eval_value(*bindee);
+                self.assign_pattern(*binder, &bindee).expect("pattern match failed in let");
+                Focus::Compu(*tail)
             }
-            | Computation::Let(Let { binder, bindee, tail }) => {
-                let bindee = bindee.as_ref().clone().eval(runtime);
-                let () = Assign(binder, bindee).eval(runtime).expect("pattern match failed in let");
-                Step::Step(tail.as_ref().clone())
-            }
-            | Computation::Do(Bind { binder, bindee, tail }) => {
-                runtime.stack.push_back_mut(SemCompu::Kont(tail, runtime.env.clone(), binder));
-                Step::Step(bindee.as_ref().clone())
-            }
-            | Computation::Fix(Fix(vpat, body)) => {
-                let thunk = SemValue::Thunk(EnvThunk {
-                    body: Rc::new(Fix(vpat.clone(), body.clone()).into()),
-                    env: runtime.env.clone(),
+            | ir::Computation::Do(Bind { binder, bindee, tail }) => {
+                self.stack.push(SemCompu::Kont {
+                    body: *tail,
+                    env: self.env.clone(),
+                    binder: *binder,
                 });
-                let () = Assign(vpat, thunk).eval(runtime).expect("pattern match failed in fix");
-                Step::Step(body.as_ref().clone())
+                Focus::Compu(*bindee)
             }
-            | Computation::Match(Match { scrut, arms }) => {
-                let scrut = scrut.as_ref().clone().eval(runtime);
+            | ir::Computation::Fix { param, body } => {
+                let thunk = SemValue::Thunk(Rc::new(ThunkBody::Fix {
+                    param: *param,
+                    body: *body,
+                    env: self.env.clone(),
+                }));
+                self.env.insert(*param, thunk);
+                Focus::Compu(*body)
+            }
+            | ir::Computation::Match(Match { scrut, arms }) => {
+                let scrut = self.eval_value(*scrut);
                 for Matcher { binder, tail } in arms {
-                    match Assign(binder.to_owned(), scrut.clone()).eval(runtime) {
-                        | Ok(()) => return Step::Step(tail.as_ref().clone()),
-                        | Err(()) => {}
+                    let saved = self.env.clone();
+                    if self.assign_pattern(*binder, &scrut).is_ok() {
+                        return Focus::Compu(*tail);
                     }
+                    self.env = saved;
                 }
-                Step::Done(ProgKont::Error(RuntimeError::PatternMatch))
+                Focus::Done(ProgKont::Error(RuntimeError::PatternMatch))
             }
-            | Computation::CoMatch(CoMatch { arms }) => {
-                let Some(SemCompu::Dtor(dtor)) = runtime.pop_stack() else {
+            | ir::Computation::CoMatch { arms } => {
+                let Some(SemCompu::Dtor(dtor)) = self.stack.pop() else {
                     panic!("Comatch on non-Dtor")
                 };
-                let CoMatcher { dtor: _, tail } =
-                    arms.into_iter().find(|arm| arm.dtor == dtor).expect("no matching arm");
-                Step::Step(tail.as_ref().clone())
+                let arm = arms.iter().find(|arm| arm.dtor == dtor).expect("no matching arm");
+                Focus::Compu(arm.tail)
             }
-            | Computation::Dtor(Dtor(body, dtor)) => {
-                runtime.stack.push_back_mut(SemCompu::Dtor(dtor));
-                Step::Step(body.as_ref().clone())
+            | ir::Computation::Dtor { body, tag } => {
+                self.stack.push(SemCompu::Dtor(tag.clone()));
+                Focus::Compu(*body)
             }
-            | Computation::Prim(Prim { role }) => {
-                let mut args = Vec::new();
+        }
+    }
+
+    fn step_return(&mut self, value: SemValue) -> Focus {
+        match self.stack.pop() {
+            | Some(SemCompu::Kont { body, env, binder }) => {
+                self.env = env;
+                self.assign_pattern(binder, &value).expect("pattern match failed in return");
+                Focus::Compu(body)
+            }
+            | None => Focus::Done(ProgKont::Ret(value)),
+            | _ => panic!("Kont not at stacktop"),
+        }
+    }
+
+    fn step_thunk(&mut self, thunk: Rc<ThunkBody>) -> Focus {
+        match &*thunk {
+            | ThunkBody::Core { body, env } => {
+                self.env = env.clone();
+                Focus::Compu(*body)
+            }
+            | ThunkBody::Fix { param, body, env } => {
+                let mut next_env = env.clone();
+                next_env.insert(*param, SemValue::Thunk(Rc::clone(&thunk)));
+                self.env = next_env;
+                Focus::Compu(*body)
+            }
+            | ThunkBody::Builtin(role) => {
+                let mut args = Vec::with_capacity(role.arity());
                 for _ in 0..role.arity() {
-                    let Some(SemCompu::App(arg)) = runtime.pop_stack() else {
-                        panic!("Prim on non-Dtor")
+                    let Some(SemCompu::App(arg)) = self.stack.pop() else {
+                        panic!("Prim on non-App")
                     };
                     args.push(arg);
                 }
-                match crate::builtin::BuiltinRuntime::invoke(
-                    role,
+                match BuiltinRuntime::invoke(
+                    *role,
                     args,
-                    runtime.input,
-                    runtime.output,
-                    runtime.stderr,
-                    runtime.args,
-                    &mut runtime.host,
+                    self.input,
+                    self.output,
+                    self.stderr,
+                    self.args,
+                    &mut self.host,
                 ) {
-                    | Ok(e) => Step::Step(e),
+                    | Ok(HostAction::Return(value)) => Focus::Return(value),
+                    | Ok(HostAction::Resume { continuation, arguments }) => {
+                        for arg in arguments.into_iter().rev() {
+                            self.stack.push(SemCompu::App(arg));
+                        }
+                        let SemValue::Thunk(ref cont) = continuation else {
+                            panic!("continuation must be a thunk")
+                        };
+                        Focus::Thunk(Rc::clone(cont))
+                    }
                     | Err(crate::builtin::BuiltinFailure::Exit(code)) => {
-                        Step::Done(ProgKont::ExitCode(code))
+                        Focus::Done(ProgKont::ExitCode(code))
                     }
                     | Err(crate::builtin::BuiltinFailure::Runtime(error)) => {
-                        Step::Done(ProgKont::Error(error))
+                        Focus::Done(ProgKont::Error(error))
                     }
                 }
             }
-            | Computation::Foreign(ForeignPrim { import }) => {
-                let CheckedImport::C(import) = import else {
-                    return Step::Done(ProgKont::Error(
-                        crate::foreign::ForeignRuntimeError::NativeUnit.into(),
-                    ));
-                };
-                let arguments = (0..import.signature.parameters().len())
-                    .map(|_| match runtime.pop_stack() {
-                        | Some(SemCompu::App(argument)) => argument,
-                        | _ => panic!("foreign call argument not at stack top"),
-                    })
-                    .collect();
-                match runtime.foreign.invoke(&import, arguments) {
-                    | Ok(computation) => Step::Step(computation),
-                    | Err(error) => Step::Done(ProgKont::Error(error.into())),
+            | ThunkBody::Foreign(CheckedImport::C(import)) => {
+                let mut arguments = Vec::with_capacity(import.signature.parameters().len());
+                for _ in 0..import.signature.parameters().len() {
+                    let Some(SemCompu::App(argument)) = self.stack.pop() else {
+                        panic!("foreign call argument not at stack top")
+                    };
+                    arguments.push(argument);
+                }
+                match self.foreign.invoke(import, arguments) {
+                    | Ok(value) => Focus::Return(value),
+                    | Err(error) => Focus::Done(ProgKont::Error(error.into())),
                 }
             }
+            | ThunkBody::Foreign(CheckedImport::Zydeco(_)) => {
+                Focus::Done(ProgKont::Error(crate::foreign::ForeignRuntimeError::NativeUnit.into()))
+            }
         }
+    }
+
+    fn eval_value(&mut self, value_id: ir::ValueId) -> SemValue {
+        zydeco_foundation::stack::maybe_grow(|| match &self.program.values[value_id] {
+            | ir::Value::Hole(Hole) => panic!("Hole in value"),
+            | ir::Value::Var(var) => self.env.get(*var).expect("variable does not exist").clone(),
+            | ir::Value::Let(Let { binder, bindee, tail }) => {
+                let outer = self.env.clone();
+                let bindee = self.eval_value(*bindee);
+                self.assign_pattern(*binder, &bindee).expect("pattern match failed in value let");
+                let value = self.eval_value(*tail);
+                self.env = outer;
+                value
+            }
+            | ir::Value::Thunk(Thunk(body)) => {
+                SemValue::Thunk(Rc::new(ThunkBody::Core { body: *body, env: self.env.clone() }))
+            }
+            | ir::Value::Ctor { tag, payload } => {
+                let arg = Rc::new(self.eval_value(*payload));
+                SemValue::Ctor(Ctor(tag.name, arg))
+            }
+            | ir::Value::Triv(Triv) => SemValue::Triv(Triv),
+            | ir::Value::VCons(vcons) => {
+                let items = vcons.items.iter().map(|item| self.eval_value(*item)).collect();
+                SemValue::VCons(items)
+            }
+            | ir::Value::Proj { head, steps } => {
+                let mut current = self.eval_value(*head);
+                for step in steps {
+                    let next = match &current {
+                        | SemValue::VCons(components) => components
+                            .get(step.position)
+                            .expect(
+                                "type-checked product projection must have a matching component",
+                            )
+                            .clone(),
+                        | _ => panic!("type-checked product projection must project a product"),
+                    };
+                    current = next;
+                }
+                current
+            }
+            | ir::Value::Lit(lit) => SemValue::Literal(lit.clone()),
+            | ir::Value::Foreign(import) => {
+                SemValue::Thunk(Rc::new(ThunkBody::Foreign(import.clone())))
+            }
+        })
+    }
+
+    fn assign_pattern(&mut self, vpat_id: ir::VPatId, sem: &SemValue) -> Result<(), ()> {
+        zydeco_foundation::stack::maybe_grow(|| match &self.program.vpats[vpat_id] {
+            | ir::ValuePattern::Hole(Hole) => Ok(()),
+            | ir::ValuePattern::Var(var) => {
+                self.env.insert(*var, sem.clone());
+                Ok(())
+            }
+            | ir::ValuePattern::Ctor { tag, payload, .. } => match sem {
+                | SemValue::Ctor(Ctor(found, body)) => {
+                    if tag.name != *found {
+                        return Err(());
+                    }
+                    self.assign_pattern(*payload, body)
+                }
+                | SemValue::Thunk(_)
+                | SemValue::Triv(_)
+                | SemValue::VCons(_)
+                | SemValue::Literal(_)
+                | SemValue::Host(_) => unreachable!(),
+            },
+            | ir::ValuePattern::Lit(pattern) => match sem {
+                | SemValue::Literal(found) if found == pattern => Ok(()),
+                // A value of another shape can never equal a literal, so the
+                // arm simply fails rather than reporting an impossible state.
+                | SemValue::Literal(_)
+                | SemValue::Thunk(_)
+                | SemValue::Ctor(_)
+                | SemValue::Triv(_)
+                | SemValue::VCons(_)
+                | SemValue::Host(_) => Err(()),
+            },
+            | ir::ValuePattern::Alias(Alias(patterns)) => {
+                for pattern in patterns {
+                    self.assign_pattern(*pattern, sem)?;
+                }
+                Ok(())
+            }
+            | ir::ValuePattern::Triv(Triv) => match sem {
+                | SemValue::Triv(Triv) => Ok(()),
+                | SemValue::Thunk(_)
+                | SemValue::Ctor(_)
+                | SemValue::VCons(_)
+                | SemValue::Literal(_)
+                | SemValue::Host(_) => Err(()),
+            },
+            | ir::ValuePattern::VCons(vcons) => match sem {
+                | SemValue::VCons(values) => {
+                    if vcons.items.len() != values.len() {
+                        return Err(());
+                    }
+                    for (pattern, value) in vcons.items.iter().zip(values.iter()) {
+                        self.assign_pattern(*pattern, value)?;
+                    }
+                    Ok(())
+                }
+                | SemValue::Thunk(_)
+                | SemValue::Ctor(_)
+                | SemValue::Triv(_)
+                | SemValue::Literal(_)
+                | SemValue::Host(_) => unreachable!(),
+            },
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use zydeco_ir::{CoreArena, ProductLayout, VCons as IrVCons};
+
+    #[test]
+    fn computation_and_value_roots_evaluate_directly() {
+        let mut arena = CoreArena::default();
+        let triv = arena.values.alloc(ir::Value::Triv(Triv));
+        let compu = arena.compus.alloc(ir::Computation::Ret(Return(triv)));
+
+        for root in [CoreRoot::Compu(compu), CoreRoot::Value(triv)] {
+            let program = CoreProgram::new(arena.clone(), root);
+            let mut input = std::io::empty();
+            let mut output = Vec::new();
+            let mut stderr = Vec::new();
+            let result = Runtime::new(&mut input, &mut output, &mut stderr, &[], &program).run();
+            assert!(matches!(result, ProgKont::Ret(SemValue::Triv(Triv))));
+        }
+    }
+
+    #[test]
+    fn with_packages_and_multi_arg_host_resume_deliver_arguments_in_order() {
+        // Construct:
+        // fn pkg =>
+        //   let (split_at) = pkg in
+        //   do (l, r) <- (fn (a : String) (b : String) => ret (a, b)) ... wait:
+        // Directly call str_split_once_branch on ("hi:lo", ':', none, some(a, b) => ret (a, b))
+        let mut arena = CoreArena::default();
+        let pkg_var = arena.vars.alloc(VarName::new("split_once"));
+        let pkg_pat = arena.vpats.alloc(ir::ValuePattern::Var(pkg_var));
+        let split_fn = arena.values.alloc(ir::Value::Var(pkg_var));
+
+        let a_var = arena.vars.alloc(VarName::new("a"));
+        let b_var = arena.vars.alloc(VarName::new("b"));
+        let a_pat = arena.vpats.alloc(ir::ValuePattern::Var(a_var));
+        let b_pat = arena.vpats.alloc(ir::ValuePattern::Var(b_var));
+        let a_ref = arena.values.alloc(ir::Value::Var(a_var));
+        let b_ref = arena.values.alloc(ir::Value::Var(b_var));
+        let pair = arena
+            .values
+            .alloc(ir::Value::VCons(IrVCons::new(vec![a_ref, b_ref], ProductLayout { arity: 2 })));
+        let ret_pair = arena.compus.alloc(ir::Computation::Ret(Return(pair)));
+        let lam_b = arena.compus.alloc(ir::Computation::VAbs(Abs(b_pat, ret_pair)));
+        let lam_a = arena.compus.alloc(ir::Computation::VAbs(Abs(a_pat, lam_b)));
+        let some_thk = arena.values.alloc(ir::Value::Thunk(Thunk(lam_a)));
+
+        let empty_str = arena.values.alloc(ir::Value::Lit(Literal::String("none".into())));
+        let none_ret = arena.compus.alloc(ir::Computation::Ret(Return(empty_str)));
+        let none_thk = arena.values.alloc(ir::Value::Thunk(Thunk(none_ret)));
+
+        let input_str = arena.values.alloc(ir::Value::Lit(Literal::String("hi:lo".into())));
+        let sep_char = arena.values.alloc(ir::Value::Lit(Literal::Char(':')));
+
+        let f0 = arena.compus.alloc(ir::Computation::Force(Force(split_fn)));
+        let a1 = arena.compus.alloc(ir::Computation::VApp(App(f0, input_str)));
+        let a2 = arena.compus.alloc(ir::Computation::VApp(App(a1, sep_char)));
+        let a3 = arena.compus.alloc(ir::Computation::VApp(App(a2, none_thk)));
+        let a4 = arena.compus.alloc(ir::Computation::VApp(App(a3, some_thk)));
+        let root = arena.compus.alloc(ir::Computation::VAbs(Abs(pkg_pat, a4)));
+
+        let program = CoreProgram::new(arena, CoreRoot::Compu(root));
+        let plan = BuiltinPackagePlan {
+            value: BuiltinPackageValue::Operation(BuiltinValueRole::StrSplitOnce),
+        };
+        let mut input = std::io::empty();
+        let mut output = Vec::new();
+        let mut stderr = Vec::new();
+        let result = Runtime::new(&mut input, &mut output, &mut stderr, &[], &program)
+            .with_packages(&[plan])
+            .run();
+        let ProgKont::Ret(SemValue::VCons(ref fields)) = result else { panic!("expected pair") };
+        assert!(matches!(
+            &fields[..],
+            [
+                SemValue::Literal(Literal::String(first)),
+                SemValue::Literal(Literal::String(second)),
+            ] if first.as_str() == "hi" && second.as_str() == "lo"
+        ));
+    }
+
+    #[test]
+    fn fix_tail_loop_runs_deeply_on_small_stack() {
+        std::thread::Builder::new()
+            .stack_size(512 * 1024)
+            .spawn(|| {
+                // Loop 20,000 times subtracting 1 until 0, then return 0.
+                let mut arena = CoreArena::default();
+                let _pkg_var = arena.vars.alloc(VarName::new("pkg"));
+                let sub_var = arena.vars.alloc(VarName::new("sub"));
+                let eq_var = arena.vars.alloc(VarName::new("eq"));
+                let sub_pat = arena.vpats.alloc(ir::ValuePattern::Var(sub_var));
+                let eq_pat = arena.vpats.alloc(ir::ValuePattern::Var(eq_var));
+                let pkg_pat = arena.vpats.alloc(ir::ValuePattern::VCons(IrVCons::new(
+                    vec![sub_pat, eq_pat],
+                    ProductLayout { arity: 2 },
+                )));
+
+                let rec_var = arena.vars.alloc(VarName::new("loop"));
+                let n_var = arena.vars.alloc(VarName::new("n"));
+                let n_pat = arena.vpats.alloc(ir::ValuePattern::Var(n_var));
+
+                let zero_a =
+                    arena.values.alloc(ir::Value::Lit(Literal::Integer(IntegerLiteral::Int(0))));
+                let done_ret = arena.compus.alloc(ir::Computation::Ret(Return(zero_a)));
+                let done_thk = arena.values.alloc(ir::Value::Thunk(Thunk(done_ret)));
+
+                // else branch: do n1 <- ! sub n 1; ! loop n1
+                let n_ref_sub = arena.values.alloc(ir::Value::Var(n_var));
+                let one =
+                    arena.values.alloc(ir::Value::Lit(Literal::Integer(IntegerLiteral::Int(1))));
+                let sub_ref = arena.values.alloc(ir::Value::Var(sub_var));
+                let sub_f = arena.compus.alloc(ir::Computation::Force(Force(sub_ref)));
+                let sub_1 = arena.compus.alloc(ir::Computation::VApp(App(sub_f, n_ref_sub)));
+                let sub_2 = arena.compus.alloc(ir::Computation::VApp(App(sub_1, one)));
+
+                let n1_var = arena.vars.alloc(VarName::new("n1"));
+                let n1_pat = arena.vpats.alloc(ir::ValuePattern::Var(n1_var));
+                let n1_ref = arena.values.alloc(ir::Value::Var(n1_var));
+                let rec_ref = arena.values.alloc(ir::Value::Var(rec_var));
+                let rec_f = arena.compus.alloc(ir::Computation::Force(Force(rec_ref)));
+                let rec_app = arena.compus.alloc(ir::Computation::VApp(App(rec_f, n1_ref)));
+                let else_compu = arena.compus.alloc(ir::Computation::Do(Bind {
+                    binder: n1_pat,
+                    bindee: sub_2,
+                    tail: rec_app,
+                }));
+                let else_thk = arena.values.alloc(ir::Value::Thunk(Thunk(else_compu)));
+
+                // ! eq n 0 done_thk else_thk
+                let n_ref_eq = arena.values.alloc(ir::Value::Var(n_var));
+                let zero_b =
+                    arena.values.alloc(ir::Value::Lit(Literal::Integer(IntegerLiteral::Int(0))));
+                let eq_ref = arena.values.alloc(ir::Value::Var(eq_var));
+                let eq_f = arena.compus.alloc(ir::Computation::Force(Force(eq_ref)));
+                let eq_1 = arena.compus.alloc(ir::Computation::VApp(App(eq_f, n_ref_eq)));
+                let eq_2 = arena.compus.alloc(ir::Computation::VApp(App(eq_1, zero_b)));
+                let eq_3 = arena.compus.alloc(ir::Computation::VApp(App(eq_2, done_thk)));
+                let eq_4 = arena.compus.alloc(ir::Computation::VApp(App(eq_3, else_thk)));
+                let lam_n = arena.compus.alloc(ir::Computation::VAbs(Abs(n_pat, eq_4)));
+                let fix = arena.compus.alloc(ir::Computation::Fix { param: rec_var, body: lam_n });
+                let count = arena
+                    .values
+                    .alloc(ir::Value::Lit(Literal::Integer(IntegerLiteral::Int(20_000))));
+                let app_start = arena.compus.alloc(ir::Computation::VApp(App(fix, count)));
+                let root = arena.compus.alloc(ir::Computation::VAbs(Abs(pkg_pat, app_start)));
+
+                let program = CoreProgram::new(arena, CoreRoot::Compu(root));
+                let plan = BuiltinPackagePlan {
+                    value: BuiltinPackageValue::Product(vec![
+                        BuiltinPackageValue::Operation(BuiltinValueRole::Integer(
+                            IntegerType::Int,
+                            IntegerOperation::Sub,
+                        )),
+                        BuiltinPackageValue::Operation(BuiltinValueRole::Integer(
+                            IntegerType::Int,
+                            IntegerOperation::Eq,
+                        )),
+                    ]),
+                };
+                let mut input = std::io::empty();
+                let mut output = Vec::new();
+                let mut stderr = Vec::new();
+                let result = Runtime::new(&mut input, &mut output, &mut stderr, &[], &program)
+                    .with_packages(&[plan])
+                    .run();
+                assert!(matches!(
+                    result,
+                    ProgKont::Ret(SemValue::Literal(Literal::Integer(IntegerLiteral::Int(0))))
+                ));
+            })
+            .unwrap()
+            .join()
+            .unwrap();
     }
 }

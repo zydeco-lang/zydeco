@@ -6,7 +6,7 @@
 
 use crate::syntax::*;
 use rustc_hash::FxHashMap;
-use zydeco_utils::fold::{Explicit, Folder, Step};
+use zydeco_foundation::fold::{Explicit, Folder, Step};
 
 /// A node of one phase, by sort.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

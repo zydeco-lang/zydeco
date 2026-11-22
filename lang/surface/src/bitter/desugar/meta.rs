@@ -194,11 +194,8 @@ impl DesugarFolder<'_> {
                 let patterns = CorePrelude::names()
                     .iter()
                     .map(|name| {
-                        let definition = Alloc::alloc(
-                            &mut self.builder,
-                            b::VarName((*name).into()),
-                            metadata.into(),
-                        );
+                        let definition =
+                            Alloc::alloc(&mut self.builder, b::VarName::new(name), metadata.into());
                         let pattern = Alloc::alloc(
                             &mut self.builder,
                             b::Pattern::Var(definition),
@@ -206,7 +203,7 @@ impl DesugarFolder<'_> {
                         );
                         Alloc::alloc(
                             &mut self.builder,
-                            b::ProjectionPattern(b::FieldName((*name).into()), pattern).into(),
+                            b::ProjectionPattern(b::FieldName::new(name), pattern).into(),
                             metadata.into(),
                         )
                     })

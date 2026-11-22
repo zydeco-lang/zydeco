@@ -1,6 +1,6 @@
 //! Scoped syntax construction without name lookup or analysis side effects.
 use super::syntax::*;
-use zydeco_utils::prelude::IdAllocator;
+use zydeco_foundation::prelude::IdAllocator;
 
 pub(super) struct ScopedBuilder {
     allocator: IdAllocator<ScopedScope>,

@@ -112,7 +112,7 @@ impl ValuePiInstantiation {
         if matches!(projection, ss::PackageWitnessProjection::Ignore) {
             return Ok(Vec::new());
         }
-        let shape = argument.static_shape(tycker);
+        let shape = argument.static_shape(tycker, env.skolem_scope());
         Self::projected_shape(env, tycker, projection, domain, argument, &shape)
     }
 
@@ -287,31 +287,12 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiIntroduction> {
             .tyck(tycker, Action::ana(signature.codomain.into()))?;
         let (body, codomain) = body.try_as_compu(tycker, TyckError::SortMismatch)?;
 
-        let mut iter = witnesses.iter();
-        let first = *iter.next().expect("a package telescope opens at least one witness");
-        let rest = iter.copied().collect::<Vec<_>>();
-        let input = crate::query::InternedPackPiIntro::new(
-            tycker.db, pattern, body, domain, first, rest, codomain,
-        );
-        let Some(outcome) = crate::query::pack_pi_intro_judgment(
-            tycker.db,
-            tycker.data,
-            tycker.query_site(),
-            input,
-        ) else {
-            unreachable!("pack-pi introduction judgments are query-produced")
-        };
-        tycker.statics.types_pre.insert_new(
-            outcome.sig_id,
-            ss::Fillable::Done(outcome.sig),
-            outcome.kd,
-        );
-        tycker.store_env(outcome.sig_id, &self.info);
-        outcome.sig_id.constrain_to_scope(tycker, self.info.skolem_scope())?;
-        tycker.statics.compus.insert_new(outcome.abs_id, outcome.abs);
-        tycker.statics.annotations_compu.insert_new(outcome.abs_id, outcome.sig_id);
-        tycker.statics.env_compu.insert_new(outcome.abs_id, self.info.clone());
-        Ok(TermAnnId::Compu(outcome.abs_id, outcome.sig_id))
+        let sig = ss::PackPi { domain, witnesses, codomain };
+        let kd = tycker.intrinsics.ctype;
+        let sig_id = Alloc::alloc(tycker, sig, kd, &());
+        sig_id.constrain_to_scope(tycker, self.info.skolem_scope())?;
+        let abs_id = Alloc::alloc(tycker, ss::Abs(pattern, body), sig_id, &());
+        Ok(TermAnnId::Compu(abs_id, sig_id))
     }
 }
 
@@ -325,7 +306,7 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiElimination> {
         let PackPiElimination { function, argument, signature } = &self.inner;
         let argument = self.mk(*argument).tyck(tycker, Action::ana(signature.domain.into()))?;
         let (argument, _) = argument.try_as_value(tycker, TyckError::SortMismatch)?;
-        let Some(witnesses) = argument.package_witnesses(tycker) else {
+        let Some(witnesses) = argument.package_witnesses(tycker, self.info.skolem_scope()) else {
             tycker.err(TyckError::PackageWitnessesUnavailable { package: argument })?
         };
         let codomain = self
@@ -337,20 +318,7 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiElimination> {
             | Switch::Ana(AnnId::Type(expected)) => Lub::lub(expected, codomain, tycker)?,
             | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker.err(TyckError::SortMismatch)?,
         };
-        let input = crate::query::InternedAppInput::new(
-            tycker.db,
-            crate::query::AppShape::CompuValue { function: *function, argument },
-            codomain,
-            codomain,
-        );
-        let Some(crate::query::AppSynOutcome::Compu { id, compu, ann, reported }) =
-            crate::query::app_judgment_at(tycker.db, tycker.data, tycker.query_site(), input)
-        else {
-            unreachable!("pack-pi elimination judgments are query-produced")
-        };
-        tycker.statics.compus.insert_new(id, compu);
-        tycker.statics.annotations_compu.insert_new(id, ann);
-        tycker.statics.env_compu.insert_new(id, self.info.clone());
-        Ok(TermAnnId::Compu(id, reported))
+        let id = Alloc::alloc(tycker, ss::App(*function, argument), codomain, &());
+        Ok(TermAnnId::Compu(id, codomain))
     }
 }

@@ -8,12 +8,12 @@ pub use super::{
     analyze::{Layout, Slot, SlotId},
     arena::*,
 };
+pub use zydeco_foundation::arena::*;
 pub use zydeco_syntax::*;
-pub use zydeco_utils::arena::*;
 
 use derive_more::From;
 
-zydeco_utils::new_key_type! {
+zydeco_foundation::new_key_type! {
     pub struct VarId;
     pub struct SymId;
     pub struct ProgId;
@@ -197,7 +197,7 @@ pub enum ExternMode {
 }
 
 /// Contexts are ordered sets of variables.
-pub type Context = zydeco_utils::context::Context<VarId>;
+pub type Context = zydeco_foundation::context::Context<VarId>;
 
 /// CoContexts are unordered sets of variables.
-pub type CoContext = zydeco_utils::context::CoContext<VarId>;
+pub type CoContext = zydeco_foundation::context::CoContext<VarId>;

@@ -86,7 +86,7 @@ fn traversal_observes_repeated_edges_without_reexpanding_children() {
     );
 
     arena.inner.values[&value] =
-        Ctor(CtorIdx { idx: 0, name: CtorName("loop".into()) }, value).into();
+        Ctor(CtorIdx { idx: 0, name: CtorName::new("loop") }, value).into();
     let (variables, trace) = Fixture::analyze(&arena.inner, root.into());
     assert!(variables.free_variables(root.into()).is_none());
     assert!(trace.0.contains(&Event::Enter(value.into(), Edge::Child, Occurrence::Cyclic)));
@@ -136,7 +136,7 @@ fn summaries_respect_block_entries_and_opening_scopes() {
         variables.free_variables(block.into()).unwrap().iter().copied().collect::<Vec<_>>(),
         [outer]
     );
-    let expected: zydeco_utils::context::CoContext<_> =
+    let expected: zydeco_foundation::context::CoContext<_> =
         [outer, environment, result, label].into_iter().collect();
     assert_eq!(
         variables.free_variables(body.into()).unwrap().iter().collect::<Vec<_>>(),

@@ -42,7 +42,7 @@ cargo test -p zydeco-tests --test cases -- literal-pattern/
 ```
 
 Use [source cases](lang/tests/cases/README.md) for individual language behaviors.
-Put whole-program regressions under `lib/tests/` and register them in `lang/tests/tests/`; the
+Put whole-program regressions under `lib/tests/` and register them in `lang/tests/tests/suite/`; the
 [test harness reference](docs/references/compiler/src/validation-and-extending.md#source-fixtures-and-runtime-oracles)
 explains backend coverage, I/O assertions, and source templates.
 Native tests need the [AMD64 toolchain](cli/README.md#native-executables).

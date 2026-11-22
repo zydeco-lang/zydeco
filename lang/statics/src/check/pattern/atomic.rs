@@ -129,12 +129,8 @@ impl PatternChecker<'_> {
                 .tyck(tycker, PatternAction::ana(codomain.into()).with_skolems(skolems.clone()))?;
             let (pattern, _) = nested.annotation.try_as_value(tycker, TyckError::SortMismatch)?;
             opened.extend(nested.inner.opened.iter().copied());
-            let view_pattern = Alloc::alloc(
-                tycker,
-                Box::new(ss::ViewPattern { function, pattern }),
-                domain,
-                &self.info,
-            );
+            let view_pattern =
+                Alloc::alloc(tycker, Box::new(ss::ViewPattern { function, pattern }), domain, &());
             TyEnvT::new(
                 nested.info,
                 PatternCheck::with_opened(PatAnnId::Value(view_pattern, domain), opened),
@@ -147,25 +143,14 @@ impl PatternChecker<'_> {
     ) -> Result<CheckedPattern> {
         Ok(match switch {
             | Switch::Syn => {
-                let pat = crate::query::InternedPat::new(tycker.db, self.inner);
-                let Some(outcome) = crate::query::pat_triv_syn_judgment(
-                    tycker.db,
-                    tycker.data,
-                    pat,
-                    tycker.site_occurrence(),
-                ) else {
-                    unreachable!("trivial pattern judgments are query-produced")
-                };
-                let crate::query::PatTrivSynOutcome { id, value, ty } = outcome;
-                tycker.statics.vpats.insert_new(id, value);
-                tycker.statics.annotations_vpat.insert_new(id, ty);
-                tycker.statics.env_vpat.insert_new(id, self.info.clone());
+                let ty = tycker.intrinsics.unit;
+                let id = Alloc::alloc(tycker, ss::Triv, ty, &());
                 self.mk(PatternCheck::new(PatAnnId::Value(id, ty)))
             }
             | Switch::Ana(AnnId::Type(ana)) => {
                 let unit = ss::UnitTy.build(tycker, &self.info);
                 let ann = Lub::lub(ana, unit, tycker)?;
-                let triv = Alloc::alloc(tycker, ss::Triv, ann, &self.info);
+                let triv = Alloc::alloc(tycker, ss::Triv, ann, &());
                 self.mk(PatternCheck::new(PatAnnId::Value(triv, ann)))
             }
             | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker.err(TyckError::SortMismatch)?,

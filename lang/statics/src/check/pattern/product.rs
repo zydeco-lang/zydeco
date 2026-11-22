@@ -23,7 +23,7 @@ impl ConsScope {
     }
 
     /// Check the leading components against their component types, then the
-    /// tail against the product of the remaining component types.
+    /// tail against the final component type.
     fn check_value_components(
         &mut self, tycker: &mut Tycker<'_>, items: &[su::PatId], tail: su::PatId,
         component_tys: &[ss::TypeId], skolems: &PatternSkolems,
@@ -37,7 +37,7 @@ impl ConsScope {
                 self.check_value(tycker, item, action)
             })
             .collect::<Result<Vec<_>>>()?;
-        let remaining = tycker.rest_product(&component_tys[items.len()..], &self.env)?;
+        let remaining = component_tys[items.len()];
         let action = PatternAction::ana(remaining.into()).with_skolems(skolems.clone());
         let tail = self.check_value(tycker, tail, action)?;
         Ok((components, tail))
@@ -45,8 +45,8 @@ impl ConsScope {
 
     /// Check the value components of a package pattern against its body type.
     ///
-    /// A lone tail component takes the whole body; several components split
-    /// the body as a product.
+    /// A lone tail component takes the whole body; several components match a
+    /// product of the exact same arity.
     fn check_package_body(
         &mut self, tycker: &mut Tycker<'_>, body_items: &[su::PatId], tail: su::PatId,
         body_ty: ss::TypeId, skolems: &PatternSkolems,
@@ -57,14 +57,20 @@ impl ConsScope {
             return Ok(body);
         }
         let ss::Prod(body_component_tys) = body_ty.view_product(tycker, &self.env)?;
+        if body_component_tys.len() != body_items.len() + 1 {
+            tycker.err(TyckError::TypeExpected {
+                expected: "a product with matching components".to_string(),
+                found: body_ty,
+            })?
+        }
         let (components, (tail, ann)) =
             self.check_value_components(tycker, body_items, tail, &body_component_tys, skolems)?;
         let vtype = ss::VType.build(tycker, &self.env);
         let (mut components, mut component_tys): (Vec<_>, Vec<_>) = components.into_iter().unzip();
         component_tys.push(ann);
-        let ann = Alloc::alloc(tycker, ss::Prod(component_tys), vtype, &self.env);
+        let ann = Alloc::alloc(tycker, ss::Prod(component_tys), vtype, &());
         components.push(tail);
-        Ok(Alloc::alloc(tycker, ss::ValuePattern::VCons(components), ann, &self.env))
+        Ok(Alloc::alloc(tycker, ss::ValuePattern::VCons(components), ann, &()))
     }
 }
 
@@ -141,7 +147,7 @@ impl PackageOpening {
         tycker.transfer_builtin_role(source_binder.witness, skolem)?;
         tycker.statics.existential_skolems.ensure(skolem);
         self.scope.env = self.scope.env.clone().with_skolem(skolem);
-        let abstract_ty = Alloc::alloc(tycker, skolem, payload_kind, &self.scope.env);
+        let abstract_ty = Alloc::alloc(tycker, skolem, payload_kind, &());
         let full_witness = source_binder.pattern.introduce_payload(tycker, abstract_ty);
         let full_witness = full_witness?;
         self.scope.env = TyEnvT::new(self.scope.env.clone(), Assign(pattern, full_witness))
@@ -240,36 +246,19 @@ impl PatternChecker<'_> {
         Ok(self.finish_product_pattern(tycker, scope, components, tail))
     }
 
-    /// Record a product pattern through the cons judgment.
+    /// Record a product pattern.
     fn finish_product_pattern(
         &self, tycker: &mut Tycker<'_>, scope: ConsScope,
         components: Vec<(ss::VPatId, ss::TypeId)>, tail: (ss::VPatId, ss::TypeId),
     ) -> CheckedPattern {
         let ConsScope { env: pattern_env, opened } = scope;
-        let item_outcomes =
-            components.into_iter().map(|(vpat, ty)| PatAnnId::Value(vpat, ty)).collect::<Vec<_>>();
-        let items_interned = crate::query::InternedPatItems::new(tycker.db, item_outcomes);
-        let (tail, tail_annotation) = tail;
-        let tail_interned =
-            crate::query::InternedPatAnn::new(tycker.db, PatAnnId::Value(tail, tail_annotation));
-        let outcome = tycker.judge(
-            self.inner,
-            (items_interned, tail_interned),
-            |db, data, pat, (items, tail), occurrence| {
-                crate::query::pat_cons_syn_judgment(db, data, pat, items, tail, occurrence)
-            },
-        );
-        for (id, prod) in outcome.prods {
-            tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(prod), outcome.vtype);
-            tycker.store_env(id, &pattern_env);
-        }
-        tycker.statics.vpats.insert_new(outcome.pat_id, outcome.pat);
-        tycker.statics.annotations_vpat.insert_new(outcome.pat_id, outcome.ann);
-        tycker.statics.env_vpat.insert_new(outcome.pat_id, self.info.clone());
-        TyEnvT::new(
-            pattern_env,
-            PatternCheck::with_opened(PatAnnId::Value(outcome.pat_id, outcome.ann), opened),
-        )
+        let (tail_pat, tail_ty) = tail;
+        let (mut pats, mut tys): (Vec<_>, Vec<_>) = components.into_iter().unzip();
+        pats.push(tail_pat);
+        tys.push(tail_ty);
+        let ann = Alloc::alloc(tycker, ss::Prod(tys), tycker.intrinsics.vtype, &());
+        let pat_id = Alloc::alloc(tycker, ss::ValuePattern::VCons(pats), ann, &());
+        TyEnvT::new(pattern_env, PatternCheck::with_opened(PatAnnId::Value(pat_id, ann), opened))
     }
 
     /// Check a package pattern against an existential or manifest-kind
@@ -319,7 +308,7 @@ impl PatternChecker<'_> {
             &skolems,
         )?;
         let PackageOpening { scope, static_patterns, boundary_opened } = opening;
-        let cons = Alloc::alloc(tycker, ss::ConsN(static_patterns, body), expected, &self.info);
+        let cons = Alloc::alloc(tycker, ss::ConsN(static_patterns, body), expected, &());
         if boundary_opened > 0 {
             tycker.statics.package_pattern_opened_arity.insert_new(cons, boundary_opened);
         }

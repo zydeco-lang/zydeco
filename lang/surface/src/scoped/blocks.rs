@@ -3,8 +3,8 @@ use crate::{
     bitter::syntax::{self as b, Term},
     scoped::{syntax::*, *},
 };
-use zydeco_utils::err::{CollectReported, Report, ReportedError};
-use zydeco_utils::prelude::IdAllocator;
+use zydeco_foundation::err::{CollectReported, Report, ReportedError};
+use zydeco_foundation::prelude::IdAllocator;
 type FoldResult<T> = std::result::Result<T, ReportedError>;
 
 /// One syntactic contribution discovered within a `begin` boundary.
@@ -273,7 +273,7 @@ impl BlockScope {
                 binder
                     .binders(&resolver.bitter)
                     .iter()
-                    .map(|(name, definition)| (name.clone(), *definition, site))
+                    .map(|(name, definition)| (*name, *definition, site))
                     .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();
@@ -282,8 +282,8 @@ impl BlockScope {
         for (name, definition, site) in projected {
             if let Some(previous) = binders.get(&name) {
                 resolver.report(ResolveError::DuplicateDefinition(
-                    previous.span(resolver).make(name.clone()),
-                    definition.span(resolver).make(name.clone()),
+                    previous.span(resolver).make(name),
+                    definition.span(resolver).make(name),
                 ));
                 rejected = true;
             } else {
@@ -295,8 +295,7 @@ impl BlockScope {
             return Err(ReportedError);
         }
         local.boundary = Some(block);
-        local =
-            local.bind_group(binders.iter().map(|(name, definition)| (name.clone(), *definition)));
+        local = local.bind_group(binders.iter().map(|(name, definition)| (*name, *definition)));
         Ok(Self { local })
     }
 }

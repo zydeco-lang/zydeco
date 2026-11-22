@@ -239,28 +239,25 @@ impl<'a, P: DebugArena> Pretty<'a, Formatter<'a, P>> for Hole {
 
 impl<'a, P: DebugArena> Pretty<'a, Formatter<'a, P>> for VarName {
     fn pretty(&self, _f: &'a Formatter<'a, P>) -> RcDoc<'a> {
-        let VarName(name) = self;
-        RcDoc::text(name.clone())
+        RcDoc::text(self.as_str())
     }
 }
 
 impl<'a, P: DebugArena> Pretty<'a, Formatter<'a, P>> for FieldName {
     fn pretty(&self, _f: &'a Formatter<'a, P>) -> RcDoc<'a> {
-        RcDoc::text(self.plain())
+        RcDoc::text(self.plain_str())
     }
 }
 
 impl<'a, P: DebugArena> Pretty<'a, Formatter<'a, P>> for CtorName {
     fn pretty(&self, _f: &'a Formatter<'a, P>) -> RcDoc<'a> {
-        let CtorName(name) = self;
-        RcDoc::text(name.clone())
+        RcDoc::text(self.as_str())
     }
 }
 
 impl<'a, P: DebugArena> Pretty<'a, Formatter<'a, P>> for DtorName {
     fn pretty(&self, _f: &'a Formatter<'a, P>) -> RcDoc<'a> {
-        let DtorName(name) = self;
-        RcDoc::text(name.clone())
+        RcDoc::text(self.as_str())
     }
 }
 

@@ -9,11 +9,11 @@ impl Fixture {
     }
 
     fn tag() -> CtorIdx {
-        CtorIdx { idx: 0, name: CtorName("known".into()) }
+        CtorIdx { idx: 0, name: CtorName::new("known") }
     }
 
     fn other() -> CtorIdx {
-        CtorIdx { idx: 1, name: CtorName("other".into()) }
+        CtorIdx { idx: 1, name: CtorName::new("other") }
     }
 }
 

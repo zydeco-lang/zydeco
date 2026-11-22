@@ -10,17 +10,17 @@ use std::{
     sync::Arc,
 };
 use thiserror::Error;
+use zydeco_foundation::arena::ArenaAccess;
 use zydeco_statics::{
     CheckedSource, RejectedSource, TyckDiagnostics, TyckObservation,
     arena::StaticsArena,
-    syntax::{Fillable, PackPi, TermAnnId, Type},
+    syntax::{Fillable, TermAnnId, Type},
 };
 use zydeco_surface::{
     bitter::DesugarErrors,
     scoped::{ResolveErrors, arena::ScopedArena},
     textual::syntax::SpanArena,
 };
-use zydeco_utils::arena::ArenaAccess;
 
 mod completion;
 pub use completion::{CompletionAnalysis, CompletionError, CompletionSemantics};
@@ -121,11 +121,8 @@ pub struct CheckedProgram {
 /// One checked computation with the host Builtin package contract validated.
 #[derive(Clone)]
 pub struct ExecutableProgram {
-    pub spans: Arc<SpanArena>,
-    pub scoped: Arc<ScopedArena>,
-    pub statics: Arc<StaticsArena>,
-    pub root: zydeco_statics::syntax::CompuId,
-    pub signature: PackPi,
+    pub core: Arc<zydeco_ir::CoreProgram>,
+    pub builtin: zydeco_ir::BuiltinPackagePlan,
 }
 
 /// The source provenance and checked entries of an independently compiled library.
@@ -146,7 +143,9 @@ pub struct UnitProgram {
 #[derive(Clone, Debug, Error)]
 pub enum ExecutableError {
     #[error(transparent)]
-    Hole(#[from] zydeco_statics::validate::ExecutableHoles),
+    Hole(#[from] zydeco_ir::validate::ExecutableHoles),
+    #[error(transparent)]
+    Builtin(#[from] zydeco_statics::BuiltinPackagePlanError),
     #[error("cannot execute a program rejected during type checking")]
     Rejected,
     #[error("the analysis could not be re-materialized")]
@@ -254,21 +253,33 @@ trait SourceQueryDb: salsa::Database + zydeco_statics::query::TyckDb {
 
 /// Long-lived source inputs and memoized compiler queries.
 #[salsa::db]
-#[derive(Clone)]
 pub struct CompilerSession {
     storage: Storage<Self>,
-    derived_ids: std::sync::Arc<zydeco_statics::DerivedIdRegistry>,
+    generated_def_spaces: std::sync::Arc<
+        zydeco_foundation::arena::KeySpaceRegistry<zydeco_statics::surface_syntax::TermId>,
+    >,
     files: DashMap<PathBuf, SourceInput>,
     pending: std::sync::Arc<
         std::sync::Mutex<Option<std::sync::Arc<zydeco_statics::query::PendingParts>>>,
     >,
 }
 
+impl Clone for CompilerSession {
+    fn clone(&self) -> Self {
+        Self {
+            storage: self.storage.clone(),
+            generated_def_spaces: self.generated_def_spaces.clone(),
+            files: self.files.clone(),
+            pending: std::sync::Arc::new(std::sync::Mutex::new(None)),
+        }
+    }
+}
+
 impl Default for CompilerSession {
     fn default() -> Self {
         Self {
             storage: Storage::default(),
-            derived_ids: Default::default(),
+            generated_def_spaces: Default::default(),
             files: DashMap::new(),
             pending: std::sync::Arc::new(std::sync::Mutex::new(None)),
         }
@@ -280,8 +291,12 @@ impl salsa::Database for CompilerSession {}
 
 #[salsa::db]
 impl zydeco_statics::query::TyckDb for CompilerSession {
-    fn derived_ids(&self) -> &std::sync::Arc<zydeco_statics::DerivedIdRegistry> {
-        &self.derived_ids
+    fn generated_def_spaces(
+        &self,
+    ) -> &std::sync::Arc<
+        zydeco_foundation::arena::KeySpaceRegistry<zydeco_statics::surface_syntax::TermId>,
+    > {
+        &self.generated_def_spaces
     }
 
     fn pending_parts(
@@ -426,6 +441,11 @@ impl CompilerSession {
         self.clone()
     }
 
+    /// Reclaim evicted LRU query memos, such as stale full-arena checks.
+    pub fn evict_lru(&mut self) {
+        salsa::Database::trigger_lru_eviction(self);
+    }
+
     /// Install or replace an editor overlay without changing the disk input.
     pub fn set_overlay(
         &mut self, path: impl AsRef<Path>, text: String,
@@ -439,6 +459,7 @@ impl CompilerSession {
         });
         if input.overlay(self).as_ref() != Some(&text) {
             input.set_overlay(self).to(Some(text));
+            salsa::Database::trigger_lru_eviction(self);
         }
         Ok(())
     }
@@ -456,6 +477,7 @@ impl CompilerSession {
         };
         if input.disk_text(self) != disk_text {
             input.set_disk_text(self).to(disk_text);
+            salsa::Database::trigger_lru_eviction(self);
         }
         Ok(())
     }
@@ -463,14 +485,20 @@ impl CompilerSession {
     /// Remove an editor overlay and refresh the underlying disk text.
     pub fn clear_overlay(&mut self, path: impl AsRef<Path>) -> Result<(), SourceLoadError> {
         let canonical = Self::path_identity(path.as_ref())?;
+        let mut changed = false;
         if let Some(input) = self.files.get(&canonical).map(|entry| *entry) {
             let disk_text = super::prelude::DefaultPrelude::read(&canonical).ok();
             if input.disk_text(self) != disk_text {
                 input.set_disk_text(self).to(disk_text);
+                changed = true;
             }
             if input.overlay(self).is_some() {
                 input.set_overlay(self).to(None);
+                changed = true;
             }
+        }
+        if changed {
+            salsa::Database::trigger_lru_eviction(self);
         }
         Ok(())
     }
@@ -530,7 +558,7 @@ impl CompilerSession {
         let root = self
             .source_input(analysis.root_path().to_path_buf())
             .map_err(|_| ExecutableError::Materialize)?;
-        let (spans, zydeco_statics::query::TyckOutput { scoped, outcome }) =
+        let (_, zydeco_statics::query::TyckOutput { scoped, outcome }) =
             rechecked(self, root, analysis.package.clone(), analysis.project.clone())
                 .map_err(|_| ExecutableError::Materialize)?;
         let (root, statics) = match outcome {
@@ -541,14 +569,23 @@ impl CompilerSession {
                 return Err(ExecutableError::Rejected);
             }
         };
-        zydeco_statics::validate::ExecutionReadiness::check(&statics, root)?;
-        let TermAnnId::Compu(root, ty) = root else {
+        if let Some(core) = &statics.core {
+            zydeco_ir::validate::ExecutionReadiness::check(core)?;
+        }
+        let TermAnnId::Compu(_, ty) = root else {
             return Err(ExecutableError::NonComputation { found: root.into() });
         };
         let Fillable::Done(Type::PackPi(signature)) = statics.types_pre[&ty].clone() else {
             return Err(ExecutableError::non_builtin(&scoped, &statics, ty));
         };
-        Ok(ExecutableProgram { spans, scoped, statics, root, signature: *signature })
+        let core = statics
+            .core
+            .as_ref()
+            .expect("checked computation root must carry a CoreProgram")
+            .clone();
+        let builtin =
+            zydeco_statics::BuiltinPackagePlanner::new(&statics).for_executable(&signature)?;
+        Ok(ExecutableProgram { core, builtin })
     }
 
     pub fn library_program(
@@ -844,7 +881,7 @@ fn fill_solution_at<'db>(
     db: &'db dyn SourceQueryDb, root: SourceInput, fill: zydeco_statics::query::InternedFill<'db>,
 ) -> Option<zydeco_statics::syntax::AnnId> {
     let analysis = analyze_source(db, root, None, Arc::default()).ok()?;
-    analysis.statics().solus.get(&fill.id(db)).copied()
+    analysis.statics().solus.get(fill.id(db)).copied()
 }
 
 /// The type annotation recorded for a scoped definition.
@@ -1084,7 +1121,7 @@ mod tests {
         // The session re-materializes the payload from the memoized check.
         let program = session.checked_program(&analysis).expect("checked program");
         assert!(!program.statics.types_pre.is_empty());
-        assert!(program.statics.compus.len() > 0);
+        assert!(!program.statics.compus.is_empty());
     }
 
     #[derive(Debug, PartialEq, Eq)]
@@ -1098,10 +1135,10 @@ mod tests {
     impl IdentitySnapshot {
         fn new(arena: &zydeco_statics::StaticsArena) -> Self {
             Self {
-                kinds: arena.kinds_pre.iter().map(|(id, _)| *id).collect(),
+                kinds: arena.kinds_pre.iter().map(|(id, _)| id).collect(),
                 types: arena.types_pre.iter().map(|(id, _)| id).collect(),
-                values: arena.values.iter().map(|(id, _)| *id).collect(),
-                compus: arena.compus.iter().map(|(id, _)| *id).collect(),
+                values: arena.values.iter().map(|(id, _)| id).collect(),
+                compus: arena.compus.iter().map(|(id, _)| id).collect(),
             }
         }
     }
@@ -1119,7 +1156,7 @@ mod tests {
         salsa::Database::trigger_lru_eviction(&mut session);
 
         let cloned = session.clone();
-        assert!(Arc::ptr_eq(&session.derived_ids, &cloned.derived_ids));
+        assert!(Arc::ptr_eq(&session.generated_def_spaces, &cloned.generated_def_spaces));
         let after = cloned.checked_program(&analysis).unwrap();
         assert!(
             !Arc::ptr_eq(&before.statics, &after.statics),
@@ -1131,13 +1168,14 @@ mod tests {
 
     #[test]
     fn independent_sessions_separate_identical_source_ids_and_release_their_registries() {
+        use zydeco_foundation::arena::IdAllocator;
         use zydeco_surface::scoped::{arena::ScopedScope, syntax as su};
-        use zydeco_utils::arena::{ArenaAccess, IdAllocator};
         let root = IdAllocator::<ScopedScope>::new().alloc();
         let mut scoped = su::ScopedArena::default();
         scoped.terms.insert_new(root, su::Triv.into());
         let session = CompilerSession::default();
-        let weak = Arc::downgrade(&session.derived_ids);
+        let weak = Arc::downgrade(&session.generated_def_spaces);
+        let before_space = session.generated_def_spaces.intern(root);
         let cloned = session.clone();
         let before = session
             .check_resolved(su::SpanArena::default(), scoped.clone(), root)
@@ -1150,17 +1188,18 @@ mod tests {
         assert!(weak.upgrade().is_none(), "published arenas do not retain the registry");
 
         let replacement = CompilerSession::default();
-        let after = replacement
+        let after_space = replacement.generated_def_spaces.intern(root);
+        let _after = replacement
             .check_resolved(su::SpanArena::default(), scoped, root)
             .outcome
             .into_result()
             .unwrap();
-        assert_ne!(before.root, after.root, "new sessions never recycle prior derived IDs");
+        assert_ne!(before_space, after_space, "new sessions never recycle prior key spaces");
         let zydeco_statics::TermAnnId::Value(value, _) = before.root else {
             panic!("expected a unit value")
         };
         assert!(
-            before.statics.values.get(&value).is_some(),
+            before.statics.values.get(value).is_some(),
             "old arenas remain usable after their registry is dropped"
         );
     }

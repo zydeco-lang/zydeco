@@ -1,7 +1,7 @@
 use super::syntax::*;
 use crate::bitter::arena::TextualOrigins;
 use zydeco_derive::{AsMutSelf, AsRefSelf};
-use zydeco_utils::prelude::{DepGraph, Kosaraju, SccGraph};
+use zydeco_foundation::prelude::{DepGraph, SccGraph, Tarjan};
 
 pub use crate::arena::*;
 
@@ -46,7 +46,7 @@ impl BindingContext {
         mut allocator: IdAllocator<ScopedScope>, mut bindings: ArenaAssoc<BindingId, Binding>,
         dependencies: DepGraph<BindingId>,
     ) -> Self {
-        let mut components = Kosaraju::new(&dependencies).run();
+        let mut components = Tarjan::new(&dependencies).run();
         let mut ready = Vec::new();
         let groups = std::iter::from_fn(|| {
             if let Some(group) = ready.pop() {
@@ -105,7 +105,7 @@ impl BindingContext {
                 .filter(|dependency| *dependency != node);
             node_dependencies.add(node, deps);
         });
-        let graph = Kosaraju::new(&node_dependencies).run();
+        let graph = Tarjan::new(&node_dependencies).run();
         Self { nodes, graph, dependencies }
     }
 

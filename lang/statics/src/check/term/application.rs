@@ -14,13 +14,11 @@ impl TermChecker<'_> {
         // a site of its own, so the core applications it produces stay distinct.
         let head = earlier.iter().try_fold(head, |head, argument| {
             tycker.guarded(|tycker| {
-                tycker.tasks.push_back_mut(TyckTask::Term(self.inner, Switch::Syn));
-                tycker.enter_site(su::EntityId::Term(self.inner));
+                tycker.tasks.push(TyckTask::Term(self.inner, Switch::Syn));
                 let result = self.check_app_argument(tycker, head, *argument, Switch::Syn, None);
                 if let Ok(out_ann) = result {
                     self.record_layer_source(tycker, out_ann);
                 }
-                tycker.allocator.exit();
                 result
             })
         })?;
@@ -89,20 +87,8 @@ impl TermChecker<'_> {
             | Switch::Ana(AnnId::Type(expected)) => Lub::lub(expected, result, tycker)?,
             | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker.err(TyckError::SortMismatch)?,
         };
-        let input = crate::query::InternedAppInput::new(
-            tycker.db,
-            crate::query::AppShape::Value { function, argument },
-            result,
-            result,
-        );
-        let outcome = tycker.judge(self.inner, input, crate::query::app_judgment);
-        let crate::query::AppSynOutcome::Value { id, value, ann, reported } = outcome else {
-            unreachable!("value applications are query-produced")
-        };
-        tycker.statics.values.insert_new(id, value);
-        tycker.statics.annotations_value.insert_new(id, ann);
-        tycker.statics.env_value.insert_new(id, self.info.clone());
-        Ok(TermAnnId::Value(id, reported))
+        let id = Alloc::alloc(tycker, ss::Value::ValApp(ss::App(function, argument)), result, &());
+        Ok(TermAnnId::Value(id, result))
     }
 
     /// Check a value-function argument against the classifier's binder and
@@ -179,8 +165,8 @@ impl TermChecker<'_> {
             | Switch::Ana(AnnId::Type(ty_ana)) => Lub::lub(ty_ana, ty_out, tycker)?,
             | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker.err(TyckError::SortMismatch)?,
         };
-        let shape = crate::query::AppShape::CompuValue { function: f_out, argument: a_out };
-        Ok(self.record_compu_app(tycker, shape, ty_out, ty_out))
+        let id = Alloc::alloc(tycker, ss::Computation::VApp(ss::App(f_out, a_out)), ty_out, &());
+        Ok(TermAnnId::Compu(id, ty_out))
     }
 
     /// A type-polymorphic term application.
@@ -199,24 +185,8 @@ impl TermChecker<'_> {
             | Switch::Ana(AnnId::Type(ty_ana)) => Lub::lub(ty_ana, body_ty_subst, tycker)?,
             | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker.err(TyckError::SortMismatch)?,
         };
-        let shape = crate::query::AppShape::CompuType { function: f_out, argument: a_ty };
-        Ok(self.record_compu_app(tycker, shape, ty_out, body_ty_subst))
-    }
-
-    /// Record a computation application through the application judgment.
-    fn record_compu_app(
-        &self, tycker: &mut Tycker<'_>, shape: crate::query::AppShape, ann: ss::TypeId,
-        reported: ss::TypeId,
-    ) -> TermAnnId {
-        let input = crate::query::InternedAppInput::new(tycker.db, shape, ann, reported);
-        let outcome = tycker.judge(self.inner, input, crate::query::app_judgment);
-        let crate::query::AppSynOutcome::Compu { id, compu, ann, reported } = outcome else {
-            unreachable!("computation applications are query-produced")
-        };
-        tycker.statics.compus.insert_new(id, compu);
-        tycker.statics.annotations_compu.insert_new(id, ann);
-        tycker.statics.env_compu.insert_new(id, self.info.clone());
-        TermAnnId::Compu(id, reported)
+        let id = Alloc::alloc(tycker, ss::Computation::TApp(ss::App(f_out, a_ty)), ty_out, &());
+        Ok(TermAnnId::Compu(id, body_ty_subst))
     }
 
     pub(super) fn check_fix<'db>(
@@ -253,12 +223,9 @@ impl TermChecker<'_> {
                 .tyck(tycker, Action::ana(binder_ty.into()))?;
             let (body_out, fix_ty) = body_out_ann.try_as_compu(tycker, TyckError::SortMismatch)?;
             binder_elaboration.close_scope(tycker, fix_ty)?;
-            let input = crate::query::InternedFixInput::new(tycker.db, binder, body_out, fix_ty);
-            let outcome = tycker.judge(self.inner, input, crate::query::fix_judgment);
-            tycker.statics.compus.insert_new(outcome.id, outcome.compu);
-            tycker.statics.annotations_compu.insert_new(outcome.id, outcome.ann);
-            tycker.statics.env_compu.insert_new(outcome.id, self.info.clone());
-            TermAnnId::Compu(outcome.id, outcome.ann)
+            let id =
+                Alloc::alloc(tycker, ss::Computation::Fix(ss::Fix(binder, body_out)), fix_ty, &());
+            TermAnnId::Compu(id, fix_ty)
         })
     }
 }

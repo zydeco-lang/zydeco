@@ -2,14 +2,14 @@ use super::*;
 use crate::{
     SpsScheme,
     high::check::{FragmentError, FragmentProgram},
+    ir,
     protocol::{StackProtocol, ValueProtocol},
 };
-use zydeco_statics::{arena::StaticsScope, syntax as ss};
-use zydeco_utils::prelude::IdAllocator;
+use zydeco_foundation::dense::DenseId;
 
 struct Fixture {
     arena: SpsArena,
-    sites: IdAllocator<StaticsScope>,
+    next_site: usize,
 }
 
 /// The nodes of a consumer that carry evidence a copy must keep.
@@ -21,17 +21,25 @@ struct Evidence {
 
 impl Fixture {
     fn new() -> Self {
-        Self { arena: SpsArena::default(), sites: IdAllocator::new() }
+        Self { arena: SpsArena::default(), next_site: 0 }
     }
 
     fn def(&mut self, name: &str) -> DefId {
         let def = self.arena.admin.fresh_def();
-        self.arena.admin.insert_def(def, VarName(name.into()));
+        self.arena.admin.insert_def(def, VarName::new(name));
         def
     }
 
-    fn term(&mut self) -> Option<ss::TermId> {
-        Some(ss::TermId::Value(self.sites.alloc()))
+    fn term(&mut self) -> Option<ir::TermId> {
+        let site = ir::ValueId::from_index(self.next_site);
+        self.next_site += 1;
+        Some(ir::TermId::Value(site))
+    }
+
+    fn pat(&mut self) -> Option<ir::VPatId> {
+        let site = ir::VPatId::from_index(self.next_site);
+        self.next_site += 1;
+        Some(site)
     }
 
     /// `arg(v) :: tag(d) :: kont x -> let f = { • -> • @ x } in f ! •`, with sites,
@@ -46,7 +54,7 @@ impl Fixture {
         let thunk = ValueProtocol::Thunk(Box::default());
         self.arena.inner.value_protocols.insert_new(closure, thunk);
         self.arena.inner.builtin_functions.insert_new(closure, BuiltinValueRole::Exit);
-        let site = Some(ss::PatId::Value(self.sites.alloc()));
+        let site = self.pat();
         let binder = ValuePattern::Var(f).build(&mut self.arena, site);
         self.arena.inner.pattern_protocols.insert_new(binder, ValueProtocol::Unit);
         let thunk = Value::Var(f).build(&mut self.arena, None);
@@ -58,7 +66,7 @@ impl Fixture {
         self.arena.inner.compu_protocols.insert_new(body, protocol);
         let result = ValuePattern::Var(x).build(&mut self.arena, None);
         let kont = Kont { binder: result, body }.build(&mut self.arena, None);
-        let tag = DtorIdx { idx: 0, name: DtorName("d".into()) };
+        let tag = DtorIdx { idx: 0, name: DtorName::new("d") };
         let tagged = Cons(tag, kont).build(&mut self.arena, None);
         let site = self.term();
         let argument = Value::Var(v).build(&mut self.arena, site);
@@ -81,20 +89,13 @@ impl Fixture {
     }
 
     fn render(&self, stack: StackId) -> String {
-        let scoped = zydeco_surface::scoped::arena::ScopedArena::default();
-        let statics = zydeco_statics::arena::StaticsArena::default();
-        let formatter = crate::high::fmt::Formatter::new(
-            &self.arena.admin,
-            &self.arena.inner,
-            &scoped,
-            &statics,
-        );
+        let formatter = crate::high::fmt::Formatter::new(&self.arena.admin, &self.arena.inner);
         stack.ugly(&formatter)
     }
 
     /// `case C() | C(_) -> h ! first | C(_) -> h ! second end` under the duplicating scheme.
     fn branch(mut self, first: StackId, second: StackId) -> Result<FragmentProgram, FragmentError> {
-        let tag = CtorIdx { idx: 0, name: CtorName("C".into()) };
+        let tag = CtorIdx { idx: 0, name: CtorName::new("C") };
         let payload = Triv.build(&mut self.arena, None);
         let scrut = Ctor(tag.clone(), payload).build(&mut self.arena, None);
         let h = self.def("h");

@@ -21,7 +21,7 @@ impl Folder for FreshenFolder<'_> {
     }
 
     fn fold_def(&mut self, id: DefId) -> Result<DefId, Self::Error> {
-        let name = self.builder.arena.defs[&id].clone();
+        let name = self.builder.arena.defs[&id];
         let origin = self.builder.arena.origins.source(&id.into()).unwrap();
         Ok(Alloc::alloc(self.builder, name, origin))
     }

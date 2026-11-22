@@ -28,9 +28,9 @@ impl Fixture {
     }
 
     pub(in crate::low::convert) fn convert(
-        source: &high::SpsArena, root: high::CompuId, scoped: &ScopedArena, statics: &StaticsArena,
+        source: &high::SpsArena, root: high::CompuId,
     ) -> SpsLowProgram {
-        SpsLowConverter { scoped, statics }.run_infallible(Self::input(source, root))
+        SpsLowConverter.run_infallible(Self::input(source, root))
     }
 
     fn returning(arena: &mut high::SpsArena) -> high::CompuId {
@@ -56,8 +56,9 @@ fn conversion_preserves_empty_and_wide_children() {
                 let stack = StackVar.build(&mut arena, None);
                 let tail = SReturn { stack, value }.build(&mut arena, None);
                 let payload: high::VPatId = Hole.build(&mut arena, None);
-                let binder = Ctor(CtorIdx { idx, name: CtorName(format!("+Arm{idx}")) }, payload)
-                    .build(&mut arena, None);
+                let binder =
+                    Ctor(CtorIdx { idx, name: CtorName::new(format!("+Arm{idx}")) }, payload)
+                        .build(&mut arena, None);
                 Matcher { binder, tail }
             })
             .collect();
@@ -66,16 +67,16 @@ fn conversion_preserves_empty_and_wide_children() {
         let bindee = StackVar.build(&mut arena, None);
         let branch = Let { binder: StackVar, bindee, tail }.build(&mut arena, None);
         let mut coarms = vec![CoMatcher {
-            dtor: Cons(DtorIdx { idx: 0, name: DtorName("branch".into()) }, StackVar),
+            dtor: Cons(DtorIdx { idx: 0, name: DtorName::new("branch") }, StackVar),
             tail: branch,
         }];
         coarms.extend((1..count).map(|idx| CoMatcher {
-            dtor: Cons(DtorIdx { idx, name: DtorName(format!("method{idx}")) }, StackVar),
+            dtor: Cons(DtorIdx { idx, name: DtorName::new(format!("method{idx}")) }, StackVar),
             tail: Fixture::returning(&mut arena),
         }));
         let scrut = StackVar.build(&mut arena, None);
         let root = SCoMatch { scrut, arms: coarms }.build(&mut arena, None);
-        Fixture::convert(&arena, root, &ScopedArena::default(), &StaticsArena::default());
+        Fixture::convert(&arena, root);
     }
 }
 
@@ -96,7 +97,7 @@ fn conversion_preserves_comparison_operands_successors_and_shared_stack() {
     let body = Fixture::returning(&mut arena);
     let bindee = Kont { binder, body }.build(&mut arena, None);
     let root = Let { binder: StackVar, bindee, tail }.build(&mut arena, None);
-    let output = Fixture::convert(&arena, root, &ScopedArena::default(), &StaticsArena::default());
+    let output = Fixture::convert(&arena, root);
     let low::Computation::LetStack(low::LetStack { tail, .. }) =
         output.arena().inner.compus[&output.root()]
     else {
@@ -108,11 +109,11 @@ fn conversion_preserves_comparison_operands_successors_and_shared_stack() {
 
 #[test]
 fn conversion_preserves_origins_and_partial_protocols() {
+    use zydeco_foundation::dense::DenseId;
     let mut arena = high::SpsArena::default();
-    let mut origins = IdAllocator::<zydeco_statics::arena::StaticsScope>::new();
-    let value_site = ss::TermId::Value(origins.alloc());
-    let body_site = ss::TermId::Compu(origins.alloc());
-    let closure_site = ss::TermId::Value(origins.alloc());
+    let value_site = crate::ir::TermId::Value(crate::ir::ValueId::from_index(0));
+    let body_site = crate::ir::TermId::Compu(crate::ir::CompuId::from_index(0));
+    let closure_site = crate::ir::TermId::Value(crate::ir::ValueId::from_index(1));
     let unit = Triv.build(&mut arena, Some(value_site));
     arena.inner.value_protocols.insert_new(unit, ValueProtocol::Unit);
     let stack = StackVar.build(&mut arena, None);
@@ -125,7 +126,7 @@ fn conversion_preserves_origins_and_partial_protocols() {
         .insert_new(closure, ValueProtocol::Thunk(Box::new(protocol.clone())));
     let stack = StackVar.build(&mut arena, None);
     let root = SReturn { stack, value: closure }.build(&mut arena, None);
-    let output = Fixture::convert(&arena, root, &ScopedArena::default(), &StaticsArena::default());
+    let output = Fixture::convert(&arena, root);
     assert_eq!(output.arena().inner.entry_protocols.len(), 1);
     assert!(
         output
@@ -162,9 +163,7 @@ fn deep_conversion_reconstructs_and_drops_without_native_recursion() {
         let program =
             FragmentProgram::try_new(high::SpsProgram::new(arena, root), SpsScheme::BranchJoin)
                 .unwrap();
-        let scoped = ScopedArena::default();
-        let statics = StaticsArena::default();
-        let mut conversion = ClosureConversion::new(program, &scoped, &statics);
+        let mut conversion = ClosureConversion::new(program);
         ConversionFolder::new(&mut conversion).run(root);
         assert_eq!(conversion.arena.inner.compus.len(), 4096 * 3 + 2);
         assert_eq!(conversion.arena.inner.values.len(), 4096 * 5 + 2);
@@ -180,9 +179,7 @@ fn deep_conversion_reconstructs_and_drops_without_native_recursion() {
         let program =
             FragmentProgram::try_new(high::SpsProgram::new(arena, root), SpsScheme::BranchJoin)
                 .unwrap();
-        let scoped = ScopedArena::default();
-        let statics = StaticsArena::default();
-        let mut conversion = ClosureConversion::new(program, &scoped, &statics);
+        let mut conversion = ClosureConversion::new(program);
         ConversionFolder::new(&mut conversion).run(root);
         assert_eq!(conversion.arena.inner.stacks.len(), 16385);
         assert_eq!(conversion.arena.inner.values.len(), 16384);

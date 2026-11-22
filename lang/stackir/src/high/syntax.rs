@@ -6,7 +6,7 @@ pub use crate::syntax::*;
 use crate::syntax as common;
 use derive_more::From;
 
-zydeco_utils::new_key_type! {
+zydeco_foundation::new_key_type! {
     pub struct VPatId;
     pub struct ValueId;
     pub struct CompuId;

@@ -109,17 +109,18 @@ so an ARM host must pass `--target-arch x86-64`.
 Build and runtime directories default to `build/` and `runtime/` relative to the working directory.
 
 Native linking copies runtime sources into the build directory, writes the compiler's embedded model
-to `build/machine/`, and invokes Cargo, which may fetch dependencies.
+to `build/machine/`, caches optimized `rustc` builds of `zydeco-machine` and `zydeco-runtime`
+under `ZYDECO_RUNTIME_CACHE_DIR` (or the system temporary cache directory) with zero external crate dependencies,
+and links the generated archive against them.
 Keep runtime edits in the source directory and rebuild the compiler after model changes.
 Custom manifests inherit `zydeco-machine` through workspace dependencies,
 following [runtime/Cargo.toml](../runtime/Cargo.toml).
 See the [shared model contract](../DESIGN.md#shared-rust-runtime-model) for compatibility checks.
 
-Executable builds use the runtime's dev profile; compiled-library support uses release mode, PIC, and aborting panics.
-Set `CARGO_PROFILE_DEV_OPT_LEVEL=3` for optimized-runtime experiments and record the other profile settings.
-Keep `lto = "off"` in custom runtime profiles to retain exports referenced by generated assembly.
-Set `CARGO_NET_OFFLINE=true` to include nested runtime builds in an offline run.
-The `native_model` integration target checks default and release runtime linking and execution.
+Cached runtime compilation uses optimization level 2, single codegen-unit emission,
+PIC relocation, aborting panics, and `lto = "off"` to preserve exports referenced
+by generated assembly while linking warm executables directly through `rustc`.
+The `native_model` module of `suite` checks cached and release runtime linking and execution.
 
 ### WebAssembly
 
@@ -264,5 +265,5 @@ Validate selection and execution with:
 ```sh
 cargo test -p zydeco-assembly --lib
 cargo test -p zydeco-cli --test representation
-cargo test -p zydeco-tests --test representation_policies
+cargo test -p zydeco-tests --test suite -- representation_policies::
 ```

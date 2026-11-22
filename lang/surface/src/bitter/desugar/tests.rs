@@ -85,7 +85,7 @@ fn partial_actions_apply_to_cached_payloads_without_marking_nested_headers() {
         SourceUnitDesugarer { spans: &parser.spans, textual: &parser.arena }.run(unit).unwrap();
     for (pattern, value) in parser.arena.pats.iter() {
         let t::Pattern::Var(definition) = value else { continue };
-        let name = &parser.arena.defs[definition].0;
+        let name = parser.arena.defs[definition].as_str();
         assert_eq!(result.arena.partial_binders.contains(pattern), name == "x", "{name}");
     }
     let errors = Fixture::errors("@[partial] 1");
@@ -145,7 +145,7 @@ fn prelude_is_exactly_one_projection_with_precise_origins() {
         SourceUnitDesugarer { spans: &parser.spans, textual: &parser.arena }.run(unit).unwrap();
     let b::Term::Let(binding) = &result.arena.terms[&result.root] else { panic!() };
     let b::Let { binder, bindee, tail } = **binding;
-    assert!(matches!(&result.arena.terms[&bindee], b::Term::Var(name) if name.0 == "view"));
+    assert!(matches!(&result.arena.terms[&bindee], b::Term::Var(name) if name == "view"));
     let origin = result.arena.origins.source(&bindee.into()).unwrap();
     assert_eq!(&source[parser.spans[&origin].range()], "view");
     let origin = result.arena.origins.source(&tail.into()).unwrap();
@@ -160,11 +160,11 @@ fn prelude_is_exactly_one_projection_with_precise_origins() {
                 panic!()
             };
             let b::Pattern::Var(definition) = result.arena.pats[inner] else { panic!() };
-            assert_eq!(field.0, result.arena.defs[&definition].0);
+            assert_eq!(field.as_str(), result.arena.defs[&definition].as_str());
             let origin = result.arena.origins.source(&definition.into()).unwrap();
             assert!(matches!(origin, t::EntityId::Meta(_)));
             assert_eq!(&source[parser.spans[&origin].range()], "prelude(from(view))");
-            field.0.as_str()
+            field.as_str()
         })
         .collect::<Vec<_>>();
     assert_eq!(

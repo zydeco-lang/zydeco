@@ -1,7 +1,7 @@
 use super::*;
 use crate::high::syntax::*;
 use std::cell::Cell;
-use zydeco_utils::pass::{Identity, PassFailureCause};
+use zydeco_foundation::pass::{Identity, PassFailureCause};
 
 struct Fixture;
 
@@ -10,7 +10,7 @@ impl Fixture {
         let mut arena = SpsArena::default();
         let value = if open {
             let def = arena.admin.fresh_def();
-            arena.admin.insert_def(def, VarName("free".into()));
+            arena.admin.insert_def(def, VarName::new("free"));
             def.build(&mut arena, None)
         } else {
             Triv.build(&mut arena, None)
@@ -79,26 +79,21 @@ fn malformed_passes_options_and_nested_presets_are_rejected() {
 
 #[test]
 fn one_plan_instantiates_independent_observed_runs_with_borrowed_output() {
-    let scoped = ScopedArena::default();
-    let statics = StaticsArena::default();
     let plan = "normalize,normalize".parse::<SpsPlan>().unwrap();
     for _ in 0..2 {
         let mut output = Vec::new();
         let mut observer = SpsObserver {
-            scoped: &scoped,
-            statics: &statics,
             inspection: SpsInspection { trace: true, verify: true, dump: true },
             output: &mut output,
         };
         let observed =
             plan.instantiate_observed(&mut observer).run(Fixture::program(false)).unwrap();
-        let direct =
-            zydeco_utils::pipeline![Normalizer, Normalizer].run_infallible(Fixture::program(false));
+        let direct = zydeco_foundation::pipeline![Normalizer, Normalizer]
+            .run_infallible(Fixture::program(false));
         let format = |program: &FragmentProgram| {
             let program = program.as_program();
             let arena = program.arena();
-            let formatter =
-                crate::high::fmt::Formatter::new(&arena.admin, &arena.inner, &scoped, &statics);
+            let formatter = crate::high::fmt::Formatter::new(&arena.admin, &arena.inner);
             program.pretty(&formatter).pretty(100).to_string()
         };
         assert_eq!(format(&observed), format(&direct));
@@ -115,11 +110,7 @@ fn one_plan_instantiates_independent_observed_runs_with_borrowed_output() {
 
 #[test]
 fn verification_identifies_the_stage_that_introduced_an_open_root() {
-    let scoped = ScopedArena::default();
-    let statics = StaticsArena::default();
     let mut observer = SpsObserver {
-        scoped: &scoped,
-        statics: &statics,
         inspection: SpsInspection { verify: true, ..Default::default() },
         output: Vec::new(),
     };
@@ -158,11 +149,7 @@ fn inspection_output_failures_stop_before_transformation() {
             Ok(())
         }
     }
-    let scoped = ScopedArena::default();
-    let statics = StaticsArena::default();
     let mut observer = SpsObserver {
-        scoped: &scoped,
-        statics: &statics,
         inspection: SpsInspection { trace: true, ..Default::default() },
         output: BrokenWriter,
     };

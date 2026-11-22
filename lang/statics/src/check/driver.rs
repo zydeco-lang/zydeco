@@ -16,10 +16,10 @@ impl<'a> Tycker<'a> {
     ) -> Self {
         let mut statics = StaticsArena::default();
         statics.reserve(scoped);
-        let intrinsics = IntrinsicStatics::new(db, data, &mut statics);
+        let intrinsics = IntrinsicStatics::new(&mut statics);
         let source_contexts = TermContexts::collect(scoped, data.root(db));
         Self {
-            allocator: DerivedAllocator::new(db.derived_ids().clone(), data.root(db)),
+            allocator: DefGenAllocator::new(db.generated_def_spaces(), data.root(db)),
             db,
             data,
             spans,
@@ -27,23 +27,90 @@ impl<'a> Tycker<'a> {
             source_contexts,
             statics,
             intrinsics,
-            tasks: rpds::VectorSync::new_sync(),
-            check_counts: ArenaAssoc::default(),
+            tasks: Vec::new(),
+            visited_terms: Default::default(),
+            kind_bindings: Default::default(),
+            type_bindings: Default::default(),
             settled_pattern_annotations: ArenaAssoc::default(),
             checked_terms: CheckedTermRepository::default(),
-            metas: rpds::VectorSync::new_sync(),
+            fill_trail: Vec::new(),
+            fill_depth: 0,
+            solus_epoch: 0,
+            lub_cache: Default::default(),
+            metas: Vec::new(),
             field_materializations: DeferredEnvMaterializationCache::default(),
             completion: None,
             lub_probe: None,
             errors: Vec::new(),
             observations: Vec::new(),
             monadic_families: Default::default(),
+            monadic_memo: None,
             pending_foreign_imports: Vec::new(),
         }
     }
 
     pub(crate) fn invalidate_field_materializations(&mut self) {
         self.field_materializations.clear();
+        self.lub_cache.clear();
+    }
+
+    pub(crate) fn begin_fill_transaction(&mut self) -> usize {
+        self.fill_depth += 1;
+        self.fill_trail.len()
+    }
+
+    pub(crate) fn commit_fill_transaction(&mut self, _checkpoint: usize) {
+        self.fill_depth -= 1;
+        if self.fill_depth == 0 {
+            self.fill_trail.clear();
+        }
+    }
+
+    pub(crate) fn rollback_fill_transaction(&mut self, checkpoint: usize) {
+        self.fill_depth -= 1;
+        while self.fill_trail.len() > checkpoint {
+            match self.fill_trail.pop().expect("trail length exceeded checkpoint") {
+                | FillUndo::Solus { id, prev } => {
+                    match prev {
+                        | Some(ann) => {
+                            let _ = self.statics.solus.upsert(id, ann);
+                        }
+                        | None => {
+                            let _ = self.statics.solus.remove(id);
+                        }
+                    }
+                    self.solus_epoch = self.solus_epoch.wrapping_add(1);
+                    self.invalidate_field_materializations();
+                }
+                | FillUndo::FillScope { id, prev } => match prev {
+                    | Some(scope) => {
+                        let _ = self.statics.fill_scopes.upsert(id, scope);
+                    }
+                    | None => {
+                        let _ = self.statics.fill_scopes.remove(id);
+                    }
+                },
+            }
+        }
+        if self.fill_depth == 0 {
+            self.fill_trail.clear();
+        }
+    }
+
+    pub(crate) fn record_solution(&mut self, id: FillId, solution: AnnId) {
+        let prev = self.statics.solus.upsert(id, solution);
+        if self.fill_depth > 0 {
+            self.fill_trail.push(FillUndo::Solus { id, prev });
+        }
+        self.solus_epoch = self.solus_epoch.wrapping_add(1);
+        self.invalidate_field_materializations();
+    }
+
+    pub(crate) fn record_fill_scope(&mut self, id: FillId, scope: SkolemScope) {
+        let prev = self.statics.fill_scopes.upsert(id, scope);
+        if self.fill_depth > 0 {
+            self.fill_trail.push(FillUndo::FillScope { id, prev });
+        }
     }
 
     pub(super) fn record_seal(&mut self, witness: ss::AbstId, definition: ss::TypeId) {
@@ -94,33 +161,6 @@ impl<'a> Tycker<'a> {
         self.source_contexts.at(term)
     }
 
-    /// Reserve an occurrence before entering its local allocation frame.
-    pub(super) fn enter_site(&mut self, entity: su::EntityId) {
-        let occurrence = self.check_counts.get(&entity).copied().unwrap_or(0);
-        let next = occurrence.checked_add(1).expect("checking occurrence range exhausted");
-        self.allocator.enter(entity, occurrence);
-        let _ = self.check_counts.upsert(entity, next);
-    }
-
-    /// The occurrence of the innermost allocation site, carried by the
-    /// checker's allocator. Producer queries key their identifiers on it so
-    /// re-checked entities derive distinct ids.
-    pub fn site_occurrence(&self) -> u32 {
-        self.allocator.occurrence()
-    }
-
-    /// Derive one identifier in the producer allocation family without
-    /// retaining a salsa query solely to own that identifier.
-    pub(super) fn query_derived_id<Id: ArenaId>(&self, slot: u32) -> Id {
-        derived_id(self.allocator.query_key_space(), slot)
-    }
-
-    /// The innermost allocation site as a salsa key, for queries of auxiliary
-    /// entities that allocate at the enclosing entity's site.
-    pub fn query_site(&self) -> crate::query::InternedSite<'a> {
-        crate::query::InternedSite::new(self.db, self.allocator.query_key_space())
-    }
-
     /// Consume the checker and retain the typed identity of a complete source term.
     pub fn check_source(
         self, root: su::TermId,
@@ -156,9 +196,9 @@ impl<'a> Tycker<'a> {
         self.normalize_and_validate()
     }
 
-    pub(crate) fn elaborate_static_root(&mut self, root: TermAnnId) -> Result<()> {
-        let elaboration = crate::elaborate::static_values::StaticElaborator::run(self, root)?;
-        self.statics.static_elaboration = Some(elaboration);
+    pub fn elaborate_static_root(&mut self, root: TermAnnId) -> Result<()> {
+        let core = crate::elaborate::static_values::StaticElaborator::run(self, root)?;
+        self.statics.core = core.map(std::sync::Arc::new);
         Ok(())
     }
 
@@ -174,12 +214,12 @@ impl<'a> Tycker<'a> {
     /// phase.
     pub(crate) fn normalize_and_validate(&mut self) -> Result<()> {
         let mut normalizer = crate::normalize::FilledNormalizer::default();
-        let kind_ids: Vec<_> = self.statics.kinds_pre.iter().map(|(id, _)| *id).collect();
+        let kind_ids: Vec<_> = self.statics.kinds_pre.ids().collect();
         let kinds = kind_ids
             .into_iter()
             .map(|id| normalizer.normalize_kind(id, self).map(|_| ()))
             .collect_reported::<()>();
-        let type_ids: Vec<_> = self.statics.types_pre.iter().map(|(id, _)| id).collect();
+        let type_ids: Vec<_> = self.statics.types_pre.ids().collect();
         let types = type_ids
             .into_iter()
             .map(|id| normalizer.normalize_type(id, self).map(|_| ()))
@@ -195,7 +235,7 @@ impl<'a> Tycker<'a> {
             self.statics.coverage_errors = coverage.clone();
             self.errors.extend(coverage.into_iter().map(|error| TyckErrorEntry {
                 error: TyckError::Coverage(error),
-                stack: rpds::VectorSync::new_sync(),
+                stack: std::sync::Arc::from([]),
             }));
         }
         if !self.errors.is_empty() {
@@ -204,29 +244,10 @@ impl<'a> Tycker<'a> {
         Ok(())
     }
 
-    /// Intern one typing environment into the arena's environment cache and
-    /// record it as the environment of one type node.
-    pub(crate) fn store_env(&mut self, id: TypeId, env: &TyEnv) {
-        let env = self.statics.intern_env(env);
-        self.statics.env_type.insert_new(id, env);
-    }
-
-    /// Drop the checker-internal typing environments from the finished arena.
-    ///
-    /// Environments are consumed entirely by the checking phases: judgment
-    /// synthesis, hole resolution, and normalization. No downstream pass and no
-    /// editor query reads them, but they are the largest retained structure in a
-    /// standard-library-sized arena, so they are stripped before the outcome
-    /// leaves the checker.
+    /// Release construction-only checker indexes before the outcome leaves the
+    /// checker.
     pub(crate) fn strip_checker_state(&mut self) {
         self.statics.types_pre.strip_kind_index();
-        self.statics.env_kpat = Default::default();
-        self.statics.env_tpat = Default::default();
-        self.statics.env_type = Default::default();
-        self.statics.env_interner = Default::default();
-        self.statics.env_vpat = Default::default();
-        self.statics.env_value = Default::default();
-        self.statics.env_compu = Default::default();
     }
 
     pub(crate) fn error_diagnostics(&self) -> TyckDiagnostics {
@@ -282,7 +303,7 @@ impl<'a> Tycker<'a> {
     /// Resolve all holes with solutions (including nested ones).
     #[inline]
     pub fn do_resolve_holes(&mut self) {
-        let type_ids: Vec<_> = self.statics.types_pre.iter().map(|(id, _)| id.to_owned()).collect();
+        let type_ids: Vec<_> = self.statics.types_pre.ids().collect();
         let mut resolver = crate::normalize::HoleResolver::default();
         for id in type_ids {
             let solu = match resolver.resolve(id, self) {
@@ -301,7 +322,7 @@ impl<'a> Tycker<'a> {
         }
     }
     pub(super) fn collect_hole_solutions(&mut self) {
-        self.observations.extend(self.statics.fill_hints.iter().map(|(id, ())| {
+        self.observations.extend(self.statics.fill_hints.iter().map(|id| {
             TyckObservation::HoleSolution {
                 site: self.statics.fills[id],
                 solution: self.statics.solus.get(id).copied(),
@@ -319,9 +340,9 @@ mod impl_tycker {
         /// do all administrative work before and after calling the function.
         #[inline]
         pub(crate) fn guarded<R>(&mut self, with: impl FnOnce(&mut Self) -> R) -> R {
-            let stack = self.tasks.clone();
-            let res = with(self);
-            self.tasks = stack;
+            let depth = self.tasks.len();
+            let res = zydeco_foundation::stack::maybe_grow(|| with(self));
+            self.tasks.truncate(depth);
             res
         }
 
@@ -334,7 +355,7 @@ mod impl_tycker {
         #[inline]
         pub(crate) fn source_guarded<R>(&mut self, with: impl FnOnce(&mut Self) -> R) -> R {
             let stack = std::mem::take(&mut self.tasks);
-            let res = with(self);
+            let res = zydeco_foundation::stack::maybe_grow(|| with(self));
             self.tasks = stack;
             res
         }
@@ -359,7 +380,7 @@ mod impl_tycker {
         /// Record `error` in the context of the current checking tasks.
         #[inline]
         fn report(&mut self, error: TyckError) -> ReportedError {
-            let stack = self.tasks.clone();
+            let stack = std::sync::Arc::from(self.tasks.as_slice());
             self.errors.push(TyckErrorEntry { error, stack });
             ReportedError
         }

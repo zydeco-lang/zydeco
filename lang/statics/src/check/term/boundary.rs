@@ -60,7 +60,7 @@ impl TermChecker<'_> {
                     inference.close(tycker)?;
                     Ok(checked)
                 })?;
-                tycker.tasks.push_back_mut(TyckTask::Term(term, Switch::Syn));
+                tycker.tasks.push(TyckTask::Term(term, Switch::Syn));
                 checked.require_complete(tycker, TyckError::MissingAnnotation)
             })?;
             checked.reconcile(tycker, switch)?
@@ -80,7 +80,7 @@ impl TermChecker<'_> {
                     inference.close(tycker)?;
                     Ok(checked)
                 })?;
-                tycker.tasks.push_back_mut(TyckTask::Term(term, Switch::Syn));
+                tycker.tasks.push(TyckTask::Term(term, Switch::Syn));
                 match checked.root() {
                     | TermAnnId::Type(_, _) => Ok(checked),
                     | TermAnnId::Hole(_)

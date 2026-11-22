@@ -1,47 +1,44 @@
 use super::*;
-use zydeco_statics::arena::StaticsScope;
-use zydeco_utils::prelude::IdAllocator;
+use crate::{
+    ir::{BuiltinPackageValue, CoreArena, CoreProgram, CoreRoot, syntax as ir},
+    protocol::ValueProtocol,
+};
+use zydeco_foundation::dense::DenseId;
 
 struct Fixture {
-    allocator: IdAllocator<StaticsScope>,
-    statics: StaticsArena,
+    core: CoreArena,
 }
 
 impl Fixture {
     fn new() -> Self {
-        Self { allocator: IdAllocator::new(), statics: StaticsArena::default() }
+        Self { core: CoreArena::default() }
     }
 
-    fn value(&mut self, value: impl Into<ss::Value>) -> ss::ValueId {
-        let id = self.allocator.alloc();
-        self.statics.values.insert_new(id, value.into());
-        id
+    fn value(&mut self, value: impl Into<ir::Value>) -> ir::ValueId {
+        self.core.values.alloc(value.into())
     }
 
-    fn pattern(&mut self, pattern: impl Into<ss::ValuePattern>) -> ss::VPatId {
-        let id = self.allocator.alloc();
-        self.statics.vpats.insert_new(id, pattern.into());
-        id
+    fn pattern(&mut self, pattern: ir::ValuePattern) -> ir::VPatId {
+        self.core.vpats.alloc(pattern)
     }
 
-    fn computation(&mut self, computation: impl Into<ss::Computation>) -> ss::CompuId {
-        let id = self.allocator.alloc();
-        self.statics.compus.insert_new(id, computation.into());
-        id
+    fn computation(&mut self, computation: ir::Computation) -> ir::CompuId {
+        self.core.compus.alloc(computation)
     }
 
-    fn ty(&mut self, ty: ss::Type) -> ss::TypeId {
-        let id = self.allocator.alloc();
-        let kind = self.allocator.alloc();
-        self.statics.types_pre.insert_new(id, ss::Fillable::Done(ty), kind);
-        id
+    fn dummy_program() -> CoreProgram {
+        let mut core = CoreArena::default();
+        let hole = core.compus.alloc(ir::Computation::Hole(Hole));
+        CoreProgram::new(core, CoreRoot::Compu(hole))
     }
 
-    fn lower(&self, root: ss::CompuId) -> FragmentProgram {
-        let scoped = ScopedArena::default();
-        RootLowerer { scoped: &scoped, statics: &self.statics, scheme: SpsScheme::BranchJoin }
-            .run(root)
-            .unwrap()
+    fn into_program(self, root: ir::CompuId) -> CoreProgram {
+        CoreProgram::new(self.core, CoreRoot::Compu(root))
+    }
+
+    fn lower(self, root: ir::CompuId) -> FragmentProgram {
+        let program = self.into_program(root);
+        RootLowerer { scheme: SpsScheme::BranchJoin }.run_infallible(&program)
     }
 
     // Construct and destroy the fixtures on the same small stack. This isolates
@@ -54,16 +51,26 @@ impl Fixture {
 #[test]
 fn only_structural_payloads_use_direct_constructor_arms() {
     let mut fixture = Fixture::new();
-    let hole = fixture.pattern(Hole);
-    let product = fixture.pattern(ss::ValuePattern::VCons(vec![hole, hole]));
-    let direct = fixture.pattern(Ctor(CtorName("+Outer".into()), product));
-    let nested = fixture.pattern(Ctor(CtorName("+Outer".into()), direct));
-    let nested_product = fixture.pattern(ss::ValuePattern::VCons(vec![hole, direct]));
-    let alias = fixture.pattern(Alias(ConsN::from_vec(vec![direct, hole]).unwrap()));
-    let literal = fixture.pattern(ss::Literal::Integer(IntegerLiteral::Int(0)));
-    let literal_payload = fixture.pattern(Ctor(CtorName("+Outer".into()), literal));
-    let scoped = ScopedArena::default();
-    let lowerer = Lowerer::new(&scoped, &fixture.statics, SpsScheme::BranchJoin);
+    let data = fixture.core.datas.alloc(vec![CtorName::new("+Outer")]);
+    let tag = CtorIdx { idx: 0, name: CtorName::new("+Outer") };
+    let hole = fixture.pattern(ir::ValuePattern::Hole(Hole));
+    let product = fixture
+        .pattern(ir::ValuePattern::VCons(VCons::new(vec![hole, hole], ProductLayout { arity: 2 })));
+    let direct =
+        fixture.pattern(ir::ValuePattern::Ctor { data, tag: tag.clone(), payload: product });
+    let nested =
+        fixture.pattern(ir::ValuePattern::Ctor { data, tag: tag.clone(), payload: direct });
+    let nested_product = fixture.pattern(ir::ValuePattern::VCons(VCons::new(
+        vec![hole, direct],
+        ProductLayout { arity: 2 },
+    )));
+    let alias = fixture
+        .pattern(ir::ValuePattern::Alias(Alias(ConsN::from_vec(vec![direct, hole]).unwrap())));
+    let literal =
+        fixture.pattern(ir::ValuePattern::Lit(ir::Literal::Integer(IntegerLiteral::Int(0))));
+    let literal_payload = fixture.pattern(ir::ValuePattern::Ctor { data, tag, payload: literal });
+    let program = fixture.into_program(ir::CompuId::from_index(0));
+    let lowerer = Lowerer::new(&program, SpsScheme::BranchJoin);
 
     for pattern in [hole, product] {
         assert!(!lowerer.pattern_needs_match_plan(pattern));
@@ -80,25 +87,31 @@ fn only_structural_payloads_use_direct_constructor_arms() {
 #[test]
 fn mixed_reconstruction_and_ordered_match_plans_lower_to_a_valid_fragment() {
     let mut fixture = Fixture::new();
-    let unit = fixture.value(Triv);
-    let hole = fixture.pattern(Hole);
-    let bindee = fixture.value(Let { binder: hole, bindee: unit, tail: unit });
-    let returned = fixture.computation(Return(unit));
-    let scrut = fixture.value(ss::Literal::Integer(IntegerLiteral::Int(0)));
+    let unit = fixture.value(ir::Value::Triv(Triv));
+    let hole = fixture.pattern(ir::ValuePattern::Hole(Hole));
+    let bindee = fixture.value(ir::Value::Let(Let { binder: hole, bindee: unit, tail: unit }));
+    let returned = fixture.computation(ir::Computation::Ret(ir::Return(unit)));
+    let scrut = fixture.value(ir::Value::Lit(ir::Literal::Integer(IntegerLiteral::Int(0))));
     let mut root = returned;
     for index in 0..12 {
-        root = fixture.computation(Let { binder: hole, bindee, tail: root });
-        root = fixture.computation(Bind { binder: hole, bindee: returned, tail: root });
-        root = fixture.computation(Abs(hole, root));
-        root = fixture.computation(App(root, unit));
-        let thunk = fixture.value(Thunk(root));
-        root = fixture.computation(Force(thunk));
-        let literal = fixture.pattern(ss::Literal::Integer(IntegerLiteral::Int(index)));
-        let binder = fixture.pattern(Alias(ConsN::from_vec(vec![literal, hole]).unwrap()));
-        root = fixture.computation(Match {
+        root = fixture.computation(ir::Computation::Let(Let { binder: hole, bindee, tail: root }));
+        root = fixture.computation(ir::Computation::Do(ir::Bind {
+            binder: hole,
+            bindee: returned,
+            tail: root,
+        }));
+        root = fixture.computation(ir::Computation::VAbs(Abs(hole, root)));
+        root = fixture.computation(ir::Computation::VApp(App(root, unit)));
+        let thunk = fixture.value(ir::Value::Thunk(Thunk(root)));
+        root = fixture.computation(ir::Computation::Force(ir::Force(thunk)));
+        let literal = fixture
+            .pattern(ir::ValuePattern::Lit(ir::Literal::Integer(IntegerLiteral::Int(index))));
+        let binder = fixture
+            .pattern(ir::ValuePattern::Alias(Alias(ConsN::from_vec(vec![literal, hole]).unwrap())));
+        root = fixture.computation(ir::Computation::Match(ir::Match {
             scrut,
             arms: vec![Matcher { binder, tail: root }, Matcher { binder: hole, tail: returned }],
-        });
+        }));
     }
     fixture.lower(root);
 }
@@ -107,21 +120,29 @@ fn mixed_reconstruction_and_ordered_match_plans_lower_to_a_valid_fragment() {
 fn deeply_nested_computations_and_thunks_lower_on_a_small_stack() {
     Fixture::small_stack(|| {
         let mut fixture = Fixture::new();
-        let unit = fixture.value(Triv);
-        let hole = fixture.pattern(Hole);
-        let returned = fixture.computation(Return(unit));
+        let unit = fixture.value(ir::Value::Triv(Triv));
+        let hole = fixture.pattern(ir::ValuePattern::Hole(Hole));
+        let returned = fixture.computation(ir::Computation::Ret(ir::Return(unit)));
         let mut root = returned;
         for _ in 0..4096 {
-            root = fixture.computation(Let { binder: hole, bindee: unit, tail: root });
-            root = fixture.computation(Bind { binder: hole, bindee: returned, tail: root });
-            root = fixture.computation(Abs(hole, root));
-            root = fixture.computation(App(root, unit));
-            let thunk = fixture.value(Thunk(root));
-            root = fixture.computation(Force(thunk));
-            root = fixture.computation(Match {
+            root = fixture.computation(ir::Computation::Let(Let {
+                binder: hole,
+                bindee: unit,
+                tail: root,
+            }));
+            root = fixture.computation(ir::Computation::Do(ir::Bind {
+                binder: hole,
+                bindee: returned,
+                tail: root,
+            }));
+            root = fixture.computation(ir::Computation::VAbs(Abs(hole, root)));
+            root = fixture.computation(ir::Computation::VApp(App(root, unit)));
+            let thunk = fixture.value(ir::Value::Thunk(Thunk(root)));
+            root = fixture.computation(ir::Computation::Force(ir::Force(thunk)));
+            root = fixture.computation(ir::Computation::Match(ir::Match {
                 scrut: unit,
                 arms: vec![Matcher { binder: hole, tail: root }],
-            });
+            }));
         }
         let program = fixture.lower(root);
         let arena = &program.as_program().arena().inner;
@@ -136,16 +157,19 @@ fn deeply_nested_computations_and_thunks_lower_on_a_small_stack() {
 fn deeply_nested_values_and_structural_patterns_lower_on_a_small_stack() {
     Fixture::small_stack(|| {
         let mut fixture = Fixture::new();
-        let unit = fixture.value(Triv);
-        let hole = fixture.pattern(Hole);
+        let unit = fixture.value(ir::Value::Triv(Triv));
+        let hole = fixture.pattern(ir::ValuePattern::Hole(Hole));
         let mut value = unit;
         let mut pattern = hole;
         for _ in 0..8192 {
-            value = fixture.value(Let { binder: hole, bindee: unit, tail: value });
-            pattern = fixture.pattern(Alias(ConsN::from_vec(vec![pattern, hole]).unwrap()));
+            value = fixture.value(ir::Value::Let(Let { binder: hole, bindee: unit, tail: value }));
+            pattern = fixture.pattern(ir::ValuePattern::Alias(Alias(
+                ConsN::from_vec(vec![pattern, hole]).unwrap(),
+            )));
         }
-        let tail = fixture.computation(Return(unit));
-        let root = fixture.computation(Let { binder: pattern, bindee: value, tail });
+        let tail = fixture.computation(ir::Computation::Ret(ir::Return(unit)));
+        let root =
+            fixture.computation(ir::Computation::Let(Let { binder: pattern, bindee: value, tail }));
         let program = fixture.lower(root);
         let arena = &program.as_program().arena().inner;
         assert_eq!(arena.compus.len(), 8192 + 2);
@@ -158,17 +182,19 @@ fn deeply_nested_values_and_structural_patterns_lower_on_a_small_stack() {
 fn long_literal_fallthrough_chains_preserve_row_order_on_a_small_stack() {
     Fixture::small_stack(|| {
         let mut fixture = Fixture::new();
-        let scrut = fixture.value(ss::Literal::Integer(IntegerLiteral::Int(-1)));
-        let unit = fixture.value(Triv);
-        let tail = fixture.computation(Return(unit));
+        let scrut = fixture.value(ir::Value::Lit(ir::Literal::Integer(IntegerLiteral::Int(-1))));
+        let unit = fixture.value(ir::Value::Triv(Triv));
+        let tail = fixture.computation(ir::Computation::Ret(ir::Return(unit)));
         let mut arms = (0..4096)
             .map(|index| {
-                let binder = fixture.pattern(ss::Literal::Integer(IntegerLiteral::Int(index)));
+                let binder = fixture.pattern(ir::ValuePattern::Lit(ir::Literal::Integer(
+                    IntegerLiteral::Int(index),
+                )));
                 Matcher { binder, tail }
             })
             .collect::<Vec<_>>();
-        arms.push(Matcher { binder: fixture.pattern(Hole), tail });
-        let root = fixture.computation(Match { scrut, arms });
+        arms.push(Matcher { binder: fixture.pattern(ir::ValuePattern::Hole(Hole)), tail });
+        let root = fixture.computation(ir::Computation::Match(ir::Match { scrut, arms }));
         let program = fixture.lower(root);
         let program = program.as_program();
         let arena = &program.arena().inner;
@@ -192,7 +218,7 @@ fn long_literal_fallthrough_chains_preserve_row_order_on_a_small_stack() {
                 })
                 .collect::<Vec<_>>();
             assert!(
-                matches!(arena.values[&arguments[1]], Value::Literal(ss::Literal::Integer(IntegerLiteral::Int(actual))) if actual == index)
+                matches!(arena.values[&arguments[1]], Value::Literal(ir::Literal::Integer(IntegerLiteral::Int(actual))) if actual == index)
             );
             let Value::Ext(ValueExt::Closure(Closure { body, .. })) = arena.values[&arguments[2]]
             else {
@@ -215,13 +241,15 @@ fn long_literal_fallthrough_chains_preserve_row_order_on_a_small_stack() {
 #[test]
 fn shared_typed_children_have_fresh_output_ownership_and_source_protocols() {
     let mut fixture = Fixture::new();
-    let unit_ty = fixture.ty(ss::Type::Unit(ss::UnitTy));
-    let pair_ty = fixture.ty(ss::Type::Prod(Prod(vec![unit_ty, unit_ty])));
-    let unit = fixture.value(Triv);
-    fixture.statics.annotations_value.insert_new(unit, unit_ty);
-    let pair = fixture.value(ss::Value::VCons(vec![unit, unit]));
-    fixture.statics.annotations_value.insert_new(pair, pair_ty);
-    let root = fixture.computation(Return(pair));
+    let unit = fixture.value(ir::Value::Triv(Triv));
+    fixture.core.value_protocols.insert_new(unit, ValueProtocol::Unit);
+    let pair =
+        fixture.value(ir::Value::VCons(VCons::new(vec![unit, unit], ProductLayout { arity: 2 })));
+    fixture
+        .core
+        .value_protocols
+        .insert_new(pair, ValueProtocol::Product(vec![ValueProtocol::Unit, ValueProtocol::Unit]));
+    let root = fixture.computation(ir::Computation::Ret(ir::Return(pair)));
     let program = fixture.lower(root);
     let program = program.as_program();
     let arena = program.arena();
@@ -233,32 +261,10 @@ fn shared_typed_children_have_fresh_output_ownership_and_source_protocols() {
     let Value::VCons(VCons { items, .. }) = &arena.inner.values[&value] else { panic!("product") };
     assert_ne!(items[0], items[1]);
     for item in items {
-        assert_eq!(arena.admin.terms.back(&(*item).into()), Some(&unit.into()));
+        assert_eq!(arena.admin.terms.back(&(*item).into()), Some(&ir::TermId::Value(unit)));
         assert_eq!(arena.inner.value_protocols[item], crate::protocol::ValueProtocol::Unit);
     }
-    assert_eq!(arena.admin.terms.back(&value.into()), Some(&pair.into()));
-}
-
-#[test]
-fn independent_invalid_values_are_collected_without_publishing_a_program() {
-    let mut fixture = Fixture::new();
-    let unit = fixture.value(Triv);
-    let hole = fixture.pattern(Hole);
-    let first = fixture.value(Abs(ss::ValBinder::Value(hole), unit));
-    let second = fixture.value(App(first, ss::ValArgument::Value(unit)));
-    let tail = fixture.computation(Return(second));
-    let root = fixture.computation(Let { binder: hole, bindee: first, tail });
-    let scoped = ScopedArena::default();
-    let errors =
-        RootLowerer { scoped: &scoped, statics: &fixture.statics, scheme: SpsScheme::BranchJoin }
-            .run(root)
-            .unwrap_err();
-    assert!(
-        matches!(errors.as_slice(), [SpsLoweringError::ResidualStaticValue { value: a }, SpsLoweringError::ResidualStaticValue { value: b }] if *a == first && *b == second)
-    );
-    fixture.statics.values[&first] = ss::Value::Triv(Triv);
-    fixture.statics.values[&second] = ss::Value::Triv(Triv);
-    fixture.lower(root);
+    assert_eq!(arena.admin.terms.back(&value.into()), Some(&ir::TermId::Value(pair)));
 }
 
 #[test]
@@ -266,13 +272,12 @@ fn deeply_nested_builtin_products_lower_on_a_small_stack() {
     Fixture::small_stack(|| {
         let value = (0..16384)
             .fold(BuiltinPackageValue::Unit, |value, _| BuiltinPackageValue::Product(vec![value]));
-        let scoped = ScopedArena::default();
-        let statics = StaticsArena::default();
-        let mut lowerer = Lowerer::new(&scoped, &statics, SpsScheme::BranchJoin);
+        let core = Fixture::dummy_program();
+        let mut lowerer = Lowerer::new(&core, SpsScheme::BranchJoin);
         let value = Explicit::run(&mut BuiltinPackageFolder { lowerer: &mut lowerer }, value);
         let stack = StackVar.build(&mut lowerer, None);
         let root = SReturn { stack, value }.build(&mut lowerer, None);
-        let program = lowerer.finish(root).unwrap();
+        let program = lowerer.finish(root);
         assert_eq!(program.as_program().arena().inner.values.len(), 16385);
     });
 }
@@ -280,9 +285,8 @@ fn deeply_nested_builtin_products_lower_on_a_small_stack() {
 #[test]
 fn builtin_folder_preserves_product_order_and_materialization() {
     use zydeco_syntax::{BuiltinValueRole, IntegerOperation, IntegerType};
-    let scoped = ScopedArena::default();
-    let statics = StaticsArena::default();
-    let mut lowerer = Lowerer::new(&scoped, &statics, SpsScheme::BranchJoin);
+    let core = Fixture::dummy_program();
+    let mut lowerer = Lowerer::new(&core, SpsScheme::BranchJoin);
     let input = BuiltinPackageValue::Product(vec![
         BuiltinPackageValue::Unit,
         BuiltinPackageValue::Operation(BuiltinValueRole::Integer(
@@ -307,9 +311,8 @@ fn builtin_folder_preserves_product_order_and_materialization() {
 #[test]
 fn builtin_folder_rejects_empty_product_plans() {
     let rejected = std::panic::catch_unwind(|| {
-        let scoped = ScopedArena::default();
-        let statics = StaticsArena::default();
-        let mut lowerer = Lowerer::new(&scoped, &statics, SpsScheme::BranchJoin);
+        let core = Fixture::dummy_program();
+        let mut lowerer = Lowerer::new(&core, SpsScheme::BranchJoin);
         Explicit::run(
             &mut BuiltinPackageFolder { lowerer: &mut lowerer },
             BuiltinPackageValue::Product(vec![]),
@@ -325,51 +328,12 @@ fn builtin_folder_rejects_empty_product_plans() {
 
 #[test]
 fn computation_roots_lower_as_single_program_roots() {
-    let mut allocator = IdAllocator::<StaticsScope>::new();
-    let value = allocator.alloc();
-    let root = allocator.alloc();
-    let mut statics = StaticsArena::default();
-    statics.values.insert_new(value, ss::Triv.into());
-    statics.compus.insert_new(root, ss::Return(value).into());
-    let scoped = ScopedArena::default();
-
-    let stackir = RootLowerer { scoped: &scoped, statics: &statics, scheme: SpsScheme::BranchJoin }
-        .run(root)
-        .unwrap();
+    let mut fixture = Fixture::new();
+    let value = fixture.value(ir::Value::Triv(Triv));
+    let root = fixture.computation(ir::Computation::Ret(ir::Return(value)));
+    let stackir = fixture.lower(root);
     let stackir = stackir.as_program();
 
     assert!(stackir.arena().inner.compus.get(&stackir.root()).is_some());
-    super::super::check::check(stackir, &scoped, &statics);
-}
-
-#[test]
-fn residual_value_functions_report_an_internal_invariant_failure() {
-    let mut allocator = IdAllocator::<StaticsScope>::new();
-    let unit = allocator.alloc();
-    let pattern = allocator.alloc();
-    let abstraction = allocator.alloc();
-    let root = allocator.alloc();
-    let valid_root = allocator.alloc();
-    let mut statics = StaticsArena::default();
-    statics.values.insert_new(unit, ss::Triv.into());
-    statics.vpats.insert_new(pattern, ss::ValuePattern::Triv(ss::Triv));
-    statics.values.insert_new(abstraction, ss::Abs(ss::ValBinder::Value(pattern), unit).into());
-    statics.compus.insert_new(root, ss::Return(abstraction).into());
-    statics.compus.insert_new(valid_root, ss::Return(unit).into());
-    let spans = SpanArena::default();
-    let scoped = ScopedArena::default();
-
-    let mut passes = zydeco_utils::pipeline![
-        RootLowerer { scoped: &scoped, statics: &statics, scheme: SpsScheme::BranchJoin },
-        crate::SpsLowPipeline { scoped: &scoped, statics: &statics }.with_error(),
-    ];
-    let before = passes.run(valid_root).expect("a complete root reaches SPSLow");
-    let errors = passes.run(root).expect_err("unelaborated static syntax cannot lower");
-    assert!(
-        matches!(errors.as_slice(), [SpsLoweringError::ResidualStaticValue { value }] if *value == abstraction)
-    );
-    // Internal fixtures need a useful report even without source spans.
-    let _ = errors[0].to_report(&spans, &scoped, &statics);
-    let after = passes.run(valid_root).expect("failed lowering leaves no state in the next run");
-    assert_eq!(before.arena().inner.compus.len(), after.arena().inner.compus.len());
+    super::super::check::check(stackir);
 }

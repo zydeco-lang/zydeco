@@ -5,8 +5,8 @@ use crate::metadata::{
 };
 use crate::textual::syntax as t;
 use thiserror::Error;
+use zydeco_foundation::span::{Sp, Span};
 use zydeco_syntax::{BuiltinTypeRole, BuiltinValueRole};
-use zydeco_utils::span::{Sp, Span};
 
 #[derive(Error, Debug, Clone)]
 pub enum DesugarError {
@@ -93,12 +93,13 @@ pub enum DesugarError {
 impl DesugarError {
     pub fn to_report(
         &self, spans: &t::SpanArena,
-    ) -> ariadne::Report<'static, (zydeco_utils::span::PathDisplay, std::ops::Range<usize>)> {
+    ) -> ariadne::Report<'static, (zydeco_foundation::span::PathDisplay, std::ops::Range<usize>)>
+    {
         let span = self.span();
         let site = spans
             .source_map()
             .and_then(|map| map.ariadne_range(span))
-            .unwrap_or_else(zydeco_utils::span::internal_ariadne_span);
+            .unwrap_or_else(zydeco_foundation::span::internal_ariadne_span);
         ariadne::Report::build(ariadne::ReportKind::Error, site.clone())
             .with_message(self.to_string())
             .with_label(ariadne::Label::new(site).with_message(self.to_string()))

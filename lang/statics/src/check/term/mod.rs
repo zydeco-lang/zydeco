@@ -75,11 +75,9 @@ impl<'a> Tyck<'a> for TyEnvT<TelescopeTail> {
         }
         let switch = action.switch;
         tycker.guarded(|tycker| {
-            tycker.tasks.push_back_mut(TyckTask::Term(self.inner.term, switch));
-            tycker.enter_site(su::EntityId::Term(self.inner.term));
-            let result = self.tyck_inner(tycker, action);
-            tycker.allocator.exit();
-            result
+            tycker.tasks.push(TyckTask::Term(self.inner.term, switch));
+            tycker.visited_terms.insert(self.inner.term);
+            self.tyck_inner(tycker, action)
         })
     }
 
@@ -110,11 +108,9 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
         let switch = action.switch;
         tycker.guarded(|tycker| {
             // administrative
-            tycker.tasks.push_back_mut(TyckTask::Term(self.inner, switch));
-            tycker.enter_site(su::EntityId::Term(self.inner));
-            let result = self.tyck_inner(tycker, action);
-            tycker.allocator.exit();
-            result
+            tycker.tasks.push(TyckTask::Term(self.inner, switch));
+            tycker.visited_terms.insert(self.inner);
+            self.tyck_inner(tycker, action)
         })
     }
 
@@ -347,7 +343,7 @@ impl TermChecker<'_> {
             .all(|def| tycker.statics.global_defs.get(def).is_some());
 
         if global {
-            tycker.statics.global_terms.ensure(out);
+            tycker.statics.global_terms.insert(out);
         }
     }
 }

@@ -90,7 +90,7 @@ mod tests {
             let environment = TyEnv::new();
             let vtype = ss::VType.build(tycker, &environment);
             let unit = ss::UnitTy.build(tycker, &environment);
-            let other_unit: ss::TypeId = Alloc::alloc(tycker, ss::UnitTy, vtype, &environment);
+            let other_unit: ss::TypeId = Alloc::alloc(tycker, ss::UnitTy, vtype, &());
             let integer = ss::PrimitiveTy(ss::PrimitiveType::Integer(ss::IntegerType::Int))
                 .build(tycker, &environment);
 
@@ -119,9 +119,9 @@ mod tests {
             let unit = ss::UnitTy.build(tycker, &environment);
             let root = tycker.data.root(tycker.db);
             let fill = Alloc::alloc(tycker, root, (), &());
-            let pending: ss::TypeId = Alloc::alloc(tycker, fill, vtype, &environment);
+            let pending: ss::TypeId = Alloc::alloc(tycker, fill, vtype, environment.skolem_scope());
             let scopes = tycker.statics.fill_scopes.iter().count();
-            let scope = tycker.statics.fill_scopes.get(&fill).cloned();
+            let scope = tycker.statics.fill_scopes.get(fill).cloned();
             let errors = tycker.errors.len();
 
             assert_eq!(
@@ -132,13 +132,13 @@ mod tests {
                 tycker.annotation_compatibility(pending.into(), pending.into()),
                 AnnotationCompatibility::Unknown
             );
-            assert!(tycker.statics.solus.get(&fill).is_none());
+            assert!(tycker.statics.solus.get(fill).is_none());
             assert_eq!(tycker.statics.fill_scopes.iter().count(), scopes);
-            assert_eq!(tycker.statics.fill_scopes.get(&fill).cloned(), scope);
+            assert_eq!(tycker.statics.fill_scopes.get(fill).cloned(), scope);
             assert_eq!(tycker.errors.len(), errors);
 
             assert_eq!(pending.lub(unit, tycker).ok(), Some(unit));
-            assert_eq!(tycker.statics.solus.get(&fill), Some(&AnnId::Type(unit)));
+            assert_eq!(tycker.statics.solus.get(fill), Some(&AnnId::Type(unit)));
         });
     }
 
@@ -152,13 +152,13 @@ mod tests {
                 .build(tycker, &environment);
             let root = tycker.data.root(tycker.db);
             let fill = Alloc::alloc(tycker, root, (), &());
-            let pending: ss::TypeId = Alloc::alloc(tycker, fill, vtype, &environment);
+            let pending: ss::TypeId = Alloc::alloc(tycker, fill, vtype, environment.skolem_scope());
             let partly_unknown: ss::TypeId =
-                Alloc::alloc(tycker, ss::Prod(vec![pending, unit]), vtype, &environment);
+                Alloc::alloc(tycker, ss::Prod(vec![pending, unit]), vtype, &());
             let compatible: ss::TypeId =
-                Alloc::alloc(tycker, ss::Prod(vec![integer, unit]), vtype, &environment);
+                Alloc::alloc(tycker, ss::Prod(vec![integer, unit]), vtype, &());
             let mismatched: ss::TypeId =
-                Alloc::alloc(tycker, ss::Prod(vec![integer, integer]), vtype, &environment);
+                Alloc::alloc(tycker, ss::Prod(vec![integer, integer]), vtype, &());
 
             assert_eq!(
                 tycker.annotation_compatibility(partly_unknown.into(), compatible.into()),
@@ -168,7 +168,7 @@ mod tests {
                 tycker.annotation_compatibility(partly_unknown.into(), mismatched.into()),
                 AnnotationCompatibility::Mismatch
             );
-            assert!(tycker.statics.solus.get(&fill).is_none());
+            assert!(tycker.statics.solus.get(fill).is_none());
             assert!(tycker.errors.is_empty());
         });
     }
@@ -181,14 +181,14 @@ mod tests {
             let unit = ss::UnitTy.build(tycker, &environment);
             let root = tycker.data.root(tycker.db);
             let fill = Alloc::alloc(tycker, root, (), &());
-            let pending: ss::TypeId = Alloc::alloc(tycker, fill, vtype, &environment);
+            let pending: ss::TypeId = Alloc::alloc(tycker, fill, vtype, environment.skolem_scope());
             tycker.statics.solus.insert_new(fill, unit.into());
 
             assert_eq!(
                 tycker.annotation_compatibility(pending.into(), unit.into()),
                 AnnotationCompatibility::Equal
             );
-            assert_eq!(tycker.statics.solus.get(&fill), Some(&AnnId::Type(unit)));
+            assert_eq!(tycker.statics.solus.get(fill), Some(&AnnId::Type(unit)));
             assert!(tycker.errors.is_empty());
         });
     }
@@ -202,9 +202,9 @@ mod tests {
             let ret = ss::RetTy.build(tycker, &environment);
             let quantified = |tycker: &mut Tycker<'_>| {
                 let binder = anonymous_type_binder(tycker, vtype, &environment);
-                let witness = Alloc::alloc(tycker, binder.witness, vtype, &environment);
-                let body = Alloc::alloc(tycker, ss::App(ret, witness), ctype, &environment);
-                Alloc::alloc(tycker, ss::Forall(binder, body), ctype, &environment)
+                let witness = Alloc::alloc(tycker, binder.witness, vtype, &());
+                let body = Alloc::alloc(tycker, ss::App(ret, witness), ctype, &());
+                Alloc::alloc(tycker, ss::Forall(binder, body), ctype, &())
             };
             let left = quantified(tycker);
             let right = quantified(tycker);
@@ -215,8 +215,7 @@ mod tests {
                 AnnotationCompatibility::Equal
             );
             let unit = ss::UnitTy.build(tycker, &environment);
-            let monomorphic: ss::TypeId =
-                Alloc::alloc(tycker, ss::App(ret, unit), ctype, &environment);
+            let monomorphic: ss::TypeId = Alloc::alloc(tycker, ss::App(ret, unit), ctype, &());
             assert_eq!(
                 tycker.annotation_compatibility(left.into(), monomorphic.into()),
                 AnnotationCompatibility::Mismatch
@@ -232,12 +231,10 @@ mod tests {
             let vtype = ss::VType.build(tycker, &environment);
             let unit = ss::UnitTy.build(tycker, &environment);
             let binder = anonymous_type_binder(tycker, vtype, &environment);
-            let body = Alloc::alloc(tycker, binder.witness, vtype, &environment);
+            let body = Alloc::alloc(tycker, binder.witness, vtype, &());
             let kind = Alloc::alloc(tycker, ss::Arrow(vtype, vtype), (), &());
-            let identity =
-                Alloc::alloc(tycker, ss::TypeAbstraction { binder, body }, kind, &environment);
-            let applied: ss::TypeId =
-                Alloc::alloc(tycker, ss::App(identity, unit), vtype, &environment);
+            let identity = Alloc::alloc(tycker, ss::TypeAbstraction { binder, body }, kind, &());
+            let applied: ss::TypeId = Alloc::alloc(tycker, ss::App(identity, unit), vtype, &());
             assert_eq!(
                 tycker.annotation_compatibility(applied.into(), unit.into()),
                 AnnotationCompatibility::Equal
@@ -246,7 +243,7 @@ mod tests {
             let sealed = |tycker: &mut Tycker<'_>| {
                 let witness = Alloc::alloc(tycker, None::<ss::DefId>, vtype, &());
                 tycker.record_seal(witness, unit);
-                Alloc::alloc(tycker, witness, vtype, &environment)
+                Alloc::alloc(tycker, witness, vtype, &())
             };
             let left: ss::TypeId = sealed(tycker);
             let right: ss::TypeId = sealed(tycker);

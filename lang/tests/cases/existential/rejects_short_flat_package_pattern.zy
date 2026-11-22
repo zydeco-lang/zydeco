@@ -1,0 +1,6 @@
+-- stage: check
+-- expect: reject(tyck.type-expected)
+
+let boxed : exists (X : VType) . X * Int * Int = (Int, 1, 2, 3) in
+let (X, a, rest) = boxed in
+! exit 0

@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{diagnostic::Diagnostics, fold::Folder};
 use std::collections::HashSet;
-use zydeco_utils::{
+use zydeco_foundation::{
     err::{CollectReported, Report, ReportedError},
     prelude::FrozenArena,
 };
@@ -127,7 +127,7 @@ impl<O: ResolutionObserver> ResolveFolder<'_, O> {
 
     fn reference(&mut self, id: TermId, name: VarName, env: &ResolveEnv<'_>) -> Term<DefId> {
         let Some(binding) = env.scope().lookup(&name) else {
-            if env.local.prelude.enabled && name.0 == "OS" {
+            if env.local.prelude.enabled && name == "OS" {
                 // The checker resolves this against witnesses from explicit package
                 // openings. It neither opens another package nor chooses between providers.
                 self.dependencies.implicit_provider(&env.local.under);
@@ -168,8 +168,8 @@ impl<O: ResolutionObserver> ResolveFolder<'_, O> {
                 env = self.pattern(*tm, env)?.env;
             }
             | Pattern::Var(def) => {
-                let name = self.bitter.defs[def].clone();
-                self.builder.defs.insert_new(*def, name.clone());
+                let name = self.bitter.defs[def];
+                self.builder.defs.insert_new(*def, name);
                 env.local = env.local.bind_group([(name, *def)]);
             }
             | Pattern::Named(Named(_, inner))
@@ -315,7 +315,7 @@ impl<O: ResolutionObserver> ResolveFolder<'_, O> {
                         .var_to_def
                         .iter()
                         .filter(|(_, binding)| binding.depth > env.local.depth)
-                        .map(|(name, binding)| (name.clone(), binding.definition))
+                        .map(|(name, binding)| (*name, binding.definition))
                         .collect();
                     binder.env.local = env.local;
                     binder.env.local.prelude.definitions = definitions;

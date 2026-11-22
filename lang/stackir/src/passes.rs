@@ -13,9 +13,7 @@ use std::{
     str::FromStr,
     time::Duration,
 };
-use zydeco_statics::arena::StaticsArena;
-use zydeco_surface::scoped::arena::ScopedArena;
-use zydeco_utils::pass::{
+use zydeco_foundation::pass::{
     CompilerPass, PassFailure, PassInvocation, PassLocation, PassObserver, PassSequence,
 };
 
@@ -204,7 +202,7 @@ impl SpsInspection {
 #[derive(Debug, thiserror::Error)]
 pub enum SpsObservationError {
     #[error(transparent)]
-    Invalid(#[from] zydeco_surface::diagnostic::Diagnostics<SpsInvariant>),
+    Invalid(#[from] zydeco_foundation::diagnostic::Diagnostics<SpsInvariant>),
     #[error("could not write SPS inspection output: {0}")]
     Output(#[from] io::Error),
 }
@@ -219,15 +217,13 @@ pub enum SpsInvariant {
 
 pub type SpsFailure = PassFailure<Infallible, SpsObservationError>;
 
-/// Render and verify borrowed IR using the current compilation's naming arenas.
-pub struct SpsObserver<'a, W> {
-    pub scoped: &'a ScopedArena,
-    pub statics: &'a StaticsArena,
+/// Render and verify borrowed IR using each program's own naming arena.
+pub struct SpsObserver<W> {
     pub inspection: SpsInspection,
     pub output: W,
 }
 
-impl<W: Write> SpsObserver<'_, W> {
+impl<W: Write> SpsObserver<W> {
     fn inspect(&mut self, program: &FragmentProgram) -> Result<(), SpsObservationError> {
         if self.inspection.verify {
             use crate::high::{
@@ -256,19 +252,14 @@ impl<W: Write> SpsObserver<'_, W> {
                         .map(|free| SpsInvariant::FreeDefinitions(free.iter().copied().collect())),
                 )
                 .collect();
-            if let Some(errors) = zydeco_surface::diagnostic::Diagnostics::with_errors(errors) {
+            if let Some(errors) = zydeco_foundation::diagnostic::Diagnostics::with_errors(errors) {
                 return Err(errors.into());
             }
         }
         if self.inspection.dump {
             let program = program.as_program();
             let arena = program.arena();
-            let formatter = crate::high::fmt::Formatter::new(
-                &arena.admin,
-                &arena.inner,
-                self.scoped,
-                self.statics,
-            );
+            let formatter = crate::high::fmt::Formatter::new(&arena.admin, &arena.inner);
             program.pretty(&formatter).render(100, &mut self.output)?;
             writeln!(self.output)?;
         }
@@ -276,7 +267,7 @@ impl<W: Write> SpsObserver<'_, W> {
     }
 }
 
-impl<W: Write> PassObserver<FragmentProgram, FragmentProgram, Infallible> for SpsObserver<'_, W> {
+impl<W: Write> PassObserver<FragmentProgram, FragmentProgram, Infallible> for SpsObserver<W> {
     type Error = SpsObservationError;
 
     fn before(

@@ -22,19 +22,14 @@ impl TermChecker<'_> {
             let body_out_ann =
                 self.mk(body).tyck(tycker, Action::ana_prepared(body_ty.into(), &self.info))?;
             let (body_out, body_ty) = body_out_ann.try_as_compu(tycker, TyckError::SortMismatch)?;
-            let body_interned =
-                crate::query::InternedTermAnn::new(tycker.db, TermAnnId::Compu(body_out, body_ty));
-            let outcome = tycker.judge(self.inner, body_interned, crate::query::thunk_judgment);
-            tycker.statics.types_pre.insert_new(
-                outcome.thk_ty_id,
-                ss::Fillable::Done(outcome.thk_ty),
-                outcome.vtype,
+            let thk_ty_id = Alloc::alloc(
+                tycker,
+                ss::App(tycker.intrinsics.thk, body_ty),
+                tycker.intrinsics.vtype,
+                &(),
             );
-            tycker.store_env(outcome.thk_ty_id, &self.info);
-            tycker.statics.values.insert_new(outcome.thunk_id, outcome.thunk);
-            tycker.statics.annotations_value.insert_new(outcome.thunk_id, outcome.thk_ty_id);
-            tycker.statics.env_value.insert_new(outcome.thunk_id, self.info.clone());
-            TermAnnId::Value(outcome.thunk_id, outcome.thk_ty_id)
+            let thunk_id = Alloc::alloc(tycker, ss::Thunk(body_out), thk_ty_id, &());
+            TermAnnId::Value(thunk_id, thk_ty_id)
         })
     }
 
@@ -79,12 +74,8 @@ impl TermChecker<'_> {
                 let ss::App(_thunk_ty, force_ty) = thunk_app_body_ty;
                 force_ty
             };
-            let input = crate::query::InternedForceInput::new(tycker.db, body, force_ty);
-            let outcome = tycker.judge(self.inner, input, crate::query::force_judgment);
-            tycker.statics.compus.insert_new(outcome.id, outcome.compu);
-            tycker.statics.annotations_compu.insert_new(outcome.id, outcome.ann);
-            tycker.statics.env_compu.insert_new(outcome.id, self.info.clone());
-            TermAnnId::Compu(outcome.id, outcome.ann)
+            let id = Alloc::alloc(tycker, ss::Force(body), force_ty, &());
+            TermAnnId::Compu(id, force_ty)
         })
     }
 
@@ -107,19 +98,14 @@ impl TermChecker<'_> {
             let body_out_ann =
                 self.mk(body).tyck(tycker, Action::ana_prepared(body_ty.into(), &self.info))?;
             let (body_out, body_ty) = body_out_ann.try_as_value(tycker, TyckError::SortMismatch)?;
-            let body_interned =
-                crate::query::InternedTermAnn::new(tycker.db, TermAnnId::Value(body_out, body_ty));
-            let outcome = tycker.judge(self.inner, body_interned, crate::query::ret_judgment);
-            tycker.statics.types_pre.insert_new(
-                outcome.ret_ty_id,
-                ss::Fillable::Done(outcome.ret_ty),
-                outcome.ctype,
+            let ret_ty_id = Alloc::alloc(
+                tycker,
+                ss::App(tycker.intrinsics.ret, body_ty),
+                tycker.intrinsics.ctype,
+                &(),
             );
-            tycker.store_env(outcome.ret_ty_id, &self.info);
-            tycker.statics.compus.insert_new(outcome.ret_id, outcome.ret);
-            tycker.statics.annotations_compu.insert_new(outcome.ret_id, outcome.ret_ty_id);
-            tycker.statics.env_compu.insert_new(outcome.ret_id, self.info.clone());
-            TermAnnId::Compu(outcome.ret_id, outcome.ret_ty_id)
+            let ret_id = Alloc::alloc(tycker, ss::Return(body_out), ret_ty_id, &());
+            TermAnnId::Compu(ret_id, ret_ty_id)
         })
     }
 
@@ -153,15 +139,13 @@ impl TermChecker<'_> {
                 tail_out_ann.try_as_compu(tycker, TyckError::SortMismatch)?
             };
             binder_elaboration.close_scope(tycker, tail_ty)?;
-            let bind_ty = tail_ty;
-            let input = crate::query::InternedDoInput::new(
-                tycker.db, binder_out, bindee_out, tail_out, bind_ty,
+            let id = Alloc::alloc(
+                tycker,
+                ss::Bind { binder: binder_out, bindee: bindee_out, tail: tail_out },
+                tail_ty,
+                &(),
             );
-            let outcome = tycker.judge(self.inner, input, crate::query::do_judgment);
-            tycker.statics.compus.insert_new(outcome.id, outcome.compu);
-            tycker.statics.annotations_compu.insert_new(outcome.id, outcome.ann);
-            tycker.statics.env_compu.insert_new(outcome.id, self.info.clone());
-            TermAnnId::Compu(outcome.id, outcome.ann)
+            TermAnnId::Compu(id, tail_ty)
         })
     }
 
@@ -219,13 +203,9 @@ impl TermChecker<'_> {
             let _ = tycker.statics.type_definitions.upsert(def, bindee_out);
         }
         let bindee_out = if is_sealed {
-            let abst: AbstId = tycker.fresh();
-            tycker.statics.absts.insert_new(abst, ());
-            if let (Some(def), _) = binder_out.try_destruct_def(tycker) {
-                tycker.statics.abst_hints.insert_new(abst, def);
-            }
+            let abst = Alloc::alloc(tycker, binder_out.try_destruct_def(tycker).0, bindee_kd, &());
             tycker.record_seal(abst, bindee_out);
-            Alloc::alloc(tycker, abst, bindee_kd, &self.info)
+            Alloc::alloc(tycker, abst, bindee_kd, &())
         } else {
             bindee_out
         };
@@ -233,7 +213,7 @@ impl TermChecker<'_> {
         let env = self.mk(Assign(binder_out, bindee_out)).tyck(tycker, ())?;
         if let (Some(def), _) = binder_out.try_destruct_def(tycker) {
             // consider adding it to the globals if bindee is global
-            if tycker.statics.global_terms.get(&bindee_out.into()).is_some() {
+            if tycker.statics.global_terms.contains(&ss::TermId::from(bindee_out)) {
                 tycker.statics.global_defs.ensure(def);
             }
         }
@@ -265,7 +245,7 @@ impl TermChecker<'_> {
         if let (Some(def), _) = binder_out.try_destruct_def(tycker) {
             let _ = tycker.statics.value_aliases.upsert(def, bindee_out);
             // consider adding it to the globals if bindee is global
-            if tycker.statics.global_terms.get(&bindee_out.into()).is_some() {
+            if tycker.statics.global_terms.contains(&ss::TermId::from(bindee_out)) {
                 tycker.statics.global_defs.ensure(def);
                 // consider adding it to the inlinables as well
                 let _ = tycker.statics.inlinables.upsert(def, bindee_out);
@@ -318,57 +298,28 @@ impl TermChecker<'_> {
                     ))?
                 }
                 binder_elaboration.close_scope(tycker, tail_ty)?;
-                let outcome = self.judge_let(
+                let id = Alloc::alloc(
                     tycker,
-                    binder_out,
-                    bindee_out,
-                    TermAnnId::Value(tail_out, tail_ty),
+                    ss::Let { binder: binder_out, bindee: bindee_out, tail: tail_out },
+                    tail_ty,
+                    &(),
                 );
-                let crate::query::LetSynOutcome::Value { id, value, ann } = outcome else {
-                    unreachable!("the value tail of let judgments is query-produced")
-                };
-                tycker.statics.values.insert_new(id, value);
-                tycker.statics.annotations_value.insert_new(id, ann);
-                tycker.statics.env_value.insert_new(id, self.info.clone());
-                Ok(TermAnnId::Value(id, ann))
+                Ok(TermAnnId::Value(id, tail_ty))
             }
             | TermAnnId::Compu(tail_out, tail_ty) => {
                 binder_elaboration.close_scope(tycker, tail_ty)?;
                 ValuePatternShape::require_binding(tycker, binder, binder_out)?;
-                let outcome = self.judge_let(
+                let id = Alloc::alloc(
                     tycker,
-                    binder_out,
-                    bindee_out,
-                    TermAnnId::Compu(tail_out, tail_ty),
+                    ss::Let { binder: binder_out, bindee: bindee_out, tail: tail_out },
+                    tail_ty,
+                    &(),
                 );
-                let crate::query::LetSynOutcome::Compu { id, compu, ann } = outcome else {
-                    unreachable!("the computation tail of let judgments is query-produced")
-                };
-                tycker.statics.compus.insert_new(id, compu);
-                tycker.statics.annotations_compu.insert_new(id, ann);
-                tycker.statics.env_compu.insert_new(id, self.info.clone());
-                Ok(TermAnnId::Compu(id, ann))
+                Ok(TermAnnId::Compu(id, tail_ty))
             }
             | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Type(_, _) => {
                 tycker.err(TyckError::SortMismatch)
             }
         }
-    }
-
-    /// Run the let judgment for a value binding over its checked tail.
-    fn judge_let(
-        &self, tycker: &mut Tycker<'_>, binder_out: ss::VPatId, bindee_out: ss::ValueId,
-        tail: TermAnnId,
-    ) -> crate::query::LetSynOutcome {
-        let binder = crate::query::InternedVPat::new(tycker.db, binder_out);
-        let bindee = crate::query::InternedValue::new(tycker.db, bindee_out);
-        let tail = crate::query::InternedTermAnn::new(tycker.db, tail);
-        tycker.judge(
-            self.inner,
-            (binder, bindee, tail),
-            |db, data, term, (binder, bindee, tail), occurrence| {
-                crate::query::let_judgment(db, data, term, binder, bindee, tail, occurrence)
-            },
-        )
     }
 }

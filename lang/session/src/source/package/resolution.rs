@@ -3,8 +3,8 @@ use crate::source::{
     SourceFile, SourceGraph, SourceGraphScope, SourceId, SourceImport, SourceImportId,
 };
 use std::collections::{BTreeMap, HashMap};
+use zydeco_foundation::prelude::{ArenaDense, FrozenArena};
 use zydeco_surface::textual::PackageSite;
-use zydeco_utils::prelude::{ArenaDense, FrozenArena};
 
 /// A route through the unmerged graph. Its source points into the merged graph.
 #[derive(Clone, Debug)]

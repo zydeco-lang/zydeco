@@ -1,7 +1,7 @@
 //! Reconstruction frames preserve forward facts and backward consumer demands.
 
 use super::*;
-use zydeco_utils::fold::{Explicit, Folder, Step};
+use zydeco_foundation::fold::{Explicit, Folder, Step};
 
 /// A memory step's operand besides its address: the fresh result binder of a load or the stored
 /// value of a store.
@@ -126,20 +126,20 @@ pub(super) enum Work {
         bindee: ScopedValue,
         tail: CompuId,
         scope: Scope,
-        site: Option<ss::TermId>,
+        site: Option<crate::ir::TermId>,
     },
     BindingComponents {
         remaining: std::vec::IntoIter<(VPatId, ScopedValue)>,
-        site: Option<ss::TermId>,
+        site: Option<crate::ir::TermId>,
     },
     ResidualBinding {
         binder: VPatId,
         bindee: ScopedValue,
-        site: Option<ss::TermId>,
+        site: Option<crate::ir::TermId>,
     },
     FinishBinding {
         binder: VPatId,
-        site: Option<ss::TermId>,
+        site: Option<crate::ir::TermId>,
     },
     ComparisonChildren {
         source: CompuId,
@@ -147,7 +147,7 @@ pub(super) enum Work {
         position: usize,
         arms: Scope,
         join: Option<ScopedStack>,
-        site: Option<ss::TermId>,
+        site: Option<crate::ir::TermId>,
     },
     BranchArms {
         source: CompuId,
@@ -155,7 +155,7 @@ pub(super) enum Work {
         known: Rc<KnownValue>,
         arms: Scope,
         join: Option<ScopedStack>,
-        site: Option<ss::TermId>,
+        site: Option<crate::ir::TermId>,
     },
     BranchArm {
         binder: VPatId,
@@ -170,63 +170,44 @@ pub(super) enum Work {
         tail: CompuId,
         env: EnvId,
         join: Option<ScopedStack>,
-        site: Option<ss::TermId>,
+        site: Option<crate::ir::TermId>,
     },
     BranchTail {
         count: usize,
         tail: CompuId,
         join: Option<ScopedStack>,
         demands: Demands,
-        site: Option<ss::TermId>,
+        site: Option<crate::ir::TermId>,
     },
     BranchStack {
         tail: CompuId,
         demands: Demands,
-        site: Option<ss::TermId>,
+        site: Option<crate::ir::TermId>,
     },
     StackLetBody {
         bindee: ScopedStack,
-        site: Option<ss::TermId>,
+        site: Option<crate::ir::TermId>,
     },
     FinishStackLet {
-        site: Option<ss::TermId>,
+        site: Option<crate::ir::TermId>,
     },
     PrimitiveValue {
         operation: PrimitiveOp,
         operands: [ScopedValue; 2],
-        site: Option<ss::TermId>,
+        site: Option<crate::ir::TermId>,
     },
     PrimitiveSecond {
         operation: PrimitiveOp,
         second: ScopedValue,
-        site: Option<ss::TermId>,
+        site: Option<crate::ir::TermId>,
     },
     FinishPrimitiveValue {
         operation: PrimitiveOp,
-        site: Option<ss::TermId>,
-    },
-    PrimitiveContinuation {
-        binder: VPatId,
-        operation: PrimitiveOp,
-        operands: [ScopedValue; 2],
-        folded: bool,
-        site: Option<ss::TermId>,
-    },
-    PrimitiveResult {
-        operation: PrimitiveOp,
-        operands: [ScopedValue; 2],
-        site: Option<ss::TermId>,
-    },
-    PrimitiveReturn {
-        site: Option<ss::TermId>,
-    },
-    PrimitiveStack {
-        operation: PrimitiveOp,
-        site: Option<ss::TermId>,
+        site: Option<crate::ir::TermId>,
     },
     ExternalStack {
         function: ExternalFunction,
-        site: Option<ss::TermId>,
+        site: Option<crate::ir::TermId>,
     },
 }
 
@@ -475,19 +456,19 @@ impl<'a> NormalizationFolder<'a> {
                 let stack = ScopedStack { node: stack, scope: scope.clone() };
                 if let KnownValue::External(function) = known.as_ref() {
                     self.external_call(function.clone(), stack, site)
-                } else if self.norm.movable_stack(stack.node)
-                    && let KnownValue::BuiltinBody(body) = known.as_ref()
+                } else if let KnownValue::BuiltinBody(body) = known.as_ref()
+                    && self.norm.can_enter_with_stack(*body, stack.clone())
                 {
                     let stack = Some(self.norm.delay_stack(stack));
                     Step::TailCall(Work::Computation(*body, Scope { values: scope.values, stack }))
-                } else if self.norm.movable_stack(stack.node)
-                    && let Value::Ext(ValueExt::Closure(Closure { body, .. })) =
-                        self.norm.source.inner.values[&thunk]
+                } else if let Value::Ext(ValueExt::Closure(Closure { body, .. })) =
+                    self.norm.source.inner.values[&thunk]
+                    && self.norm.can_enter_with_stack(body, stack.clone())
                 {
                     let stack = Some(self.norm.delay_stack(stack));
                     Step::TailCall(Work::Computation(body, Scope { values: scope.values, stack }))
-                } else if self.norm.movable_stack(stack.node)
-                    && let KnownValue::Closure { body, env } = known.as_ref()
+                } else if let KnownValue::Closure { body, env } = known.as_ref()
+                    && self.norm.can_enter_with_stack(*body, stack.clone())
                 {
                     let stack = Some(self.norm.delay_stack(stack));
                     Step::TailCall(Work::Computation(*body, Scope { values: *env, stack }))
@@ -542,8 +523,8 @@ impl<'a> NormalizationFolder<'a> {
             | Computation::Ext(CompuExt::CallProc(CallProc { procedure, stack })) => {
                 let known = self.norm.lookup(scope.values, procedure);
                 let stack = ScopedStack { node: stack, scope };
-                if self.norm.movable_stack(stack.node)
-                    && let KnownValue::Procedure { body, env } = known.as_ref()
+                if let KnownValue::Procedure { body, env } = known.as_ref()
+                    && self.norm.can_enter_with_stack(*body, stack.clone())
                 {
                     let stack = Some(self.norm.delay_stack(stack));
                     Step::TailCall(Work::Computation(*body, Scope { values: *env, stack }))
@@ -581,7 +562,10 @@ impl<'a> NormalizationFolder<'a> {
                 let stack =
                     self.norm.resolve_stack(ScopedStack { node: bindee, scope: scope.clone() });
                 if let Stack::Arg(Cons(value, rest)) = self.norm.source.inner.stacks[&stack.node]
-                    && self.norm.movable_stack(rest)
+                    && self.norm.can_enter_with_stack(
+                        tail,
+                        ScopedStack { node: rest, scope: stack.scope.clone() },
+                    )
                 {
                     let value = ScopedValue { node: value, env: stack.scope.values };
                     let rest =
@@ -629,7 +613,8 @@ impl<'a> NormalizationFolder<'a> {
     /// stack the let names; the arms of a bare branch each consume the current delayed stack,
     /// rebuilding it on their own.
     fn branch(
-        &mut self, branch: CompuId, scope: Scope, guard: Option<StackId>, site: Option<ss::TermId>,
+        &mut self, branch: CompuId, scope: Scope, guard: Option<StackId>,
+        site: Option<crate::ir::TermId>,
     ) -> Step<Self> {
         // Selecting a successor moves a guard's stack into it, so the guard must be movable.
         let selectable = guard.is_none_or(|bindee| self.norm.movable_stack(bindee));
@@ -701,7 +686,7 @@ impl<'a> NormalizationFolder<'a> {
     /// delayed, so reductions see through the let; a frame whose argument may trap keeps its let,
     /// and the frames delayed beneath it are named above it, so the trap stays where it was pushed.
     fn stack_let(
-        &mut self, bindee: StackId, tail: CompuId, scope: Scope, site: Option<ss::TermId>,
+        &mut self, bindee: StackId, tail: CompuId, scope: Scope, site: Option<crate::ir::TermId>,
     ) -> Step<Self> {
         let bindee = ScopedStack { node: bindee, scope: scope.clone() };
         if self.norm.movable_stack(bindee.node) {
@@ -730,7 +715,7 @@ impl<'a> NormalizationFolder<'a> {
     /// a bare branch is complete.
     fn join_branch(
         &mut self, branch: CompuId, demands: Demands, join: Option<ScopedStack>,
-        site: Option<ss::TermId>,
+        site: Option<crate::ir::TermId>,
     ) -> Step<Self> {
         match join {
             | Some(bindee) => Step::Call {
@@ -765,45 +750,9 @@ impl<'a> NormalizationFolder<'a> {
     }
 
     fn external_call(
-        &mut self, function: ExternalFunction, stack: ScopedStack, site: Option<ss::TermId>,
+        &mut self, function: ExternalFunction, stack: ScopedStack, site: Option<crate::ir::TermId>,
     ) -> Step<Self> {
-        if let ExternalFunction::Host(role) = &function
-            && let Some(operation) = PrimitiveOp::from_builtin(*role)
-        {
-            if let Some((operands, rest)) = self.norm.primitive_arguments(stack.clone()) {
-                if let Stack::Ext(StackExt::Kont(Kont { binder, body })) =
-                    self.norm.source.inner.stacks[&rest.node]
-                {
-                    let folded = self.norm.fold_primitive(operation, operands);
-                    let known = folded
-                        .clone()
-                        .map_or_else(Rc::default, |value| Rc::new(KnownValue::Literal(value)));
-                    let values = self.norm.bind(rest.scope.values, binder, known);
-                    Step::Call {
-                        input: Work::Computation(body, Scope { values, ..rest.scope }),
-                        frame: Work::PrimitiveContinuation {
-                            binder,
-                            operation,
-                            operands,
-                            folded: folded.is_some(),
-                            site,
-                        },
-                    }
-                } else {
-                    Step::Call {
-                        input: Work::Stack(rest),
-                        frame: Work::PrimitiveResult { operation, operands, site },
-                    }
-                }
-            } else {
-                Step::Call {
-                    input: Work::Stack(stack),
-                    frame: Work::PrimitiveStack { operation, site },
-                }
-            }
-        } else {
-            Step::Call { input: Work::Stack(stack), frame: Work::ExternalStack { function, site } }
-        }
+        Step::Call { input: Work::Stack(stack), frame: Work::ExternalStack { function, site } }
     }
 
     // Values
@@ -1127,7 +1076,7 @@ impl<'a> NormalizationFolder<'a> {
 
     fn resume_binding(
         &mut self, binder: VPatId, bindee: ScopedValue, tail: CompuId, scope: Scope,
-        site: Option<ss::TermId>,
+        site: Option<crate::ir::TermId>,
     ) -> Step<Self> {
         let values = self.norm.extend(scope.values, self.norm.binding_facts(binder, bindee));
         Step::Call {
@@ -1137,11 +1086,12 @@ impl<'a> NormalizationFolder<'a> {
     }
 
     fn resume_residual_binding(
-        &mut self, binder: VPatId, bindee: ScopedValue, site: Option<ss::TermId>,
+        &mut self, binder: VPatId, bindee: ScopedValue, site: Option<crate::ir::TermId>,
     ) -> Step<Self> {
         let bound = binder.vars(&self.norm.source);
         let mut tail = self.computation();
-        if !bound.iter().any(|def| tail.demands.contains(def)) && self.norm.discardable(bindee.node)
+        if !bound.iter().any(|def| tail.demands.contains(def))
+            && self.norm.discardable_scoped(bindee)
         {
             self.computations.push(tail);
             return Step::Return(());
@@ -1168,7 +1118,7 @@ impl<'a> NormalizationFolder<'a> {
 
     fn resume_binding_components(
         &mut self, mut remaining: std::vec::IntoIter<(VPatId, ScopedValue)>,
-        site: Option<ss::TermId>,
+        site: Option<crate::ir::TermId>,
     ) -> Step<Self> {
         if let Some((binder, bindee)) = remaining.next_back() {
             return Step::Call {
@@ -1179,7 +1129,9 @@ impl<'a> NormalizationFolder<'a> {
         Step::Return(())
     }
 
-    fn resume_finish_binding(&mut self, binder: VPatId, site: Option<ss::TermId>) -> Step<Self> {
+    fn resume_finish_binding(
+        &mut self, binder: VPatId, site: Option<crate::ir::TermId>,
+    ) -> Step<Self> {
         let bindee = self.value();
         let binder = self.norm.pattern(binder);
         let tail = self.computation();
@@ -1189,12 +1141,12 @@ impl<'a> NormalizationFolder<'a> {
     }
 
     fn resume_stack_let_body(
-        &mut self, bindee: ScopedStack, site: Option<ss::TermId>,
+        &mut self, bindee: ScopedStack, site: Option<crate::ir::TermId>,
     ) -> Step<Self> {
         Step::Call { input: Work::Stack(bindee), frame: Work::FinishStackLet { site } }
     }
 
-    fn resume_finish_stack_let(&mut self, site: Option<ss::TermId>) -> Step<Self> {
+    fn resume_finish_stack_let(&mut self, site: Option<crate::ir::TermId>) -> Step<Self> {
         let bindee = self.stack();
         let tail = self.computation();
         let (spine, bindee_demands) = self.spine_of(bindee);
@@ -1207,7 +1159,7 @@ impl<'a> NormalizationFolder<'a> {
 
     fn resume_comparison_children(
         &mut self, source: CompuId, compare: CompareBranch, position: usize, arms: Scope,
-        join: Option<ScopedStack>, site: Option<ss::TermId>,
+        join: Option<ScopedStack>, site: Option<crate::ir::TermId>,
     ) -> Step<Self> {
         let input = match position {
             | 0 => Some(Work::Computation(compare.when_true, arms.clone())),
@@ -1247,7 +1199,7 @@ impl<'a> NormalizationFolder<'a> {
 
     fn resume_branch_arms(
         &mut self, source: CompuId, position: usize, known: Rc<KnownValue>, scope: Scope,
-        join: Option<ScopedStack>, site: Option<ss::TermId>,
+        join: Option<ScopedStack>, site: Option<crate::ir::TermId>,
     ) -> Step<Self> {
         let Computation::CoprodMatch(SCoprodMatch { scrut, arms }) =
             &self.norm.source.inner.compus[&source]
@@ -1305,7 +1257,7 @@ impl<'a> NormalizationFolder<'a> {
 
     fn resume_branch_scrutinee(
         &mut self, scrut: ValueId, count: usize, tail: CompuId, env: EnvId,
-        join: Option<ScopedStack>, site: Option<ss::TermId>,
+        join: Option<ScopedStack>, site: Option<crate::ir::TermId>,
     ) -> Step<Self> {
         let first = self.arms.len() - count;
         let (demands, demand) = self.arms[first..].iter_mut().fold(
@@ -1323,7 +1275,7 @@ impl<'a> NormalizationFolder<'a> {
 
     fn resume_branch_tail(
         &mut self, count: usize, tail: CompuId, join: Option<ScopedStack>, demands: Demands,
-        site: Option<ss::TermId>,
+        site: Option<crate::ir::TermId>,
     ) -> Step<Self> {
         let scrut = self.value();
         let arms = self
@@ -1338,7 +1290,7 @@ impl<'a> NormalizationFolder<'a> {
     }
 
     fn resume_branch_stack(
-        &mut self, tail: CompuId, demands: Demands, site: Option<ss::TermId>,
+        &mut self, tail: CompuId, demands: Demands, site: Option<crate::ir::TermId>,
     ) -> Step<Self> {
         let stack = self.stack();
         // Under the full scheme the delayed consumer of a bare branch is named frame by
@@ -1357,7 +1309,8 @@ impl<'a> NormalizationFolder<'a> {
     // Primitives
 
     fn resume_primitive_value(
-        &mut self, operation: PrimitiveOp, operands: [ScopedValue; 2], site: Option<ss::TermId>,
+        &mut self, operation: PrimitiveOp, operands: [ScopedValue; 2],
+        site: Option<crate::ir::TermId>,
     ) -> Step<Self> {
         if let Some(literal) = self.norm.fold_primitive(operation, operands) {
             self.values.push(Residual {
@@ -1374,7 +1327,7 @@ impl<'a> NormalizationFolder<'a> {
     }
 
     fn resume_primitive_second(
-        &mut self, operation: PrimitiveOp, second: ScopedValue, site: Option<ss::TermId>,
+        &mut self, operation: PrimitiveOp, second: ScopedValue, site: Option<crate::ir::TermId>,
     ) -> Step<Self> {
         Step::Call {
             input: Work::Value(second.node, second.env, Demand::Used),
@@ -1383,7 +1336,7 @@ impl<'a> NormalizationFolder<'a> {
     }
 
     fn resume_finish_primitive_value(
-        &mut self, operation: PrimitiveOp, site: Option<ss::TermId>,
+        &mut self, operation: PrimitiveOp, site: Option<crate::ir::TermId>,
     ) -> Step<Self> {
         let second = self.value();
         let first = self.value();
@@ -1393,76 +1346,8 @@ impl<'a> NormalizationFolder<'a> {
         Step::Return(())
     }
 
-    fn resume_primitive_continuation(
-        &mut self, binder: VPatId, operation: PrimitiveOp, operands: [ScopedValue; 2],
-        folded: bool, site: Option<ss::TermId>,
-    ) -> Step<Self> {
-        let mut tail = self.computation();
-        let bound = binder.vars(&self.norm.source);
-        let discardable = folded
-            || (!operation.may_trap()
-                && operands.iter().all(|value| self.norm.discardable(value.node)));
-        if discardable && !bound.iter().any(|def| tail.demands.contains(def)) {
-            self.computations.push(tail);
-            return Step::Return(());
-        }
-        for def in bound {
-            tail.demands.remove(&def);
-        }
-        self.computations.push(tail);
-        Step::Call {
-            input: Work::PrimitiveValue { operation, operands, site },
-            frame: Work::FinishBinding { binder, site },
-        }
-    }
-
-    fn resume_primitive_result(
-        &mut self, operation: PrimitiveOp, operands: [ScopedValue; 2], site: Option<ss::TermId>,
-    ) -> Step<Self> {
-        Step::Call {
-            input: Work::PrimitiveValue { operation, operands, site },
-            frame: Work::PrimitiveReturn { site },
-        }
-    }
-
-    fn resume_primitive_return(&mut self, site: Option<ss::TermId>) -> Step<Self> {
-        let value = self.value();
-        let stack = self.stack();
-        let (stack, spine, demands) = self.consumed(stack);
-        let node = SReturn { stack, value: value.node }.build(self.norm, site);
-        let node = self.norm.arena.name_frames(spine, node, site);
-        self.computations.push(Residual { node, demands: demands.join(value.demands) });
-        Step::Return(())
-    }
-
-    fn resume_primitive_stack(
-        &mut self, operation: PrimitiveOp, site: Option<ss::TermId>,
-    ) -> Step<Self> {
-        let stack = self.stack();
-        let (stack, spine, demands) = self.consumed(stack);
-        let defs = ["__primitive_first__", "__primitive_second__"].map(|name| {
-            let def = self.norm.arena.admin.fresh_def();
-            self.norm.arena.admin.insert_def(def, VarName(name.into()));
-            def
-        });
-        let operands = defs.map(|def| def.build(self.norm, site));
-        let value = Primitive { operation, operands }.build(self.norm, site);
-        let ambient = StackVar.build(self.norm, site);
-        let tail = SReturn { stack: ambient, value }.build(self.norm, site);
-        let second = defs[1].build(self.norm, None);
-        let ambient = StackVar.build(self.norm, site);
-        let tail =
-            Let { binder: Cons(second, StackVar), bindee: ambient, tail }.build(self.norm, site);
-        let first = defs[0].build(self.norm, None);
-        let node =
-            Let { binder: Cons(first, StackVar), bindee: stack, tail }.build(self.norm, site);
-        let node = self.norm.arena.name_frames(spine, node, site);
-        self.computations.push(Residual { node, demands });
-        Step::Return(())
-    }
-
     fn resume_external_stack(
-        &mut self, function: ExternalFunction, site: Option<ss::TermId>,
+        &mut self, function: ExternalFunction, site: Option<crate::ir::TermId>,
     ) -> Step<Self> {
         let stack = self.stack();
         let (stack, spine, demands) = self.consumed(stack);
@@ -1565,16 +1450,6 @@ impl Folder for NormalizationFolder<'_> {
             }
             | Work::FinishPrimitiveValue { operation, site } => {
                 self.resume_finish_primitive_value(operation, site)
-            }
-            | Work::PrimitiveContinuation { binder, operation, operands, folded, site } => {
-                self.resume_primitive_continuation(binder, operation, operands, folded, site)
-            }
-            | Work::PrimitiveResult { operation, operands, site } => {
-                self.resume_primitive_result(operation, operands, site)
-            }
-            | Work::PrimitiveReturn { site } => self.resume_primitive_return(site),
-            | Work::PrimitiveStack { operation, site } => {
-                self.resume_primitive_stack(operation, site)
             }
             | Work::ExternalStack { function, site } => self.resume_external_stack(function, site),
         }

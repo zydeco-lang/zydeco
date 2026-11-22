@@ -1,7 +1,7 @@
 //! Resumable closure conversion with occurrence-local capture and renaming state.
 
 use super::*;
-use zydeco_utils::fold::{Explicit, Folder, Step};
+use zydeco_foundation::fold::{Explicit, Folder, Step};
 
 pub(super) struct Captures {
     env: RenameEnvId,
@@ -220,15 +220,15 @@ pub(super) enum Work {
     },
 }
 
-pub(super) struct ConversionFolder<'a, 'source> {
-    conversion: &'a mut ClosureConversion<'source>,
+pub(super) struct ConversionFolder<'a> {
+    conversion: &'a mut ClosureConversion,
     values: Vec<low::ValueId>,
     stacks: Vec<low::StackId>,
     computations: Vec<low::CompuId>,
 }
 
-impl<'a, 'source> ConversionFolder<'a, 'source> {
-    pub(super) fn new(conversion: &'a mut ClosureConversion<'source>) -> Self {
+impl<'a> ConversionFolder<'a> {
+    pub(super) fn new(conversion: &'a mut ClosureConversion) -> Self {
         Self { conversion, values: Vec::new(), stacks: Vec::new(), computations: Vec::new() }
     }
 
@@ -781,8 +781,8 @@ impl<'a, 'source> ConversionFolder<'a, 'source> {
         let site = self.conversion.source.admin.term_site(source);
         let package = self.value();
         let stack = self.stack();
-        let environment_def = self.conversion.alloc_def(VarName("__environment__".into()));
-        let code_def = self.conversion.alloc_def(VarName("__closure_code__".into()));
+        let environment_def = self.conversion.alloc_def(VarName::new("__environment__"));
+        let code_def = self.conversion.alloc_def(VarName::new("__closure_code__"));
         let environment: low::VPatId = environment_def.build(self.conversion, None);
         let code: low::VPatId = code_def.build(self.conversion, None);
         let environment_value = environment_def.build(self.conversion, site);
@@ -803,7 +803,7 @@ impl<'a, 'source> ConversionFolder<'a, 'source> {
         let site = self.conversion.source.admin.term_site(source);
         let package = self.stack();
         let value = self.value();
-        let code_def = self.conversion.alloc_def(VarName("__continuation_code__".into()));
+        let code_def = self.conversion.alloc_def(VarName::new("__continuation_code__"));
         let code = code_def.build(self.conversion, None);
         let target = code_def.build(self.conversion, site);
         let stack = low::StackVar.build(self.conversion, site);
@@ -1049,7 +1049,7 @@ impl<'a, 'source> ConversionFolder<'a, 'source> {
     }
 }
 
-impl Folder for ConversionFolder<'_, '_> {
+impl Folder for ConversionFolder<'_> {
     type Input = Work;
     type Frame = Work;
     type Output = ();

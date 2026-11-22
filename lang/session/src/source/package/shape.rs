@@ -136,7 +136,9 @@ impl Shapes {
     fn head(arena: &t::TextArena, entity: t::EntityId) -> (Kind, Vec<Atom>) {
         use Atom::*;
         match entity {
-            | t::EntityId::Def(id) => (Kind::Definition, vec![Text(arena.defs[&id].0.clone())]),
+            | t::EntityId::Def(id) => {
+                (Kind::Definition, vec![Text(arena.defs[&id].as_str().to_owned())])
+            }
             | t::EntityId::Meta(id) => {
                 let meta = &arena.metas[&id];
                 let atoms = match meta {
@@ -150,7 +152,7 @@ impl Shapes {
             | t::EntityId::CoPat(id) => {
                 let node = &arena.copats[&id];
                 let atoms = match node {
-                    | t::CoPattern::Dtor(name) => vec![Text(name.0.clone())],
+                    | t::CoPattern::Dtor(name) => vec![Text(name.as_str().to_owned())],
                     | t::CoPattern::Pat(_) | t::CoPattern::App(_) => Vec::new(),
                 };
                 (Kind::Copattern(discriminant(node)), atoms)
@@ -160,9 +162,9 @@ impl Shapes {
                 let atoms = match node {
                     | t::Pattern::Named(t::Named(name, _))
                     | t::Pattern::Project(t::ProjectionPattern(name, _)) => {
-                        vec![Text(name.0.clone())]
+                        vec![Text(name.as_str().to_owned())]
                     }
-                    | t::Pattern::Ctor(t::Ctor(name, _)) => vec![Text(name.0.clone())],
+                    | t::Pattern::Ctor(t::Ctor(name, _)) => vec![Text(name.as_str().to_owned())],
                     | t::Pattern::Lit(value) => vec![Literal(value.clone())],
                     | t::Pattern::Ann(_)
                     | t::Pattern::Manifest(_)
@@ -177,12 +179,12 @@ impl Shapes {
             | t::EntityId::Term(id) => {
                 let node = &arena.terms[&id];
                 let atoms = match node {
-                    | t::Term::Var(name) => vec![Text(name.0.clone())],
+                    | t::Term::Var(name) => vec![Text(name.as_str().to_owned())],
                     | t::Term::Named(t::Named(name, _))
                     | t::Term::Label(t::Label(name, _))
-                    | t::Term::Proj(t::Proj(_, name)) => vec![Text(name.0.clone())],
-                    | t::Term::Ctor(t::Ctor(name, _)) => vec![Text(name.0.clone())],
-                    | t::Term::Dtor(t::Dtor(_, name)) => vec![Text(name.0.clone())],
+                    | t::Term::Proj(t::Proj(_, name)) => vec![Text(name.as_str().to_owned())],
+                    | t::Term::Ctor(t::Ctor(name, _)) => vec![Text(name.as_str().to_owned())],
+                    | t::Term::Dtor(t::Dtor(_, name)) => vec![Text(name.as_str().to_owned())],
                     | t::Term::Lit(value) => vec![Literal(value.clone())],
                     | t::Term::Let(binding) => Self::binding(&binding.binding),
                     | t::Term::ContextBind(binding) => Self::binding(&binding.binding)
@@ -204,12 +206,14 @@ impl Shapes {
                         })
                         .collect(),
                     | t::Term::Data(data) => {
-                        data.arms.iter().map(|arm| Text(arm.name.0.clone())).collect()
+                        data.arms.iter().map(|arm| Text(arm.name.as_str().to_owned())).collect()
                     }
                     | t::Term::CoData(data) => data
                         .arms
                         .iter()
-                        .flat_map(|arm| [Text(arm.name.0.clone()), Flag(arm.params.is_some())])
+                        .flat_map(|arm| {
+                            [Text(arm.name.as_str().to_owned()), Flag(arm.params.is_some())]
+                        })
                         .collect(),
                     | t::Term::Meta(_)
                     | t::Term::SourceBoundary(_)

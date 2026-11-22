@@ -7,11 +7,11 @@ use std::{
     fmt::{Display, Formatter},
 };
 use thiserror::Error;
+use zydeco_foundation::arena::ArenaAccess;
 use zydeco_syntax::{
     BuiltinRole, BuiltinTypeRole, BuiltinValueRole, FloatOperation, FloatType, IntegerOperation,
     IntegerType, Named, Prod,
 };
-use zydeco_utils::arena::ArenaAccess;
 
 /// Atomic value types available to foundational host operations.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -354,19 +354,7 @@ impl BuiltinOperationAbi {
     }
 }
 
-/// One runtime-relevant component of a checked Builtin package.
-#[derive(Clone, Debug)]
-pub enum BuiltinPackageValue {
-    Unit,
-    Operation(BuiltinValueRole),
-    Product(Vec<BuiltinPackageValue>),
-}
-
-/// Backend-independent instructions for materializing the host Builtin package.
-#[derive(Clone, Debug)]
-pub struct BuiltinPackagePlan {
-    pub value: BuiltinPackageValue,
-}
+pub use zydeco_ir::builtin::{BuiltinPackagePlan, BuiltinPackageValue};
 
 /// One Builtin role assigned to more than one entry of a package signature.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -489,7 +477,7 @@ impl<'a> BuiltinSignatureValidator<'a> {
             if !self.visited.insert(ty) {
                 return Some(());
             }
-            let Some(Fillable::Done(view)) = self.statics.types_pre.get(&ty).cloned() else {
+            let Some(Fillable::Done(view)) = self.statics.types_pre.get(ty).cloned() else {
                 return Some(());
             };
             match view {
@@ -564,9 +552,9 @@ impl<'a> BuiltinClassifierMatcher<'a> {
                     && self.matches_computation(body, expected)
             }
             | (Some(ss::Type::Named(Named(_, inner))), _) => self.matches_value(inner, expected),
-            | (Some(ss::Type::Var(def)), _) => self
-                .variable_type(actual, def)
-                .is_some_and(|inner| self.matches_value(inner, expected)),
+            | (Some(ss::Type::Var(def)), _) => {
+                self.variable_type(def).is_some_and(|inner| self.matches_value(inner, expected))
+            }
             | _ => false,
         };
         self.visiting.remove(&actual);
@@ -621,7 +609,7 @@ impl<'a> BuiltinClassifierMatcher<'a> {
                 self.matches_computation(inner, expected)
             }
             | (Some(ss::Type::Var(def)), _) => self
-                .variable_type(actual, def)
+                .variable_type(def)
                 .is_some_and(|inner| self.matches_computation(inner, expected)),
             | _ => false,
         };
@@ -638,7 +626,7 @@ impl<'a> BuiltinClassifierMatcher<'a> {
             | Some(ss::Type::Ret(_)) => expected == IntrinsicConstructor::Return,
             | Some(ss::Type::Named(Named(_, inner))) => self.matches_constructor(inner, expected),
             | Some(ss::Type::Var(def)) => self
-                .variable_type(actual, def)
+                .variable_type(def)
                 .is_some_and(|inner| self.matches_constructor(inner, expected)),
             | _ => false,
         };
@@ -647,7 +635,7 @@ impl<'a> BuiltinClassifierMatcher<'a> {
     }
 
     fn type_view(&self, ty: ss::TypeId) -> Option<ss::Type> {
-        match self.statics.types_pre.get(&ty)?.to_owned() {
+        match self.statics.types_pre.get(ty)?.to_owned() {
             | Fillable::Done(ty) => Some(ty),
             | Fillable::Fill(_) => None,
         }
@@ -656,17 +644,16 @@ impl<'a> BuiltinClassifierMatcher<'a> {
     fn witness_is_ctype(&self, witness: ss::AbstId) -> bool {
         self.statics
             .annotations_abst
-            .get(&witness)
+            .get(witness)
             .and_then(|kind| self.statics.kinds_pre.get(kind))
             .is_some_and(|kind| matches!(kind, Fillable::Done(ss::Kind::CType(_))))
     }
 
-    fn variable_type(&self, occurrence: ss::TypeId, def: ss::DefId) -> Option<ss::TypeId> {
+    fn variable_type(&self, def: ss::DefId) -> Option<ss::TypeId> {
         self.statics
-            .env_type
-            .get(&occurrence)
-            .and_then(|environment| environment.get(&def).copied())
-            .and_then(Self::as_type)
+            .type_definitions
+            .get(&def)
+            .copied()
             .or_else(|| self.statics.annotations_var.get(&def).copied().and_then(Self::as_type))
     }
 
@@ -703,16 +690,20 @@ pub enum BuiltinPackagePlanError {
 }
 
 /// Derives a backend-independent package plan from checked static identities.
-struct BuiltinPackagePlanner<'a> {
-    statics: &'a StaticsArena,
+pub struct BuiltinPackagePlanner<'a> {
+    pub statics: &'a StaticsArena,
 }
 
-impl BuiltinPackagePlan {
+impl<'a> BuiltinPackagePlanner<'a> {
+    pub fn new(statics: &'a StaticsArena) -> Self {
+        Self { statics }
+    }
+
     /// Validate the domain of a library factory independently of process completion.
     pub fn for_value(
-        statics: &StaticsArena, parameter: &ss::ValueParameter,
-    ) -> Result<Self, BuiltinPackagePlanError> {
-        BuiltinSignatureValidator::new(statics).validate_parts(
+        &self, parameter: &ss::ValueParameter,
+    ) -> Result<BuiltinPackagePlan, BuiltinPackagePlanError> {
+        BuiltinSignatureValidator::new(self.statics).validate_parts(
             parameter.domain,
             parameter
                 .witnesses
@@ -720,27 +711,23 @@ impl BuiltinPackagePlan {
                 .into_iter()
                 .flat_map(|witnesses| witnesses.iter().copied()),
         )?;
-        Ok(Self { value: BuiltinPackagePlanner { statics }.value(parameter.domain)? })
+        Ok(BuiltinPackagePlan { value: self.value(parameter.domain)? })
     }
 
     pub fn for_computation(
-        statics: &StaticsArena, signature: &ss::PackPi,
-    ) -> Result<Self, BuiltinPackagePlanError> {
-        BuiltinSignatureValidator::new(statics).validate(signature)?;
-        Ok(Self { value: BuiltinPackagePlanner { statics }.value(signature.domain)? })
+        &self, signature: &ss::PackPi,
+    ) -> Result<BuiltinPackagePlan, BuiltinPackagePlanError> {
+        BuiltinSignatureValidator::new(self.statics).validate(signature)?;
+        Ok(BuiltinPackagePlan { value: self.value(signature.domain)? })
     }
 
     pub fn for_executable(
-        statics: &StaticsArena, signature: &ss::PackPi,
-    ) -> Result<Self, BuiltinPackagePlanError> {
-        let planner = BuiltinPackagePlanner { statics };
-        let plan = Self::for_computation(statics, signature)?;
-        planner.validate_executable(signature)?;
+        &self, signature: &ss::PackPi,
+    ) -> Result<BuiltinPackagePlan, BuiltinPackagePlanError> {
+        let plan = self.for_computation(signature)?;
+        self.validate_executable(signature)?;
         Ok(plan)
     }
-}
-
-impl BuiltinPackagePlanner<'_> {
     fn value(&self, ty: ss::TypeId) -> Result<BuiltinPackageValue, BuiltinPackagePlanError> {
         match self.type_view(ty)? {
             | ss::Type::Exists(exists) => self.value(exists.body),

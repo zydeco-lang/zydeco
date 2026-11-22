@@ -5,22 +5,20 @@ use std::{
 };
 use thiserror::Error;
 use zydeco_assembly::{LoweringPipeline, syntax::AssemblyProgram};
-use zydeco_dynamics::{BuiltinRootLinker, LinkError, ProgKont, Runtime};
+use zydeco_dynamics::{ProgKont, Runtime};
+use zydeco_foundation::{pass::CompilerPass, pipeline};
+use zydeco_ir::{BuiltinPackagePlan, CoreProgram};
 use zydeco_session::{
     AnalysisError, AnalysisOutcome, CompilerSession, ExecutableError, ExecutableProgram,
     ProgramAnalysis,
 };
 use zydeco_stackir::{
-    BuiltinRootLowerError, FragmentProgram, RootLowerer, SpsLowPipeline, SpsLowProgram,
-    SpsLoweringError, SpsScheme,
+    FragmentProgram, RootLowerer, SpsLowPipeline, SpsLowProgram, SpsScheme,
     passes::{SpsFailure, SpsInspection, SpsObserver, SpsPlan, SpsSelection},
 };
-use zydeco_statics::{BuiltinPackagePlanError, arena::StaticsArena};
-use zydeco_surface::{scoped::arena::ScopedArena, textual::syntax::SpanArena};
-use zydeco_utils::{pass::CompilerPass, pipeline};
 
 /// One-shot command adapter over the same revisioned session used by editor clients.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct CommandCompiler {
     session: CompilerSession,
     project: Arc<zydeco_session::source::Project>,
@@ -38,6 +36,9 @@ pub struct TestInteraction {
 }
 
 impl CommandCompiler {
+    pub fn evict_lru(&mut self) {
+        self.session.evict_lru();
+    }
     pub fn session(&self) -> &CompilerSession {
         &self.session
     }
@@ -128,14 +129,11 @@ impl CommandCompiler {
     }
 
     pub fn lower_export(
-        &self, program: &zydeco_session::LibraryProgram, export: &zydeco_statics::CheckedExport,
+        &self, _program: &zydeco_session::LibraryProgram, export: &zydeco_statics::CheckedExport,
     ) -> Result<BackendProgram, CompileError> {
         BackendProgram::lower_boundary(
-            program.spans.clone(),
-            program.scoped.clone(),
-            program.library.statics.clone(),
-            export.root,
-            export.builtin.clone(),
+            &export.core,
+            export.builtin.as_ref(),
             &self.sps,
             self.pass_inspection,
         )
@@ -152,11 +150,8 @@ impl CommandCompiler {
         &self, program: &zydeco_session::UnitProgram,
     ) -> Result<BackendProgram, CompileError> {
         BackendProgram::lower_boundary(
-            program.spans.clone(),
-            program.scoped.clone(),
-            program.unit.statics.clone(),
-            program.unit.initializer.root,
-            program.unit.initializer.builtin.clone(),
+            &program.unit.initializer.core,
+            program.unit.initializer.builtin.as_ref(),
             &self.sps,
             self.pass_inspection,
         )
@@ -175,18 +170,11 @@ impl CommandCompiler {
             std::path::PathBuf,
         >,
     ) -> Result<ProgKont, CompileError> {
-        let dynamics = BuiltinRootLinker {
-            scoped: executable.scoped,
-            statics: executable.statics,
-            root: executable.root,
-            signature: executable.signature,
-        }
-        .run()
-        .map_err(CompileError::Link)?;
         let mut input = std::io::stdin().lock();
         let mut output = std::io::stdout();
         let mut stderr = std::io::stderr();
-        match Runtime::new(&mut input, &mut output, &mut stderr, arguments, dynamics)
+        match Runtime::new(&mut input, &mut output, &mut stderr, arguments, &executable.core)
+            .with_packages(std::slice::from_ref(&executable.builtin))
             .with_foreign_libraries(libraries)
             .run()
         {
@@ -197,18 +185,13 @@ impl CommandCompiler {
 
     pub fn test(&self, path: &Path, arguments: &[String]) -> Result<(), CompileError> {
         let executable = self.executable(path)?;
-        let dynamics = BuiltinRootLinker {
-            scoped: executable.scoped,
-            statics: executable.statics,
-            root: executable.root,
-            signature: executable.signature,
-        }
-        .run()
-        .map_err(CompileError::Link)?;
         let mut input = std::io::empty();
         let mut output = std::io::sink();
         let mut stderr = std::io::sink();
-        match Runtime::new(&mut input, &mut output, &mut stderr, arguments, dynamics).run() {
+        match Runtime::new(&mut input, &mut output, &mut stderr, arguments, &executable.core)
+            .with_packages(std::slice::from_ref(&executable.builtin))
+            .run()
+        {
             | ProgKont::ExitCode(0) => Ok(()),
             | ProgKont::Error(error) => Err(CompileError::Runtime(error)),
             | result => Err(CompileError::TestFailure(result)),
@@ -237,18 +220,11 @@ impl CommandCompiler {
             std::path::PathBuf,
         >,
     ) -> Result<TestInteraction, CompileError> {
-        let dynamics = BuiltinRootLinker {
-            scoped: executable.scoped,
-            statics: executable.statics,
-            root: executable.root,
-            signature: executable.signature,
-        }
-        .run()
-        .map_err(CompileError::Link)?;
         let mut input = input.as_bytes();
         let mut output = Vec::new();
         let mut stderr = Vec::new();
-        match Runtime::new(&mut input, &mut output, &mut stderr, arguments, dynamics)
+        match Runtime::new(&mut input, &mut output, &mut stderr, arguments, &executable.core)
+            .with_packages(std::slice::from_ref(&executable.builtin))
             .with_foreign_libraries(libraries)
             .run()
         {
@@ -275,41 +251,13 @@ impl CommandCompiler {
     }
 }
 
-/// Frozen backend input retaining the provenance needed by renderers and emitters.
+/// Frozen backend input independent of front-end arenas.
 pub struct BackendProgram {
-    pub scoped: Arc<ScopedArena>,
-    pub statics: Arc<StaticsArena>,
     pub sps_low: SpsLowProgram,
     /// Populated only when an assembly-derived target is requested.
     assembly: OnceLock<AssemblyProgram>,
     representation: RepresentationStrategy,
     sps_passes: SpsPlan,
-}
-
-/// One source-level SPS lowering failure with the provenance its reports need.
-#[derive(Error)]
-pub struct SpsLoweringFailure {
-    pub errors: Vec<SpsLoweringError>,
-    pub spans: Arc<SpanArena>,
-    pub scoped: Arc<ScopedArena>,
-    pub statics: Arc<StaticsArena>,
-}
-
-impl std::fmt::Display for SpsLoweringFailure {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let Some(first) = self.errors.first() else { return Ok(()) };
-        write!(f, "{first}")?;
-        if self.errors.len() > 1 {
-            write!(f, " (and {} more)", self.errors.len() - 1)?;
-        }
-        Ok(())
-    }
-}
-
-impl std::fmt::Debug for SpsLoweringFailure {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SpsLoweringFailure").field("errors", &self.errors).finish()
-    }
 }
 
 /// Assembly text and linker dependencies from one native lowering pass.
@@ -321,41 +269,27 @@ pub struct Amd64Artifact {
     pub unit_imports: Vec<zydeco_syntax::UnitImport>,
 }
 
-enum BackendLowerError {
-    Root(BuiltinRootLowerError),
-    Pass(SpsFailure),
-}
-
 impl BackendProgram {
     /// Lower and freeze an executable under the selected scheme and pass plan.
     pub fn lower_with_selection(
         executable: ExecutableProgram, selection: &SpsSelection, inspection: SpsInspection,
     ) -> Result<Self, CompileError> {
-        let ExecutableProgram { spans, scoped, statics, root, signature } = executable;
-        let builtin = zydeco_statics::BuiltinPackagePlan::for_executable(&statics, &signature)
-            .map_err(CompileError::BuiltinLower)?;
-        Self::lower_boundary(spans, scoped, statics, root, Some(builtin), selection, inspection)
+        Self::lower_boundary(&executable.core, Some(&executable.builtin), selection, inspection)
     }
 
     fn lower_boundary(
-        spans: Arc<SpanArena>, scoped: Arc<ScopedArena>, statics: Arc<StaticsArena>,
-        root: zydeco_statics::CompuId, builtin: Option<zydeco_statics::BuiltinPackagePlan>,
-        selection: &SpsSelection, inspection: SpsInspection,
+        core: &CoreProgram, builtin: Option<&BuiltinPackagePlan>, selection: &SpsSelection,
+        inspection: SpsInspection,
     ) -> Result<Self, CompileError> {
         let SpsSelection { scheme, plan } = selection;
         let lower_sps = |program: FragmentProgram| {
-            let mut pipeline = SpsLowPipeline { scoped: &scoped, statics: &statics };
+            let mut pipeline = SpsLowPipeline;
             if inspection.enabled() {
-                let mut observer = SpsObserver {
-                    scoped: &scoped,
-                    statics: &statics,
-                    inspection,
-                    output: std::io::stderr().lock(),
-                };
+                let mut observer = SpsObserver { inspection, output: std::io::stderr().lock() };
                 pipeline
                     .with_optimizations(plan.instantiate_observed(&mut observer))
                     .run(program)
-                    .map_err(BackendLowerError::Pass)
+                    .map_err(CompileError::SpsPass)
             } else {
                 Ok(match plan {
                     | SpsPlan::Default => pipeline.run_infallible(program),
@@ -363,31 +297,14 @@ impl BackendProgram {
                 })
             }
         };
-        let lowered = pipeline![
-            |root| RootLowerer { scoped: &scoped, statics: &statics, scheme: *scheme }
-                .run_with_builtin(root, builtin.clone())
-                .map_err(|errors| BackendLowerError::Root(BuiltinRootLowerError::Sps(errors))),
+        let sps_low = pipeline![
+            |core| Ok::<_, CompileError>(
+                RootLowerer { scheme: *scheme }.run_with_builtin(core, builtin),
+            ),
             lower_sps,
         ]
-        .run(root);
-        let sps_low = match lowered {
-            | Ok(sps_low) => sps_low,
-            | Err(BackendLowerError::Root(BuiltinRootLowerError::Package(error))) => {
-                return Err(CompileError::BuiltinLower(error));
-            }
-            | Err(BackendLowerError::Root(BuiltinRootLowerError::Sps(errors))) => {
-                return Err(CompileError::SpsLowering(SpsLoweringFailure {
-                    errors,
-                    spans,
-                    scoped,
-                    statics,
-                }));
-            }
-            | Err(BackendLowerError::Pass(error)) => return Err(CompileError::SpsPass(error)),
-        };
+        .run(core)?;
         Ok(Self {
-            scoped,
-            statics,
             sps_low,
             assembly: OnceLock::new(),
             representation: RepresentationStrategy::default(),
@@ -422,7 +339,7 @@ impl BackendProgram {
     pub fn render_sps_low(&self) -> String {
         use zydeco_stackir::low::fmt::*;
         let arena = self.sps_low.arena();
-        let formatter = Formatter::new(&arena.admin, &arena.inner, &self.scoped, &self.statics);
+        let formatter = Formatter::new(&arena.admin, &arena.inner);
         let mut output = String::new();
         self.sps_low.pretty(&formatter).render_fmt(100, &mut output).unwrap();
         output
@@ -456,7 +373,7 @@ impl BackendProgram {
     fn emit_native(
         &self, operating_system: TargetOs, entry: zydeco_amd64::emit::NativeEntry,
     ) -> Amd64Artifact {
-        let native = LoweringPipeline::new(&self.scoped, &self.statics)
+        let native = LoweringPipeline::new()
             .with_representation(self.representation)
             .with_native_frames()
             .run(&self.sps_low)
@@ -523,7 +440,7 @@ impl BackendProgram {
     /// The immutable assembly product selected by this program's representation policy.
     pub fn assembly(&self) -> &AssemblyProgram {
         self.assembly.get_or_init(|| {
-            LoweringPipeline::new(&self.scoped, &self.statics)
+            LoweringPipeline::new()
                 .with_representation(self.representation)
                 .run_infallible(&self.sps_low)
         })
@@ -542,12 +459,6 @@ pub enum CompileError {
     Rejected(Arc<ProgramAnalysis>),
     #[error(transparent)]
     Executable(ExecutableError),
-    #[error(transparent)]
-    Link(LinkError),
-    #[error(transparent)]
-    BuiltinLower(BuiltinPackagePlanError),
-    #[error("{0}")]
-    SpsLowering(SpsLoweringFailure),
     #[error(transparent)]
     Runtime(zydeco_dynamics::syntax::RuntimeError),
     #[error(transparent)]

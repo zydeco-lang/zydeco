@@ -38,14 +38,14 @@ impl TypeId {
                 let scope = tycker
                     .statics
                     .fill_scopes
-                    .get(&fill)
+                    .get(fill)
                     .map(|current| current.intersection(&admissible))
                     .unwrap_or(admissible);
                 (fill, scope)
             })
             .collect::<Vec<_>>();
         constraints.into_iter().for_each(|(fill, scope)| {
-            let _ = tycker.statics.fill_scopes.upsert(fill, scope);
+            tycker.record_fill_scope(fill, scope);
         });
         Ok(())
     }
@@ -89,6 +89,7 @@ pub(super) struct TypeSupportCollector {
     support: TypeSupport,
     bound: HashSet<AbstId>,
     pack_scope: SkolemScope,
+    visited_closed_nofill: HashSet<TypeId>,
     visiting_fills: HashSet<FillId>,
     visiting_vars: HashSet<(DefId, TypeId)>,
     visiting_datas: HashSet<DataId>,
@@ -117,30 +118,34 @@ impl InferenceOccurs {
     }
 
     fn in_kind(&mut self, kind: KindId, tycker: &mut Tycker<'_>) -> Result<bool> {
-        if !self.visiting_kinds.insert(kind) {
-            return Ok(false);
-        }
-        let occurs = match tycker.statics.kinds_pre[&kind].to_owned() {
-            | Fillable::Fill(fill) if fill == self.needle => true,
-            | Fillable::Fill(fill) if self.visiting_fills.insert(fill) => {
-                let occurs = match tycker.statics.solus.get(&fill).copied() {
-                    | Some(AnnId::Kind(solution)) => self.in_kind(solution, tycker)?,
-                    | Some(AnnId::Set | AnnId::Type(_)) => {
-                        return tycker.err(TyckError::SortMismatch);
-                    }
-                    | None => false,
-                };
-                self.visiting_fills.remove(&fill);
-                occurs
+        zydeco_foundation::stack::maybe_grow(|| {
+            if !self.visiting_kinds.insert(kind) {
+                return Ok(false);
             }
-            | Fillable::Fill(_) | Fillable::Done(Kind::VType(_) | Kind::CType(_)) => false,
-            | Fillable::Done(Kind::Arrow(Arrow(domain, codomain))) => {
-                self.in_kind(domain, tycker)? || self.in_kind(codomain, tycker)?
-            }
-            | Fillable::Done(Kind::Label(Label(_, payload))) => self.in_kind(payload, tycker)?,
-        };
-        self.visiting_kinds.remove(&kind);
-        Ok(occurs)
+            let occurs = match tycker.statics.kinds_pre[&kind].to_owned() {
+                | Fillable::Fill(fill) if fill == self.needle => true,
+                | Fillable::Fill(fill) if self.visiting_fills.insert(fill) => {
+                    let occurs = match tycker.statics.solus.get(fill).copied() {
+                        | Some(AnnId::Kind(solution)) => self.in_kind(solution, tycker)?,
+                        | Some(AnnId::Set | AnnId::Type(_)) => {
+                            return tycker.err(TyckError::SortMismatch);
+                        }
+                        | None => false,
+                    };
+                    self.visiting_fills.remove(&fill);
+                    occurs
+                }
+                | Fillable::Fill(_) | Fillable::Done(Kind::VType(_) | Kind::CType(_)) => false,
+                | Fillable::Done(Kind::Arrow(Arrow(domain, codomain))) => {
+                    self.in_kind(domain, tycker)? || self.in_kind(codomain, tycker)?
+                }
+                | Fillable::Done(Kind::Label(Label(_, payload))) => {
+                    self.in_kind(payload, tycker)?
+                }
+            };
+            self.visiting_kinds.remove(&kind);
+            Ok(occurs)
+        })
     }
 }
 
@@ -150,6 +155,7 @@ impl TypeSupportCollector {
             support: TypeSupport::default(),
             bound: HashSet::default(),
             pack_scope: SkolemScope::default(),
+            visited_closed_nofill: HashSet::default(),
             visiting_fills: HashSet::default(),
             visiting_vars: HashSet::default(),
             visiting_datas: HashSet::default(),
@@ -158,6 +164,24 @@ impl TypeSupportCollector {
     }
 
     fn visit(&mut self, id: TypeId, tycker: &mut Tycker<'_>) -> Result<()> {
+        let summary = tycker.statics.types_pre.summary(id);
+        if !summary.intersects(
+            TypeSummary::HAS_FILL
+                .union(TypeSummary::HAS_FREE_ABST)
+                .union(TypeSummary::HAS_FREE_VAR),
+        ) {
+            return Ok(());
+        }
+        if self.bound.is_empty()
+            && !summary.intersects(TypeSummary::HAS_FILL.union(TypeSummary::HAS_FREE_VAR))
+            && !self.visited_closed_nofill.insert(id)
+        {
+            return Ok(());
+        }
+        zydeco_foundation::stack::maybe_grow(|| self.visit_inner(id, tycker))
+    }
+
+    fn visit_inner(&mut self, id: TypeId, tycker: &mut Tycker<'_>) -> Result<()> {
         match tycker.statics.types_pre[&id].to_owned() {
             | Fillable::Fill(fill) => {
                 let local_scope = self.pack_scope.clone();
@@ -166,7 +190,7 @@ impl TypeSupportCollector {
                     .entry(fill)
                     .and_modify(|scope| *scope = scope.intersection(&local_scope))
                     .or_insert(local_scope);
-                let solution = tycker.statics.solus.get(&fill).cloned();
+                let solution = tycker.statics.solus.get(fill).cloned();
                 if self.visiting_fills.insert(fill) {
                     let result = match solution {
                         | Some(AnnId::Type(solution)) => self.visit(solution, tycker),
@@ -177,135 +201,142 @@ impl TypeSupportCollector {
                     result?;
                 }
             }
-            | Fillable::Done(ty) => match ty {
-                | Type::Var(def) => {
-                    let target = tycker.statics.env_type[&id].get(&def).copied();
-                    if let Some(AnnId::Type(target)) = target {
-                        let key = (def, target);
-                        if self.visiting_vars.insert(key) {
-                            let result = self.visit(target, tycker);
-                            self.visiting_vars.remove(&key);
-                            result?;
-                        }
-                    }
-                }
-                | Type::Abst(abst) if !self.bound.contains(&abst) => {
-                    if tycker.statics.existential_skolems.get(&abst).is_some() {
-                        self.support.skolems.insert(abst);
-                    } else {
-                        self.support.declarations.insert(abst);
-                    }
-                }
-                | Type::Abst(_) => {}
-                | Type::Abs(TypeAbstraction { binder, body }) => {
-                    let newly_bound = self.bound.insert(binder.witness);
-                    let result = self.visit(body, tycker);
-                    if newly_bound {
-                        self.bound.remove(&binder.witness);
-                    }
-                    result?;
-                }
-                | Type::App(App(function, argument)) => {
-                    [function, argument].into_iter().try_for_each(|ty| self.visit(ty, tycker))?;
-                }
-                | Type::Named(Named(_, inner)) | Type::Label(Label(_, inner)) => {
-                    self.visit(inner, tycker)?
-                }
-                | Type::Proj(Proj(head, _)) => self.visit(head, tycker)?,
-                | Type::Thk(_)
-                | Type::Ret(_)
-                | Type::Unit(_)
-                | Type::Opaque(_)
-                | Type::Primitive(_)
-                | Type::OS(_) => {}
-                | Type::ValPi(pi) => {
-                    let ValPi { binder, codomain } = *pi;
-                    match binder {
-                        | ValPiBinder::Type(binder) => {
-                            let newly_bound = self.bound.insert(binder.witness);
-                            let result = self.visit(codomain, tycker);
-                            if newly_bound {
-                                self.bound.remove(&binder.witness);
-                            }
-                            result?;
-                        }
-                        | ValPiBinder::Value(parameter) => {
-                            self.visit(parameter.domain, tycker)?;
-                            match parameter.witnesses {
-                                | None => self.visit(codomain, tycker)?,
-                                | Some(witnesses) => {
-                                    let outer_bound = self.bound.clone();
-                                    let outer_pack_scope = self.pack_scope.clone();
-                                    self.bound.extend(witnesses.iter().copied());
-                                    self.pack_scope =
-                                        self.pack_scope.union(&witnesses.iter().copied().collect());
-                                    let result = self.visit(codomain, tycker);
-                                    self.bound = outer_bound;
-                                    self.pack_scope = outer_pack_scope;
-                                    result?;
-                                }
-                            }
-                        }
-                    }
-                }
-                | Type::Arrow(Arrow(input, output)) => {
-                    [input, output].into_iter().try_for_each(|ty| self.visit(ty, tycker))?;
-                }
-                | Type::Prod(Prod(components)) => {
-                    components.into_iter().try_for_each(|ty| self.visit(ty, tycker))?;
-                }
-                | Type::Forall(Forall(binder, body)) => {
-                    let newly_bound = self.bound.insert(binder.witness);
-                    let result = self.visit(body, tycker);
-                    if newly_bound {
-                        self.bound.remove(&binder.witness);
-                    }
-                    result?;
-                }
-                | Type::Exists(exists) => {
-                    let Exists { binder, mode, body } = *exists;
-                    if let ExistsMode::Manifest(definition) = mode {
-                        self.visit(definition, tycker)?;
-                    }
-                    let newly_bound = self.bound.insert(binder.witness);
-                    let result = self.visit(body, tycker);
-                    if newly_bound {
-                        self.bound.remove(&binder.witness);
-                    }
-                    result?;
-                }
-                | Type::ManifestKind(ManifestKind { body, .. }) => self.visit(body, tycker)?,
-                | Type::PackPi(pack_pi) => {
-                    let PackPi { domain, witnesses, codomain } = *pack_pi;
-                    self.visit(domain, tycker)?;
-                    let outer_bound = self.bound.clone();
-                    let outer_pack_scope = self.pack_scope.clone();
-                    self.bound.extend(witnesses.iter().copied());
-                    self.pack_scope = self.pack_scope.union(&witnesses.iter().copied().collect());
-                    let result = self.visit(codomain, tycker);
-                    self.bound = outer_bound;
-                    self.pack_scope = outer_pack_scope;
-                    result?;
-                }
-                | Type::Data(data) => {
-                    if self.visiting_datas.insert(data) {
-                        let arms = tycker.statics.datas[&data].clone();
-                        let result =
-                            arms.into_iter().try_for_each(|(_, arm)| self.visit(arm, tycker));
-                        self.visiting_datas.remove(&data);
+            | Fillable::Done(ty) => self.visit_done(ty, tycker)?,
+        }
+        Ok(())
+    }
+
+    fn visit_done(&mut self, ty: Type, tycker: &mut Tycker<'_>) -> Result<()> {
+        match ty {
+            | Type::Var(def) => {
+                let target = tycker
+                    .type_bindings
+                    .get(&def)
+                    .copied()
+                    .or_else(|| tycker.statics.type_definitions.get(&def).copied());
+                if let Some(target) = target {
+                    let key = (def, target);
+                    if self.visiting_vars.insert(key) {
+                        let result = self.visit(target, tycker);
+                        self.visiting_vars.remove(&key);
                         result?;
                     }
                 }
-                | Type::CoData(codata) => {
-                    if self.visiting_codatas.insert(codata) {
-                        let arms = tycker.statics.codatas[&codata].clone();
-                        let result =
-                            arms.into_iter().try_for_each(|(_, arm)| self.visit(arm, tycker));
-                        self.visiting_codatas.remove(&codata);
+            }
+            | Type::Abst(abst) if !self.bound.contains(&abst) => {
+                if tycker.statics.existential_skolems.contains(abst) {
+                    self.support.skolems.insert(abst);
+                } else {
+                    self.support.declarations.insert(abst);
+                }
+            }
+            | Type::Abst(_) => {}
+            | Type::Abs(TypeAbstraction { binder, body }) => {
+                let newly_bound = self.bound.insert(binder.witness);
+                let result = self.visit(body, tycker);
+                if newly_bound {
+                    self.bound.remove(&binder.witness);
+                }
+                result?;
+            }
+            | Type::App(App(function, argument)) => {
+                [function, argument].into_iter().try_for_each(|ty| self.visit(ty, tycker))?;
+            }
+            | Type::Named(Named(_, inner)) | Type::Label(Label(_, inner)) => {
+                self.visit(inner, tycker)?
+            }
+            | Type::Proj(Proj(head, _)) => self.visit(head, tycker)?,
+            | Type::Thk(_)
+            | Type::Ret(_)
+            | Type::Unit(_)
+            | Type::Opaque(_)
+            | Type::Primitive(_)
+            | Type::OS(_) => {}
+            | Type::ValPi(pi) => {
+                let ValPi { binder, codomain } = *pi;
+                match binder {
+                    | ValPiBinder::Type(binder) => {
+                        let newly_bound = self.bound.insert(binder.witness);
+                        let result = self.visit(codomain, tycker);
+                        if newly_bound {
+                            self.bound.remove(&binder.witness);
+                        }
                         result?;
                     }
+                    | ValPiBinder::Value(parameter) => {
+                        self.visit(parameter.domain, tycker)?;
+                        match parameter.witnesses {
+                            | None => self.visit(codomain, tycker)?,
+                            | Some(witnesses) => {
+                                let outer_bound = self.bound.clone();
+                                let outer_pack_scope = self.pack_scope.clone();
+                                self.bound.extend(witnesses.iter().copied());
+                                self.pack_scope =
+                                    self.pack_scope.union(&witnesses.iter().copied().collect());
+                                let result = self.visit(codomain, tycker);
+                                self.bound = outer_bound;
+                                self.pack_scope = outer_pack_scope;
+                                result?;
+                            }
+                        }
+                    }
                 }
-            },
+            }
+            | Type::Arrow(Arrow(input, output)) => {
+                [input, output].into_iter().try_for_each(|ty| self.visit(ty, tycker))?;
+            }
+            | Type::Prod(Prod(components)) => {
+                components.into_iter().try_for_each(|ty| self.visit(ty, tycker))?;
+            }
+            | Type::Forall(Forall(binder, body)) => {
+                let newly_bound = self.bound.insert(binder.witness);
+                let result = self.visit(body, tycker);
+                if newly_bound {
+                    self.bound.remove(&binder.witness);
+                }
+                result?;
+            }
+            | Type::Exists(exists) => {
+                let Exists { binder, mode, body } = *exists;
+                if let ExistsMode::Manifest(definition) = mode {
+                    self.visit(definition, tycker)?;
+                }
+                let newly_bound = self.bound.insert(binder.witness);
+                let result = self.visit(body, tycker);
+                if newly_bound {
+                    self.bound.remove(&binder.witness);
+                }
+                result?;
+            }
+            | Type::ManifestKind(ManifestKind { body, .. }) => self.visit(body, tycker)?,
+            | Type::PackPi(pack_pi) => {
+                let PackPi { domain, witnesses, codomain } = *pack_pi;
+                self.visit(domain, tycker)?;
+                let outer_bound = self.bound.clone();
+                let outer_pack_scope = self.pack_scope.clone();
+                self.bound.extend(witnesses.iter().copied());
+                self.pack_scope = self.pack_scope.union(&witnesses.iter().copied().collect());
+                let result = self.visit(codomain, tycker);
+                self.bound = outer_bound;
+                self.pack_scope = outer_pack_scope;
+                result?;
+            }
+            | Type::Data(data) => {
+                if self.visiting_datas.insert(data) {
+                    let arms = tycker.statics.datas[&data].clone();
+                    let result = arms.into_iter().try_for_each(|(_, arm)| self.visit(arm, tycker));
+                    self.visiting_datas.remove(&data);
+                    result?;
+                }
+            }
+            | Type::CoData(codata) => {
+                if self.visiting_codatas.insert(codata) {
+                    let arms = tycker.statics.codatas[&codata].clone();
+                    let result = arms.into_iter().try_for_each(|(_, arm)| self.visit(arm, tycker));
+                    self.visiting_codatas.remove(&codata);
+                    result?;
+                }
+            }
         }
         Ok(())
     }

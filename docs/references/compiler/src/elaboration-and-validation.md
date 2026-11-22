@@ -11,6 +11,12 @@ and static-root elaboration before publishing its result.
 [Monadic checking](../../../../lang/statics/src/check/monadic.rs) checks the supplied `Monad` and `Algebra` basis,
 synthesizes the payload once under its monadic environment, and passes a `CheckedTerm`
 to the [algebra translation](../../../../lang/statics/src/elaborate/monadic).
+`MonadicMemo` caches closed `Signature` and `TypeLift` type translations by `(monad_ty, algebra, TypeId)`
+across each block, and shares closed `Structure` algebra computations via block-top thunk `let` bindings
+so downstream lowering never duplicates computation binder `DefId`s.
+It also invokes [call-by-value block elaboration](../../../../lang/statics/src/check/term/cbv/mod.rs)
+where `@[cbv]` blocks enter checking, using precomputed `TermContexts` mention
+and `SourceBoundary` summaries to skip irrelevant variable scans.
 The translator constructs lifted types, structures, and terms, rebinding their static evidence into the output context.
 It dispatches the retained root to the existing type, value, or computation translation and preserves that sort.
 The outer wrapper is a carrier-parameterized type abstraction, a carrier-and-dictionary value abstraction,
@@ -51,8 +57,8 @@ The payload is checked once, then translated, finalized, and statically eliminat
 The static evaluator can forward opaque runtime monad dictionaries through known value closures;
 it never executes their structure thunks to recover a type witness.
 Translated terms retain source provenance so residualization failures identify the source construct.
-[Source fixtures](../../../../lang/tests/cases/monadic-value-functions) cover signatures, witness scope,
-and rejection; [Rust assertions](../../../../lang/tests/tests/monadic_value_functions.rs) retain typed-arena invariant
+[Source fixtures](../../../../lang/tests/cases/monadic-value-functions) cover signatures, witness scope, and rejection;
+[Rust assertions](../../../../lang/tests/tests/suite/monadic_value_functions.rs) retain typed-arena invariant
 and lowering checks.
 The [State fixture](../../../../lib/tests/monadic/value-functions.zy) checks effect order
 through the interpreter and the Wasm backend.
@@ -95,15 +101,15 @@ Recursive requests select methods on the fixed dictionary instead of rebuilding 
 Translated value and computation roots bind the dictionary thunk under their carrier and runtime monad arguments,
 so dynamic evaluation and inlining use the same generated code and nominal families.
 Type roots prepare the same applicative families but skip dictionary construction entirely.
-[Root-sort regressions](../../../../lang/tests/tests/monadic_roots.rs) check that distinction, source imports,
-typed-arena invariants, and shared lowering.
+[Root-sort regressions](../../../../lang/tests/tests/suite/monadic_roots.rs) check that distinction,
+source imports, typed-arena invariants, and shared lowering.
 
 The `comatch` constructor accepts an expected classifier, exposes its codata shape to check each arm,
 and retains the nominal classifier on the result.
 This keeps codata introductions, observations, algebra signatures, and coverage hints consistent.
 [Nominal fixtures](../../../../lang/tests/cases/monadic-nominal) cover mutual recursion, growing type arguments,
 scoped and higher-kinded dependencies, packages, nested translation, and applicative equality and rejection.
-[Rust regressions](../../../../lang/tests/tests/monadic_nominal.rs) retain typed-arena invariant checks,
+[Rust regressions](../../../../lang/tests/tests/suite/monadic_nominal.rs) retain typed-arena invariant checks,
 lowering, source sharing, and bounded family counts on a 160-declaration cycle.
 The [State fixture](../../../../lib/tests/monadic/nominal-types.zy) checks runtime dictionary selection,
 finite protocol observations, and absence of eager effects in the interpreter, native backend, and Wasm backend.
@@ -195,7 +201,7 @@ Both linking and SPS lowering select the stored residual root.
 typed holes may still be inspected during ordinary checking.
 [Static-elimination fixtures](../../../../lang/tests/cases/static-elimination) distinguish erased library structure,
 runtime payloads, and failed evidence recovery.
-[Rust regressions](../../../../lang/tests/tests/static_elimination.rs) inspect residual sharing and source facts,
+[Rust regressions](../../../../lang/tests/tests/suite/static_elimination.rs) inspect residual sharing and source facts,
 retain invariant and lowering assertions, and generate boundary and reduction-limit matrices.
 
 ## Residual Runtime Traversal
@@ -231,5 +237,5 @@ and neither the root nor any recorded term annotation is a hole.
 Tests check these invariants; compilation does not.
 [`ArenaInvariants`](../../../../lang/tests/src/invariants.rs) reports every violation in a finished arena,
 and `SourceCase::check_invariants` asserts that the arena of each source it checks has none.
-[Mutation tests](../../../../lang/tests/tests/arena_invariants.rs) corrupt one fact of a checked fixture
-and require the matching violation, paired with the unmodified fixture.
+[Mutation tests](../../../../lang/tests/tests/suite/arena_invariants.rs) corrupt one fact
+of a checked fixture and require the matching violation, paired with the unmodified fixture.

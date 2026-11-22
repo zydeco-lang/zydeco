@@ -3,7 +3,7 @@ use crate::{
     bitter::{SourceDesugarOut, SourceUnitDesugarer},
     textual::{StrictParser, syntax as t},
 };
-use zydeco_utils::pass::CompilerPass;
+use zydeco_foundation::pass::CompilerPass;
 
 struct Fixture {
     spans: t::SpanArena,
@@ -173,7 +173,7 @@ fn failed_nested_blocks_close_their_graphs_before_visiting_siblings() {
         .arena
         .defs
         .iter()
-        .find_map(|(id, name)| (name.0 == "y").then_some(*id))
+        .find_map(|(id, name)| (*name == "y").then_some(*id))
         .unwrap();
     let output = fixture.observe();
     assert!(output.program.is_err());
@@ -195,7 +195,7 @@ fn mobile_bindings_reject_lexical_dependencies_unavailable_at_the_block_boundary
     assert!(output.program.is_err(), "an invalid block must not publish a resolved program");
     assert!(matches!(
         output.diagnostics.as_slice(),
-        [ResolveError::UnboundVar(name)] if name.inner.0 == "x"
+        [ResolveError::UnboundVar(name)] if name.inner == "x"
     ));
 
     let output = Fixture::parse("begin let x = 1 in begin let y = x that y end end").observe();

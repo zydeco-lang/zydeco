@@ -1,7 +1,8 @@
 //! Materialize Builtin package plans through the shared resumable folder.
 
 use super::*;
-use zydeco_utils::fold::{Folder, Step};
+use crate::ir::BuiltinPackageValue;
+use zydeco_foundation::fold::{Folder, Step};
 
 pub(super) struct BuiltinPackageFolder<'lo, 'source> {
     pub lowerer: &'lo mut Lowerer<'source>,
@@ -20,9 +21,9 @@ impl Folder for BuiltinPackageFolder<'_, '_> {
     fn enter(&mut self, input: BuiltinPackageValue) -> Step<Self> {
         match input {
             | BuiltinPackageValue::Unit => Step::Return(Triv.build(self.lowerer, None)),
-            | BuiltinPackageValue::Operation(role) => Step::Return(
-                ExternalFunction::Host(role).make_function(self.lowerer.scheme, self.lowerer),
-            ),
+            | BuiltinPackageValue::Operation(role) => {
+                Step::Return(make_builtin_op(role, self.lowerer))
+            }
             | BuiltinPackageValue::Product(product) => {
                 let fields = Vec::with_capacity(product.len());
                 self.product(ProductFrame { remaining: product.into_iter(), fields })
@@ -34,6 +35,10 @@ impl Folder for BuiltinPackageFolder<'_, '_> {
         frame.fields.push(child);
         self.product(frame)
     }
+}
+
+fn make_builtin_op(role: BuiltinValueRole, lowerer: &mut Lowerer<'_>) -> ValueId {
+    ExternalFunction::Host(role).make_function(lowerer.scheme, lowerer)
 }
 
 impl BuiltinPackageFolder<'_, '_> {

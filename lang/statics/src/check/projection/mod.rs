@@ -70,7 +70,7 @@ struct PackageFieldCandidate {
 #[derive(Clone)]
 pub(super) struct DeferredEnvType {
     pub(super) root: ss::TypeId,
-    pub(super) environment: ss::TyEnv,
+    pub(super) environment: std::sync::Arc<ss::TyEnv>,
     pending: Option<DeferredEnvOperation>,
 }
 
@@ -86,14 +86,25 @@ enum DeferredEnvOperation {
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct DeferredEnvMaterializationKey {
     root: ss::TypeId,
-    environment: ss::TyEnv,
+    environment: std::sync::Arc<ss::TyEnv>,
     operation: DeferredEnvOperation,
+}
+
+/// Indexed value and package field occurrences for one resolved receiver shape and environment.
+#[derive(Default)]
+pub(in crate::check::projection) struct FieldIndex {
+    pub(in crate::check::projection) value_fields:
+        rustc_hash::FxHashMap<FieldName, Vec<DeferredValueFieldCandidate>>,
+    pub(in crate::check::projection) package_fields:
+        rustc_hash::FxHashMap<FieldName, Vec<PackageFieldCandidate>>,
 }
 
 /// Cross-operation field-search results, valid only while mutable type state is unchanged.
 #[derive(Default)]
 pub(super) struct DeferredEnvMaterializationCache {
-    entries: std::collections::HashMap<DeferredEnvMaterializationKey, ss::TypeId>,
+    entries: rustc_hash::FxHashMap<DeferredEnvMaterializationKey, ss::TypeId>,
+    field_indexes:
+        rustc_hash::FxHashMap<(ss::TypeId, std::sync::Arc<ss::TyEnv>), std::sync::Arc<FieldIndex>>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -184,12 +195,12 @@ struct ExistentialProjectionOpening {
 pub(super) struct DeferredTelescopeType {
     pub(super) root: ss::TypeId,
     environment: Option<DeferredTelescopeEnvironment>,
-    abstracts: rpds::VectorSync<DeferredAbstractAssignment>,
+    abstracts: Vec<DeferredAbstractAssignment>,
 }
 
 #[derive(Clone)]
 struct DeferredTelescopeEnvironment {
-    value: ss::TyEnv,
+    value: std::sync::Arc<ss::TyEnv>,
     unroll: bool,
 }
 

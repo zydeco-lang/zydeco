@@ -46,15 +46,16 @@ impl Fixture {
             .iter()
             .filter(|candidate| {
                 !zydeco_surface::metadata::CorePrelude::closed_names()
-                    .any(|name| name == candidate.name.0)
+                    .any(|name| name == candidate.name.as_str())
             })
-            .map(|candidate| candidate.name.0.clone())
+            .map(|candidate| candidate.name.as_str().to_owned())
             .collect()
     }
 
     fn annotation(&self, name: &str) -> Option<String> {
         let completion = self.completion();
-        let candidate = completion.candidates.iter().find(|candidate| candidate.name.0 == name)?;
+        let candidate =
+            completion.candidates.iter().find(|candidate| candidate.name.as_str() == name)?;
         let semantics = completion.semantics.as_ref()?;
         let annotation = semantics.annotation(candidate.definition)?;
         let formatter = Formatter::new(&semantics.scoped, &semantics.statics);
@@ -70,7 +71,7 @@ impl Fixture {
             .scoped
             .defs
             .iter()
-            .find_map(|(definition, found)| (found.0 == name).then_some(*definition))?;
+            .find_map(|(definition, found)| (found.as_str() == name).then_some(*definition))?;
         Some(semantics.compatibility(definition))
     }
 }
@@ -87,7 +88,7 @@ fn names_follow_lexical_proximity_and_shadowing() {
         panic!("the winning definition must be an authored binder")
     };
     assert_eq!(value.distance, 0);
-    assert_eq!(semantics.scoped.defs[&value.definition].0, "value");
+    assert_eq!(semantics.scoped.defs[&value.definition].as_str(), "value");
 }
 
 #[test]
@@ -455,7 +456,7 @@ fn completion_uses_the_selected_project_and_package_context() {
         .unwrap()
         .unwrap();
     assert_eq!(
-        completion.candidates.iter().map(|candidate| candidate.name.0.as_str()).collect::<Vec<_>>(),
+        completion.candidates.iter().map(|candidate| candidate.name.as_str()).collect::<Vec<_>>(),
         ["value"]
     );
     assert!(completion.semantics.is_some());
@@ -466,20 +467,21 @@ fn completion_uses_the_selected_project_and_package_context() {
 fn default_names_are_available_ranked_after_authored_names_and_shadowable() {
     let fixture = Fixture::new("let value = 1 in ¦");
     let completion = fixture.completion();
-    assert_eq!(completion.candidates[0].name.0, "value");
+    assert_eq!(completion.candidates[0].name.as_str(), "value");
     let defaults = completion.candidates[1..]
         .iter()
-        .map(|candidate| candidate.name.0.as_str())
+        .map(|candidate| candidate.name.as_str())
         .collect::<std::collections::BTreeSet<_>>();
     assert_eq!(defaults, zydeco_surface::metadata::CorePrelude::closed_names().collect());
     assert!(completion.implicit_os);
     assert_eq!(fixture.annotation("Int").as_deref(), Some("VType"));
     let shadow = Fixture::new("let Int = Unit in In¦");
     let completion = shadow.completion();
-    let int = completion.candidates.iter().find(|candidate| candidate.name.0 == "Int").unwrap();
+    let int =
+        completion.candidates.iter().find(|candidate| candidate.name.as_str() == "Int").unwrap();
     assert!(!completion.semantics.as_ref().unwrap().scoped.is_prelude_definition(int.definition));
     assert_eq!(
-        completion.candidates.iter().filter(|candidate| candidate.name.0 == "Int").count(),
+        completion.candidates.iter().filter(|candidate| candidate.name.as_str() == "Int").count(),
         1
     );
 }
@@ -489,7 +491,7 @@ fn opt_out_removes_default_completions_but_preserves_authored_names() {
     let fixture = Fixture::new("let Int = Unit in @[prelude(none)] ¦");
     let completion = fixture.completion();
     assert_eq!(
-        completion.candidates.iter().map(|candidate| candidate.name.0.as_str()).collect::<Vec<_>>(),
+        completion.candidates.iter().map(|candidate| candidate.name.as_str()).collect::<Vec<_>>(),
         ["Int"]
     );
     assert!(!completion.implicit_os);

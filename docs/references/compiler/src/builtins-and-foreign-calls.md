@@ -126,8 +126,8 @@ otherwise native linking uses the library's linker name and interpreter loading 
 Native foreign imports are unsupported in Wasm.
 
 [Foreign signature tests](../../../../lang/statics/tests/foreign.rs)
-and [FFI integration tests](../../../../lang/tests/tests/ffi.rs) pair valid shapes with unsupported arities,
-argument sorts, results, loader failures, and borrowing cases.
+and [FFI integration tests](../../../../lang/tests/tests/suite/ffi.rs) pair valid shapes
+with unsupported arities, argument sorts, results, loader failures, and borrowing cases.
 Scalar exports use the [C entry adapter](native-emission.md#compilation-unit-preparation-and-artifacts)
 and the same scalar call plan.
 Incoming pointers remain outside the scalar export profile; they need a separate entry adapter and binding contract.

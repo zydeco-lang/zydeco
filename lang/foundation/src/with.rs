@@ -1,0 +1,84 @@
+use derive_more::{AsMut, AsRef, Deref, DerefMut};
+use std::borrow::{Borrow, BorrowMut};
+
+/// A value of type `A` paired with attached metadata `M`.
+///
+/// [`With<M, A>`] is a lightweight, transparent product type meant for *decorating* a value
+/// with extra information—without turning it into an opaque "wrapper object".
+///
+/// The intended convention is:
+/// - `A` is the **payload** (the thing you want to transform).
+/// - `M` is **metadata / context** that should usually be preserved as you transform `A`
+///   (e.g. spans, IDs, annotations, provenance, configuration, etc.).
+///
+/// In functional terms, `With<M, _>` corresponds to the partially-applied product type
+/// `M × _` (Haskell’s `((,) M)`), and is commonly treated as "functor-like" over `A`:
+/// mapping over the payload leaves `M` unchanged.
+///
+/// # Basic usage
+///
+/// ```
+/// # use zydeco_foundation::with::With;
+/// let x: With<&'static str, i32> = With { info: "source.rs:10", inner: 123 };
+///
+/// // Destructure to access components:
+/// let With { info, inner } = x;
+/// assert_eq!(info, "source.rs:10");
+/// assert_eq!(inner, 123);
+/// ```
+///
+/// # Domain-specific aliases
+///
+/// Using aliases often makes call sites clearer:
+///
+/// ```
+/// # use zydeco_foundation::with::With;
+/// # struct Span;
+/// # struct TypeInfo;
+/// type Spanned<T>   = With<Span, T>;
+/// type Annotated<T> = With<TypeInfo, T>;
+/// ```
+///
+/// # Notes on semantics
+///
+/// Map-style operations on `With` apply the function to the `A` field while leaving `M`
+/// untouched (see [`With::mk`]). When sequencing/composition combines metadata,
+/// `M` takes on "log/writer" semantics (e.g. requires some kind of append).
+#[derive(Default, Clone, Debug, AsRef, AsMut, Deref, DerefMut)]
+pub struct With<M, A> {
+    pub info: M,
+    #[as_ref]
+    #[as_mut]
+    #[deref]
+    #[deref_mut]
+    pub inner: A,
+}
+
+impl<M, A> With<M, A> {
+    pub fn new(info: M, inner: A) -> Self {
+        Self { info, inner }
+    }
+    pub fn mk<B>(&self, inner: B) -> With<M, B>
+    where
+        M: Clone,
+    {
+        With { info: self.info.clone(), inner }
+    }
+    pub fn mk_add<B, T>(&self, other: T, inner: B) -> With<M, B>
+    where
+        M: Clone + std::ops::Add<T, Output = M>,
+    {
+        With { info: self.info.clone() + other, inner }
+    }
+}
+
+impl<M, A> Borrow<A> for With<M, A> {
+    fn borrow(&self) -> &A {
+        &self.inner
+    }
+}
+impl<M, A> BorrowMut<A> for With<M, A> {
+    fn borrow_mut(&mut self) -> &mut A {
+        &mut self.inner
+    }
+}

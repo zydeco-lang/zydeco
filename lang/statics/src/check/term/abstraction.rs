@@ -40,8 +40,8 @@ impl TermChecker<'_> {
                 vtype,
             )?,
         };
-        let classifier = Alloc::alloc(tycker, classifier, vtype, &self.info);
-        let value = Alloc::alloc(tycker, ss::Abs(binder_node, body), classifier, &self.info);
+        let classifier = Alloc::alloc(tycker, classifier, vtype, &());
+        let value = Alloc::alloc(tycker, ss::Abs(binder_node, body), classifier, &());
         Ok(TermAnnId::Value(value, classifier))
     }
 
@@ -51,7 +51,7 @@ impl TermChecker<'_> {
     ) -> Result<(ss::ValBinder, ss::ValueId, ss::ValPi)> {
         let witness = Alloc::alloc(tycker, pattern, (), &());
         let payload_kind = tycker.statics.annotations_abst[&witness];
-        let payload = Alloc::alloc(tycker, witness, payload_kind, &self.info);
+        let payload = Alloc::alloc(tycker, witness, payload_kind, &());
         let argument = pattern.introduce_payload(tycker, payload);
         let argument = argument?;
         let body_env =
@@ -142,7 +142,7 @@ impl TermChecker<'_> {
                 codomain,
             )?,
         };
-        let value = Alloc::alloc(tycker, ss::Abs(binder, body), expected, &self.info);
+        let value = Alloc::alloc(tycker, ss::Abs(binder, body), expected, &());
         Ok(TermAnnId::Value(value, expected))
     }
 
@@ -154,7 +154,7 @@ impl TermChecker<'_> {
         let binder = self.mk(source_binder).tyck(tycker, PatternAction::ana(domain_kind.into()))?;
         let (pattern, _) = binder.try_as_type(tycker, TyckError::SortMismatch)?;
         let payload_kind = expected_binder.payload_kind(tycker);
-        let payload = Alloc::alloc(tycker, expected_binder.witness, payload_kind, &self.info);
+        let payload = Alloc::alloc(tycker, expected_binder.witness, payload_kind, &());
         let argument = expected_binder.pattern.introduce_payload(tycker, payload);
         let argument = argument?;
         let body_env = TyEnvT::new(binder.info, Assign(pattern, argument)).tyck(tycker, ())?.info;
@@ -242,26 +242,14 @@ impl TermChecker<'_> {
     ) -> Result<TermAnnId> {
         let pat_out_ann = self.mk(pat).tyck(tycker, PatternAction::syn())?;
         match pat_out_ann.annotation {
-            | PatAnnId::Kind(_) => {
-                self.reject_abs_syn(tycker, crate::query::AbsSynArm::Expressivity)
-            }
+            | PatAnnId::Kind(_) => tycker.err(TyckError::Expressivity(
+                "functions cannot abstract over the meta-level `Set`",
+            )),
             | PatAnnId::Type(tpat, kd) => self.check_abs_syn_type_binder(tycker, tpat, kd, body),
             | PatAnnId::Value(vpat, ty) => {
                 self.check_abs_syn_value_binder(tycker, pat, &pat_out_ann, vpat, ty, body)
             }
         }
-    }
-
-    /// Report the rejection that the abstraction judgment produces for `arm`.
-    fn reject_abs_syn<'db, T>(
-        &self, tycker: &mut Tycker<'db>, arm: crate::query::AbsSynArm,
-    ) -> Result<T> {
-        let input = crate::query::InternedAbsSyn::new(tycker.db, arm);
-        let outcome = tycker.judge(self.inner, input, crate::query::abs_syn_judgment);
-        let crate::query::AbsSynOutcome::Error(error) = outcome else {
-            unreachable!("the rejection arms of abstraction judgments are query-produced")
-        };
-        tycker.err(error)
     }
 
     fn check_abs_syn_type_binder<'db>(
@@ -272,7 +260,7 @@ impl TermChecker<'_> {
         let subst_vec = {
             let mut subst_vec = Vec::new();
             if let (Some(def), kd) = tpat.try_destruct_def(tycker) {
-                let ty_abst = Alloc::alloc(tycker, abst, kd, &self.info);
+                let ty_abst = Alloc::alloc(tycker, abst, kd, &());
                 subst_vec.push((def, ty_abst.into()));
             }
             subst_vec
@@ -281,54 +269,39 @@ impl TermChecker<'_> {
         match body_out_ann {
             | TermAnnId::Type(ty, body_kd) => {
                 // a type function
-                let input = crate::query::InternedAbsSyn::new(
-                    tycker.db,
-                    crate::query::AbsSynArm::TypeFunction {
-                        tpat,
-                        witness: abst,
-                        kd,
-                        body_kd,
+                let arrow_id =
+                    Alloc::alloc(tycker, ss::Kind::Arrow(ss::Arrow(kd, body_kd)), (), &());
+                let abs_id = Alloc::alloc(
+                    tycker,
+                    ss::Type::Abs(ss::TypeAbstraction {
+                        binder: ss::TypeBinder { pattern: tpat, witness: abst },
                         body: ty,
-                    },
+                    }),
+                    arrow_id,
+                    &(),
                 );
-                let outcome = tycker.judge(self.inner, input, crate::query::abs_syn_judgment);
-                let crate::query::AbsSynOutcome::TypeFunction { arrow_id, arrow, abs_id, abs } =
-                    outcome
-                else {
-                    unreachable!("the type function arm of abstraction judgments is query-produced")
-                };
-                tycker.statics.kinds_pre.insert_new(arrow_id, ss::Fillable::Done(arrow));
-                tycker.statics.types_pre.insert_new(abs_id, ss::Fillable::Done(abs), arrow_id);
-                tycker.store_env(abs_id, &self.info);
                 Ok(TermAnnId::Type(abs_id, arrow_id))
             }
             | TermAnnId::Compu(compu, body_ty) => {
                 // a type-polymorphic function
-                let input = crate::query::InternedAbsSyn::new(
-                    tycker.db,
-                    crate::query::AbsSynArm::PolymorphicCompu { tpat, abst, compu, body_ty },
+                let ctype = ss::CType.build(tycker, &self.info);
+                let ann_id = Alloc::alloc(
+                    tycker,
+                    ss::Type::Forall(ss::Forall(
+                        ss::TypeBinder { pattern: tpat, witness: abst },
+                        body_ty,
+                    )),
+                    ctype,
+                    &(),
                 );
-                let outcome = tycker.judge(self.inner, input, crate::query::abs_syn_judgment);
-                let crate::query::AbsSynOutcome::TAbsCompu { ann_id, ann, kd, abs_id, abs } =
-                    outcome
-                else {
-                    unreachable!(
-                        "the polymorphic computation arm of abstraction judgments is query-produced"
-                    )
-                };
-                tycker.statics.types_pre.insert_new(ann_id, ss::Fillable::Done(ann), kd);
-                tycker.store_env(ann_id, &self.info);
-                tycker.statics.compus.insert_new(abs_id, abs);
-                tycker.statics.annotations_compu.insert_new(abs_id, ann_id);
-                tycker.statics.env_compu.insert_new(abs_id, self.info.clone());
+                let abs_id =
+                    Alloc::alloc(tycker, ss::Computation::TAbs(ss::Abs(tpat, compu)), ann_id, &());
                 Ok(TermAnnId::Compu(abs_id, ann_id))
             }
             | TermAnnId::Value(_, _) => tycker.err(TyckError::Expressivity(
                 "use `val` or block-form `param val` to introduce a pure value function",
             )),
-            | TermAnnId::Hole(_) | TermAnnId::Kind(_) => {
-                self.reject_abs_syn(tycker, crate::query::AbsSynArm::SortMismatch)
-            }
+            | TermAnnId::Hole(_) | TermAnnId::Kind(_) => tycker.err(TyckError::SortMismatch),
         }
     }
 
@@ -346,50 +319,27 @@ impl TermChecker<'_> {
                 "use `val` or block-form `param val` to introduce a pure value function",
             )),
             | TermAnnId::Compu(compu, body_ty) => {
-                let arm = match pat_out_ann.package_telescope(tycker)? {
+                let ctype = ss::CType.build(tycker, &self.info);
+                let ann_id = match pat_out_ann.package_telescope(tycker)? {
                     | None => {
                         pat_out_ann.close_scope(tycker, body_ty)?;
-                        crate::query::AbsSynArm::CompuArrow { vpat, ty, compu, body_ty }
+                        Alloc::alloc(tycker, ss::Type::Arrow(ss::Arrow(ty, body_ty)), ctype, &())
                     }
                     | Some(witnesses) => {
                         let pack_pi = ss::PackPi { domain: ty, witnesses, codomain: body_ty };
                         tycker.validate_builtin_signature(&pack_pi)?;
-                        let mut iter = pack_pi.witnesses.iter();
-                        let first =
-                            *iter.next().expect("a package telescope opens at least one witness");
-                        let rest = iter.copied().collect::<Vec<_>>();
-                        crate::query::AbsSynArm::CompuPackPi {
-                            vpat,
-                            domain: ty,
-                            first,
-                            rest,
-                            codomain: body_ty,
-                            compu,
-                        }
+                        let ann_id =
+                            Alloc::alloc(tycker, ss::Type::PackPi(Box::new(pack_pi)), ctype, &());
+                        ann_id.constrain_to_scope(tycker, self.info.skolem_scope())?;
+                        ann_id
                     }
                 };
-                let input = crate::query::InternedAbsSyn::new(tycker.db, arm);
-                let outcome = tycker.judge(self.inner, input, crate::query::abs_syn_judgment);
-                let crate::query::AbsSynOutcome::VAbsCompu { ann_id, ann, kd, abs_id, abs } =
-                    outcome
-                else {
-                    unreachable!(
-                        "the computation arrow arm of abstraction judgments is query-produced"
-                    )
-                };
-                let is_pack_pi = matches!(&ann, ss::Type::PackPi(_));
-                tycker.statics.types_pre.insert_new(ann_id, ss::Fillable::Done(ann), kd);
-                tycker.store_env(ann_id, &self.info);
-                if is_pack_pi {
-                    ann_id.constrain_to_scope(tycker, self.info.skolem_scope())?;
-                }
-                tycker.statics.compus.insert_new(abs_id, abs);
-                tycker.statics.annotations_compu.insert_new(abs_id, ann_id);
-                tycker.statics.env_compu.insert_new(abs_id, self.info.clone());
+                let abs_id =
+                    Alloc::alloc(tycker, ss::Computation::VAbs(ss::Abs(vpat, compu)), ann_id, &());
                 Ok(TermAnnId::Compu(abs_id, ann_id))
             }
             | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Type(_, _) => {
-                self.reject_abs_syn(tycker, crate::query::AbsSynArm::SortMismatch)
+                tycker.err(TyckError::SortMismatch)
             }
         }
     }
@@ -410,7 +360,7 @@ impl TermChecker<'_> {
         let body_env = match binder.try_destruct_def(tycker).0 {
             | Some(def) => {
                 let payload_kind = tycker.statics.annotations_abst[&witness];
-                let witness_ty = Alloc::alloc(tycker, witness, payload_kind, &self.info);
+                let witness_ty = Alloc::alloc(tycker, witness, payload_kind, &());
                 self.info.clone() + [(def, witness_ty.into())]
             }
             | None => self.info.clone(),
@@ -425,7 +375,7 @@ impl TermChecker<'_> {
                 body: body_out,
             },
             ann,
-            &self.info,
+            &(),
         );
         Ok(TermAnnId::Type(abs, ann))
     }
@@ -474,8 +424,8 @@ impl TermChecker<'_> {
         let (body_out, body_ty) = body_out_ann.try_as_compu(tycker, TyckError::SortMismatch)?;
         binder_elaboration.close_scope(tycker, body_ty)?;
         let ctype = ss::CType.build(tycker, &self.info);
-        let ann = Alloc::alloc(tycker, ss::Arrow(binder_ty, body_ty), ctype, &self.info);
-        let abs = Alloc::alloc(tycker, ss::Abs(binder, body_out), ann, &self.info);
+        let ann = Alloc::alloc(tycker, ss::Arrow(binder_ty, body_ty), ctype, &());
+        let abs = Alloc::alloc(tycker, ss::Abs(binder, body_out), ann, &());
         Ok(TermAnnId::Compu(abs, ann))
     }
 
@@ -487,7 +437,7 @@ impl TermChecker<'_> {
         let binder = self.mk(pat).tyck(tycker, PatternAction::ana(domain_kind.into()))?;
         let (binder, _binder_kd) = binder.try_as_type(tycker, TyckError::SortMismatch)?;
         let payload_kind = source_binder.payload_kind(tycker);
-        let abst_ty = Alloc::alloc(tycker, source_binder.witness, payload_kind, &self.info);
+        let abst_ty = Alloc::alloc(tycker, source_binder.witness, payload_kind, &());
         let full_argument = source_binder.pattern.introduce_payload(tycker, abst_ty);
         let full_argument = full_argument?;
         let env = self.mk(Assign(binder, full_argument)).tyck(tycker, ())?.info;
@@ -497,8 +447,8 @@ impl TermChecker<'_> {
         // Todo: reuse _body_ty by substituting abst back
         let (body_out, body_ty) = body_out_ann.try_as_compu(tycker, TyckError::SortMismatch)?;
         let ctype = ss::CType.build(tycker, &self.info);
-        let ann = Alloc::alloc(tycker, ss::Forall(source_binder, body_ty), ctype, &self.info);
-        let abs = Alloc::alloc(tycker, ss::Abs(binder, body_out), ann, &self.info);
+        let ann = Alloc::alloc(tycker, ss::Forall(source_binder, body_ty), ctype, &());
+        let abs = Alloc::alloc(tycker, ss::Abs(binder, body_out), ann, &());
         Ok(TermAnnId::Compu(abs, ann))
     }
 }

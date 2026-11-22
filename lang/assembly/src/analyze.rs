@@ -1,7 +1,7 @@
 use super::syntax::*;
 use derive_more::{AsMut, AsRef};
 
-zydeco_utils::new_key_type! {
+zydeco_foundation::new_key_type! {
     pub struct SlotId;
 }
 
@@ -16,18 +16,13 @@ impl ArenaSchema<SlotId> for StackAnalysisScope {
 
 #[derive(Clone)]
 pub struct Layout {
-    pub control: rpds::VectorSync<SlotId>,
-    pub context: rpds::VectorSync<(VarId, Slot)>,
+    pub control: Vec<SlotId>,
+    pub context: Vec<(VarId, Slot)>,
 }
 
 impl Layout {
     fn pop_control_id(&mut self) -> Option<SlotId> {
-        let slot = self.control.last().copied();
-        if slot.is_some() {
-            let dropped = self.control.drop_last_mut();
-            debug_assert!(dropped);
-        }
-        slot
+        self.control.pop()
     }
 }
 
@@ -79,7 +74,7 @@ impl<'a> StackAnalyzer<'a> {
         let slot_id = self.allocator.alloc();
         self.slots.insert_new(slot_id, slot);
         self.inlined.insert_new(slot_id, false);
-        layout.control.push_back_mut(slot_id);
+        layout.control.push(slot_id);
         slot_id
     }
     pub fn pop_control(&mut self, layout: &mut Layout) -> Option<Slot> {
@@ -113,7 +108,7 @@ impl StackAnalyzer<'_> {
                 .copied()
                 .map(|var| (var, Slot::Unknown))
                 .collect();
-            let layout = Layout { control: rpds::VectorSync::new_sync(), context };
+            let layout = Layout { control: Vec::new(), context };
             prog.stack_measure(&mut self, layout);
         }
         let context = self.arena.contexts[&self.root]
@@ -121,7 +116,7 @@ impl StackAnalyzer<'_> {
             .copied()
             .map(|var| (var, Slot::Unknown))
             .collect();
-        let layout = Layout { control: rpds::VectorSync::new_sync(), context };
+        let layout = Layout { control: Vec::new(), context };
         self.root.stack_measure(&mut self, layout);
         for prog in symbol_programs {
             prog.stack_inline(&mut self);
@@ -176,7 +171,7 @@ impl<'a> StackMeasure<'a> for ProgId {
                         });
                     }
                     | Instruction::AllocContext(Alloc(ContextMarker)) => {
-                        layout.context = rpds::VectorSync::new_sync();
+                        layout.context = Vec::new();
                     }
                     | Instruction::PushArg(Push(atom)) => {
                         let slot = match atom {
@@ -193,7 +188,7 @@ impl<'a> StackMeasure<'a> for ProgId {
                     }
                     | Instruction::PopArg(Pop(var)) => {
                         let slot = si.pop_control(&mut layout).unwrap_or(Slot::Unknown);
-                        layout.context.push_back_mut((var, slot));
+                        layout.context.push((var, slot));
                     }
                     | Instruction::PushTag(Push(_)) => {
                         si.push_control(&mut layout, Slot::Unknown);

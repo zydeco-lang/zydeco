@@ -10,8 +10,8 @@
 
 use crate::representation::{Local, RepresentationPolicy, UnboxingOpportunity, UnboxingReason};
 use std::collections::{HashMap, HashSet};
+use zydeco_foundation::fold::{Explicit, Folder, Step};
 use zydeco_stackir::low::traverse::{Edge, EntityId, Node, Occurrence, Traversal, Visitor};
-use zydeco_utils::fold::{Explicit, Folder, Step};
 
 use zydeco_stackir::{SpsLowProgram, low::syntax as sk};
 
@@ -305,9 +305,8 @@ impl<'a> Folder for VariableUsesFolder<'a> {
 mod tests {
     use super::*;
     use crate::representation::{Boxed, Direct, RepresentationStrategy, Shared};
-    use zydeco_stackir::{SpsScheme, arena::Construct as _};
-    use zydeco_statics::arena::StaticsScope;
-    use zydeco_utils::arena::IdAllocator;
+    use zydeco_foundation::arena::IdAllocator;
+    use zydeco_stackir::{SpsScheme, SpsScope, arena::Construct as _};
 
     struct Fixture;
 
@@ -331,7 +330,7 @@ mod tests {
         }
 
         fn definition(arena: &mut sk::SpsLowArena) -> sk::DefId {
-            let id = IdAllocator::<StaticsScope>::new().alloc();
+            let id = IdAllocator::<SpsScope>::new().alloc();
             arena.admin.defs.insert_new(id, "fixture".into());
             id
         }
@@ -511,9 +510,7 @@ mod tests {
             LoweringPipeline,
             syntax::{Instruction, Program},
         };
-        use zydeco_statics::arena::StaticsArena;
-        use zydeco_surface::scoped::arena::ScopedArena;
-        use zydeco_utils::pass::CompilerPass;
+        use zydeco_foundation::pass::CompilerPass;
 
         for (program, reason) in [
             (Fixture::projection(false).0, UnboxingReason::ProjectedVariable),
@@ -521,9 +518,7 @@ mod tests {
         ] {
             for &strategy in RepresentationStrategy::ALL {
                 let assembly =
-                    LoweringPipeline::new(&ScopedArena::default(), &StaticsArena::default())
-                        .with_representation(strategy)
-                        .run_infallible(&program);
+                    LoweringPipeline::new().with_representation(strategy).run_infallible(&program);
                 let allocations = assembly
                     .arena()
                     .programs
@@ -583,7 +578,7 @@ mod tests {
         let mut arena = sk::SpsLowArena::default();
         let env_value = Fixture::product(&mut arena);
         let block_body = Fixture::terminal(&mut arena);
-        let label = IdAllocator::<StaticsScope>::new().alloc();
+        let label = IdAllocator::<SpsScope>::new().alloc();
         let entry = sk::EntryParameters::Closure { environment: sk::Hole.build(&mut arena, None) };
         let block = sk::Block { label, entry, body: block_body }.build(&mut arena, None);
         let package =
@@ -745,11 +740,9 @@ mod tests {
                 let def = Fixture::definition(&mut arena);
                 let mut value: sk::ValueId = def.build(&mut arena, None);
                 for _ in 0..16_384 {
-                    value = sk::Ctor(
-                        sk::CtorIdx { idx: 0, name: sk::CtorName("nested".into()) },
-                        value,
-                    )
-                    .build(&mut arena, None);
+                    value =
+                        sk::Ctor(sk::CtorIdx { idx: 0, name: sk::CtorName::new("nested") }, value)
+                            .build(&mut arena, None);
                 }
                 let ambient = sk::StackVar.build(&mut arena, None);
                 let stack = sk::Cons(value, ambient).build(&mut arena, None);

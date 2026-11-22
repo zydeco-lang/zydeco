@@ -4,12 +4,12 @@ struct ListFixture;
 
 impl ListFixture {
     fn list(length: i64) -> SemValue {
-        let nil = SemValue::Ctor(Ctor(CtorName("Nil".into()), SemValue::Triv(Triv).into()));
+        let nil = SemValue::Ctor(Ctor(CtorName::new("Nil"), SemValue::Triv(Triv).into()));
         (0..length).fold(nil, |tail, head| {
             let fields = SemValue::VCons(
                 [SemValue::Literal(Literal::Integer(IntegerLiteral::Int(head))), tail].into(),
             );
-            SemValue::Ctor(Ctor(CtorName("Cons".into()), fields.into()))
+            SemValue::Ctor(Ctor(CtorName::new("Cons"), fields.into()))
         })
     }
 }
@@ -38,7 +38,7 @@ fn cloning_a_constructor_shares_its_payload() {
 #[test]
 fn cloning_a_product_shares_its_components() {
     for length in [1, 2, 64] {
-        let SemValue::Ctor(Ctor(_, payload)) = ListFixture::list(length) else {
+        let SemValue::Ctor(Ctor(_, ref payload)) = ListFixture::list(length) else {
             panic!("expected a list constructor");
         };
         // Pattern binding clones the payload separately from the enclosing constructor.
@@ -54,4 +54,17 @@ fn cloning_a_product_shares_its_components() {
             "cloning a list of length {length} copied its product components"
         );
     }
+}
+
+#[test]
+fn dropping_deep_constructor_chain_does_not_overflow_small_stack() {
+    std::thread::Builder::new()
+        .stack_size(512 * 1024)
+        .spawn(|| {
+            let list = ListFixture::list(50_000);
+            drop(list);
+        })
+        .unwrap()
+        .join()
+        .unwrap();
 }

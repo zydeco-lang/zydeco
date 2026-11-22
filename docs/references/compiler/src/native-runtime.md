@@ -11,8 +11,8 @@ This is artifact pairing, not verification of handwritten instruction selection.
 Odd words are immediate. Even words are pointer-shaped.
 `Int`/`UInt`, narrower integers, `Float32`, characters, and tags fit in an immediate word.
 `Int64`, `UInt64`, and `Float64` payloads use opaque scalar boxes.
-Integer arithmetic wraps at the source payload width, including operations left
-as builtin calls after optional normalization.
+Integer arithmetic wraps at the source payload width via typed inline primitive instructions emitted directly
+by the compiler backends.
 Products and closures occupy scanned blocks.
 Source numeric domains and immediate ranges are specified in [L13](../../language/src/primitives-and-capabilities.md);
 storage and C carriers are specified in [L14](../../language/src/foreign-interfaces.md#storage-and-foreign-transport).
@@ -172,6 +172,6 @@ Scanning order and forwarding must never reinterpret scalar bits as managed refe
 
 Host helpers that can trigger collection must publish every live managed word and reload relocated roots afterward.
 Raw borrowed C argument frames are discarded before any result-box allocation that can collect.
-[GC regressions](../../../../lang/tests/tests/native_gc.rs) cover roots, interior pointers,
+[GC regressions](../../../../lang/tests/tests/suite/native_gc.rs) cover roots, interior pointers,
 aliasing, cycles, capacity failure, and allocation after collection.
 Frame storage reclamation and managed-value liveness are separate obligations.

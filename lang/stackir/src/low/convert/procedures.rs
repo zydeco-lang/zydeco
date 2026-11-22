@@ -9,7 +9,7 @@
 use super::{high, low};
 use crate::high::traverse::{EntityId, Node, Traversal, Visitor};
 use std::collections::HashMap;
-use zydeco_utils::context::CoContext;
+use zydeco_foundation::context::CoContext;
 
 /// The calls a subtree makes to procedures bound outside it, split by whether they stay in the
 /// subtree's frame.

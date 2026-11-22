@@ -3,27 +3,21 @@ use crate::{
     host::{HostRuntime, HostValue},
     syntax::*,
 };
-use std::rc::Rc;
 use zydeco_machine::memory::{Address, MemoryError, MemoryLayout};
 
 pub(crate) struct MemoryRuntime;
 impl MemoryRuntime {
     pub(crate) fn invoke(
         role: BuiltinValueRole, args: Vec<SemValue>, host: &mut HostRuntime,
-    ) -> Result<Computation, i32> {
+    ) -> Result<HostAction, i32> {
         use BuiltinValueRole as Role;
         let result: Result<Vec<SemValue>, MemoryError> = match role {
             | Role::MemoryNull => {
-                return Ok(Return(Rc::new(
-                    SemValue::Host(HostValue::Address(Address::NULL)).into(),
-                ))
-                .into());
+                return Ok(HostAction::Return(SemValue::Host(HostValue::Address(Address::NULL))));
             }
             | Role::MemoryOffset => {
                 let address = Self::address(&args[0]).offset(Self::integer(&args[1]));
-                return Ok(
-                    Return(Rc::new(SemValue::Host(HostValue::Address(address)).into())).into()
-                );
+                return Ok(HostAction::Return(SemValue::Host(HostValue::Address(address))));
             }
             | Role::MemoryAllocate => {
                 MemoryLayout::for_request(Self::integer(&args[0]), Self::integer(&args[1]))
@@ -99,22 +93,27 @@ impl MemoryRuntime {
             | Err(error) => Self::resume(&args[args.len() - 2], [Self::int_value(error as i64)]),
         })
     }
+
     pub(crate) fn resume(
         success: &SemValue, arguments: impl IntoIterator<Item = SemValue>,
-    ) -> Computation {
-        arguments.into_iter().fold(Force(Rc::new(success.clone().into())).into(), |body, arg| {
-            App(Rc::new(body), Rc::new(arg.into())).into()
-        })
+    ) -> HostAction {
+        HostAction::Resume {
+            continuation: success.clone(),
+            arguments: arguments.into_iter().collect(),
+        }
     }
+
     pub(crate) fn int_value(value: i64) -> SemValue {
         Literal::Integer(IntegerLiteral::Int(value)).into()
     }
+
     fn integer(value: &SemValue) -> i64 {
         let SemValue::Literal(Literal::Integer(IntegerLiteral::Int(value))) = value else {
             unreachable!("typed Int")
         };
         *value
     }
+
     pub(crate) fn address(value: &SemValue) -> Address {
         let SemValue::Host(HostValue::Address(value)) = value else { unreachable!("typed Addr") };
         *value

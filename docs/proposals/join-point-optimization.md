@@ -14,10 +14,11 @@ This establishes the existing mechanism for an already factored program;
 it does not establish automatic conversion of the original program.
 Merely finding any procedure in its output is insufficient because `read_bool` is also shared.
 
-The [current normalization and procedure rules](../references/compiler/src/sps/normalization-and-demand.md#second-class-procedures) preserve
-unknown branch joins and inline only singly called general closures or procedures.
-This proposal supplies sharing-aware control-flow transformations before closure conversion.
-It does not add source procedure syntax, change the source evaluation order, or require recursive procedure groups.
+The
+[current normalization and procedure rules](../references/compiler/src/sps/normalization-and-demand.md#second-class-procedures)
+preserve unknown branch joins and inline only singly called general closures or procedures. This proposal supplies
+sharing-aware control-flow transformations before closure conversion. It does not add source procedure syntax, change
+the source evaluation order, or require recursive procedure groups.
 [Constructor-aware normalization](constructor-normalization.md) owns contracting the newly exposed known cases;
 [procedure environment sharing](procedure-environments.md) owns the later cost of passing captured values.
 
@@ -112,7 +113,7 @@ than return a malformed fragment or silently switch schemes.
 
 ## Acceptance and failure cases
 
-Extend [the existing short-circuit structural check](../../lang/tests/tests/short_circuit.rs)
+Extend [the existing short-circuit structural check](../../lang/tests/tests/suite/short_circuit.rs)
 from the manually commuted control to the original source:
 
 - Exactly one copy of `M4` and `M5`; one procedure for `M5`, with both false arms jumping directly to it.

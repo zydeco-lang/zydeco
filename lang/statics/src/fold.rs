@@ -45,41 +45,37 @@ pub trait TypeFolder: Sized {
     }
 
     fn fold_data(&mut self, tycker: &mut Tycker<'_>, source: DataId) -> Result<DataId> {
-        let arms = tycker.statics.datas[&source].clone();
+        let arms = tycker.statics.datas[source].clone();
         let mut children = TypeChildren { folder: self, tycker, changed: false };
         let arms = arms
-            .into_iter()
-            .map(|(name, ty)| Ok((name, children.r#type(ty)?)))
+            .iter()
+            .map(|&(name, ty)| Ok((name, children.r#type(ty)?)))
             .collect::<Result<Vec<_>>>()?;
         if !children.changed {
             return Ok(source);
         }
-        let target = children.tycker.fresh();
-        children.tycker.statics.datas.insert_new(target, Data::new(arms));
-        Ok(target)
+        Ok(children.tycker.statics.datas.alloc(Data::new(arms)))
     }
 
     fn fold_codata(&mut self, tycker: &mut Tycker<'_>, source: CoDataId) -> Result<CoDataId> {
-        let arms = tycker.statics.codatas[&source].clone();
+        let arms = tycker.statics.codatas[source].clone();
         let mut children = TypeChildren { folder: self, tycker, changed: false };
         let arms = arms
-            .into_iter()
-            .map(|(name, ty)| Ok((name, children.r#type(ty)?)))
+            .iter()
+            .map(|&(name, ty)| Ok((name, children.r#type(ty)?)))
             .collect::<Result<Vec<_>>>()?;
         if !children.changed {
             return Ok(source);
         }
-        let target = children.tycker.fresh();
-        children.tycker.statics.codatas.insert_new(target, CoData::new(arms));
-        Ok(target)
+        Ok(children.tycker.statics.codatas.alloc(CoData::new(arms)))
     }
 
     fn fold_children(
-        &mut self, tycker: &mut Tycker<'_>, source: TypeId, node: Type, kind: KindId, env: &TyEnv,
+        &mut self, tycker: &mut Tycker<'_>, source: TypeId, node: Type, kind: KindId,
     ) -> Result<TypeId> {
         let mut children = TypeChildren { folder: self, tycker, changed: false };
         let node = children.node(node)?;
-        Ok(TypeRebuilder::rebuild(children.tycker, source, node, kind, env, children.changed))
+        Ok(TypeRebuilder::rebuild(children.tycker, source, node, kind, children.changed))
     }
 }
 
@@ -88,14 +84,13 @@ pub struct TypeRebuilder;
 
 impl TypeRebuilder {
     pub fn rebuild(
-        tycker: &mut Tycker<'_>, source: TypeId, node: Type, kind: KindId, env: &TyEnv,
-        changed: bool,
+        tycker: &mut Tycker<'_>, source: TypeId, node: Type, kind: KindId, changed: bool,
     ) -> TypeId {
         if !changed && kind == tycker.statics.type_kind(source) {
             return source;
         }
         let label = matches!(node, Type::Label(_));
-        let target = Alloc::alloc(tycker, node, kind, env);
+        let target = Alloc::alloc(tycker, node, kind, &());
         if label {
             tycker
                 .statics
@@ -115,19 +110,23 @@ struct TypeChildren<'a, 'db, F> {
 
 impl<F: TypeFolder> TypeChildren<'_, '_, F> {
     fn r#type(&mut self, source: TypeId) -> Result<TypeId> {
-        let target = self.folder.fold_type(self.tycker, source)?;
+        let target =
+            zydeco_foundation::stack::maybe_grow(|| self.folder.fold_type(self.tycker, source))?;
         self.changed |= source != target;
         Ok(target)
     }
 
     fn kind(&mut self, source: KindId) -> Result<KindId> {
-        let target = self.folder.fold_kind(self.tycker, source)?;
+        let target =
+            zydeco_foundation::stack::maybe_grow(|| self.folder.fold_kind(self.tycker, source))?;
         self.changed |= source != target;
         Ok(target)
     }
 
     fn body(&mut self, source: TypeId, scope: TypeScope<'_>) -> Result<TypeId> {
-        let target = self.folder.fold_body(self.tycker, source, scope)?;
+        let target = zydeco_foundation::stack::maybe_grow(|| {
+            self.folder.fold_body(self.tycker, source, scope)
+        })?;
         self.changed |= source != target;
         Ok(target)
     }

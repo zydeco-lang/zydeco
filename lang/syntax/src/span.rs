@@ -6,7 +6,7 @@
 //! pair implementation below covers that shape for every phase, so each phase
 //! only implements the two small traits on its arenas.
 
-use zydeco_utils::span::Span;
+use zydeco_foundation::span::Span;
 
 pub trait SpanView<'a, Arena> {
     fn span(&self, arena: &'a Arena) -> &'a Span;

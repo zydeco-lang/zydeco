@@ -4,8 +4,8 @@
 //! notes — is frontend-independent; only the output sink differs between callers.
 
 use ariadne::{Label, Report, ReportKind};
+use zydeco_foundation::span::{PathDisplay, Span, internal_ariadne_span};
 use zydeco_statics::TyckDiagnostic;
-use zydeco_utils::span::{PathDisplay, Span, internal_ariadne_span};
 
 use super::ProgramAnalysis;
 

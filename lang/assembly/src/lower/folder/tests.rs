@@ -1,6 +1,6 @@
 use super::*;
+use zydeco_foundation::fold::Explicit;
 use zydeco_stackir::arena::Construct as _;
-use zydeco_utils::fold::Explicit;
 
 struct Storage;
 
@@ -16,8 +16,6 @@ impl Storage {
         let mut lo = Lowerer {
             allocator: IdAllocator::new(),
             arena: AssemblyArena::default(),
-            scoped: &ScopedArena::default(),
-            statics: &StaticsArena::default(),
             sps_low: &arena,
             root,
             unboxing: crate::unbox::LocalUnboxing::default(),

@@ -15,7 +15,7 @@ impl InferenceRefinement {
                 | Fillable::Fill(fill) if !visited.insert(fill) => {
                     return tycker.err(TyckError::OccursCheck(fill));
                 }
-                | Fillable::Fill(fill) => match tycker.statics.solus.get(&fill).copied() {
+                | Fillable::Fill(fill) => match tycker.statics.solus.get(fill).copied() {
                     | Some(AnnId::Type(solution)) => current = solution,
                     | Some(AnnId::Set | AnnId::Kind(_)) => {
                         return tycker.err(TyckError::SortMismatch);
@@ -27,9 +27,9 @@ impl InferenceRefinement {
     }
 
     fn fresh_type(tycker: &mut Tycker<'_>, parent: FillId, kind: KindId, env: &TyEnv) -> TypeId {
-        let site = tycker.statics.fills[&parent];
+        let site = tycker.statics.fills[parent];
         let fill = Alloc::alloc(tycker, site, (), &());
-        Alloc::alloc(tycker, fill, kind, env)
+        Alloc::alloc(tycker, fill, kind, env.skolem_scope())
     }
 
     fn arrow(tycker: &mut Tycker<'_>, fill: FillId, env: &TyEnv) -> Result<Type> {
@@ -37,7 +37,7 @@ impl InferenceRefinement {
         let ctype = Alloc::alloc(tycker, CType, (), &());
         let domain = Self::fresh_type(tycker, fill, vtype, env);
         let codomain = Self::fresh_type(tycker, fill, ctype, env);
-        let shape = Alloc::alloc(tycker, Arrow(domain, codomain), ctype, env);
+        let shape = Alloc::alloc(tycker, Arrow(domain, codomain), ctype, &());
         fill.fill(tycker, shape.into())?;
         Ok(Type::Arrow(Arrow(domain, codomain)))
     }
@@ -46,7 +46,7 @@ impl InferenceRefinement {
         let vtype = Alloc::alloc(tycker, VType, (), &());
         let head = Self::fresh_type(tycker, fill, vtype, env);
         let tail = Self::fresh_type(tycker, fill, vtype, env);
-        let shape = Alloc::alloc(tycker, Prod(vec![head, tail]), vtype, env);
+        let shape = Alloc::alloc(tycker, Prod(vec![head, tail]), vtype, &());
         fill.fill(tycker, shape.into())?;
         Ok(Type::Prod(Prod(vec![head, tail])))
     }
@@ -141,8 +141,7 @@ impl FillId {
             return tycker.err(TyckError::OccursCheck(*self));
         }
 
-        let solutions = tycker.statics.solus.clone();
-        let scopes = tycker.statics.fill_scopes.clone();
+        let checkpoint = tycker.begin_fill_transaction();
         let result = (|| {
             let current = tycker.statics.solus.get(self).copied();
             let solution =
@@ -153,13 +152,12 @@ impl FillId {
                 return tycker.err(TyckError::OccursCheck(*self));
             }
             self.constrain_solution(tycker, solution)?;
-            let _ = tycker.statics.solus.upsert(*self, solution);
-            tycker.invalidate_field_materializations();
+            tycker.record_solution(*self, solution);
             Ok(solution)
         })();
-        if result.is_err() {
-            tycker.statics.solus = solutions;
-            tycker.statics.fill_scopes = scopes;
+        match &result {
+            | Ok(_) => tycker.commit_fill_transaction(checkpoint),
+            | Err(_) => tycker.rollback_fill_transaction(checkpoint),
         }
         result
     }
@@ -182,7 +180,7 @@ impl FillId {
             if !visited.insert(fill) {
                 return None;
             }
-            match tycker.statics.solus.get(&fill).copied() {
+            match tycker.statics.solus.get(fill).copied() {
                 | Some(solution) => annotation = solution,
                 | None => return Some((fill, annotation)),
             }

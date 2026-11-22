@@ -5,7 +5,6 @@
 //! Allocations abandoned by inference retries are held to the same rules.
 
 use zydeco_statics::{
-    ArenaAccess,
     arena::StaticsArena,
     surface_syntax as su,
     syntax::{
@@ -86,9 +85,7 @@ impl ArenaInvariants<'_> {
     /// Every kind and type cell has left its hole form.
     fn fill_closure(&self) -> Vec<ArenaViolation> {
         let kinds = self.statics.kinds_pre.iter().filter_map(|(kind, value)| match value {
-            | Fillable::Fill(fill) => {
-                Some(ArenaViolation::UnfilledKind { kind: *kind, fill: *fill })
-            }
+            | Fillable::Fill(fill) => Some(ArenaViolation::UnfilledKind { kind, fill: *fill }),
             | Fillable::Done(_) => None,
         });
         let types = self.statics.types_pre.iter().filter_map(|(ty, value)| match value {
@@ -107,16 +104,16 @@ impl ArenaInvariants<'_> {
         let missing = |node| ArenaViolation::MissingAnnotation { node };
         let values = (statics.values.iter())
             .filter(|(value, _)| statics.annotations_value.get(value).is_none())
-            .map(|(value, _)| missing(AnnotatedNode::Value(*value)));
+            .map(|(value, _)| missing(AnnotatedNode::Value(value)));
         let compus = (statics.compus.iter())
             .filter(|(compu, _)| statics.annotations_compu.get(compu).is_none())
-            .map(|(compu, _)| missing(AnnotatedNode::Compu(*compu)));
+            .map(|(compu, _)| missing(AnnotatedNode::Compu(compu)));
         let vpats = (statics.vpats.iter())
             .filter(|(pat, _)| statics.annotations_vpat.get(pat).is_none())
-            .map(|(pat, _)| missing(AnnotatedNode::VPat(*pat)));
+            .map(|(pat, _)| missing(AnnotatedNode::VPat(pat)));
         let tpats = (statics.tpats.iter())
             .filter(|(pat, _)| statics.annotations_tpat.get(pat).is_none())
-            .map(|(pat, _)| missing(AnnotatedNode::TPat(*pat)));
+            .map(|(pat, _)| missing(AnnotatedNode::TPat(pat)));
         let types = (statics.types_pre.iter())
             .filter(|(ty, _)| statics.type_kind_at(*ty).is_none())
             .map(|(ty, _)| missing(AnnotatedNode::Type(ty)));
@@ -126,14 +123,14 @@ impl ArenaInvariants<'_> {
     /// Value and pattern annotations are value types; computation annotations are computation types.
     fn annotation_sorts(&self) -> Vec<ArenaViolation> {
         let annotated = (self.statics.annotations_value.iter())
-            .map(|(value, ty)| (AnnotatedNode::Value(*value), *ty, AnnotationSort::VType))
+            .map(|(value, ty)| (AnnotatedNode::Value(value), *ty, AnnotationSort::VType))
             .chain(
                 (self.statics.annotations_compu.iter())
-                    .map(|(compu, ty)| (AnnotatedNode::Compu(*compu), *ty, AnnotationSort::CType)),
+                    .map(|(compu, ty)| (AnnotatedNode::Compu(compu), *ty, AnnotationSort::CType)),
             )
             .chain(
                 (self.statics.annotations_vpat.iter())
-                    .map(|(pat, ty)| (AnnotatedNode::VPat(*pat), *ty, AnnotationSort::VType)),
+                    .map(|(pat, ty)| (AnnotatedNode::VPat(pat), *ty, AnnotationSort::VType)),
             );
         annotated
             .filter(|(_, ty, expected)| self.sort(*ty) != Some(*expected))
@@ -159,10 +156,10 @@ impl ArenaInvariants<'_> {
             .filter(|(value, node)| {
                 matches!(node, Value::Hole(_)) && statics.foreign_imports.get(value).is_none()
             })
-            .map(|(value, _)| ArenaViolation::ResidualHoleValue { value: *value });
+            .map(|(value, _)| ArenaViolation::ResidualHoleValue { value });
         let compus = (statics.compus.iter())
             .filter(|(_, node)| matches!(node, Computation::Hole(_)))
-            .map(|(compu, _)| ArenaViolation::ResidualHoleComputation { compu: *compu });
+            .map(|(compu, _)| ArenaViolation::ResidualHoleComputation { compu });
         let annotations = std::iter::once((AnnotationSite::Root, root))
             .chain(
                 (statics.term_facts.iter())

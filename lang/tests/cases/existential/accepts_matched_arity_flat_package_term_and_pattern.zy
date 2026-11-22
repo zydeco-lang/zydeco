@@ -1,0 +1,5 @@
+-- stage: run
+
+let boxed : exists (X : VType) . X * Int * Int = (Int, 1, 2, 3) in
+let (X, a, b, c) = boxed in
+! exit 0

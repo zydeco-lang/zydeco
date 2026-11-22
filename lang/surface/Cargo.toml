@@ -11,18 +11,17 @@ description = "surface syntax for zydeco"
 
 [dependencies]
 serde = { workspace = true }
+rustc-hash = { workspace = true }
 regex = { workspace = true }
 logos = { workspace = true }
 lalrpop-util = { workspace = true }
-sequence_trie = { workspace = true }
 rpds = { workspace = true }
-unindent = { workspace = true }
 thiserror = { workspace = true }
 ariadne = { workspace = true }
 pretty = { workspace = true }
 auto_impl = { workspace = true }
 strum = { workspace = true }
-zydeco-utils = { workspace = true }
+zydeco-foundation = { workspace = true }
 zydeco-derive = { workspace = true }
 zydeco-syntax = { workspace = true }
 derive_more = { workspace = true, features = [

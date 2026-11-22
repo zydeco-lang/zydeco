@@ -4,14 +4,14 @@ pub use super::arena::*;
 pub use super::intention::*;
 pub use super::trivia::*;
 pub use crate::{arena::*, syntax::*};
+pub use zydeco_foundation::span::{FileMap, SourceMap, Sp, Span};
 pub use zydeco_syntax::*;
-pub use zydeco_utils::span::{FileMap, SourceMap, Sp, Span};
 
 use derive_more::From;
 
 /* ------------------------------- Identifier ------------------------------- */
 
-zydeco_utils::new_key_type! {
+zydeco_foundation::new_key_type! {
     pub struct DefId;
     pub struct PatId;
     pub struct CoPatId;
@@ -605,7 +605,7 @@ impl Parser {
     /// Expand `= field` into a named term whose payload is the same-spelled
     /// variable, optionally annotated.
     pub fn pun_term(&mut self, field: Sp<FieldName>, ty: Option<Sp<TermId>>) -> Term {
-        let variable = self.term(field.mk(VarName(field.inner.0.clone()).into()));
+        let variable = self.term(field.mk(VarName::from_sym(field.inner.sym()).into()));
         let inner = match ty {
             | Some(ty) => {
                 let annotation = Ann { tm: variable, ty: ty.inner };
@@ -656,7 +656,7 @@ impl Parser {
         ProjectionPattern(field.inner, inner).into()
     }
     fn punned_pattern_payload(&mut self, field: &Sp<FieldName>, ty: Option<Sp<TermId>>) -> PatId {
-        let binder = self.def(field.mk(VarName(field.inner.0.clone())));
+        let binder = self.def(field.mk(VarName::from_sym(field.inner.sym())));
         let variable = self.pat(field.mk(binder.into()));
         match ty {
             | Some(ty) => {

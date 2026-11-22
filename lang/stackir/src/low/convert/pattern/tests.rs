@@ -1,19 +1,21 @@
 use super::*;
 use crate::high::syntax::*;
-use zydeco_utils::fold::Explicit;
+use zydeco_foundation::{dense::DenseId, fold::Explicit};
 
 struct Fixture {
     arena: high::SpsArena,
-    origins: IdAllocator<zydeco_statics::arena::StaticsScope>,
+    next_origin: usize,
 }
 
 impl Fixture {
     fn new() -> Self {
-        Self { arena: high::SpsArena::default(), origins: IdAllocator::new() }
+        Self { arena: high::SpsArena::default(), next_origin: 0 }
     }
 
     fn pattern(&mut self, pattern: impl Into<high::ValuePattern>) -> high::VPatId {
-        pattern.into().build(&mut self.arena, Some(ss::PatId::Value(self.origins.alloc())))
+        let origin = crate::ir::VPatId::from_index(self.next_origin);
+        self.next_origin += 1;
+        pattern.into().build(&mut self.arena, Some(origin))
     }
 
     fn program(mut self, binder: high::VPatId) -> FragmentProgram {
@@ -31,20 +33,18 @@ impl Fixture {
 fn pattern_translation_preserves_binding_order_origins_layouts_and_protocols() {
     let mut fixture = Fixture::new();
     let def: DefId = fixture.arena.admin.fresh_def();
-    fixture.arena.admin.insert_def(def, VarName("argument".into()));
+    fixture.arena.admin.insert_def(def, VarName::new("argument"));
     let variable = fixture.pattern(def);
-    let ctor = fixture.pattern(Ctor(CtorIdx { idx: 1, name: CtorName("+Item".into()) }, variable));
+    let ctor = fixture.pattern(Ctor(CtorIdx { idx: 1, name: CtorName::new("+Item") }, variable));
     let other: DefId = fixture.arena.admin.fresh_def();
-    fixture.arena.admin.insert_def(other, VarName("second".into()));
+    fixture.arena.admin.insert_def(other, VarName::new("second"));
     let second = fixture.pattern(other);
     let alias = fixture.pattern(Alias(ConsN(vec![ctor], second)));
     let unit = fixture.pattern(Triv);
     fixture.arena.inner.pattern_protocols.insert_new(unit, ValueProtocol::Unit);
     let empty = fixture.pattern(VCons::new(vec![], ProductLayout { arity: 2 }));
     let root = fixture.pattern(VCons::new(vec![alias, unit, empty], ProductLayout { arity: 4 }));
-    let scoped = ScopedArena::default();
-    let statics = StaticsArena::default();
-    let mut conversion = ClosureConversion::new(fixture.program(root), &scoped, &statics);
+    let mut conversion = ClosureConversion::new(fixture.program(root));
     let translated = Explicit::run(&mut PatternFolder { conversion: &mut conversion }, root);
     assert_eq!(conversion.arena.inner.vpats.len(), 7);
     assert_eq!(
@@ -79,15 +79,13 @@ fn deep_pattern_translation_and_destruction_use_a_small_stack() {
         .spawn(|| {
             let mut fixture = Fixture::new();
             let def: DefId = fixture.arena.admin.fresh_def();
-            fixture.arena.admin.insert_def(def, VarName("argument".into()));
+            fixture.arena.admin.insert_def(def, VarName::new("argument"));
             let mut root = fixture.pattern(def);
             for _ in 0..8192 {
                 let hole = fixture.pattern(Hole);
                 root = fixture.pattern(Alias(ConsN(vec![root], hole)));
             }
-            let scoped = ScopedArena::default();
-            let statics = StaticsArena::default();
-            let mut conversion = ClosureConversion::new(fixture.program(root), &scoped, &statics);
+            let mut conversion = ClosureConversion::new(fixture.program(root));
             let output = Explicit::run(&mut PatternFolder { conversion: &mut conversion }, root);
             assert_eq!(output.bindings.len(), 1);
             assert_eq!(output.bindings[0].0, def);
@@ -104,9 +102,7 @@ fn invalid_layouts_reject_the_parent_after_independent_children() {
     let hole = fixture.pattern(Hole);
     let unit = fixture.pattern(Triv);
     let root = fixture.pattern(VCons::new(vec![hole, unit], ProductLayout { arity: 2 }));
-    let scoped = ScopedArena::default();
-    let statics = StaticsArena::default();
-    let mut conversion = ClosureConversion::new(fixture.program(root), &scoped, &statics);
+    let mut conversion = ClosureConversion::new(fixture.program(root));
     let high::ValuePattern::VCons(product) = &mut conversion.source.inner.vpats[&root] else {
         panic!()
     };

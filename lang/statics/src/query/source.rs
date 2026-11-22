@@ -1,44 +1,6 @@
-//! Source and completion query orchestration and recursive-group allocation sites.
+//! Coarse source and completion checking queries.
 
 use super::*;
-
-/// An interned binding index, for use as a salsa query key.
-#[salsa::interned]
-pub struct InternedBindingIndex<'db> {
-    #[returns(clone)]
-    pub index: u32,
-}
-
-impl<'db> InternedBindingIndex<'db> {
-    pub(crate) fn with_usize(db: &'db dyn TyckDb, index: usize) -> Self {
-        Self::new(db, u32::try_from(index).expect("recursive binding index range exhausted"))
-    }
-}
-
-/// The pre-introduction identities of one recursive-group binding: the
-/// abstract type and the two type-alias nodes the fixpoint introduces, derived
-/// at the group's site by the binding's index.
-///
-/// This is the first half of the design's cycle strategy: the group-level
-/// query introduces the recursive identities before the equation checks run,
-/// mirroring the checker's fixpoint prelude. The seals and the environment
-/// threading stay checker-side.
-#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
-pub fn rec_group_abst_judgment_at<'db>(
-    db: &'db dyn TyckDb, site: InternedSite<'db>, index: InternedBindingIndex<'db>,
-) -> Option<(ss::AbstId, ss::TypeId, ss::TypeId)> {
-    let last = index
-        .index(db)
-        .checked_mul(3)
-        .and_then(|base| base.checked_add(2))
-        .expect("recursive binding slot range exhausted");
-    let base = last - 2;
-    let key_space = site.key_space(db);
-    let abst: ss::AbstId = derived_id(key_space, base);
-    let ty_1: ss::TypeId = derived_id(key_space, base + 1);
-    let ty_2: ss::TypeId = derived_id(key_space, last);
-    Some((abst, ty_1, ty_2))
-}
 
 /// Take the pending resolved program out of the slot and intern it as a
 /// tracked struct, inside the query graph where tracked-struct creation is
@@ -115,7 +77,7 @@ pub fn check_library<'db>(
         .map_err(|_| crate::LibraryCheckError::Checking(tycker.error_diagnostics()))?;
     let exports = tycker.prepare_library(root, &contract)?;
     tycker.strip_checker_state();
-    Ok(crate::CheckedLibrary { statics: std::sync::Arc::new(tycker.statics), exports })
+    Ok(crate::CheckedLibrary { exports })
 }
 
 /// Prepare one native initializer without replacing ordinary source import semantics.
@@ -131,7 +93,7 @@ pub fn check_unit<'db>(
         .map_err(|_| crate::LibraryCheckError::Checking(tycker.error_diagnostics()))?;
     let initializer = tycker.prepare_unit(root)?;
     tycker.strip_checker_state();
-    Ok(crate::CheckedUnit { statics: std::sync::Arc::new(tycker.statics), initializer })
+    Ok(crate::CheckedUnit { initializer })
 }
 
 /// Check current recovered syntax and compare names before transient environments are released.

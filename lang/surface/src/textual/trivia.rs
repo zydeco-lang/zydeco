@@ -8,7 +8,7 @@ pub use comment::{
     TrailingComment,
 };
 pub(crate) use comment::{CommentCapture, SpannedEntity};
-use zydeco_utils::arena::{ArenaAccess, ArenaAssoc};
+use zydeco_foundation::arena::{ArenaAccess, ArenaAssoc};
 
 /// Comments and other source material anchored to canonical textual IDs.
 ///

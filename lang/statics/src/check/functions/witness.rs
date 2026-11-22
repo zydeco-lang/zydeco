@@ -84,7 +84,7 @@ impl PackageSignature {
                 tycker.transfer_builtin_role(*canonical, fresh)?;
                 tycker.statics.existential_skolems.ensure(fresh);
                 let env = env.with_skolem(fresh);
-                let payload = Alloc::alloc(tycker, fresh, kind, &env);
+                let payload = Alloc::alloc(tycker, fresh, kind, &());
                 let codomain = codomain.subst_abst(tycker, (*canonical, payload))?;
                 opened.push(fresh);
                 Ok((env, codomain, opened))
@@ -132,8 +132,8 @@ impl<'a> PackPiWitnessSkolems<'a> {
                         let Some((&canonical, witnesses)) = self.witnesses.split_first() else {
                             unreachable!()
                         };
-                        let kind = tycker.statics.annotations_abst[&canonical];
-                        let payload = Alloc::alloc(tycker, canonical, kind, env);
+                        let kind = tycker.statics.annotations_abst[canonical];
+                        let payload = Alloc::alloc(tycker, canonical, kind, &());
                         let domain = body.subst_abst(tycker, (binder.witness, payload))?;
                         let tail = Self { witnesses, domain, expected: self.expected }
                             .collect_reported(tycker, env)?;
@@ -185,8 +185,8 @@ impl<'a> PackPiPatternAssignments<'a> {
                         let Some((&witness, witnesses)) = self.witnesses.split_first() else {
                             unreachable!()
                         };
-                        let kind = tycker.statics.annotations_abst[&witness];
-                        let payload = Alloc::alloc(tycker, witness, kind, env);
+                        let kind = tycker.statics.annotations_abst[witness];
+                        let payload = Alloc::alloc(tycker, witness, kind, &());
                         let domain = body.subst_abst(tycker, (binder.witness, payload))?;
                         let tail = Self {
                             items,
@@ -315,7 +315,7 @@ impl ValuePiPatternSkolems {
                                     };
                                     remaining = rest;
                                     let kind = tycker.statics.annotations_abst[&witness];
-                                    Alloc::alloc(tycker, witness, kind, env)
+                                    Alloc::alloc(tycker, witness, kind, &())
                                 }
                                 | ss::ExistsMode::Manifest(definition) => definition,
                             };

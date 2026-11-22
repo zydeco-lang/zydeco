@@ -30,11 +30,17 @@ impl KindId {
     fn filled_norm_id(
         self, tycker: &mut Tycker<'_>, norm: &mut FilledNormalizer,
     ) -> Result<KindId> {
+        zydeco_foundation::stack::maybe_grow(|| self.filled_norm_id_inner(tycker, norm))
+    }
+
+    fn filled_norm_id_inner(
+        self, tycker: &mut Tycker<'_>, norm: &mut FilledNormalizer,
+    ) -> Result<KindId> {
         if let Some(norm) = norm.kinds.get(&self).cloned() {
             return Ok(norm);
         }
         let res = match tycker.statics.kinds_pre[&self].to_owned() {
-            | Fillable::Fill(fill) => match tycker.statics.solus.get(&fill).cloned() {
+            | Fillable::Fill(fill) => match tycker.statics.solus.get(fill).cloned() {
                 | Some(AnnId::Kind(kd)) => kd.filled_norm_id(tycker, norm)?,
                 | Some(AnnId::Set | AnnId::Type(_)) => {
                     let _: Result<()> = tycker.err(TyckError::SortMismatch);
@@ -85,14 +91,19 @@ impl TypeId {
     fn filled_norm_id(
         self, tycker: &mut Tycker<'_>, norm: &mut FilledNormalizer,
     ) -> Result<TypeId> {
+        zydeco_foundation::stack::maybe_grow(|| self.filled_norm_id_inner(tycker, norm))
+    }
+
+    fn filled_norm_id_inner(
+        self, tycker: &mut Tycker<'_>, norm: &mut FilledNormalizer,
+    ) -> Result<TypeId> {
         if let Some(normalized) = norm.types.get(&self).cloned() {
             return Ok(normalized);
         }
         let kd = tycker.statics.type_kind(self);
         let kd_norm = kd.filled_norm_id(tycker, norm)?;
-        let env = tycker.statics.env_at(self);
         let res = match tycker.statics.types_pre[&self].to_owned() {
-            | Fillable::Fill(fill) => match tycker.statics.solus.get(&fill).cloned() {
+            | Fillable::Fill(fill) => match tycker.statics.solus.get(fill).cloned() {
                 | Some(AnnId::Type(ty)) => ty.filled_norm_id(tycker, norm)?,
                 | Some(AnnId::Set | AnnId::Kind(_)) => {
                     let _: Result<()> = tycker.err(TyckError::SortMismatch);
@@ -114,7 +125,7 @@ impl TypeId {
                         if f_norm == f_ty && a_norm == a_ty && kd_norm == kd {
                             self
                         } else {
-                            Alloc::alloc(tycker, App(f_norm, a_norm), kd_norm, &env)
+                            Alloc::alloc(tycker, App(f_norm, a_norm), kd_norm, &())
                         }
                     } else {
                         let spine =
@@ -140,11 +151,11 @@ impl TypeId {
                             inner.filled_norm_id(tycker, norm)?
                         }
                         | _ if head_norm == head && kd_norm == kd => self,
-                        | _ => Alloc::alloc(tycker, Proj(head_norm, name), kd_norm, &env),
+                        | _ => Alloc::alloc(tycker, Proj(head_norm, name), kd_norm, &()),
                     }
                 }
-                | Type::Primitive(primitive) => primitive.build(tycker, &env),
-                | node => norm.fold_children(tycker, self, node, kd_norm, &env)?,
+                | Type::Primitive(primitive) => primitive.build(tycker, &TyEnv::default()),
+                | node => norm.fold_children(tycker, self, node, kd_norm)?,
             },
         };
         norm.types.insert(self, res);

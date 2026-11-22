@@ -5,7 +5,7 @@ use crate::{
     textual::{StrictParser, arena::TextualScope, syntax as t},
 };
 use std::collections::{HashMap, HashSet};
-use zydeco_utils::pass::CompilerPass;
+use zydeco_foundation::pass::CompilerPass;
 
 struct Fixture {
     textual: IdAllocator<TextualScope>,
@@ -19,7 +19,7 @@ impl Fixture {
 
     fn definition(&mut self, name: &str) -> DefId {
         let origin: t::DefId = self.textual.alloc();
-        Alloc::alloc(&mut self.builder, VarName(name.into()), origin.into())
+        Alloc::alloc(&mut self.builder, VarName::new(name), origin.into())
     }
 
     fn pattern(&mut self, pattern: impl Into<Pattern>) -> PatId {
@@ -49,7 +49,7 @@ fn shared_pattern_annotations_copy_every_occurrence_and_retain_origins() {
     let mut fixture = Fixture::new();
     let definition = fixture.definition("x");
     let binder = fixture.pattern(definition);
-    let occurrence = fixture.term(Term::Var(VarName("x".into())));
+    let occurrence = fixture.term(Term::Var(VarName::new("x")));
     let provider = fixture.term(Abs(vec![binder], occurrence));
     let source = fixture.term(SourceBoundary(provider));
     let signature = fixture.term(SignatureBoundary(provider));
@@ -86,7 +86,7 @@ fn shared_pattern_annotations_copy_every_occurrence_and_retain_origins() {
     assert_eq!(counts, expected);
     assert_eq!(copies.len(), 14);
     for (id, name) in arena.defs.iter() {
-        assert_eq!(name.0, "x");
+        assert_eq!(name, &"x");
         assert_eq!(arena.origins.source(&(*id).into()), arena.origins.source(&definition.into()));
     }
 }
@@ -98,16 +98,16 @@ fn copattern_spines_retain_order_and_freshen_all_binders() {
     let first_pattern = fixture.pattern(first);
     let second = fixture.definition("x");
     let second_pattern = fixture.pattern(second);
-    let dependent_type = fixture.term(Term::Var(VarName("A".into())));
+    let dependent_type = fixture.term(Term::Var(VarName::new("A")));
     let second_pattern = fixture.pattern(Ann { tm: second_pattern, ty: dependent_type });
-    let tail = fixture.term(Term::Var(VarName("x".into())));
+    let tail = fixture.term(Term::Var(VarName::new("x")));
     let root = fixture.term(CoMatchClauses {
         clauses: vec![CoPatternClause {
             spine: CoPatternSpine {
-                head: CoPatternItem::Dtor(DtorName("read".into())),
+                head: CoPatternItem::Dtor(DtorName::new("read")),
                 tail: vec![
                     first_pattern.into(),
-                    CoPatternItem::Dtor(DtorName("next".into())),
+                    CoPatternItem::Dtor(DtorName::new("next")),
                     second_pattern.into(),
                 ],
             },
@@ -129,8 +129,8 @@ fn copattern_spines_retain_order_and_freshen_all_binders() {
     else {
         panic!()
     };
-    assert_eq!(read.0, "read");
-    assert_eq!(next.0, "next");
+    assert_eq!(read, &"read");
+    assert_eq!(next, &"next");
     assert_ne!(*a, first_pattern);
     assert_ne!(*x, second_pattern);
     assert_ne!(clause.tail, tail);
@@ -139,7 +139,7 @@ fn copattern_spines_retain_order_and_freshen_all_binders() {
         arena
             .terms
             .iter()
-            .filter(|(_, term)| matches!(term, Term::Var(name) if name.0 == "A"))
+            .filter(|(_, term)| matches!(term, Term::Var(name) if name == "A"))
             .count(),
         2
     );

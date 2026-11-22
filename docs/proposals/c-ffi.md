@@ -21,7 +21,7 @@ The immediate goal is to let a binding describe the storage and argument transpo
 Source protocol preservation helps validate lowering, but does not supply either contract.
 The following examples separate missing foreign operations from operations already expressible in source.
 The [C specimen](../../lib/tests/ffi/contracts.c) implements the first four interfaces and executes them
-with C callers; [source probes](../../lang/tests/tests/ffi_examples.rs) check the current Zydeco boundary.
+with C callers; [source probes](../../lang/tests/tests/suite/ffi_examples.rs) check the current Zydeco boundary.
 Executing a C caller is evidence about the specimen, not evidence that Zydeco can import every function in it.
 
 | Example | Current result | Missing capability or next decision |
@@ -171,7 +171,7 @@ Native imports remain outside the Wasm and ZASM-interpreter execution profiles u
 ## Validation criteria
 
 [Signature tests](../../lang/statics/tests/foreign.rs)
-and [integration fixtures](../../lang/tests/tests/ffi.rs) cover the current subset.
+and [integration fixtures](../../lang/tests/tests/suite/ffi.rs) cover the current subset.
 New boundaries need accepted and rejected shapes plus observable lifetime checks:
 argument order, full-width results, empty buffers, loader failure, collection with live captures,
 and invalid entry or release without partial runtime mutation.
@@ -181,8 +181,8 @@ under the repository's testing workflow.
 Reproduce the concrete boundary review with focused targets:
 
 ```sh
-cargo test -p zydeco-tests --test memory_views --test ffi_examples --test ffi --test represented_calls
-cargo test -p zydeco-tests --features system-xxhash --test ffi calls_the_installed_xxhash_library
+cargo test -p zydeco-tests --test suite -- memory_views:: ffi_examples:: ffi:: represented_calls::
+cargo test -p zydeco-tests --features system-xxhash --test suite -- ffi::calls_the_installed_xxhash_library
 ```
 
 On Unix, `ffi_examples` compiles and runs its own small C specimen with the host C compiler;

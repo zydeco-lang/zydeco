@@ -14,6 +14,17 @@ mod value_functions;
 use projection::ValueProjectionTranslation;
 use value_functions::ValueFunctionTranslation;
 
+/// Per-block memoization for closed signature, type-lift, and shareable structure
+/// algebra translations inside [`AlgebraicTranslation`].
+#[derive(Default)]
+pub(crate) struct MonadicMemo {
+    pub(crate) signatures: rustc_hash::FxHashMap<(TypeId, TypeId, TypeId), TypeId>,
+    pub(crate) type_lifts: rustc_hash::FxHashMap<(TypeId, TypeId, TypeId), TypeId>,
+    pub(crate) structures: rustc_hash::FxHashMap<TypeId, (ValueId, TypeId)>,
+    pub(crate) structure_bindings: Vec<(VPatId, ValueId)>,
+    pub(crate) share_structures: bool,
+}
+
 pub mod syntax {
     /// signature translation
     #[derive(Clone, Copy)]
@@ -79,7 +90,7 @@ mod syntax_impl {
                 let (env, ty) = ty.construct(tycker, env)?;
 
                 // administrative
-                tycker.tasks.push_back_mut(TyckTask::SignatureGen(ty.into()));
+                tycker.tasks.push(TyckTask::SignatureGen(ty.into()));
                 signature_translation(tycker, env, ty)
             })
         }
@@ -96,7 +107,7 @@ mod syntax_impl {
                 let (env, ty) = ty.construct(tycker, env)?;
 
                 // administrative
-                tycker.tasks.push_back_mut(TyckTask::StructureGen(ty.into()));
+                tycker.tasks.push(TyckTask::StructureGen(ty.into()));
                 structure_translation(tycker, env, ty)
             })
         }
@@ -113,7 +124,7 @@ mod syntax_impl {
                 let (env, ty) = ty.construct(tycker, env)?;
 
                 // administrative
-                tycker.tasks.push_back_mut(TyckTask::MonadicLiftPat(ty.into()));
+                tycker.tasks.push(TyckTask::MonadicLiftPat(ty.into()));
                 type_pattern_translation(tycker, env, ty)
             })
         }
@@ -130,7 +141,7 @@ mod syntax_impl {
                 let (env, ty) = ty.construct(tycker, env)?;
 
                 // administrative
-                tycker.tasks.push_back_mut(TyckTask::MonadicLiftTerm(ty.into()));
+                tycker.tasks.push(TyckTask::MonadicLiftTerm(ty.into()));
                 type_translation(tycker, env, ty)
             })
         }
@@ -147,7 +158,7 @@ mod syntax_impl {
                 let (env, tm) = tm.construct(tycker, env)?;
 
                 // administrative
-                tycker.tasks.push_back_mut(TyckTask::MonadicLiftPat(tm.into()));
+                tycker.tasks.push(TyckTask::MonadicLiftPat(tm.into()));
                 value_pattern_translation(tycker, env, tm)
             })
         }
@@ -164,7 +175,7 @@ mod syntax_impl {
                 let (env, tm) = tm.construct(tycker, env)?;
 
                 // administrative
-                tycker.tasks.push_back_mut(TyckTask::MonadicLiftTerm(tm.into()));
+                tycker.tasks.push(TyckTask::MonadicLiftTerm(tm.into()));
                 value_translation(tycker, env, tm)
             })
         }
@@ -181,7 +192,7 @@ mod syntax_impl {
                 let (env, tm) = tm.construct(tycker, env)?;
 
                 // administrative
-                tycker.tasks.push_back_mut(TyckTask::MonadicLiftTerm(tm.into()));
+                tycker.tasks.push(TyckTask::MonadicLiftTerm(tm.into()));
                 computation_translation(tycker, env, tm)
             })
         }
@@ -215,7 +226,7 @@ mod syntax_impl {
         fn construct(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
             let payload = env.abst(self.payload);
             let payload_kind = tycker.statics.annotations_abst[&payload];
-            let payload = Alloc::alloc(tycker, payload, payload_kind, &env.ty);
+            let payload = Alloc::alloc(tycker, payload, payload_kind, &());
             let argument = self.pattern.introduce_payload(tycker, payload)?;
             Ok((env, argument))
         }
@@ -238,11 +249,9 @@ mod syntax_impl {
 
     impl Construct<MonEnv, TPatId> for cs::ReboundTypePattern {
         fn construct(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TPatId)> {
-            use zydeco_utils::arena::ArenaAccess;
-
             let witness = env.abst(self.witness);
-            let payload = tycker.statics.abst_hints.get(&witness).copied();
-            let pattern = self.source.rebind_payload(tycker, payload, &env.ty);
+            let payload = tycker.statics.abst_hints.get(witness).copied();
+            let pattern = self.source.rebind_payload(tycker, payload);
             Ok((env, pattern))
         }
     }
@@ -258,7 +267,7 @@ mod syntax_impl {
             let (env, body) = self.body.construct(tycker, env)?;
             let (env, ctype) = CType.construct(tycker, env)?;
             let binder = TypeBinder { pattern, witness };
-            let forall = Alloc::alloc(tycker, Forall(binder, body), ctype, &env.ty);
+            let forall = Alloc::alloc(tycker, Forall(binder, body), ctype, &());
             Ok((env, forall))
         }
     }
@@ -274,6 +283,22 @@ mod syntax_impl {
 /// + `T: CType` -> `Algebra M T`
 /// + `T: K_1 -> K_2` -> `forall X: K_1 . Thk (Sig_K_1(X)) -> Sig_K_2(T X)`
 fn signature_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(MonEnv, TypeId)> {
+    let key = (env.monad_ty, env.basis.algebra, ty);
+    if let Some(cached) =
+        tycker.monadic_memo.as_ref().and_then(|memo| memo.signatures.get(&key).copied())
+    {
+        return Ok((env, cached));
+    }
+    let (env, res) = signature_translation_inner(tycker, env, ty)?;
+    if let Some(memo) = &mut tycker.monadic_memo {
+        memo.signatures.insert(key, res);
+    }
+    Ok((env, res))
+}
+
+fn signature_translation_inner(
+    tycker: &mut Tycker, env: MonEnv, ty: TypeId,
+) -> Result<(MonEnv, TypeId)> {
     let (env, kd) = cs::TypeOf(ty).construct(tycker, env)?;
     let res = match tycker.kind_filled(&kd)?.to_owned() {
         | Kind::VType(VType) => cs::TopTy.construct(tycker, env)?,
@@ -343,8 +368,8 @@ struct PackPiAbstraction {
 }
 
 impl PackPiAbstraction {
-    fn build(self, tycker: &mut Tycker<'_>, env: &TyEnv) -> CompuId {
-        Alloc::alloc(tycker, Abs(self.binder, self.body), self.signature, env)
+    fn build(self, tycker: &mut Tycker<'_>, _env: &TyEnv) -> CompuId {
+        Alloc::alloc(tycker, Abs(self.binder, self.body), self.signature, &())
     }
 }
 
@@ -357,8 +382,8 @@ struct PackPiApplication {
 }
 
 impl PackPiApplication {
-    fn build(self, tycker: &mut Tycker<'_>, env: &TyEnv) -> CompuId {
-        Alloc::alloc(tycker, App(self.function, self.argument), self.result, env)
+    fn build(self, tycker: &mut Tycker<'_>, _env: &TyEnv) -> CompuId {
+        Alloc::alloc(tycker, App(self.function, self.argument), self.result, &())
     }
 }
 
@@ -406,11 +431,11 @@ impl<'a> PackPiWitnessLayoutState<'a> {
                         let Some((&witness, witnesses)) = self.witnesses.split_first() else {
                             return self.mismatch(tycker);
                         };
-                        let kind = tycker.statics.annotations_abst[&witness];
+                        let kind = tycker.statics.annotations_abst[witness];
                         (
                             PackPiWitnessLayoutEntry::Abstract(witness),
                             witnesses,
-                            Alloc::alloc(tycker, witness, kind, env),
+                            Alloc::alloc(tycker, witness, kind, &()),
                         )
                     }
                     | ExistsMode::Manifest(definition) => {
@@ -487,8 +512,8 @@ impl<'a> PackPiPatternLayoutState<'a> {
                                     else {
                                         return self.mismatch(tycker);
                                     };
-                                    let kind = tycker.statics.annotations_abst[&witness];
-                                    let payload = Alloc::alloc(tycker, witness, kind, env);
+                                    let kind = tycker.statics.annotations_abst[witness];
+                                    let payload = Alloc::alloc(tycker, witness, kind, &());
                                     entries.push(PackPiWitnessLayoutEntry::Abstract(witness));
                                     domain = body.subst_abst(tycker, (binder.witness, payload))?;
                                     self.witnesses = rest;
@@ -554,12 +579,12 @@ impl PackPiBinderPattern {
                     ) => {
                         let witness_def = Alloc::alloc(
                             tycker,
-                            VarName(format!("pack_kind_{index}")),
+                            VarName::new(format!("pack_kind_{index}")),
                             AnnId::Set,
                             &(),
                         );
-                        let pattern_env = env.clone() + [(witness_def, AnnId::Kind(definition))];
-                        let pattern = Alloc::alloc(tycker, witness_def, (), &pattern_env);
+                        tycker.kind_bindings.insert(witness_def, definition);
+                        let pattern = Alloc::alloc(tycker, witness_def, (), &());
                         witness_patterns.push(StaticPatId::Kind(pattern));
                         Ok((body, witness_patterns))
                     }
@@ -572,20 +597,18 @@ impl PackPiBinderPattern {
                         let kind = binder.payload_kind(tycker);
                         let witness_def = Alloc::alloc(
                             tycker,
-                            VarName(format!("pack_witness_{index}")),
+                            VarName::new(format!("pack_witness_{index}")),
                             kind.into(),
                             &(),
                         );
-                        witness_patterns.push(StaticPatId::Type(binder.pattern.rebind_payload(
-                            tycker,
-                            Some(witness_def),
-                            env,
-                        )));
+                        witness_patterns.push(StaticPatId::Type(
+                            binder.pattern.rebind_payload(tycker, Some(witness_def)),
+                        ));
                         let payload = match (entry, mode) {
                             | (
                                 PackPiWitnessLayoutEntry::Abstract(witness),
                                 ExistsMode::Abstract,
-                            ) => Alloc::alloc(tycker, witness, kind, env),
+                            ) => Alloc::alloc(tycker, witness, kind, &()),
                             | (
                                 PackPiWitnessLayoutEntry::TypeManifest,
                                 ExistsMode::Manifest(definition),
@@ -604,9 +627,9 @@ impl PackPiBinderPattern {
             },
         )?;
 
-        let body_def = Alloc::alloc(tycker, VarName("pack_body".to_string()), body_ty.into(), &());
-        let body_pattern: VPatId = Alloc::alloc(tycker, body_def, body_ty, env);
-        Ok(Alloc::alloc(tycker, ConsN(witness_patterns, body_pattern), domain, env))
+        let body_def = Alloc::alloc(tycker, VarName::new("pack_body"), body_ty.into(), &());
+        let body_pattern: VPatId = Alloc::alloc(tycker, body_def, body_ty, &());
+        Ok(Alloc::alloc(tycker, ConsN(witness_patterns, body_pattern), domain, &()))
     }
 }
 
@@ -666,7 +689,7 @@ impl PackPiPatternTranslation {
             | ValuePattern::Named(Named(name, inner)) => {
                 let (env, inner) =
                     Self { pattern: inner, layout: self.layout }.translate(tycker, env)?;
-                let named = Alloc::alloc(tycker, Named(name, inner), translated_ty, &env.ty);
+                let named = Alloc::alloc(tycker, Named(name, inner), translated_ty, &());
                 Ok((env, named))
             }
             | ValuePattern::SCons(ConsN(witnesses, body)) => package_pattern_translation(
@@ -694,7 +717,7 @@ impl PackPiPatternTranslation {
                     translated.push(pattern);
                 }
                 let alias = Alias(ConsN::from_vec(translated).unwrap());
-                let pattern = Alloc::alloc(tycker, alias, translated_ty, &env.ty);
+                let pattern = Alloc::alloc(tycker, alias, translated_ty, &());
                 Ok((env, pattern))
             }
             | ValuePattern::VCons(components) => {
@@ -724,7 +747,7 @@ impl PackPiPatternTranslation {
                     });
                 }
                 let pattern =
-                    Alloc::alloc(tycker, ValuePattern::VCons(translated), translated_ty, &env.ty);
+                    Alloc::alloc(tycker, ValuePattern::VCons(translated), translated_ty, &());
                 Ok((env, pattern))
             }
             | ValuePattern::Hole(_)
@@ -854,6 +877,48 @@ impl Construct<MonEnv, CompuId> for ReferencedStructure {
 fn structure_translation(
     tycker: &mut Tycker, env: MonEnv, ty: TypeId,
 ) -> Result<(MonEnv, CompuId)> {
+    let shareable = tycker.monadic_memo.as_ref().is_some_and(|memo| memo.share_structures)
+        && env.subst.is_empty()
+        && env.subst_abst.is_empty()
+        && env.structure.def_map.is_empty()
+        && env.structure.absts.is_empty()
+        && !matches!(
+            tycker.type_filled(&ty)?,
+            Type::Abst(_)
+                | Type::Label(_)
+                | Type::Unit(_)
+                | Type::Primitive(_)
+                | Type::ValPi(_)
+                | Type::Prod(_)
+                | Type::Exists(_)
+                | Type::ManifestKind(_)
+                | Type::Data(_)
+        );
+    if !shareable {
+        return structure_translation_inner(tycker, env, ty);
+    }
+    if let Some(&(var_val, compu_ty)) =
+        tycker.monadic_memo.as_ref().and_then(|memo| memo.structures.get(&ty))
+    {
+        return Ok((env, Alloc::alloc(tycker, Force(var_val), compu_ty, &())));
+    }
+    let (env, compu) = structure_translation_inner(tycker, env, ty)?;
+    let compu_ty = tycker.statics.annotations_compu[&compu];
+    let thunk_ty = cs::Thk(compu_ty).build(tycker, &env.ty);
+    let thunk_val: ValueId = Alloc::alloc(tycker, Thunk(compu), thunk_ty, &());
+    let def: DefId = Alloc::alloc(tycker, VarName::new("__monadic_str"), thunk_ty.into(), &());
+    let vpat: VPatId = Alloc::alloc(tycker, def, thunk_ty, &());
+    let var_val: ValueId = Alloc::alloc(tycker, Value::Var(def), thunk_ty, &());
+    if let Some(memo) = &mut tycker.monadic_memo {
+        memo.structure_bindings.push((vpat, thunk_val));
+        memo.structures.insert(ty, (var_val, compu_ty));
+    }
+    Ok((env, Alloc::alloc(tycker, Force(var_val), compu_ty, &())))
+}
+
+fn structure_translation_inner(
+    tycker: &mut Tycker, env: MonEnv, ty: TypeId,
+) -> Result<(MonEnv, CompuId)> {
     let monad_impl = env.monad_impl;
     let res = match tycker.type_filled(&ty)? {
         | Type::Var(def) => ReferencedStructure {
@@ -866,7 +931,7 @@ fn structure_translation(
                 .copied(),
         }
         .construct(tycker, env)?,
-        | Type::Abst(abst) if tycker.statics.seals.get(&abst).is_some() => {
+        | Type::Abst(abst) if tycker.statics.seals.get(abst).is_some() => {
             nominal::NominalTranslation::structure(tycker, env, abst)?
         }
         | Type::Abst(abst) => {
@@ -977,78 +1042,70 @@ fn structure_translation(
             })
             .construct(tycker, env)?
         }
-        | Type::Forall(ty_forall) => {
-            // input: forall (X : K) . B
-            let Forall(binder, ty) = ty_forall;
-            let abst = binder.witness;
-            let source_pattern = binder.pattern;
-            let kd = cs::TypeOf(abst);
-            // output: fn (Z : VType) (mz : Thk (M Z)) (f : <f_ty>) => <body>
-            Abs(cs::Ty(cs::Pat("Z", VType)), move |_tvar, abst_z| {
-                Abs(cs::Pat("mz", cs::Thk(App(env.monad_ty, abst_z))), move |mz: VPatId| {
-                    // construct abstract type X first
-                    // substitute the abstract type `abst` with `abst_x`
-                    cs::CBind::new(cs::AbstPat(abst, cs::Ann("X", kd)), move |abst_x: AbstId| {
-                        // <f_ty> = Thk (Z -> forall (X : K) . Thk (Sig_K(X)) -> [B])
-                        let f_ty = cs::Thk(Arrow(
-                            abst_z,
-                            cs::PatternForall {
-                                pattern: cs::ReboundTypePattern {
-                                    source: source_pattern,
-                                    witness: abst_x,
-                                },
-                                witness: abst_x,
-                                // substitute the abstract type `abst` in the `ty` with `abst_x`
-                                body: Arrow(
-                                    cs::Thk(cs::Signature { ty: abst_x }),
-                                    cs::TypeLift { ty },
-                                ),
-                            },
-                        ));
-                        Abs(cs::Pat("f", f_ty), move |f: VPatId| {
-                            // <body> = fn (X : K) (str_X : Thk (Sig_K(X))) => Str(B) Z mz <kont>
-                            Abs(
-                                cs::Ty((
-                                    cs::ReboundTypePattern {
-                                        source: source_pattern,
-                                        witness: abst_x,
-                                    },
-                                    abst_x,
-                                )),
-                                move |_, abst_x: AbstId| {
-                                    Abs(cs::StrPat("str_X", abst_x, None), move |str_x: VPatId| {
-                                        // <kont> = { fn (z : Z) => ! f z X str_X }
-                                        let kont = Abs(cs::Pat("z", abst_z), move |z: VPatId| {
-                                            let f = cs::Value(f);
-                                            let z = cs::Value(z);
-                                            let str_x = cs::Value(str_x);
-                                            let argument = cs::PatternArgument {
-                                                pattern: source_pattern,
-                                                payload: abst_x,
-                                            };
-                                            App(App(App(Force(f), z), cs::Ty(argument)), str_x)
-                                        });
-                                        // substitute `abst` in `ty` with `abst_x`
-                                        let str_ = cs::Structure { ty };
-                                        App(
-                                            App(App(str_, cs::Ty(abst_z)), cs::Value(mz)),
-                                            Thunk(kont),
-                                        )
-                                    })
-                                },
-                            )
-                        })
-                    })
-                })
-            })
-            .construct(tycker, env)?
-        }
+        | Type::Forall(ty_forall) => forall_structure_translation(tycker, env, ty_forall)?,
         | Type::PackPi(signature) => {
             PackPiStructureTranslation { source: ty, signature: *signature }
                 .translate(tycker, env)?
         }
     };
     Ok(res)
+}
+
+fn forall_structure_translation(
+    tycker: &mut Tycker, env: MonEnv, ty_forall: Forall,
+) -> Result<(MonEnv, CompuId)> {
+    // input: forall (X : K) . B
+    let Forall(binder, ty) = ty_forall;
+    let abst = binder.witness;
+    let source_pattern = binder.pattern;
+    let kd = cs::TypeOf(abst);
+    // output: fn (Z : VType) (mz : Thk (M Z)) (f : <f_ty>) => <body>
+    Abs(cs::Ty(cs::Pat("Z", VType)), move |_tvar, abst_z| {
+        Abs(cs::Pat("mz", cs::Thk(App(env.monad_ty, abst_z))), move |mz: VPatId| {
+            // construct abstract type X first
+            // substitute the abstract type `abst` with `abst_x`
+            cs::CBind::new(cs::AbstPat(abst, cs::Ann("X", kd)), move |abst_x: AbstId| {
+                // <f_ty> = Thk (Z -> forall (X : K) . Thk (Sig_K(X)) -> [B])
+                let f_ty = cs::Thk(Arrow(
+                    abst_z,
+                    cs::PatternForall {
+                        pattern: cs::ReboundTypePattern { source: source_pattern, witness: abst_x },
+                        witness: abst_x,
+                        // substitute the abstract type `abst` in the `ty` with `abst_x`
+                        body: Arrow(cs::Thk(cs::Signature { ty: abst_x }), cs::TypeLift { ty }),
+                    },
+                ));
+                Abs(cs::Pat("f", f_ty), move |f: VPatId| {
+                    // <body> = fn (X : K) (str_X : Thk (Sig_K(X))) => Str(B) Z mz <kont>
+                    Abs(
+                        cs::Ty((
+                            cs::ReboundTypePattern { source: source_pattern, witness: abst_x },
+                            abst_x,
+                        )),
+                        move |_, abst_x: AbstId| {
+                            Abs(cs::StrPat("str_X", abst_x, None), move |str_x: VPatId| {
+                                // <kont> = { fn (z : Z) => ! f z X str_X }
+                                let kont = Abs(cs::Pat("z", abst_z), move |z: VPatId| {
+                                    let f = cs::Value(f);
+                                    let z = cs::Value(z);
+                                    let str_x = cs::Value(str_x);
+                                    let argument = cs::PatternArgument {
+                                        pattern: source_pattern,
+                                        payload: abst_x,
+                                    };
+                                    App(App(App(Force(f), z), cs::Ty(argument)), str_x)
+                                });
+                                // substitute `abst` in `ty` with `abst_x`
+                                let str_ = cs::Structure { ty };
+                                App(App(App(str_, cs::Ty(abst_z)), cs::Value(mz)), Thunk(kont))
+                            })
+                        },
+                    )
+                })
+            })
+        })
+    })
+    .construct(tycker, env)
 }
 
 /// Type Pattern Translation `[TPat]`
@@ -1062,7 +1119,7 @@ fn type_pattern_translation(
         | TPat::Var(def) => cs::Pat(def, kd).construct(tycker, env)?,
         | TPat::Named(Named(name, inner)) => {
             let (env, inner) = type_pattern_translation(tycker, env, inner)?;
-            let pattern = Alloc::alloc(tycker, Named(name, inner), kd, &env.ty);
+            let pattern = Alloc::alloc(tycker, Named(name, inner), kd, &());
             (env, pattern)
         }
     };
@@ -1072,18 +1129,19 @@ fn type_pattern_translation(
 fn kind_pattern_translation(
     tycker: &mut Tycker, env: MonEnv, pattern: KPatId, definition: KindId,
 ) -> Result<(MonEnv, KPatId)> {
-    match tycker.statics.kpats[&pattern].to_owned() {
+    match tycker.statics.kpats[pattern].to_owned() {
         | KindPattern::Hole(Hole) => {
-            let pattern = Alloc::alloc(tycker, Hole, (), &env.ty);
+            let pattern = Alloc::alloc(tycker, Hole, (), &());
             Ok((env, pattern))
         }
         | KindPattern::Var(source) => {
-            let variable = tycker.def_name(&source).clone();
+            let variable = *tycker.def_name(&source);
             let target = Alloc::alloc(tycker, variable, AnnId::Set, &());
             let mut env = env;
             env.subst += [(source, target)];
             env.ty += [(target, AnnId::Kind(definition))];
-            let pattern = Alloc::alloc(tycker, target, (), &env.ty);
+            tycker.kind_bindings.insert(target, definition);
+            let pattern = Alloc::alloc(tycker, target, (), &());
             Ok((env, pattern))
         }
     }
@@ -1091,6 +1149,29 @@ fn kind_pattern_translation(
 
 /// Carrier (Type) Translation `[T]`
 fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(MonEnv, TypeId)> {
+    let summary = tycker.statics.types_pre.summary(ty);
+    let closed = (env.subst.is_empty() || !summary.contains(TypeSummary::HAS_FREE_VAR))
+        && (env.subst_abst.is_empty() || !summary.contains(TypeSummary::HAS_FREE_ABST));
+    if !closed || tycker.monadic_memo.is_none() {
+        return type_translation_inner(tycker, env, ty);
+    }
+    let key = (env.monad_ty, env.basis.algebra, ty);
+    if let Some(cached) =
+        tycker.monadic_memo.as_ref().and_then(|memo| memo.type_lifts.get(&key).copied())
+    {
+        return Ok((env, cached));
+    }
+    let caller_env = env.clone();
+    let (_, res) = type_translation_inner(tycker, env, ty)?;
+    if let Some(memo) = &mut tycker.monadic_memo {
+        memo.type_lifts.insert(key, res);
+    }
+    Ok((caller_env, res))
+}
+
+fn type_translation_inner(
+    tycker: &mut Tycker, env: MonEnv, ty: TypeId,
+) -> Result<(MonEnv, TypeId)> {
     let monad_ty = env.monad_ty;
     let (env, kd) = cs::TypeOf(ty).construct(tycker, env)?;
     let (env, res) = match tycker.type_filled(&ty)?.to_owned() {
@@ -1099,25 +1180,22 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
             let Some(def_) = env.subst.get(&def).cloned() else {
                 tycker.err(TyckError::NotInlinable(def))?
             };
-            let alloc = Alloc::alloc(tycker, def_, kd, &env.ty);
+            let alloc = Alloc::alloc(tycker, def_, kd, &());
             (env, alloc)
         }
-        | Type::Abst(abst) => {
-            use zydeco_utils::arena::ArenaAccess;
-            match tycker.statics.seals.get(&abst) {
-                | Some(_) => nominal::NominalTranslation::apply(tycker, env, abst)?,
-                | None => match env.subst_abst.get(&abst).cloned() {
-                    | Some(new) => {
-                        let alloc = Alloc::alloc(tycker, new, kd, &env.ty);
-                        (env, alloc)
-                    }
-                    | None => {
-                        let alloc = Alloc::alloc(tycker, abst, kd, &env.ty);
-                        (env, alloc)
-                    }
-                },
-            }
-        }
+        | Type::Abst(abst) => match tycker.statics.seals.get(abst) {
+            | Some(_) => nominal::NominalTranslation::apply(tycker, env, abst)?,
+            | None => match env.subst_abst.get(&abst).cloned() {
+                | Some(new) => {
+                    let alloc = Alloc::alloc(tycker, new, kd, &());
+                    (env, alloc)
+                }
+                | None => {
+                    let alloc = Alloc::alloc(tycker, abst, kd, &());
+                    (env, alloc)
+                }
+            },
+        },
         // | Type::Abst(_abst) => unreachable!(),
         | Type::Abs(ty) => {
             let TypeAbstraction { binder, body } = ty;
@@ -1125,7 +1203,7 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
             let witness = env.subst_abst.get(&binder.witness).copied().unwrap_or(binder.witness);
             let (env, body) = cs::TypeLift { ty: body }.construct(tycker, env)?;
             let abstraction = TypeAbstraction { binder: TypeBinder { pattern, witness }, body };
-            let abstraction = Alloc::alloc(tycker, abstraction, kd, &env.ty);
+            let abstraction = Alloc::alloc(tycker, abstraction, kd, &());
             (env, abstraction)
         }
         | Type::App(ty) => {
@@ -1137,13 +1215,13 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
         | Type::Named(ty) => {
             let Named(name, inner) = ty;
             let (env, inner) = cs::TypeLift { ty: inner }.construct(tycker, env)?;
-            let named = Alloc::alloc(tycker, Named(name, inner), kd, &env.ty);
+            let named = Alloc::alloc(tycker, Named(name, inner), kd, &());
             (env, named)
         }
         | Type::Label(ty) => {
             let Label(name, inner) = ty;
             let (env, inner) = cs::TypeLift { ty: inner }.construct(tycker, env)?;
-            let label = Alloc::alloc(tycker, Label(name, inner), kd, &env.ty);
+            let label = Alloc::alloc(tycker, Label(name, inner), kd, &());
             (env, label)
         }
         | Type::Proj(ty) => {
@@ -1153,7 +1231,7 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
             (env, projected)
         }
         | Type::Thk(ThkTy) => {
-            let alloc = Alloc::alloc(tycker, ThkTy, kd, &env.ty);
+            let alloc = Alloc::alloc(tycker, ThkTy, kd, &());
             (env, alloc)
         }
         // primitive types are not allowed in monadic blocks
@@ -1175,7 +1253,7 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
             let Exists { binder, mode, body } = *ty;
             let (env, pattern) = type_pattern_translation(tycker, env, binder.pattern)?;
             let witness = env.subst_abst.get(&binder.witness).copied().unwrap_or(binder.witness);
-            let witness_ty = Alloc::alloc(tycker, witness, binder.payload_kind(tycker), &env.ty);
+            let witness_ty = Alloc::alloc(tycker, witness, binder.payload_kind(tycker), &());
             let (env, mode, structure_ty) = match mode {
                 | ExistsMode::Abstract => (env, ExistsMode::Abstract, witness_ty),
                 | ExistsMode::Manifest(definition) => {
@@ -1190,14 +1268,13 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
             let (env, body) = Prod(vec![structure, body]).construct(tycker, env)?;
             let (env, vtype) = VType.construct(tycker, env)?;
             let binder = TypeBinder { pattern, witness };
-            let exists = Alloc::alloc(tycker, Exists { binder, mode, body }, vtype, &env.ty);
+            let exists = Alloc::alloc(tycker, Exists { binder, mode, body }, vtype, &());
             (env, exists)
         }
         | Type::ManifestKind(manifest) => {
             let ManifestKind { binder, definition, body } = manifest;
             let (env, body) = cs::TypeLift { ty: body }.construct(tycker, env)?;
-            let manifest =
-                Alloc::alloc(tycker, ManifestKind { binder, definition, body }, kd, &env.ty);
+            let manifest = Alloc::alloc(tycker, ManifestKind { binder, definition, body }, kd, &());
             (env, manifest)
         }
         // os type is also not allowed in monadic blocks
@@ -1223,7 +1300,7 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
             let (env, body) = Arrow(structure, body).construct(tycker, env)?;
             let (env, ctype) = CType.construct(tycker, env)?;
             let binder = TypeBinder { pattern, witness };
-            let forall = Alloc::alloc(tycker, Forall(binder, body), ctype, &env.ty);
+            let forall = Alloc::alloc(tycker, Forall(binder, body), ctype, &());
             (env, forall)
         }
         | Type::PackPi(pack_pi) => {
@@ -1232,7 +1309,7 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
             let witnesses =
                 witnesses.map(|witness| env.subst_abst.get(&witness).copied().unwrap_or(witness));
             let (env, codomain) = cs::TypeLift { ty: codomain }.construct(tycker, env)?;
-            let alloc = Alloc::alloc(tycker, PackPi { domain, witnesses, codomain }, kd, &env.ty);
+            let alloc = Alloc::alloc(tycker, PackPi { domain, witnesses, codomain }, kd, &());
             (env, alloc)
         }
     };
@@ -1299,7 +1376,7 @@ fn package_pattern_translation(
                 tycker,
                 ConsN(vec![StaticPatId::Kind(witness)], body),
                 translated_ty,
-                &env.ty,
+                &(),
             );
             Ok((env, package))
         }
@@ -1403,13 +1480,13 @@ fn package_pattern_translation(
                 tycker,
                 ss::ValuePattern::VCons(vec![structure, body]),
                 translated_body_ty,
-                &env.ty,
+                &(),
             );
             let package = Alloc::alloc(
                 tycker,
                 ConsN(vec![StaticPatId::Type(witness)], product),
                 translated_ty,
-                &env.ty,
+                &(),
             );
             Ok((env, package))
         }
@@ -1436,7 +1513,7 @@ fn package_value_translation(
                 tycker,
                 ConsN(vec![StaticTermId::Kind(witness)], body),
                 translated_ty,
-                &env.ty,
+                &(),
             );
             Ok((env, package))
         }
@@ -1462,13 +1539,13 @@ fn package_value_translation(
                 tycker,
                 ss::Value::VCons(vec![structure, body]),
                 translated_body_ty,
-                &env.ty,
+                &(),
             );
             let package = Alloc::alloc(
                 tycker,
                 ConsN(vec![StaticTermId::Type(translated_witness)], product),
                 translated_ty,
-                &env.ty,
+                &(),
             );
             Ok((env, package))
         }
@@ -1490,7 +1567,7 @@ fn value_pattern_translation(
         | VPat::Named(vpat) => {
             let Named(name, inner) = vpat;
             let (env, inner) = value_pattern_translation(tycker, env, inner)?;
-            let named = Alloc::alloc(tycker, Named(name, inner), ty_, &env.ty);
+            let named = Alloc::alloc(tycker, Named(name, inner), ty_, &());
             (env, named)
         }
         | VPat::Ctor(vpat) => {
@@ -1508,12 +1585,12 @@ fn value_pattern_translation(
                 },
             )?;
             let alias = Alias(ConsN::from_vec(patterns).unwrap());
-            let pattern = Alloc::alloc(tycker, alias, ty_, &env.ty);
+            let pattern = Alloc::alloc(tycker, alias, ty_, &());
             (env, pattern)
         }
         | VPat::Triv(Triv) => Triv.construct(tycker, env)?,
         | VPat::Lit(literal) => {
-            let pattern = Alloc::alloc(tycker, ValuePattern::Lit(literal), ty_, &env.ty);
+            let pattern = Alloc::alloc(tycker, ValuePattern::Lit(literal), ty_, &());
             (env, pattern)
         }
         | VPat::VCons(components) => {
@@ -1532,7 +1609,7 @@ fn value_pattern_translation(
             let (env, function) = value_translation(tycker, env, function)?;
             let (env, pattern) = value_pattern_translation(tycker, env, pattern)?;
             let view = ss::ViewPattern { function, pattern };
-            let pattern = Alloc::alloc(tycker, Box::new(view), ty_, &env.ty);
+            let pattern = Alloc::alloc(tycker, Box::new(view), ty_, &());
             (env, pattern)
         }
     };
@@ -1557,7 +1634,7 @@ fn value_translation(
     let (env, res) = match tycker.statics.values[&value].to_owned() {
         | Value::Hole(Hole) => cs::Ann(Hole, ty_).construct(tycker, env)?,
         | Value::Lit(literal) => {
-            let literal = Alloc::alloc(tycker, literal, ty_, &env.ty);
+            let literal = Alloc::alloc(tycker, literal, ty_, &());
             (env, literal)
         }
         | Value::Var(def) => {
@@ -1565,11 +1642,11 @@ fn value_translation(
             match env.subst.get(&def).cloned() {
                 | Some(def_) => {
                     // the definition is closed in this monadic block
-                    let alloc = Alloc::alloc(tycker, def_, ty_, &env.ty);
+                    let alloc = Alloc::alloc(tycker, def_, ty_, &());
                     (env, alloc)
                 }
                 | None => {
-                    use zydeco_utils::arena::ArenaAccess;
+                    use zydeco_foundation::arena::ArenaAccess;
                     // it should then be global and should be in the inlinables
                     let Some(value) = tycker.statics.inlinables.get(&def).cloned() else {
                         tycker.err(TyckError::NotInlinable(def))?
@@ -1581,7 +1658,7 @@ fn value_translation(
         | Value::Named(value) => {
             let Named(name, inner) = value;
             let (env, inner) = value_translation(tycker, env, inner)?;
-            let named = Alloc::alloc(tycker, Named(name, inner), ty_, &env.ty);
+            let named = Alloc::alloc(tycker, Named(name, inner), ty_, &());
             (env, named)
         }
         | Value::Let(value) => {
@@ -1603,7 +1680,7 @@ fn value_translation(
                     Ok(Matcher { binder, tail })
                 })
                 .collect::<Result<Vec<_>>>()?;
-            let value = Alloc::alloc(tycker, Value::Match(Match { scrut, arms }), ty_, &env.ty);
+            let value = Alloc::alloc(tycker, Value::Match(Match { scrut, arms }), ty_, &());
             (env, value)
         }
         | Value::IntOp(IntValueOp { operation, operands: [left, right] }) => {
@@ -1613,7 +1690,7 @@ fn value_translation(
                 tycker,
                 Value::IntOp(IntValueOp { operation, operands: [left, right] }),
                 ty_,
-                &env.ty,
+                &(),
             );
             (env, value)
         }
@@ -1658,7 +1735,7 @@ fn computation_translation(
     tycker: &mut Tycker, env: MonEnv, compu: CompuId,
 ) -> Result<(MonEnv, CompuId)> {
     use Computation as Compu;
-    let copattern_match = tycker.statics.copattern_matches.get(&compu).is_some();
+    let copattern_match = tycker.statics.copattern_matches.contains(compu);
     let (env, ty) = cs::TypeOf(compu).construct(tycker, env)?;
 
     let (env, res) = match tycker.statics.compus[&compu].to_owned() {
@@ -1768,7 +1845,7 @@ fn computation_translation(
                 })
                 .collect::<Result<Vec<_>>>()?;
             let (env, ty_) = cs::TypeLift { ty }.construct(tycker, env)?;
-            let alloc = Alloc::alloc(tycker, Match { scrut: scrut_, arms: arms_ }, ty_, &env.ty);
+            let alloc = Alloc::alloc(tycker, Match { scrut: scrut_, arms: arms_ }, ty_, &());
             (env, alloc)
         }
         | Compu::CoMatch(compu) => {
@@ -1790,7 +1867,7 @@ fn computation_translation(
     };
 
     if copattern_match {
-        let _ = tycker.statics.copattern_matches.upsert(res, ());
+        let _ = tycker.statics.copattern_matches.ensure(res);
     }
     if let Some(origin) = tycker.statics.terms.source(&compu.into()) {
         tycker.statics.terms.record(origin, res.into());

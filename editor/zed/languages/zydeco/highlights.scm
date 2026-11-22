@@ -68,7 +68,6 @@
   "codata"
   "as"
   "def"
-  "define"
   "let"
   "param"
   "val"

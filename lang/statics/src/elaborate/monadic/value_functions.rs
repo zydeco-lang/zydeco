@@ -38,7 +38,7 @@ impl ValueFunctionTranslation {
 
     fn pi(tycker: &mut Tycker<'_>, env: &MonEnv, binder: ValPiBinder, codomain: TypeId) -> TypeId {
         let kind = VType.build(tycker, &env.ty);
-        Alloc::alloc(tycker, ValPi { binder, codomain }, kind, &env.ty)
+        Alloc::alloc(tycker, ValPi { binder, codomain }, kind, &())
     }
 
     pub fn classifier(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TypeId)> {
@@ -111,15 +111,11 @@ impl ValueFunctionTranslation {
                 Lub::lub(expected, codomain, tycker)?;
                 let (local, domain) = cs::TypeOf(structure).construct(tycker, local)?;
                 let inner_ty = Self::pi(tycker, &local, Self::value_parameter(domain), codomain);
-                let inner = Alloc::alloc(
-                    tycker,
-                    Abs(ValBinder::Value(structure), body),
-                    inner_ty,
-                    &local.ty,
-                );
+                let inner =
+                    Alloc::alloc(tycker, Abs(ValBinder::Value(structure), body), inner_ty, &());
                 let pattern = binder.pattern;
                 let ty = Self::pi(tycker, &local, ValPiBinder::Type(binder), inner_ty);
-                Alloc::alloc(tycker, Abs(ValBinder::Type(pattern), inner), ty, &local.ty)
+                Alloc::alloc(tycker, Abs(ValBinder::Type(pattern), inner), ty, &())
             }
             | (ValPiBinder::Value(parameter), ValBinder::Value(pattern)) => {
                 let witness_projection = ValueFunctionWitnessRoute {
@@ -155,7 +151,7 @@ impl ValueFunctionTranslation {
                     ValPiBinder::Value(ValueParameter { domain, witnesses, witness_projection }),
                     codomain,
                 );
-                Alloc::alloc(tycker, Abs(ValBinder::Value(pattern), body), ty, &local.ty)
+                Alloc::alloc(tycker, Abs(ValBinder::Value(pattern), body), ty, &())
             }
             | _ => unreachable!("checked value abstraction follows its classifier binder"),
         };
@@ -176,12 +172,8 @@ impl ValueFunctionTranslation {
                 Lub::lub(binder.domain_kind(tycker), argument_kind, tycker)?;
                 let payload = binder.pattern.bind_argument(tycker, argument)?;
                 let inner_ty = signature.codomain.subst_abst(tycker, (binder.witness, payload))?;
-                let inner = Alloc::alloc(
-                    tycker,
-                    App(function, ValArgument::Type(argument)),
-                    inner_ty,
-                    &env.ty,
-                );
+                let inner =
+                    Alloc::alloc(tycker, App(function, ValArgument::Type(argument)), inner_ty, &());
                 let signature = Self::signature(tycker, inner_ty)?;
                 let ValPiBinder::Value(parameter) = signature.binder else {
                     unreachable!("translated type application is followed by structure application")
@@ -191,24 +183,16 @@ impl ValueFunctionTranslation {
                 let (env, structure_ty) = cs::TypeOf(structure).construct(tycker, env)?;
                 Lub::lub(parameter.domain, structure_ty, tycker)?;
                 Lub::lub(result, signature.codomain, tycker)?;
-                let application = Alloc::alloc(
-                    tycker,
-                    App(inner, ValArgument::Value(structure)),
-                    result,
-                    &env.ty,
-                );
+                let application =
+                    Alloc::alloc(tycker, App(inner, ValArgument::Value(structure)), result, &());
                 (env, application)
             }
             | (ValPiBinder::Value(parameter), ValArgument::Value(argument)) => {
                 let (env, argument) = cs::TermLift { tm: argument }.construct(tycker, env)?;
                 let (env, argument_ty) = cs::TypeOf(argument).construct(tycker, env)?;
                 Lub::lub(parameter.domain, argument_ty, tycker)?;
-                let application = Alloc::alloc(
-                    tycker,
-                    App(function, ValArgument::Value(argument)),
-                    result,
-                    &env.ty,
-                );
+                let application =
+                    Alloc::alloc(tycker, App(function, ValArgument::Value(argument)), result, &());
                 (env, application)
             }
             | _ => unreachable!("checked value application follows its classifier binder"),
@@ -225,7 +209,7 @@ struct ValueFunctionWitnessRoute {
 
 impl ValueFunctionWitnessRoute {
     fn translate(self, tycker: &mut Tycker<'_>, env: &TyEnv) -> Result<PackageWitnessProjection> {
-        use zydeco_utils::fold::Explicit;
+        use zydeco_foundation::fold::Explicit;
         Explicit::run(&mut WitnessRouteFolder { tycker, env }, self)
     }
 }
@@ -247,9 +231,11 @@ enum WitnessRouteFrame {
 }
 
 impl WitnessRouteFolder<'_, '_, '_> {
-    fn step(&mut self, input: ValueFunctionWitnessRoute) -> Result<zydeco_utils::fold::Step<Self>> {
+    fn step(
+        &mut self, input: ValueFunctionWitnessRoute,
+    ) -> Result<zydeco_foundation::fold::Step<Self>> {
         use PackageWitnessProjection as Route;
-        use zydeco_utils::fold::Step;
+        use zydeco_foundation::fold::Step;
         if matches!(input.projection, Route::Ignore | Route::Package { abstracts: 0 }) {
             return Ok(Step::Return(Ok(Route::Ignore)));
         }
@@ -324,20 +310,20 @@ impl WitnessRouteFolder<'_, '_, '_> {
     }
 }
 
-impl zydeco_utils::fold::Folder for WitnessRouteFolder<'_, '_, '_> {
+impl zydeco_foundation::fold::Folder for WitnessRouteFolder<'_, '_, '_> {
     type Input = ValueFunctionWitnessRoute;
     type Output = Result<PackageWitnessProjection>;
     type Frame = WitnessRouteFrame;
 
-    fn enter(&mut self, input: Self::Input) -> zydeco_utils::fold::Step<Self> {
-        self.step(input).unwrap_or_else(|error| zydeco_utils::fold::Step::Return(Err(error)))
+    fn enter(&mut self, input: Self::Input) -> zydeco_foundation::fold::Step<Self> {
+        self.step(input).unwrap_or_else(|error| zydeco_foundation::fold::Step::Return(Err(error)))
     }
 
     fn resume(
         &mut self, frame: Self::Frame, child: Self::Output,
-    ) -> zydeco_utils::fold::Step<Self> {
+    ) -> zydeco_foundation::fold::Step<Self> {
         use PackageWitnessProjection as Route;
-        use zydeco_utils::fold::Step;
+        use zydeco_foundation::fold::Step;
         let child = match child {
             | Ok(child) => child,
             | Err(error) => return Step::Return(Err(error)),

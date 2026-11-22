@@ -24,28 +24,17 @@ impl TermChecker<'_> {
         &self, tycker: &mut Tycker<'db>, name: FieldName, inner: su::TermId,
     ) -> Result<TermAnnId> {
         match self.mk(inner).tyck(tycker, Action::syn())? {
-            | inner_out @ (TermAnnId::Type(..)
-            | TermAnnId::Hole(_)
-            | TermAnnId::Kind(_)
-            | TermAnnId::Compu(_, _)) => self.check_named_syn_judged(tycker, inner_out),
+            | TermAnnId::Type(inner, kd) => {
+                let kind_id = Alloc::alloc(tycker, ss::Kind::Label(ss::Label(name, kd)), (), &());
+                let named_id =
+                    Alloc::alloc(tycker, ss::Type::Named(ss::Named(name, inner)), kind_id, &());
+                Ok(TermAnnId::Type(named_id, kind_id))
+            }
+            | TermAnnId::Hole(_) => tycker.err(TyckError::MissingAnnotation),
+            | TermAnnId::Kind(_) | TermAnnId::Compu(_, _) => tycker.err(TyckError::SortMismatch),
             | TermAnnId::Value(inner, inner_ty) => {
                 self.check_named_syn_value(tycker, name, inner, inner_ty)
             }
-        }
-    }
-
-    fn check_named_syn_judged<'db>(
-        &self, tycker: &mut Tycker<'db>, inner_out: TermAnnId,
-    ) -> Result<TermAnnId> {
-        let inner_interned = crate::query::InternedTermAnn::new(tycker.db, inner_out);
-        match tycker.judge(self.inner, inner_interned, crate::query::named_syn_judgment) {
-            | crate::query::NamedSynOutcome::Type { kind_id, kind, named_id, named } => {
-                tycker.statics.kinds_pre.insert_new(kind_id, ss::Fillable::Done(kind));
-                tycker.statics.types_pre.insert_new(named_id, ss::Fillable::Done(named), kind_id);
-                tycker.store_env(named_id, &self.info);
-                Ok(TermAnnId::Type(named_id, kind_id))
-            }
-            | crate::query::NamedSynOutcome::Error(error) => tycker.err(error),
         }
     }
 
@@ -55,8 +44,8 @@ impl TermChecker<'_> {
         let inner_kind = tycker.statics.type_kind(inner_ty);
         let vtype = ss::VType.build(tycker, &self.info);
         Lub::lub(vtype, inner_kind, tycker)?;
-        let named_ty = Alloc::alloc(tycker, ss::Label(name.clone(), inner_ty), vtype, &self.info);
-        let named = Alloc::alloc(tycker, ss::Named(name, inner), named_ty, &self.info);
+        let named_ty = Alloc::alloc(tycker, ss::Label(name, inner_ty), vtype, &());
+        let named = Alloc::alloc(tycker, ss::Named(name, inner), named_ty, &());
         Ok(TermAnnId::Value(named, named_ty))
     }
 
@@ -72,7 +61,7 @@ impl TermChecker<'_> {
         Self::check_named_label(tycker, expected_name, &name)?;
         let checked = self.mk(inner).tyck(tycker, Action::ana(inner_kind.into()))?;
         let (inner, _) = checked.try_as_type(tycker, TyckError::SortMismatch)?;
-        let named = Alloc::alloc(tycker, ss::Named(name, inner), kd, &self.info);
+        let named = Alloc::alloc(tycker, ss::Named(name, inner), kd, &());
         Ok(TermAnnId::Type(named, kd))
     }
 
@@ -95,7 +84,7 @@ impl TermChecker<'_> {
         let checked =
             self.mk(inner).tyck(tycker, Action::ana_prepared(inner_ty.into(), &self.info))?;
         let (inner, _) = checked.try_as_value(tycker, TyckError::SortMismatch)?;
-        let named = Alloc::alloc(tycker, ss::Named(name, inner), expected, &self.info);
+        let named = Alloc::alloc(tycker, ss::Named(name, inner), expected, &());
         Ok(TermAnnId::Value(named, expected))
     }
 
@@ -104,7 +93,7 @@ impl TermChecker<'_> {
         tycker: &mut Tycker<'_>, expected: FieldName, found: &FieldName,
     ) -> Result<()> {
         if *found != expected {
-            return tycker.err(TyckError::NamedLabelMismatch { expected, found: found.clone() });
+            return tycker.err(TyckError::NamedLabelMismatch { expected, found: *found });
         }
         Ok(())
     }
@@ -117,28 +106,19 @@ impl TermChecker<'_> {
             let su::Label(name, inner) = term;
             match switch {
                 | Switch::Syn => match self.mk(inner).tyck(tycker, Action::syn())? {
-                    | inner_out @ (TermAnnId::Kind(_)
-                    | TermAnnId::Hole(_)
-                    | TermAnnId::Value(_, _)
-                    | TermAnnId::Compu(_, _)) => {
-                        let inner_interned =
-                            crate::query::InternedTermAnn::new(tycker.db, inner_out);
-                        match tycker.judge(
-                            self.inner,
-                            inner_interned,
-                            crate::query::label_syn_judgment,
-                        ) {
-                            | crate::query::LabelSynOutcome::Kind { id, kind } => {
-                                tycker.statics.kinds_pre.insert_new(id, ss::Fillable::Done(kind));
-                                TermAnnId::Kind(id)
-                            }
-                            | crate::query::LabelSynOutcome::Error(error) => tycker.err(error)?,
-                        }
+                    | TermAnnId::Kind(inner) => {
+                        let id =
+                            Alloc::alloc(tycker, ss::Kind::Label(ss::Label(name, inner)), (), &());
+                        TermAnnId::Kind(id)
+                    }
+                    | TermAnnId::Hole(_) => tycker.err(TyckError::MissingAnnotation)?,
+                    | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
+                        tycker.err(TyckError::SortMismatch)?
                     }
                     | TermAnnId::Type(inner, kind) => {
                         let vtype = ss::VType.build(tycker, &self.info);
                         Lub::lub(vtype, kind, tycker)?;
-                        let label = Alloc::alloc(tycker, ss::Label(name, inner), vtype, &self.info);
+                        let label = Alloc::alloc(tycker, ss::Label(name, inner), vtype, &());
                         TermAnnId::Type(label, vtype)
                     }
                 },
@@ -157,7 +137,7 @@ impl TermChecker<'_> {
                         .mk(inner)
                         .tyck(tycker, Action::ana(vtype.into()))?
                         .try_as_type(tycker, TyckError::SortMismatch)?;
-                    let label = Alloc::alloc(tycker, ss::Label(name, inner), vtype, &self.info);
+                    let label = Alloc::alloc(tycker, ss::Label(name, inner), vtype, &());
                     TermAnnId::Type(label, vtype)
                 }
                 | Switch::Ana(AnnId::Type(_)) => tycker.err(TyckError::SortMismatch)?,
@@ -234,7 +214,7 @@ impl TermChecker<'_> {
             .zip(components)
             .map(|(outcome, source)| {
                 tycker.guarded(|tycker| {
-                    tycker.tasks.push_back_mut(TyckTask::Term(source, Switch::Syn));
+                    tycker.tasks.push(TyckTask::Term(source, Switch::Syn));
                     match outcome {
                         | TermAnnId::Type(ty, kd) => {
                             Lub::lub(vtype, kd, tycker)?;
@@ -245,45 +225,24 @@ impl TermChecker<'_> {
                 })
             })
             .collect_reported::<Vec<_>>()?;
-        let prod = Alloc::alloc(tycker, ss::Prod(component_tys), vtype, &self.info);
+        let prod = Alloc::alloc(tycker, ss::Prod(component_tys), vtype, &());
         Ok(TermAnnId::Type(prod, vtype))
     }
 
     /// A product value over synthesized component values, recorded through
     /// the cons judgment.
     fn check_cons_syn_value(&self, tycker: &mut Tycker<'_>, outcomes: Vec<TermAnnId>) -> TermAnnId {
-        let (mut output, mut annotations): (Vec<_>, Vec<_>) = outcomes
+        let (output, annotations): (Vec<_>, Vec<_>) = outcomes
             .into_iter()
             .map(|outcome| match outcome {
                 | TermAnnId::Value(item, item_ty) => (item, item_ty),
                 | _ => unreachable!("sorted outcomes are uniform"),
             })
             .unzip();
-        let tail = output.pop().expect("a cons term carries at least two components");
-        let tail_ty = annotations.pop().expect("a cons term carries at least two components");
-        let item_outcomes = output
-            .iter()
-            .zip(&annotations)
-            .map(|(value, ty)| TermAnnId::Value(*value, *ty))
-            .collect::<Vec<_>>();
-        let items_interned = crate::query::InternedConsItems::new(tycker.db, item_outcomes);
-        let tail_interned =
-            crate::query::InternedTermAnn::new(tycker.db, TermAnnId::Value(tail, tail_ty));
-        let outcome = tycker.judge(
-            self.inner,
-            (items_interned, tail_interned),
-            |db, data, term, (items, tail), occurrence| {
-                crate::query::cons_syn_judgment(db, data, term, items, tail, occurrence)
-            },
-        );
-        for (id, prod) in outcome.prods {
-            tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(prod), outcome.vtype);
-            tycker.store_env(id, &self.info);
-        }
-        tycker.statics.values.insert_new(outcome.cons_id, outcome.cons);
-        tycker.statics.annotations_value.insert_new(outcome.cons_id, outcome.ann);
-        tycker.statics.env_value.insert_new(outcome.cons_id, self.info.clone());
-        TermAnnId::Value(outcome.cons_id, outcome.ann)
+        let vtype = ss::VType.build(tycker, &self.info);
+        let prod_id = Alloc::alloc(tycker, ss::Prod(annotations), vtype, &());
+        let cons_id = Alloc::alloc(tycker, ss::Value::VCons(output), prod_id, &());
+        TermAnnId::Value(cons_id, prod_id)
     }
 
     /// Check a cons term against a product type with matching components.
@@ -320,8 +279,8 @@ impl TermChecker<'_> {
             .into_iter()
             .unzip();
         let vtype = ss::VType.build(tycker, &self.info);
-        let ann = Alloc::alloc(tycker, ss::Prod(annotations), vtype, &self.info);
-        let cons = Alloc::alloc(tycker, ss::Value::VCons(components), ann, &self.info);
+        let ann = Alloc::alloc(tycker, ss::Prod(annotations), vtype, &());
+        let cons = Alloc::alloc(tycker, ss::Value::VCons(components), ann, &());
         Ok((cons, ann))
     }
 
@@ -363,7 +322,7 @@ impl TermChecker<'_> {
 
         let body_ty = body_ty.materialize(tycker)?;
         let body = self.check_package_body(tycker, &items[body_index..], tail, body_ty)?;
-        let cons = Alloc::alloc(tycker, ss::ConsN(witnesses, body), expected, &self.info);
+        let cons = Alloc::alloc(tycker, ss::ConsN(witnesses, body), expected, &());
         Ok(TermAnnId::Value(cons, expected))
     }
 
@@ -399,8 +358,8 @@ impl TermChecker<'_> {
 
     /// Check the value components of a package against its body type.
     ///
-    /// A lone tail component takes the whole body; several components split
-    /// the body as a product.
+    /// A lone tail component takes the whole body; several components match a
+    /// product of the exact same arity.
     fn check_package_body(
         &self, tycker: &mut Tycker<'_>, body_items: &[su::TermId], tail: su::TermId,
         body_ty: ss::TypeId,
@@ -412,18 +371,13 @@ impl TermChecker<'_> {
             return Ok(body);
         }
         let ss::Prod(body_component_tys) = body_ty.view_prepared_product(tycker, &self.info)?;
-        if body_component_tys.len() < body_items.len() {
+        if body_component_tys.len() != body_items.len() + 1 {
             tycker.err(TyckError::TypeExpected {
                 expected: "a product with matching components".to_string(),
                 found: body_ty,
             })?
         }
-        let remaining = tycker.rest_product(&body_component_tys[body_items.len()..], &self.info)?;
-        let components = body_items
-            .iter()
-            .copied()
-            .zip(body_component_tys.iter().copied())
-            .chain([(tail, remaining)]);
+        let components = body_items.iter().copied().chain([tail]).zip(body_component_tys);
         let (body, _) = self.check_value_product(tycker, components)?;
         Ok(body)
     }
@@ -470,49 +424,18 @@ impl TermChecker<'_> {
                         }
                     };
                     let field = ss::ResolvedField { name, target };
-                    let input = crate::query::InternedProjInput::new(
-                        tycker.db,
-                        head,
-                        field.name,
-                        field
-                            .target
-                            .products
-                            .iter()
-                            .map(|product| (product.product, product.position))
-                            .collect::<Vec<_>>(),
+                    let id = Alloc::alloc(
+                        tycker,
+                        ss::Value::Proj(ss::Proj(head, field)),
                         projected_ty,
+                        &(),
                     );
-                    let outcome = tycker.judge(self.inner, input, crate::query::proj_syn_judgment);
-                    tycker.statics.values.insert_new(outcome.id, outcome.value);
-                    tycker.statics.annotations_value.insert_new(outcome.id, outcome.ann);
-                    tycker.statics.env_value.insert_new(outcome.id, self.info.clone());
-                    TermAnnId::Value(outcome.id, outcome.ann)
+                    TermAnnId::Value(id, projected_ty)
                 }
                 | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Compu(_, _) => {
                     tycker.err(TyckError::SortMismatch)?
                 }
             }
         })
-    }
-}
-
-impl Tycker<'_> {
-    /// The product over the components remaining after a prefix has been
-    /// consumed: no components is `Unit`, one component is itself, and
-    /// several rejoin as one product.
-    pub(in crate::check) fn rest_product(
-        &mut self, components: &[ss::TypeId], env: &ss::TyEnv,
-    ) -> Result<ss::TypeId> {
-        match components {
-            | [] => {
-                let vtype = ss::VType.build(self, env);
-                Ok(Alloc::alloc(self, ss::UnitTy, vtype, env))
-            }
-            | [only] => Ok(*only),
-            | components => {
-                let vtype = ss::VType.build(self, env);
-                Ok(Alloc::alloc(self, ss::Prod(components.to_vec()), vtype, env))
-            }
-        }
     }
 }

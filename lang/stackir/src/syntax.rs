@@ -4,55 +4,22 @@
 //! products, primitive calls, bindings, and data eliminations use these common forms.
 
 pub use super::{arena::*, builtin::*};
-pub use zydeco_syntax::{fmt, *};
-pub use zydeco_utils::{
+pub use zydeco_foundation::{
     arena::*,
     context::{CoContext, Context},
 };
+pub use zydeco_syntax::{fmt, *};
 
 use crate::{
     scheme::{StackConsumer, StackShape},
-    static_syntax as ss,
     traverse::Children,
     variables::FreeVariables,
 };
 use derive_more::From;
+pub use zydeco_ir::{CtorIdx, DtorIdx, ProductLayout, ProductProjection, VCons};
 
-pub type DefId = ss::DefId;
-
-#[derive(From, Clone, Debug, Eq, Hash, PartialEq)]
-pub struct CtorIdx {
-    pub idx: usize,
-    pub name: CtorName,
-}
-
-#[derive(From, Clone, Debug, Eq, Hash, PartialEq)]
-pub struct DtorIdx {
-    pub idx: usize,
-    pub name: DtorName,
-}
-
-/* ---------------------------------- Value --------------------------------- */
-
-/// Physical layout of a product value.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct ProductLayout {
-    pub arity: usize,
-}
-
-/// A logical value cons together with its canonical physical product layout.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct VCons<T> {
-    pub items: Vec<T>,
-    pub layout: ProductLayout,
-}
-
-impl<T> VCons<T> {
-    pub fn new(items: Vec<T>, layout: ProductLayout) -> Self {
-        assert!(layout.arity > 0);
-        assert!(items.len() <= layout.arity);
-        Self { items, layout }
-    }
+zydeco_foundation::new_key_type! {
+    pub struct DefId;
 }
 
 #[derive(From, Clone, Debug)]

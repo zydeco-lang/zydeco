@@ -98,7 +98,7 @@ impl SourceCheckOutcome {
 
 /// Flexible pattern metavariables owned by one local inference boundary.
 pub(super) struct InferenceRegion {
-    pub(super) inherited: std::collections::HashSet<FillId>,
+    watermark: usize,
 }
 
 /// One immutable handle to an already synthesized typed term.
@@ -201,33 +201,32 @@ impl CheckedTermRepository {
 
 impl InferenceRegion {
     pub(super) fn enter(tycker: &Tycker<'_>) -> Self {
-        let inherited = tycker.statics.fills.iter().map(|(fill, _)| *fill).collect();
-        Self { inherited }
+        Self { watermark: tycker.statics.fills.len() }
     }
 
     pub(super) fn close(self, tycker: &mut Tycker<'_>) -> Result<()> {
-        let candidates = tycker
-            .statics
-            .fills
-            .iter()
-            .filter_map(|(fill, site)| {
-                (site.is_pattern() && !self.inherited.contains(fill)).then_some(*fill)
+        use zydeco_foundation::dense::DenseId;
+
+        let candidates = (self.watermark..tycker.statics.fills.len())
+            .filter_map(|index| {
+                let fill = FillId::from_index(index);
+                tycker.statics.fills[fill].is_pattern().then_some(fill)
             })
             .collect::<Vec<_>>();
         let mut unconstrained = Vec::new();
         for fill in candidates {
-            let Some(solution) = tycker.statics.solus.get(&fill).copied() else {
+            let Some(solution) = tycker.statics.solus.get(fill).copied() else {
                 unconstrained.push(fill);
                 continue;
             };
             let AnnId::Type(solution) = solution else { tycker.err(TyckError::SortMismatch)? };
             let (_, pending) = solution.solution(tycker)?;
-            if pending.into_iter().any(|fill| !self.inherited.contains(&fill)) {
+            if pending.into_iter().any(|fill| fill.index() >= self.watermark) {
                 unconstrained.push(fill);
             }
         }
         let mut sites = std::collections::HashSet::new();
-        unconstrained.retain(|fill| sites.insert(tycker.statics.fills[fill]));
+        unconstrained.retain(|fill| sites.insert(tycker.statics.fills[*fill]));
         if unconstrained.is_empty() {
             Ok(())
         } else {
@@ -245,7 +244,7 @@ impl Tycker<'_> {
             .run(root.into(), &mut sources)
             .expect("resolved source syntax is acyclic");
         for boundary in sources.boundaries {
-            if self.check_counts.get(&su::EntityId::Term(boundary)).is_none() {
+            if !self.visited_terms.contains(&boundary) {
                 let _ = TyEnvT::new(TyEnv::new(), boundary).tyck(self, Action::syn());
             }
         }
@@ -354,7 +353,7 @@ mod tests {
                 let checked = TyEnvT::new(TyEnv::new(), root).tyck(tycker, Action::syn()).unwrap();
 
                 assert!(matches!(checked, TermAnnId::Value(_, _)));
-                assert_eq!(tycker.check_counts.get(&su::EntityId::Term(provider)), Some(&1),);
+                assert!(tycker.visited_terms.contains(&provider));
                 assert_eq!(
                     tycker.statics.term_annotation(first),
                     tycker.statics.term_annotation(second)
@@ -397,7 +396,7 @@ mod tests {
                     .unwrap();
 
                 assert_eq!(Some(checked.root()), tycker.statics.term_annotation(provider),);
-                assert_eq!(tycker.check_counts.get(&su::EntityId::Term(provider)), Some(&1),);
+                assert!(tycker.visited_terms.contains(&provider));
                 assert_eq!(tycker.checked_terms.entries.len(), 1);
                 assert!(tycker.errors.is_empty());
             },
@@ -425,7 +424,7 @@ mod tests {
                     panic!("a recorded rejection must not replay synthesis")
                 });
                 assert_eq!(repeated, Err(ReportedError));
-                assert_eq!(tycker.check_counts.get(&su::EntityId::Term(provider)), Some(&1));
+                assert!(tycker.visited_terms.contains(&provider));
                 assert_eq!(tycker.errors.len(), 1);
                 assert!(tycker.statics.term_annotation(provider).is_some());
             },
@@ -452,7 +451,7 @@ mod tests {
                 let root = tycker.data.root(tycker.db);
                 assert!(tycker.run_judgments(root).is_err());
                 for source in [provider, first, second] {
-                    assert_eq!(tycker.check_counts.get(&su::EntityId::Term(source)), Some(&1));
+                    assert!(tycker.visited_terms.contains(&source));
                 }
                 assert_eq!(tycker.errors.len(), 1);
                 assert!(tycker.statics.term_annotation(root).is_none());
@@ -480,7 +479,7 @@ mod tests {
                 let environment = TyEnv::new() + [(definition, AnnId::Type(ty))];
                 let repeated = TyEnvT::new(environment, query).tyck(tycker, Action::syn()).unwrap();
                 assert_eq!(original, repeated);
-                assert_eq!(tycker.check_counts.get(&su::EntityId::Term(operand)), Some(&1));
+                assert!(tycker.visited_terms.contains(&operand));
                 assert!(tycker.errors.is_empty());
             },
         );

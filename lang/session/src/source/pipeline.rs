@@ -1,4 +1,6 @@
 use crate::source::TextualProgram;
+use zydeco_foundation::arena::FrozenArena;
+use zydeco_foundation::pass::CompilerPass;
 use zydeco_surface::{
     bitter::{
         DesugarErrors, SourceDesugarOut, SourceUnitDesugarer, arena::BitterArena,
@@ -10,8 +12,6 @@ use zydeco_surface::{
     },
     textual::syntax as t,
 };
-use zydeco_utils::arena::FrozenArena;
-use zydeco_utils::pass::CompilerPass;
 
 pub(crate) struct BitterProgram {
     pub spans: FrozenArena<t::SpanArena>,

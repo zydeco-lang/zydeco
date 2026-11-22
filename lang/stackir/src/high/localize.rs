@@ -18,7 +18,7 @@ use super::{
 };
 use crate::protocol::ValueProtocol;
 use std::{collections::HashMap, convert::Infallible};
-use zydeco_utils::{
+use zydeco_foundation::{
     context::{CoContext, Context},
     pass::CompilerPass,
 };

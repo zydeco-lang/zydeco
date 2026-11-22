@@ -1,7 +1,9 @@
 use std::{
+    collections::HashSet,
     io::{Seek, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
+    sync::{Mutex, OnceLock},
 };
 use tempfile::TempDir;
 use thiserror::Error;
@@ -30,20 +32,24 @@ impl<'a> ExecutionRunner<'a> {
 
     pub fn validate(&self, executable: &ExecutableProgram) -> Result<(), ExecutionError> {
         let imports = executable
-            .statics
-            .foreign_imports
+            .core
+            .values
             .iter()
-            .filter_map(|(_, import)| match import {
-                | zydeco_syntax::CheckedImport::C(import) => Some(import.clone()),
+            .filter_map(|(_, value)| match value {
+                | zydeco_ir::Value::Foreign(zydeco_syntax::CheckedImport::C(import)) => {
+                    Some(import.clone())
+                }
                 | _ => None,
             })
             .collect::<Vec<_>>();
         let units = executable
-            .statics
-            .foreign_imports
+            .core
+            .values
             .iter()
-            .filter_map(|(_, import)| match import {
-                | zydeco_syntax::CheckedImport::Zydeco(import) => Some(import.clone()),
+            .filter_map(|(_, value)| match value {
+                | zydeco_ir::Value::Foreign(zydeco_syntax::CheckedImport::Zydeco(import)) => {
+                    Some(import.clone())
+                }
                 | _ => None,
             })
             .collect::<Vec<_>>();
@@ -92,17 +98,7 @@ impl<'a> ExecutionRunner<'a> {
         }
         let node = PathBuf::from(std::env::var_os("NODE").unwrap_or_else(|| "node".into()));
         if unique.contains(&ExecutionTarget::WasmSps) {
-            let output = Command::new(&node)
-                .arg("--version")
-                .output()
-                .map_err(|source| ExecutionError::Start { program: node.clone(), source })?;
-            if !output.status.success() {
-                return Err(ExecutionError::Host {
-                    program: node,
-                    status: output.status,
-                    stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
-                });
-            }
+            verify_node_runtime(&node)?;
         }
         Ok(Self { compiler, targets: unique, runtime_dir, node, libraries: Default::default() })
     }
@@ -242,6 +238,27 @@ impl PreparedExecution {
             }
         }
     }
+}
+
+fn verify_node_runtime(node: &Path) -> Result<(), ExecutionError> {
+    static VERIFIED: OnceLock<Mutex<HashSet<PathBuf>>> = OnceLock::new();
+    let cache = VERIFIED.get_or_init(|| Mutex::new(HashSet::new()));
+    if cache.lock().unwrap_or_else(|poison| poison.into_inner()).contains(node) {
+        return Ok(());
+    }
+    let output = Command::new(node)
+        .arg("--version")
+        .output()
+        .map_err(|source| ExecutionError::Start { program: node.to_path_buf(), source })?;
+    if !output.status.success() {
+        return Err(ExecutionError::Host {
+            program: node.to_path_buf(),
+            status: output.status,
+            stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+        });
+    }
+    cache.lock().unwrap_or_else(|poison| poison.into_inner()).insert(node.to_path_buf());
+    Ok(())
 }
 
 #[derive(Debug, Error)]

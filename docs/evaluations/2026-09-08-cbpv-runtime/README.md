@@ -23,8 +23,8 @@ Those events need not each create an activation.
 A local entry can inherit available bindings, a return entry can recover suspended bindings,
 and an escaping closure needs captures with an adequate lifetime.
 The useful compilation boundary preserves these distinctions before choosing where the bindings live.
-The [entry-context contract](../../references/compiler/src/native-emission.md#activation-lifetime) establishes this for native frames;
-a general treatment of context-bearing joins remains further work.
+The [entry-context contract](../../references/compiler/src/native-emission.md#activation-lifetime) establishes this
+for native frames; a general treatment of context-bearing joins remains further work.
 
 This is flexibility in the programming and compilation model.
 C can host an explicit machine or CPS translation, but its usual call ABI does not supply the required residual-stack
@@ -187,7 +187,7 @@ which still contain the moving-root adapter and compact engine.
 Reproducing the historical measurements requires the recorded revisions and toolchains.
 Original evidence retains its recorded paths, commands, and hashes, including the former Cargo example locations.
 Correctness regressions remain in the [machine frame tests](../../../lang/machine/src/frames.rs)
-and [GC integration tests](../../../lang/tests/tests/native_gc.rs).
+and [GC integration tests](../../../lang/tests/tests/suite/native_gc.rs).
 
 ## Literature pointers
 

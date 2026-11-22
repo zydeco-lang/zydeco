@@ -102,16 +102,14 @@ impl<'a> AlgebraicTranslation<'a> {
         };
 
         let monad_ty_kd: ss::KindId = ss::Arrow(ss::VType, ss::CType).build(tycker, environment);
-        let monad_ty_var =
-            Alloc::alloc(tycker, ss::VarName("M".to_string()), monad_ty_kd.into(), &());
+        let monad_ty_var = Alloc::alloc(tycker, ss::VarName::new("M"), monad_ty_kd.into(), &());
         let abst: ss::AbstId = Alloc::alloc(tycker, monad_ty_var, monad_ty_kd, &());
         let monad_ty = cs::Type(cs::Ann(abst, monad_ty_kd)).build(tycker, environment);
         let ctype = ss::CType.build(tycker, environment);
-        let monad_application =
-            Alloc::alloc(tycker, ss::App(basis.monad, monad_ty), ctype, environment);
+        let monad_application = Alloc::alloc(tycker, ss::App(basis.monad, monad_ty), ctype, &());
         let monad_impl_ty = cs::Thk(cs::Type(monad_application)).build(tycker, environment);
         let monad_impl_var =
-            Alloc::alloc(tycker, ss::VarName("mo".to_string()), monad_impl_ty.into(), &());
+            Alloc::alloc(tycker, ss::VarName::new("mo"), monad_impl_ty.into(), &());
         let monad_impl = cs::Value(monad_impl_var).build(tycker, environment);
 
         use crate::environment::*;
@@ -129,109 +127,152 @@ impl<'a> AlgebraicTranslation<'a> {
         use crate::elaborate::monadic::nominal::NominalTranslation;
         let prepared = NominalTranslation::prepare(tycker, menv, source, body);
         let menv = prepared?;
-        let monad_ty_tpat: ss::TPatId =
-            Alloc::alloc(tycker, monad_ty_var, monad_ty_kd, environment);
-        let monad_binder = ss::TypeBinder { pattern: monad_ty_tpat, witness: abst };
-        if let CheckedNode::Type(body) = body {
-            // Type translation needs the carrier and nominal families, not runtime algebras.
-            let (_, body) = cs::TypeLift { ty: body }.construct(tycker, menv)?;
-            let kind =
-                ss::Arrow(monad_ty_kd, tycker.statics.type_kind(body)).build(tycker, environment);
-            let body = Alloc::alloc(
-                tycker,
-                ss::TypeAbstraction { binder: monad_binder, body },
-                kind,
-                environment,
-            );
-            return Ok(TermAnnId::Type(body, kind));
-        }
-
-        let dictionary = NominalTranslation::dictionary(tycker, menv);
-        let (menv, dictionary) = dictionary?;
-        let monad_impl_vpat: ss::VPatId =
-            Alloc::alloc(tycker, monad_impl_var, monad_impl_ty, environment);
-        let body = match body {
-            | CheckedNode::Value(body) => {
-                let (_, mut body) = cs::TermLift { tm: body }.construct(tycker, menv)?;
-                let body_ty = tycker.statics.annotations_value[&body];
-                if let Some((binder, bindee)) = dictionary {
-                    body = Alloc::alloc(
-                        tycker,
-                        ss::Let { binder, bindee, tail: body },
-                        body_ty,
-                        environment,
-                    );
-                }
-                let vtype = ss::VType.build(tycker, environment);
-                let inner_ty = Alloc::alloc(
-                    tycker,
-                    ss::ValPi {
-                        binder: ss::ValPiBinder::Value(ss::ValueParameter {
-                            domain: monad_impl_ty,
-                            witnesses: None,
-                            witness_projection: ss::PackageWitnessProjection::Ignore,
-                        }),
-                        codomain: body_ty,
-                    },
-                    vtype,
-                    environment,
-                );
-                let inner = Alloc::alloc(
-                    tycker,
-                    ss::Abs(ss::ValBinder::Value(monad_impl_vpat), body),
-                    inner_ty,
-                    environment,
-                );
-                let ty = Alloc::alloc(
-                    tycker,
-                    ss::ValPi { binder: ss::ValPiBinder::Type(monad_binder), codomain: inner_ty },
-                    vtype,
-                    environment,
-                );
+        let outer_memo =
+            tycker.monadic_memo.replace(crate::elaborate::monadic::MonadicMemo::default());
+        let result = (|| {
+            let monad_ty_tpat: ss::TPatId = Alloc::alloc(tycker, monad_ty_var, monad_ty_kd, &());
+            let monad_binder = ss::TypeBinder { pattern: monad_ty_tpat, witness: abst };
+            if let CheckedNode::Type(body) = body {
+                // Type translation needs the carrier and nominal families, not runtime algebras.
+                let (_, body) = cs::TypeLift { ty: body }.construct(tycker, menv)?;
+                let kind = ss::Arrow(monad_ty_kd, tycker.statics.type_kind(body))
+                    .build(tycker, environment);
                 let body = Alloc::alloc(
                     tycker,
-                    ss::Abs(ss::ValBinder::Type(monad_ty_tpat), inner),
-                    ty,
-                    environment,
+                    ss::TypeAbstraction { binder: monad_binder, body },
+                    kind,
+                    &(),
                 );
-                return Ok(TermAnnId::Value(body, ty));
+                return Ok(TermAnnId::Type(body, kind));
             }
-            | CheckedNode::Computation(body) => body,
-            | CheckedNode::Type(_) | CheckedNode::Pattern(_) => {
-                unreachable!("type roots returned above; patterns are not monadic operands")
+
+            let dictionary = NominalTranslation::dictionary(tycker, menv);
+            let (menv, dictionary) = dictionary?;
+            if let Some(memo) = &mut tycker.monadic_memo {
+                memo.share_structures = true;
             }
-        };
+            let monad_impl_vpat: ss::VPatId =
+                Alloc::alloc(tycker, monad_impl_var, monad_impl_ty, &());
+            match body {
+                | CheckedNode::Value(body) => Self::wrap_translated_value(
+                    tycker,
+                    environment,
+                    menv,
+                    monad_binder,
+                    monad_ty_tpat,
+                    monad_impl_ty,
+                    monad_impl_vpat,
+                    dictionary,
+                    body,
+                ),
+                | CheckedNode::Computation(body) => Self::wrap_translated_computation(
+                    tycker,
+                    environment,
+                    menv,
+                    monad_binder,
+                    monad_ty_tpat,
+                    monad_impl_ty,
+                    monad_impl_vpat,
+                    dictionary,
+                    body,
+                ),
+                | CheckedNode::Type(_) | CheckedNode::Pattern(_) => {
+                    unreachable!("type roots returned above; patterns are not monadic operands")
+                }
+            }
+        })();
+        tycker.monadic_memo = outer_memo;
+        result
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn wrap_translated_value(
+        tycker: &mut Tycker<'_>, environment: &TyEnv, menv: MonEnv, monad_binder: ss::TypeBinder,
+        monad_ty_tpat: ss::TPatId, monad_impl_ty: ss::TypeId, monad_impl_vpat: ss::VPatId,
+        dictionary: Option<(ss::VPatId, ss::ValueId)>, body: ss::ValueId,
+    ) -> Result<TermAnnId> {
+        let (_, mut body) = cs::TermLift { tm: body }.construct(tycker, menv)?;
+        let body_ty = tycker.statics.annotations_value[&body];
+        let structure_bindings = tycker
+            .monadic_memo
+            .as_mut()
+            .map(|memo| std::mem::take(&mut memo.structure_bindings))
+            .unwrap_or_default();
+        for (binder, bindee) in structure_bindings.into_iter().rev() {
+            body = Alloc::alloc(tycker, ss::Let { binder, bindee, tail: body }, body_ty, &());
+        }
+        if let Some((binder, bindee)) = dictionary {
+            body = Alloc::alloc(tycker, ss::Let { binder, bindee, tail: body }, body_ty, &());
+        }
+        let vtype = ss::VType.build(tycker, environment);
+        let inner_ty = Alloc::alloc(
+            tycker,
+            ss::ValPi {
+                binder: ss::ValPiBinder::Value(ss::ValueParameter {
+                    domain: monad_impl_ty,
+                    witnesses: None,
+                    witness_projection: ss::PackageWitnessProjection::Ignore,
+                }),
+                codomain: body_ty,
+            },
+            vtype,
+            &(),
+        );
+        let inner = Alloc::alloc(
+            tycker,
+            ss::Abs(ss::ValBinder::Value(monad_impl_vpat), body),
+            inner_ty,
+            &(),
+        );
+        let ty = Alloc::alloc(
+            tycker,
+            ss::ValPi { binder: ss::ValPiBinder::Type(monad_binder), codomain: inner_ty },
+            vtype,
+            &(),
+        );
+        let body =
+            Alloc::alloc(tycker, ss::Abs(ss::ValBinder::Type(monad_ty_tpat), inner), ty, &());
+        Ok(TermAnnId::Value(body, ty))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn wrap_translated_computation(
+        tycker: &mut Tycker<'_>, environment: &TyEnv, menv: MonEnv, monad_binder: ss::TypeBinder,
+        monad_ty_tpat: ss::TPatId, monad_impl_ty: ss::TypeId, monad_impl_vpat: ss::VPatId,
+        dictionary: Option<(ss::VPatId, ss::ValueId)>, body: ss::CompuId,
+    ) -> Result<TermAnnId> {
         let (_, mut body_lift) = cs::TermLift { tm: body }.construct(tycker, menv)?;
+        let structure_bindings = tycker
+            .monadic_memo
+            .as_mut()
+            .map(|memo| std::mem::take(&mut memo.structure_bindings))
+            .unwrap_or_default();
+        for (binder, bindee) in structure_bindings.into_iter().rev() {
+            let ty = tycker.statics.annotations_compu[&body_lift];
+            body_lift = Alloc::alloc(tycker, ss::Let { binder, bindee, tail: body_lift }, ty, &());
+        }
         if let Some((binder, bindee)) = dictionary {
             let ty = tycker.statics.annotations_compu[&body_lift];
-            body_lift =
-                Alloc::alloc(tycker, ss::Let { binder, bindee, tail: body_lift }, ty, environment);
+            body_lift = Alloc::alloc(tycker, ss::Let { binder, bindee, tail: body_lift }, ty, &());
         }
+        let ctype = ss::CType.build(tycker, environment);
         let body_lift_ty = cs::TypeOf(body_lift).build(tycker, environment);
 
         // <monad_impl_to_body_lift> = fn (mo: Thk (Monad M)) => Lift(body)
         let monad_impl_to_body_lift_ty =
-            Alloc::alloc(tycker, ss::Arrow(monad_impl_ty, body_lift_ty), ctype, environment);
+            Alloc::alloc(tycker, ss::Arrow(monad_impl_ty, body_lift_ty), ctype, &());
         let monad_impl_to_body_lift = Alloc::alloc(
             tycker,
             ss::Abs(monad_impl_vpat, body_lift),
             monad_impl_to_body_lift_ty,
-            environment,
+            &(),
         );
 
         // fn (M : VType -> CType) => <monad_impl_to_body_lift>
-        let res_body_ty = Alloc::alloc(
-            tycker,
-            ss::Forall(monad_binder, monad_impl_to_body_lift_ty),
-            ctype,
-            environment,
-        );
-        let res_body = Alloc::alloc(
-            tycker,
-            ss::Abs(monad_ty_tpat, monad_impl_to_body_lift),
-            res_body_ty,
-            environment,
-        );
+        let res_body_ty =
+            Alloc::alloc(tycker, ss::Forall(monad_binder, monad_impl_to_body_lift_ty), ctype, &());
+        let res_body =
+            Alloc::alloc(tycker, ss::Abs(monad_ty_tpat, monad_impl_to_body_lift), res_body_ty, &());
 
         Ok(TermAnnId::Compu(res_body, res_body_ty))
     }

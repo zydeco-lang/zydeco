@@ -33,7 +33,7 @@ fn every_fixed_spelling_lexes_to_its_declared_kind_and_formats_canonically() {
             assert_eq!(token.to_string(), kind.source_spelling().unwrap(), "{spelling:?}");
         }
     });
-    assert_eq!(TokenKind::Define.source_spellings(), ["def", "define"]);
+    assert_eq!(TokenKind::Define.source_spellings(), ["def"]);
     assert_eq!(TokenKind::Define.source_spelling(), Some("def"));
     assert_eq!(TokenKind::from_parser_name("def"), Some(TokenKind::Define));
     assert_eq!(TokenKind::from_parser_name("define"), None);

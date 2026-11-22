@@ -3,9 +3,9 @@
 use crate::elaborate::static_values::StaticEliminationError;
 use crate::validate::CoverageError;
 use crate::*;
-use zydeco_utils::span::Span;
+use zydeco_foundation::span::Span;
 
-pub use zydeco_utils::err::*;
+pub use zydeco_foundation::err::*;
 
 mod nominal;
 use nominal::NominalMismatch;
@@ -322,13 +322,33 @@ enum MissingAnnotationSubject {
 #[derive(Clone)]
 pub struct TyckErrorEntry {
     pub(crate) error: TyckError,
-    pub(crate) stack: rpds::VectorSync<TyckTask>,
+    pub(crate) stack: std::sync::Arc<[TyckTask]>,
     // Todo: dump related arena entries if needed
 }
 
 impl<'a> Tycker<'a> {
     fn statics_term_source_span(&self, term: TermId) -> Option<Span> {
         self.statics.terms.source(&term).map(|term| *term.span(self))
+    }
+
+    pub(crate) fn statics_term_span_or_dummy(&self, term: TermId) -> Span {
+        let Some(scoped_term) = self.statics.terms.source(&term) else {
+            return Span::dummy();
+        };
+        let Some(textual) = self.scoped.origins.source(&scoped_term.into()) else {
+            return Span::dummy();
+        };
+        self.spans.get(textual).copied().unwrap_or_else(Span::dummy)
+    }
+
+    pub(crate) fn statics_pat_span_or_dummy(&self, pat: PatId) -> Span {
+        let Some(scoped_pat) = self.statics.pats.source(&pat) else {
+            return Span::dummy();
+        };
+        let Some(textual) = self.scoped.origins.source(&scoped_pat.into()) else {
+            return Span::dummy();
+        };
+        self.spans.get(textual).copied().unwrap_or_else(Span::dummy)
     }
 
     pub(super) fn inference_site_source_span(&self, site: InferenceSite) -> Span {
@@ -355,7 +375,6 @@ impl<'a> Tycker<'a> {
             }
             | TyckError::NotInlinable(def) => Some(*def.span(self)),
             | TyckError::NotInlinableSeal(abst) => {
-                use zydeco_utils::arena::ArenaAccess;
                 self.statics.abst_hints.get(abst).map(|hint| *hint.span(self))
             }
             | TyckError::Coverage(error) => self.statics_term_source_span(error.term()),
@@ -365,7 +384,7 @@ impl<'a> Tycker<'a> {
     }
 
     /// The innermost source term or pattern active when an error was raised.
-    fn task_source_span(&self, stack: &rpds::VectorSync<TyckTask>) -> Option<Span> {
+    fn task_source_span(&self, stack: &[TyckTask]) -> Option<Span> {
         stack.iter().rev().find_map(|task| match task {
             | TyckTask::Pat(pattern, _) => Some(*pattern.span(self)),
             | TyckTask::Term(term, _) => Some(*term.span(self)),
@@ -542,16 +561,14 @@ impl<'a> Tycker<'a> {
         }
     }
 
-    fn missing_annotation_subject(
-        &self, stack: &rpds::VectorSync<TyckTask>,
-    ) -> MissingAnnotationSubject {
+    fn missing_annotation_subject(&self, stack: &[TyckTask]) -> MissingAnnotationSubject {
         stack
             .iter()
             .rev()
             .find_map(|task| match task {
                 | TyckTask::Term(term, _) => match &self.scoped.terms[term] {
                     | su::Term::Ctor(su::Ctor(name, _)) => {
-                        Some(MissingAnnotationSubject::Constructor(name.clone()))
+                        Some(MissingAnnotationSubject::Constructor(*name))
                     }
                     | su::Term::Match(su::Match { arms, .. }) if arms.is_empty() => {
                         Some(MissingAnnotationSubject::EmptyMatch)
@@ -577,9 +594,7 @@ impl<'a> Tycker<'a> {
             .unwrap_or(MissingAnnotationSubject::Unspecified)
     }
 
-    fn contextual_error_message(
-        &self, error: &TyckError, stack: &rpds::VectorSync<TyckTask>,
-    ) -> String {
+    fn contextual_error_message(&self, error: &TyckError, stack: &[TyckTask]) -> String {
         match error {
             | TyckError::MissingAnnotation => match self.missing_annotation_subject(stack) {
                 | MissingAnnotationSubject::Constructor(constructor) => {
@@ -622,9 +637,7 @@ impl<'a> Tycker<'a> {
         }
     }
 
-    fn diagnostic_help(
-        &self, error: &TyckError, stack: &rpds::VectorSync<TyckTask>,
-    ) -> Vec<String> {
+    fn diagnostic_help(&self, error: &TyckError, stack: &[TyckTask]) -> Vec<String> {
         match error {
             | TyckError::TypeMismatch { .. } if NominalMismatch::new(self, error).is_some() => {
                 vec![NominalMismatch::help()]
@@ -729,7 +742,6 @@ impl<'a> Tycker<'a> {
                 });
             }
             | TyckError::NotInlinableSeal(abst) => {
-                use zydeco_utils::arena::ArenaAccess;
                 add_related(
                     self.statics.abst_hints.get(abst).map(|hint| *hint.span(self)),
                     "sealed type defined here",

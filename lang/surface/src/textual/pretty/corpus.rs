@@ -6,8 +6,8 @@ use crate::{
     textual::{LexicalRole, LexicalTokens, StrictParser, syntax::*, tests::corpus::ZydecoCorpus},
 };
 use std::fs;
+use zydeco_foundation::pass::CompilerPass;
 use zydeco_syntax::Ugly;
-use zydeco_utils::pass::CompilerPass;
 
 struct ParsedSource {
     unit: SourceUnit,

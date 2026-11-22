@@ -45,8 +45,8 @@ These payload-free kinds are derived from the lexer's `Tok` declaration,
 so an expected identifier needs no invented source text and no separately maintained terminal inventory.
 
 `TokenMetadata` reads fixed spellings directly from Logos's `#[token(...)]` attributes.
-A token with several aliases selects one registered spelling explicitly:
-both `def` and `define` lex as `Define`, whose canonical spelling is `def`.
+Any token with multiple spellings selects one registered canonical spelling explicitly
+via `#[token_metadata(canonical = "...")]`.
 Variable lexical categories have no fixed source spelling.
 Their grammar names default to the variant name, with explicit overrides for existing labels such as `LowerId`.
 Trivia and malformed lexical tokens are marked as excluded from parser expectations;
@@ -193,7 +193,7 @@ Contextual `OS` retains its authored term origin without inventing a `DefId`.
 The editor classifies that term from checked evidence and filters its completion using its `CType` classifier.
 The textual formatter preserves authored annotations rather than printing the inserted default prefix.
 [Surface tests](../../../../lang/surface/src/bitter/desugar/tests.rs),
-[composition regressions](../../../../lang/tests/tests/prelude.rs), and CLI, REPL,
+[composition regressions](../../../../lang/tests/tests/suite/prelude.rs), and CLI, REPL,
 and editor tests cover opt-out and replacement, witness sharing, source independence,
 and rejected downstream publication.
 

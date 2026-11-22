@@ -1,23 +1,21 @@
 use crate::{diagnostics::DiagnosticText, submission::ExpressionMode};
 use std::{collections::HashSet, path::PathBuf, sync::Arc};
 use thiserror::Error;
-use zydeco_dynamics::{
-    BuiltinComputationRootLinker, LinkError, ProgKont, RootLinker, Runtime, ValueRootLinker,
-    fmt::Formatter as DynamicFormatter,
-};
+use zydeco_dynamics::{ProgKont, Runtime, fmt::Formatter as DynamicFormatter};
+use zydeco_foundation::dense::DenseId;
+use zydeco_ir::{BuiltinPackagePlan, CoreProgram};
 use zydeco_session::{
     AnalysisOutcome, CheckedProgram, CompilerSession, ProgramAnalysis, SourceLoadError,
     source::{PackageId, Project},
 };
 use zydeco_statics::{
-    TyckObservation,
+    BuiltinPackagePlanError, BuiltinPackagePlanner, TyckObservation,
     arena::StaticsArena,
     fmt::{self as static_fmt, Formatter as StaticFormatter},
     syntax::{Fillable, PackPi, TermAnnId, Type, TypeId},
 };
 use zydeco_surface::textual::SourceNumber;
 use zydeco_syntax::{App, BuiltinRole, BuiltinTypeRole, Meta, Pretty, Ugly};
-use zydeco_utils::arena::ArenaAccess;
 
 pub(crate) enum EvaluationOutcome {
     Success(String),
@@ -170,36 +168,41 @@ impl ReplEngine {
             }
             | TermAnnId::Hole(_) => unreachable!("a checked source root cannot remain a hole"),
         };
-        let dynamics = Self::link_checked(program).map_err(|error| error.to_string())?;
-        Self::run_dynamics(dynamics, classifier)
+        let (core, packages) = Self::link_checked(program).map_err(|error| error.to_string())?;
+        Self::run_dynamics(&core, &packages, classifier)
     }
 
     fn link_checked(
         program: CheckedProgram,
-    ) -> Result<zydeco_dynamics::syntax::DynamicsProgram, ReplLinkError> {
-        zydeco_statics::validate::ExecutionReadiness::check(&program.statics, program.root)?;
+    ) -> Result<(Arc<CoreProgram>, Vec<BuiltinPackagePlan>), ReplLinkError> {
+        let core = program.statics.core.as_ref().ok_or(ReplLinkError::NonDynamicRoot)?.clone();
+        zydeco_ir::validate::ExecutionReadiness::check(&core)?;
         match program.root {
-            | TermAnnId::Value(root, _) => {
-                ValueRootLinker { scoped: program.scoped, statics: program.statics, root }
-                    .run()
-                    .map_err(ReplLinkError::from)
+            | TermAnnId::Value(_, _) => Ok((core, Vec::new())),
+            | TermAnnId::Compu(_, ty) => {
+                let mut current = ty;
+                let mut visited = HashSet::new();
+                let mut packages = Vec::new();
+                loop {
+                    if !visited.insert(current) {
+                        return Err(ReplLinkError::UnsupportedRoot);
+                    }
+                    match Self::computation_plan(&program.statics, current) {
+                        | ComputationPlan::Return(_) | ComputationPlan::Executable => {
+                            return Ok((core, packages));
+                        }
+                        | ComputationPlan::Builtin(signature) => {
+                            let plan = BuiltinPackagePlanner::new(&program.statics)
+                                .for_computation(&signature)?;
+                            packages.push(plan);
+                            current = signature.codomain;
+                        }
+                        | ComputationPlan::Unsupported => {
+                            return Err(ReplLinkError::UnsupportedRoot);
+                        }
+                    }
+                }
             }
-            | TermAnnId::Compu(root, ty) => match Self::computation_plan(&program.statics, ty) {
-                | ComputationPlan::Return(_) | ComputationPlan::Executable => {
-                    RootLinker { scoped: program.scoped, statics: program.statics, root }
-                        .run()
-                        .map_err(ReplLinkError::from)
-                }
-                | ComputationPlan::Builtin(signature) => BuiltinComputationRootLinker {
-                    scoped: program.scoped,
-                    statics: program.statics,
-                    root,
-                    signature,
-                }
-                .run()
-                .map_err(ReplLinkError::from),
-                | ComputationPlan::Unsupported => Err(ReplLinkError::UnsupportedRoot),
-            },
             | TermAnnId::Kind(_) | TermAnnId::Type(_, _) | TermAnnId::Hole(_) => {
                 Err(ReplLinkError::NonDynamicRoot)
             }
@@ -207,15 +210,16 @@ impl ReplEngine {
     }
 
     fn run_dynamics(
-        dynamics: zydeco_dynamics::syntax::DynamicsProgram, classifier: Option<String>,
+        core: &CoreProgram, packages: &[BuiltinPackagePlan], classifier: Option<String>,
     ) -> Result<String, String> {
         let mut input = std::io::empty();
         let mut output = Vec::new();
         let mut stderr = Vec::new();
         let arguments: [String; 0] = [];
-        let mut runtime = Runtime::new(&mut input, &mut output, &mut stderr, &arguments, dynamics);
+        let mut runtime = Runtime::new(&mut input, &mut output, &mut stderr, &arguments, core)
+            .with_packages(packages);
         let result = runtime.run();
-        let formatter = DynamicFormatter::new(&runtime.program);
+        let formatter = DynamicFormatter::new(core);
         let result = match result {
             | ProgKont::Ret(value) => {
                 let value = value.ugly(&formatter);
@@ -283,10 +287,10 @@ impl ReplEngine {
     }
 
     fn type_view(statics: &StaticsArena, ty: TypeId) -> Option<&Type> {
-        if let Some(normalized) = statics.types_normalized.get(&ty) {
+        if let Some(normalized) = statics.types_normalized.get(ty) {
             return Some(normalized);
         }
-        match statics.types_pre.get(&ty)? {
+        match statics.types_pre.get(ty)? {
             | Fillable::Done(ty) => Some(ty),
             | Fillable::Fill(_) => None,
         }
@@ -328,7 +332,7 @@ impl ReplEngine {
                 Self::pretty(formatter, computation),
                 Self::pretty(formatter, ty),
             ),
-            | TermAnnId::Hole(fill) => format!("unresolved hole {}", fill.concise()),
+            | TermAnnId::Hole(fill) => format!("unresolved hole ?{}", fill.raw_u32()),
         }
     }
 
@@ -390,9 +394,9 @@ enum ComputationEvaluationPlan {
 #[derive(Debug, Error)]
 enum ReplLinkError {
     #[error(transparent)]
-    Hole(#[from] zydeco_statics::validate::ExecutableHoles),
+    Hole(#[from] zydeco_ir::validate::ExecutableHoles),
     #[error(transparent)]
-    Link(#[from] LinkError),
+    Builtin(#[from] BuiltinPackagePlanError),
     #[error("checked computation root has no runtime entry contract")]
     UnsupportedRoot,
     #[error("checked source root is not dynamically evaluable")]

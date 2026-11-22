@@ -4,6 +4,7 @@ use tower_lsp::lsp_types::{
     CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionResponse,
     CompletionTextEdit, Documentation, InsertTextFormat, Position, Range, TextEdit,
 };
+use zydeco_foundation::span::{FileMap, LineCol};
 use zydeco_session::{CompilerSession, CompletionAnalysis, CompletionSemantics};
 use zydeco_statics::{fmt::Formatter, syntax::DefId};
 use zydeco_surface::{
@@ -14,7 +15,6 @@ use zydeco_surface::{
     textual::{Lexer, LexicalTokens, Tok},
 };
 use zydeco_syntax::Pretty;
-use zydeco_utils::span::{FileMap, LineCol};
 
 mod paths;
 use paths::SourcePathCursor;
@@ -59,7 +59,7 @@ impl Completer {
             .iter()
             .enumerate()
             .map(|(rank, candidate)| {
-                let name = &candidate.name.0;
+                let name = candidate.name.as_str();
                 let annotation = semantics
                     .and_then(|semantics| self.annotation(semantics, candidate.definition));
                 let class = NameClass::of_definition(
@@ -68,7 +68,7 @@ impl Completer {
                     semantics.map(|semantics| semantics.statics.as_ref()),
                 );
                 CompletionItem {
-                    label: name.clone(),
+                    label: name.to_owned(),
                     label_details: annotation.as_ref().filter(|_| self.label_details).map(|ty| {
                         CompletionItemLabelDetails {
                             detail: Some(format!(" : {ty}")),
@@ -85,10 +85,10 @@ impl Completer {
                         })
                     }),
                     sort_text: Some(format!("{rank:08}")),
-                    filter_text: Some(name.clone()),
+                    filter_text: Some(name.to_owned()),
                     text_edit: Some(CompletionTextEdit::Edit(TextEdit {
                         range,
-                        new_text: name.clone(),
+                        new_text: name.to_owned(),
                     })),
                     ..CompletionItem::default()
                 }

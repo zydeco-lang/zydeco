@@ -4,30 +4,28 @@
 
 use crate::{arena::DefinitionNames, syntax::*};
 use pretty::RcDoc;
-use zydeco_statics::arena::StaticsArena;
-use zydeco_surface::scoped::syntax::ScopedArena;
 
 pub use zydeco_syntax::Pretty;
 
-/// Formatter for one phase, naming definitions through scoped and statics.
+/// Formatter for one phase, naming definitions from its own arena.
 pub struct Formatter<'arena, P: Phase> {
     pub(crate) admin: &'arena dyn DefinitionNames,
     pub(crate) inner: &'arena P::Nodes,
-    pub(crate) scoped: &'arena ScopedArena,
-    pub(crate) statics: &'arena StaticsArena,
     pub indent: isize,
 }
 
 impl<'arena, P: Phase> Formatter<'arena, P> {
-    pub fn new(
-        admin: &'arena dyn DefinitionNames, inner: &'arena P::Nodes, scoped: &'arena ScopedArena,
-        statics: &'arena StaticsArena,
-    ) -> Self {
-        Self { admin, inner, scoped, statics, indent: 2 }
+    pub fn new(admin: &'arena dyn DefinitionNames, inner: &'arena P::Nodes) -> Self {
+        Self { admin, inner, indent: 2 }
     }
+}
 
-    pub(crate) fn statics_formatter(&self) -> zydeco_statics::fmt::Formatter<'arena> {
-        zydeco_statics::fmt::Formatter::new(self.scoped, self.statics)
+fn format_literal(literal: &Literal) -> String {
+    match literal {
+        | Literal::Integer(i) => format!("{i:?}"),
+        | Literal::Float(value) => format!("{value:?}"),
+        | Literal::String(s) => format!("{s:?}"),
+        | Literal::Char(c) => format!("{c:?}"),
     }
 }
 
@@ -81,7 +79,7 @@ where
             | Value::Hole(Hole) => RcDoc::text("_"),
             | Value::Var(def) => def.pretty(f),
             | Value::Ctor(Ctor(ctor, value)) => RcDoc::concat([
-                RcDoc::text(ctor.name.ugly(&f.statics_formatter())),
+                RcDoc::text(ctor.name.as_str()),
                 RcDoc::text("("),
                 value.pretty(f),
                 RcDoc::text(")"),
@@ -92,7 +90,7 @@ where
                 RcDoc::intersperse(items.iter().map(|item| item.pretty(f)), RcDoc::text(", ")),
                 RcDoc::text(")"),
             ]),
-            | Value::Literal(literal) => RcDoc::text(literal.ugly(&f.statics_formatter())),
+            | Value::Literal(literal) => RcDoc::text(format_literal(literal)),
             | Value::AddrOffset(AddrOffset { base, displacement }) => RcDoc::concat([
                 RcDoc::text("addr.offset("),
                 base.pretty(f),
@@ -130,7 +128,7 @@ where
             ]),
             | Stack::Tag(Cons(dtor, stack)) => RcDoc::concat([
                 RcDoc::text("tag("),
-                RcDoc::text(dtor.name.ugly(&f.statics_formatter())),
+                RcDoc::text(dtor.name.as_str()),
                 RcDoc::text(") :: "),
                 stack.pretty(f),
             ]),
@@ -223,24 +221,21 @@ where
                     RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
                 ])
             }
-            | Computation::CoCase(SCoMatch { scrut, arms }) => {
-                let statics_fmt = f.statics_formatter();
-                RcDoc::concat([
-                    RcDoc::text("cocase "),
-                    scrut.pretty(f),
-                    RcDoc::concat(arms.iter().map(|CoMatcher { dtor, tail }| {
-                        RcDoc::concat([
-                            RcDoc::line(),
-                            RcDoc::text("| "),
-                            RcDoc::text(dtor.0.name.ugly(&statics_fmt)),
-                            RcDoc::text(" ->"),
-                            RcDoc::concat([RcDoc::line(), tail.pretty(f)]).nest(f.indent),
-                        ])
-                    })),
-                    RcDoc::line(),
-                    RcDoc::text("end"),
-                ])
-            }
+            | Computation::CoCase(SCoMatch { scrut, arms }) => RcDoc::concat([
+                RcDoc::text("cocase "),
+                scrut.pretty(f),
+                RcDoc::concat(arms.iter().map(|CoMatcher { dtor, tail }| {
+                    RcDoc::concat([
+                        RcDoc::line(),
+                        RcDoc::text("| "),
+                        RcDoc::text(dtor.0.name.as_str()),
+                        RcDoc::text(" ->"),
+                        RcDoc::concat([RcDoc::line(), tail.pretty(f)]).nest(f.indent),
+                    ])
+                })),
+                RcDoc::line(),
+                RcDoc::text("end"),
+            ]),
             | Computation::Memory(MemoryStep::Load { scalar, address, result, next }) => {
                 RcDoc::concat([
                     RcDoc::text(format!("load {scalar:?} ")),

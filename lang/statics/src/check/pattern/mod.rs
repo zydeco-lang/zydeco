@@ -46,45 +46,23 @@ enum PatternLeaf {
 }
 
 impl PatternLeaf {
-    fn materialize(self, tycker: &mut Tycker<'_>, env: &TyEnv, ann: AnnId) -> PatAnnId {
+    fn materialize(self, tycker: &mut Tycker<'_>, _env: &TyEnv, ann: AnnId) -> PatAnnId {
         match (self, ann) {
-            | (Self::Hole, AnnId::Set) => {
-                let id = tycker.query_derived_id(2);
-                tycker.statics.kpats.insert_new(id, ss::KindPattern::Hole(ss::Hole));
-                PatAnnId::Kind(id)
-            }
+            | (Self::Hole, AnnId::Set) => PatAnnId::Kind(Alloc::alloc(tycker, ss::Hole, (), &())),
             | (Self::Variable(def), AnnId::Set) => {
-                let id = tycker.query_derived_id(2);
-                tycker.statics.kpats.insert_new(id, ss::KindPattern::Var(def));
-                PatAnnId::Kind(id)
+                PatAnnId::Kind(Alloc::alloc(tycker, def, (), &()))
             }
             | (Self::Hole, AnnId::Kind(kd)) => {
-                let id = tycker.query_derived_id(2);
-                tycker.statics.tpats.insert_new(id, ss::TypePattern::Hole(ss::Hole));
-                tycker.statics.annotations_tpat.insert_new(id, kd);
-                tycker.statics.env_tpat.insert_new(id, env.clone());
-                PatAnnId::Type(id, kd)
+                PatAnnId::Type(Alloc::alloc(tycker, ss::Hole, kd, &()), kd)
             }
             | (Self::Variable(def), AnnId::Kind(kd)) => {
-                let id = tycker.query_derived_id(2);
-                tycker.statics.tpats.insert_new(id, ss::TypePattern::Var(def));
-                tycker.statics.annotations_tpat.insert_new(id, kd);
-                tycker.statics.env_tpat.insert_new(id, env.clone());
-                PatAnnId::Type(id, kd)
+                PatAnnId::Type(Alloc::alloc(tycker, def, kd, &()), kd)
             }
             | (Self::Hole, AnnId::Type(ty)) => {
-                let id = tycker.query_derived_id(2);
-                tycker.statics.vpats.insert_new(id, ss::ValuePattern::Hole(ss::Hole));
-                tycker.statics.annotations_vpat.insert_new(id, ty);
-                tycker.statics.env_vpat.insert_new(id, env.clone());
-                PatAnnId::Value(id, ty)
+                PatAnnId::Value(Alloc::alloc(tycker, ss::Hole, ty, &()), ty)
             }
             | (Self::Variable(def), AnnId::Type(ty)) => {
-                let id = tycker.query_derived_id(2);
-                tycker.statics.vpats.insert_new(id, ss::ValuePattern::Var(def));
-                tycker.statics.annotations_vpat.insert_new(id, ty);
-                tycker.statics.env_vpat.insert_new(id, env.clone());
-                PatAnnId::Value(id, ty)
+                PatAnnId::Value(Alloc::alloc(tycker, def, ty, &()), ty)
             }
         }
     }
@@ -95,18 +73,9 @@ struct PatternVariableStandIn;
 
 impl PatternVariableStandIn {
     fn materialize(tycker: &mut Tycker<'_>, env: &TyEnv, source: su::PatId) -> AnnId {
-        let fill = tycker.query_derived_id(0);
-        let ty = tycker.query_derived_id(1);
-        let vtype = ss::VType.build(tycker, env);
-
-        tycker.statics.fills.insert_new(fill, ss::InferenceSite::Pattern(source));
-        tycker.statics.types_pre.insert_new(ty, ss::Fillable::Fill(fill), vtype);
-        tycker.store_env(ty, env);
-
-        let scope = env.skolem_scope().clone();
-        if let Some(existing) = tycker.statics.fill_scopes.insert_or_get(fill, scope.clone()) {
-            tycker.statics.fill_scopes.replace_existing(fill, existing.intersection(&scope));
-        }
+        let fill = Alloc::alloc(tycker, source, (), &());
+        let ty: ss::TypeId =
+            Alloc::alloc(tycker, fill, tycker.intrinsics.vtype, env.skolem_scope());
         ty.into()
     }
 }
@@ -164,7 +133,7 @@ impl ValuePatternShape {
             }
             | ss::ValuePattern::Named(ss::Named(_, inner)) => Self::is_irrefutable(tycker, *inner),
             | ss::ValuePattern::Ctor(ss::Ctor(_, inner)) => {
-                tycker.statics.data_pat_hints.get(&pattern).is_some_and(|data| {
+                tycker.statics.data_pat_hints.get(pattern).is_some_and(|data| {
                     tycker.statics.datas[data].len() == 1 && Self::is_irrefutable(tycker, *inner)
                 })
             }
@@ -295,11 +264,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
     fn tyck(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> Result<Self::Out> {
         tycker.guarded(|tycker| {
             // administrative
-            tycker.tasks.push_back_mut(TyckTask::Pat(self.inner, action.switch));
-            tycker.enter_site(su::EntityId::Pat(self.inner));
-            let result = self.tyck_inner(tycker, action);
-            tycker.allocator.exit();
-            result
+            tycker.tasks.push(TyckTask::Pat(self.inner, action.switch));
+            self.tyck_inner(tycker, action)
         })
     }
 
@@ -349,7 +315,7 @@ impl Tycker<'_> {
             let mut names = Vec::new();
             while let su::Pattern::Named(su::Named(name, inner)) = &self.scoped.pats[&inner_pattern]
             {
-                names.push(name.clone());
+                names.push(*name);
                 inner_pattern = *inner;
             }
             let kind = names.into_iter().rev().fold(payload_kind, |kind, name| {

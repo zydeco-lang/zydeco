@@ -3,46 +3,75 @@
 use super::*;
 
 impl StaticElaborator<'_, '_> {
-    // Remaining worklist: split static value elaboration by value form.
     #[allow(clippy::too_many_lines)]
-    pub(super) fn value(
-        &mut self, source: ValueId, env: &Environment, bindings: &mut Vec<Binding>,
-    ) -> Result<StaticValue> {
+    pub(super) fn value(&mut self, source: ValueId, env: &Environment) -> Result<StaticValue> {
+        zydeco_foundation::stack::maybe_grow(|| self.value_inner(source, env))
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn value_inner(&mut self, source: ValueId, env: &Environment) -> Result<StaticValue> {
         let ty = self.ty(self.tycker.statics.annotations_value[&source], env)?;
-        if self.tycker.statics.foreign_imports.get(&source).is_some() {
-            return Ok(StaticValue::with_form(source, ty, ValueForm::Runtime(source)));
+        if let Some(import) = self.tycker.statics.foreign_imports.get(source).cloned() {
+            return Ok(self.make_value(source, ty, 0, ValueForm::Foreign(import)));
         }
-        let form = match self.tycker.statics.values[&source].clone() {
+        match self.tycker.statics.values[&source].clone() {
             | Value::Var(definition) => {
                 if let Some(value) = env.values.get(&definition) {
-                    return Ok(StaticValue(Arc::new(ValueInfo {
+                    return Ok(StaticValue(Rc::new(ValueInfo {
+                        uid: value.0.uid,
                         source,
                         ty: value.0.ty,
+                        max_scope: value.0.max_scope,
                         form: value.0.form.clone(),
                         shared: value.0.shared,
                     })));
                 }
                 if self.purpose == Purpose::Inspect {
-                    return self.inspect_alias(source, definition, ty, env, bindings);
+                    return self.inspect_alias(source, definition, ty, env);
                 }
-                ValueForm::Runtime(source)
+                let name = self.var_name(definition);
+                let var =
+                    *self.free_vars.entry(definition).or_insert_with(|| self.core.vars.alloc(name));
+                Ok(self.make_value(source, ty, 0, ValueForm::RuntimeVar(var)))
             }
-            | Value::Hole(_) | Value::Triv(_) | Value::Lit(_) => ValueForm::Runtime(source),
+            | Value::Hole(_) => {
+                let preallocated =
+                    if self.purpose == Purpose::Residualize && self.reduction_depth == 0 {
+                        let id = self.alloc_core_value(source, ir::Value::Hole(Hole), ty);
+                        self.core.retained_holes.push(ir::TermId::Value(id));
+                        Some(id)
+                    } else {
+                        None
+                    };
+                Ok(self.make_value(
+                    source,
+                    ty,
+                    0,
+                    ValueForm::Hole { preallocated: Rc::new(Cell::new(preallocated)) },
+                ))
+            }
+            | Value::Triv(_) => Ok(self.make_value(source, ty, 0, ValueForm::Triv)),
+            | Value::Lit(literal) => Ok(self.make_value(source, ty, 0, ValueForm::Lit(literal))),
             | Value::ValAbs(Abs(binder, body)) => {
-                ValueForm::Function { binder, body, env: env.clone() }
+                let max_scope = self.function_max_scope(body, &binder, env);
+                Ok(self.make_value(
+                    source,
+                    ty,
+                    max_scope,
+                    ValueForm::Function { binder, body, env: env.clone() },
+                ))
             }
             | Value::ValApp(App(function, argument)) => {
-                let function = self.value(function, env, bindings)?;
-                return self.apply(source, function, argument, env, bindings);
+                let function = self.value(function, env)?;
+                self.apply(source, function, argument, env)
             }
             | Value::IntOp(IntValueOp { operation, operands }) => {
                 let operands = operands
                     .into_iter()
                     .map(|operand| {
-                        let operand = self.value(operand, env, bindings)?.unnamed();
-                        if let ValueForm::Runtime(id) = operand.0.form
-                            && let Value::Lit(Literal::Integer(IntegerLiteral::Int(value))) =
-                                self.tycker.statics.values[&id]
+                        let operand = self.value(operand, env)?.unnamed();
+                        if let ValueForm::Lit(Literal::Integer(IntegerLiteral::Int(value))) =
+                            operand.0.form
                         {
                             Ok(value)
                         } else {
@@ -55,58 +84,86 @@ impl StaticElaborator<'_, '_> {
                 let literal = Literal::Integer(IntegerLiteral::Int(
                     operation.evaluate([operands[0], operands[1]]),
                 ));
-                ValueForm::Runtime(self.alloc_value(source, Value::Lit(literal), ty))
+                Ok(self.make_value(source, ty, 0, ValueForm::Lit(literal)))
             }
             | Value::Match(Match { scrut, arms }) => {
-                let value = self.value(scrut, env, bindings)?;
-                let value = self.share(value, bindings)?;
+                let value = self.value(scrut, env)?;
+                let value = self.share(value)?;
                 for Matcher { binder, tail } in arms {
                     let mut local = env.clone();
-                    let mut selected_bindings = Vec::new();
-                    if self.value_pattern(
-                        source,
-                        binder,
-                        value.clone(),
-                        &mut local,
-                        &mut selected_bindings,
-                    )? {
-                        bindings.extend(selected_bindings);
-                        return self.value(tail, &local, bindings);
+                    if self.value_pattern(source, binder, value.clone(), &mut local)? {
+                        return self.value(tail, &local);
                     }
                 }
-                return self.fail(StaticEliminationError::UnresolvedMatch { value: source });
+                self.fail(StaticEliminationError::UnresolvedMatch { value: source })
             }
             | Value::Let(Let { binder, bindee, tail }) => {
-                let value = self.value(bindee, env, bindings)?;
-                let value = self.share(value, bindings)?;
+                let value = self.value(bindee, env)?;
+                let value = self.share(value)?;
                 let mut local = env.clone();
-                self.bind(binder, value, &mut local, bindings)?;
-                return self.value(tail, &local, bindings);
+                self.bind(binder, value, &mut local)?;
+                self.value(tail, &local)
             }
             | Value::Thunk(Thunk(body)) => {
                 if self.purpose == Purpose::Inspect {
-                    return Ok(StaticValue::with_form(source, ty, ValueForm::Runtime(source)));
+                    return Ok(self.make_value(
+                        source,
+                        ty,
+                        0,
+                        ValueForm::RuntimeTerm(Rc::new(Cell::new(None))),
+                    ));
                 }
-                // Export selection can discard an entire thunk. Residualize its body only
-                // when this closure is actually needed by the runtime boundary.
-                if self.purpose == Purpose::SelectExports {
-                    ValueForm::Thunk { body, env: env.clone() }
+                // Top-level thunks authored directly in executable code still validate
+                // static-elimination boundaries and preserve unreferenced holes. Thunks inside
+                // static value functions or export candidates stay lazy until demanded.
+                if self.purpose == Purpose::Residualize && self.reduction_depth == 0 {
+                    if !self.runtime_type(ty) {
+                        return self
+                            .fail(StaticEliminationError::RuntimeValue { value: source, ty });
+                    }
+                    let body_id = self.computation(body, env)?;
+                    let thunk_id =
+                        self.alloc_core_value(source, ir::Value::Thunk(Thunk(body_id)), ty);
+                    let max_scope = self.thunk_max_scope(body, env);
+                    Ok(self.make_value(
+                        source,
+                        ty,
+                        max_scope,
+                        ValueForm::RuntimeTerm(Rc::new(Cell::new(Some(thunk_id)))),
+                    ))
                 } else {
-                    let body = self.computation(body, env)?;
-                    ValueForm::Runtime(self.alloc_value(source, Value::Thunk(Thunk(body)), ty))
+                    let max_scope = self.thunk_max_scope(body, env);
+                    Ok(self.make_value(
+                        source,
+                        ty,
+                        max_scope,
+                        ValueForm::Thunk { body, env: env.clone() },
+                    ))
                 }
             }
-            | Value::VCons(fields) => ValueForm::Product(
-                fields
+            | Value::VCons(fields) => {
+                let fields = fields
                     .into_iter()
-                    .map(|field| self.value(field, env, bindings))
-                    .collect::<Result<_>>()?,
-            ),
+                    .map(|field| self.value(field, env))
+                    .collect::<Result<Vec<_>>>()?;
+                let max_scope = fields.iter().map(|field| field.0.max_scope).max().unwrap_or(0);
+                Ok(self.make_value(source, ty, max_scope, ValueForm::Product(fields)))
+            }
             | Value::Ctor(Ctor(name, payload)) => {
-                ValueForm::Constructor(name, self.value(payload, env, bindings)?)
+                let payload = self.value(payload, env)?;
+                let max_scope = payload.0.max_scope;
+                let data = self.resolve_data_id(source, ty);
+                Ok(self.make_value(
+                    source,
+                    ty,
+                    max_scope,
+                    ValueForm::Constructor { data, name, payload },
+                ))
             }
             | Value::Named(Named(name, payload)) => {
-                ValueForm::Named(name, self.value(payload, env, bindings)?)
+                let payload = self.value(payload, env)?;
+                let max_scope = payload.0.max_scope;
+                Ok(self.make_value(source, ty, max_scope, ValueForm::Named(name, payload)))
             }
             | Value::SCons(ConsN(prefix, payload)) => {
                 let prefix = prefix
@@ -116,73 +173,107 @@ impl StaticElaborator<'_, '_> {
                         | StaticTermId::Kind(_) => Ok(witness),
                     })
                     .collect::<Result<Vec<_>>>()?;
-                ValueForm::Package(ConsN(prefix, self.value(payload, env, bindings)?))
+                let payload = self.value(payload, env)?;
+                let max_scope = payload.0.max_scope;
+                Ok(self.make_value(
+                    source,
+                    ty,
+                    max_scope,
+                    ValueForm::Package(ConsN(prefix, payload)),
+                ))
             }
             | Value::Proj(Proj(head, field)) => {
-                let mut value = self.value(head, env, bindings)?;
+                let mut value = self.value(head, env)?;
                 for (index, projection) in field.target.products.iter().enumerate() {
-                    if matches!(value.0.form, ValueForm::Runtime(_)) {
+                    if value.is_opaque_runtime() {
                         if self.purpose == Purpose::Inspect {
-                            return Ok(StaticValue::with_form(
+                            return Ok(self.make_value(
                                 source,
                                 ty,
-                                ValueForm::Runtime(source),
+                                0,
+                                ValueForm::RuntimeTerm(Rc::new(Cell::new(None))),
                             ));
                         }
-                        let products = field.target.products[index..]
+                        let steps = field.target.products[index..]
                             .iter()
                             .map(|step| {
-                                Ok(ProductProjection {
-                                    product: self.ty(step.product, env)?,
-                                    position: step.position,
-                                })
+                                let product = self.ty(step.product, env)?;
+                                let layout = self.product_layout(product)?;
+                                Ok(ProductProjection { layout, position: step.position })
                             })
-                            .collect::<Result<_>>()?;
+                            .collect::<Result<Vec<_>>>()?;
+                        let scope = self.current_scope();
                         let head = self.reify(&value)?;
-                        let node = Value::Proj(Proj(
-                            head,
-                            ResolvedField { name: field.name, target: ProjTarget { products } },
-                        ));
-                        let residual = self.alloc_value(source, node, ty);
-                        return Ok(StaticValue::with_form(
+                        let proj_id =
+                            self.alloc_core_value(source, ir::Value::Proj { head, steps }, ty);
+                        return Ok(self.make_value(
                             source,
                             ty,
-                            ValueForm::Runtime(residual),
+                            scope,
+                            ValueForm::RuntimeTerm(Rc::new(Cell::new(Some(proj_id)))),
                         ));
                     }
                     let product = self.ty(projection.product, env)?;
-                    value = self.project(value, product, projection.position, source, bindings)?;
+                    value = self.project(value, product, projection.position, source)?;
                 }
                 let value = value.unnamed();
-                if matches!(value.0.form, ValueForm::Runtime(_)) && value.0.ty != ty {
-                    if self.purpose == Purpose::Inspect {
-                        return Ok(StaticValue::with_form(source, ty, ValueForm::Runtime(source)));
-                    }
-                    let head = self.reify(&value)?;
-                    let node = Value::Proj(Proj(
-                        head,
-                        ResolvedField {
-                            name: field.name,
-                            target: ProjTarget { products: Vec::new() },
-                        },
-                    ));
-                    let residual = self.alloc_value(source, node, ty);
-                    return Ok(StaticValue::with_form(source, ty, ValueForm::Runtime(residual)));
+                if value.0.ty != ty {
+                    Ok(StaticValue(Rc::new(ValueInfo {
+                        uid: value.0.uid,
+                        source,
+                        ty,
+                        max_scope: value.0.max_scope,
+                        form: value.0.form.clone(),
+                        shared: value.0.shared,
+                    })))
+                } else {
+                    Ok(value)
                 }
-                return Ok(value);
             }
-        };
-        Ok(StaticValue::with_form(source, ty, form))
+        }
     }
 
     fn apply(
         &mut self, source: ValueId, function: StaticValue, argument: ValArgument,
-        caller: &Environment, bindings: &mut Vec<Binding>,
+        caller: &Environment,
     ) -> Result<StaticValue> {
+        let function = function.unnamed();
+        let ValueForm::Function { binder, body, env } = &function.0.form else {
+            return self.fail(StaticEliminationError::UnresolvedApplication {
+                function: function.0.source,
+            });
+        };
+        let binder = binder.clone();
+        let body = *body;
+        let mut local = env.clone();
+        // Evaluate value arguments in caller depth before entering the callee body so
+        // top-level arguments retain their eager validation semantics.
+        match (&binder, argument) {
+            | (ValBinder::Type(pattern), ValArgument::Type(argument)) => {
+                let argument = self.ty(argument, caller)?;
+                let classifier = function.0.ty.unroll(self.tycker)?;
+                let Some(Type::ValPi(pi)) = self.tycker.statics.normalized_at(classifier) else {
+                    unreachable!()
+                };
+                let ValPiBinder::Type(pi_binder) = &pi.binder else { unreachable!() };
+                let pi_binder = pi_binder.clone();
+                let payload = pi_binder.pattern.bind_argument(self.tycker, argument)?;
+                let body_payload = pattern.bind_argument(self.tycker, argument)?;
+                let assignments = std::iter::once((pi_binder.witness, payload))
+                    .chain(self.pattern_witness(*pattern).map(|witness| (witness, body_payload)));
+                local = local.with_types(assignments);
+            }
+            | (ValBinder::Value(pattern), ValArgument::Value(argument)) => {
+                let argument = self.value(argument, caller)?;
+                let argument = self.share(argument)?;
+                self.bind(*pattern, argument, &mut local)?;
+            }
+            | _ => unreachable!("typed value application follows its binder sort"),
+        }
         self.enter_reduction(function.0.source)?;
         let previous = self.application_site;
         self.application_site = previous.or(Some(source));
-        let result = self.apply_inner(function, argument, caller, bindings);
+        let result = self.value(body, &local);
         self.application_site = previous;
         self.reduction_depth -= 1;
         result
@@ -190,15 +281,16 @@ impl StaticElaborator<'_, '_> {
 
     fn inspect_alias(
         &mut self, source: ValueId, definition: DefId, ty: TypeId, env: &Environment,
-        bindings: &mut Vec<Binding>,
     ) -> Result<StaticValue> {
         if !self.aliases.insert(definition) {
             return Err(ReportedError);
         }
         let alias = self.tycker.statics.value_aliases.get(&definition).copied();
         let result = match alias {
-            | Some(alias) => self.value(alias, env, bindings),
-            | None => Ok(StaticValue::with_form(source, ty, ValueForm::Runtime(source))),
+            | Some(alias) => self.value(alias, env),
+            | None => {
+                Ok(self.make_value(source, ty, 0, ValueForm::RuntimeTerm(Rc::new(Cell::new(None)))))
+            }
         };
         self.aliases.remove(&definition);
         let value = result?;
@@ -208,58 +300,28 @@ impl StaticElaborator<'_, '_> {
                 | ValueForm::Package(ConsN(_, payload)) => payload.clone(),
                 | _ => value.clone(),
             };
-            Ok(StaticValue::with_form(source, ty, ValueForm::Package(ConsN(witnesses, payload))))
+            let max_scope = payload.0.max_scope;
+            Ok(self.make_value(
+                source,
+                ty,
+                max_scope,
+                ValueForm::Package(ConsN(witnesses, payload)),
+            ))
         } else {
             Ok(value)
         }
     }
 
-    fn apply_inner(
-        &mut self, function: StaticValue, argument: ValArgument, caller: &Environment,
-        bindings: &mut Vec<Binding>,
-    ) -> Result<StaticValue> {
-        let function = function.unnamed();
-        let ValueForm::Function { binder, body, env } = &function.0.form else {
-            return self.fail(StaticEliminationError::UnresolvedApplication {
-                function: function.0.source,
-            });
-        };
-        let mut local = env.clone();
-        match (binder, argument) {
-            | (ValBinder::Type(pattern), ValArgument::Type(argument)) => {
-                let argument = self.ty(argument, caller)?;
-                let classifier = function.0.ty.unroll(self.tycker)?;
-                let Some(Type::ValPi(pi)) = self.tycker.statics.normalized_at(classifier) else {
-                    unreachable!()
-                };
-                let ValPiBinder::Type(binder) = &pi.binder else { unreachable!() };
-                let binder = binder.clone();
-                let payload = binder.pattern.bind_argument(self.tycker, argument)?;
-                let body_payload = pattern.bind_argument(self.tycker, argument)?;
-                let assignments = std::iter::once((binder.witness, payload))
-                    .chain(self.pattern_witness(*pattern).map(|witness| (witness, body_payload)));
-                local = local.with_types(assignments);
-            }
-            | (ValBinder::Value(pattern), ValArgument::Value(argument)) => {
-                let argument = self.value(argument, caller, bindings)?;
-                let argument = self.share(argument, bindings)?;
-                self.bind(*pattern, argument, &mut local, bindings)?;
-            }
-            | _ => unreachable!("typed value application follows its binder sort"),
-        }
-        self.value(*body, &local, bindings)
-    }
-
     pub(super) fn project(
         &mut self, value: StaticValue, product: TypeId, position: usize, source: ValueId,
-        bindings: &mut Vec<Binding>,
     ) -> Result<StaticValue> {
         match &value.0.form {
             | ValueForm::Named(_, inner) | ValueForm::Package(ConsN(_, inner)) => {
-                self.project(inner.clone(), product, position, source, bindings)
+                self.project(inner.clone(), product, position, source)
             }
             | ValueForm::Product(fields) => Ok(fields[position].clone()),
-            | ValueForm::Runtime(_) => {
+            | form if value.is_opaque_runtime() => {
+                let _ = form;
                 let product = product.unroll(self.tycker)?;
                 let Some(Type::Prod(Prod(fields))) =
                     self.tycker.statics.normalized_at(product).cloned()
@@ -267,37 +329,39 @@ impl StaticElaborator<'_, '_> {
                     unreachable!("projection has a product receiver")
                 };
                 if self.purpose == Purpose::Inspect {
-                    return Ok(StaticValue::with_form(
+                    return Ok(self.make_value(
                         source,
                         fields[position],
-                        ValueForm::Runtime(source),
+                        0,
+                        ValueForm::RuntimeTerm(Rc::new(Cell::new(None))),
                     ));
                 }
-                let mut patterns = Vec::new();
+                let layout = ProductLayout { arity: fields.len() };
+                let mut patterns = Vec::with_capacity(fields.len());
                 let mut selected = None;
-                for (index, ty) in fields.into_iter().enumerate() {
+                let scope = self.current_scope();
+                let source_span = self.term_span(source);
+                for (index, field_ty) in fields.into_iter().enumerate() {
                     if index == position {
-                        let (pattern, value) = self.variable(Some(source), ty);
+                        let (pattern, proj_value) = self.variable(None, field_ty, scope);
                         patterns.push(pattern);
-                        selected = Some(value);
+                        selected = Some(proj_value);
                     } else {
-                        patterns.push(Alloc::alloc(
-                            self.tycker,
-                            ValuePattern::Hole(Hole),
-                            ty,
-                            &TyEnv::default(),
+                        patterns.push(self.alloc_core_vpat(
+                            Span::dummy(),
+                            ir::ValuePattern::Hole(Hole),
+                            field_ty,
                         ));
                     }
                 }
-                let binder = Alloc::alloc(
-                    self.tycker,
-                    ValuePattern::VCons(patterns),
+                let binder = self.alloc_core_vpat(
+                    Span::dummy(),
+                    ir::ValuePattern::VCons(IrVCons::new(patterns, layout)),
                     product,
-                    &TyEnv::default(),
                 );
                 let bindee = self.reify(&value)?;
-                bindings.push(Binding { binder, bindee });
-                Ok(selected.unwrap())
+                self.push_binding(CoreBinding { binder, bindee, span: source_span });
+                Ok(selected.expect("selected projection field"))
             }
             | _ => unreachable!("projection has a product receiver"),
         }

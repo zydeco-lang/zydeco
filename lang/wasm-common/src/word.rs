@@ -234,9 +234,6 @@ impl<'f> WordEmitter<'f> {
                     self.function.instruction(&WasmInstruction::I32Const(1));
                     self.function.instruction(&WasmInstruction::Call(self.alloc_function));
                 }
-                | SpareBox::Unused => {
-                    self.function.instruction(&WasmInstruction::I32Const(0));
-                }
             }
         }
     }

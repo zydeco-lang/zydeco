@@ -78,7 +78,7 @@ impl ExistentialProjectionPattern {
             | ss::TypePattern::Hole(_) => tycker
                 .statics
                 .abst_hints
-                .get(&binder.witness)
+                .get(binder.witness)
                 .map(|definition| tycker.def_name(definition).plain().into()),
         }
     }
@@ -123,7 +123,7 @@ impl ExistentialProjectionPattern {
                             tycker.transfer_builtin_role(binder.witness, skolem)?;
                             tycker.statics.existential_skolems.ensure(skolem);
                             body_env = body_env.with_skolem(skolem);
-                            let payload = Alloc::alloc(tycker, skolem, payload_kind, &body_env);
+                            let payload = Alloc::alloc(tycker, skolem, payload_kind, &());
                             opened.push(skolem);
                             (payload, Some(skolem))
                         }
@@ -158,13 +158,13 @@ impl ExistentialProjectionPattern {
     }
 
     fn wrap_type_pattern(
-        tycker: &mut Tycker<'_>, env: &ss::TyEnv, source: ss::TPatId, payload: ss::TPatId,
+        tycker: &mut Tycker<'_>, source: ss::TPatId, payload: ss::TPatId,
     ) -> ss::TPatId {
         match tycker.statics.tpats[&source].to_owned() {
             | ss::TypePattern::Named(ss::Named(field, inner)) => {
-                let inner = Self::wrap_type_pattern(tycker, env, inner, payload);
+                let inner = Self::wrap_type_pattern(tycker, inner, payload);
                 let annotation = tycker.statics.annotations_tpat[&source];
-                Alloc::alloc(tycker, ss::Named(field, inner), annotation, env)
+                Alloc::alloc(tycker, ss::Named(field, inner), annotation, &())
             }
             | ss::TypePattern::Hole(_) | ss::TypePattern::Var(_) => payload,
         }
@@ -203,12 +203,12 @@ impl ExistentialProjectionPattern {
                     .info;
                 if let (Some(skolem), (Some(definition), _)) =
                     (*skolem, payload_pattern.try_destruct_def(tycker))
-                    && tycker.statics.abst_hints.get(&skolem).is_none()
+                    && tycker.statics.abst_hints.get(skolem).is_none()
                 {
                     tycker.statics.abst_hints.insert_new(skolem, definition);
                 }
                 let full_pattern =
-                    Self::wrap_type_pattern(tycker, &opening.env, *source_pattern, payload_pattern);
+                    Self::wrap_type_pattern(tycker, *source_pattern, payload_pattern);
                 ss::StaticPatId::Type(full_pattern)
             }
         };
@@ -254,28 +254,14 @@ impl ExistentialProjectionPattern {
                 .enumerate()
                 .filter_map(|(index, slot)| (slot.field() == Some(&field)).then_some(index))
                 .collect::<Vec<_>>();
-            let value_candidates = FieldProjectionResolver::value_candidates(
-                tycker,
-                DeferredEnvType::with_environment(opening.body, &opening.env),
-                &field,
-                &[],
-                &mut std::collections::HashSet::new(),
-            )?;
-            let package_field_candidates = FieldProjectionResolver::package_candidates(
-                tycker,
-                DeferredEnvType::with_environment(opening.body, &opening.env),
-                &field,
-                &[],
-                false,
-                false,
-                &mut std::collections::HashSet::new(),
-            )?;
+            let field_index =
+                FieldProjectionResolver::field_index(tycker, opening.body, &opening.env)?;
+            let value_candidates =
+                field_index.value_fields.get(&field).map_or(&[][..], Vec::as_slice);
+            let package_field_candidates =
+                field_index.package_fields.get(&field).map_or(&[][..], Vec::as_slice);
 
-            match (
-                static_candidates.as_slice(),
-                value_candidates.as_slice(),
-                package_field_candidates.as_slice(),
-            ) {
+            match (static_candidates.as_slice(), value_candidates, package_field_candidates) {
                 | ([], [], []) => {
                     tycker.err(TyckError::MissingNamedField { field, found: expected })?
                 }
@@ -328,11 +314,11 @@ impl ExistentialProjectionPattern {
             body_patterns.push(deep);
         }
         let body_pattern = match body_patterns.len() {
-            | 0 => Alloc::alloc(tycker, ss::Hole, opening.body, &opening.env),
+            | 0 => Alloc::alloc(tycker, ss::Hole, opening.body, &()),
             | 1 => body_patterns[0],
             | _ => {
                 let patterns = ss::ConsN::from_vec(body_patterns).unwrap();
-                Alloc::alloc(tycker, ss::Alias(patterns), opening.body, &opening.env)
+                Alloc::alloc(tycker, ss::Alias(patterns), opening.body, &())
             }
         };
         let boundary_opened = opening.slots.iter().filter(|slot| slot.opens_abstract()).count();
@@ -344,7 +330,7 @@ impl ExistentialProjectionPattern {
         let package_pattern = if opening.slots.is_empty() {
             body_pattern
         } else {
-            Alloc::alloc(tycker, ss::ConsN(static_patterns, body_pattern), opening.expected, env)
+            Alloc::alloc(tycker, ss::ConsN(static_patterns, body_pattern), opening.expected, &())
         };
         if !opening.slots.is_empty() && boundary_opened + deep_opened > 0 {
             tycker
@@ -362,7 +348,7 @@ impl ExistentialProjectionPattern {
                 std::iter::once(package_pattern).chain(whole_patterns).collect(),
             )
             .unwrap();
-            Alloc::alloc(tycker, ss::Alias(patterns), opening.expected, env)
+            Alloc::alloc(tycker, ss::Alias(patterns), opening.expected, &())
         };
         Ok(TyEnvT::new(
             opening.env,
@@ -417,7 +403,7 @@ impl ExistentialProjectionPattern {
                         })
                         .collect::<Vec<_>>();
                     if members.is_empty() {
-                        patterns.push(Alloc::alloc(tycker, ss::Hole, component, env));
+                        patterns.push(Alloc::alloc(tycker, ss::Hole, component, &()));
                         continue;
                     }
                     let component = component.unroll(tycker)?.subst_env(tycker, env)?;
@@ -431,7 +417,7 @@ impl ExistentialProjectionPattern {
                         skolems,
                     )?);
                 }
-                Ok(Alloc::alloc(tycker, ss::ValuePattern::VCons(patterns), node, env))
+                Ok(Alloc::alloc(tycker, ss::ValuePattern::VCons(patterns), node, &()))
             }
             | ss::Type::Label(ss::Label(name, payload_ty)) => {
                 let (terminals, passing) =
@@ -466,10 +452,10 @@ impl ExistentialProjectionPattern {
                     )?);
                 }
                 let inner = match ss::ConsN::from_vec(members) {
-                    | Some(alias) => Alloc::alloc(tycker, ss::Alias(alias), payload_node, env),
+                    | Some(alias) => Alloc::alloc(tycker, ss::Alias(alias), payload_node, &()),
                     | None => unreachable!("a label node receives at least one member"),
                 };
-                Ok(Alloc::alloc(tycker, ss::Named(name, inner), node, env))
+                Ok(Alloc::alloc(tycker, ss::Named(name, inner), node, &()))
             }
             | ss::Type::Exists(_) | ss::Type::ManifestKind(_) => {
                 let mut nested = Self::open(tycker, env, node, skolems)?;
@@ -489,7 +475,7 @@ impl ExistentialProjectionPattern {
                     }
                 }
                 let body_pattern = if passing.is_empty() {
-                    Alloc::alloc(tycker, ss::Hole, nested.body, &nested.env)
+                    Alloc::alloc(tycker, ss::Hole, nested.body, &())
                 } else {
                     let body_node = nested.body.unroll(tycker)?.subst_env(tycker, &nested.env)?;
                     Self::deep_node_pattern(
@@ -505,7 +491,7 @@ impl ExistentialProjectionPattern {
                 let static_patterns: Vec<ss::StaticPatId> =
                     nested.slots.iter().map(ExistentialProjectionSlot::pattern).collect();
                 let pattern =
-                    Alloc::alloc(tycker, ss::ConsN(static_patterns, body_pattern), node, env);
+                    Alloc::alloc(tycker, ss::ConsN(static_patterns, body_pattern), node, &());
                 let boundary_opened =
                     nested.slots.iter().filter(|slot| slot.opens_abstract()).count();
                 if boundary_opened > 0 {
@@ -518,7 +504,7 @@ impl ExistentialProjectionPattern {
                 opened.extend(nested.opened);
                 Ok(pattern)
             }
-            | _ => Ok(Alloc::alloc(tycker, ss::Hole, node, env)),
+            | _ => Ok(Alloc::alloc(tycker, ss::Hole, node, &())),
         }
     }
 

@@ -1,10 +1,10 @@
 use crate::{CompileError, SourceFormatError};
 use ariadne::{Label, Report, ReportKind};
+use zydeco_foundation::{dense::DenseId, span::PathDisplay};
 use zydeco_session::source::{SourceLoadError, SourceParseError};
 use zydeco_session::{AnalysisError, ProgramAnalysis, SourceCaches, SourceGraph, TyckReport};
 use zydeco_statics::{TyckObservation, arena::StaticsArena, fmt as static_fmt, syntax as ss};
 use zydeco_syntax::{Pretty, SpanView, Ugly};
-use zydeco_utils::span::PathDisplay;
 
 /// Render source-aware failures at the CLI boundary.
 pub struct DiagnosticRenderer;
@@ -35,14 +35,6 @@ impl DiagnosticRenderer {
                 let mut cache = SourceCaches::graph(graph);
                 for error in error.iter() {
                     let _ = error.to_report(spans).eprint(&mut cache);
-                }
-            }
-            | CompileError::SpsLowering(failure) => {
-                let mut cache = SourceCaches::span_arena(&failure.spans);
-                for error in &failure.errors {
-                    let _ = error
-                        .to_report(&failure.spans, &failure.scoped, &failure.statics)
-                        .eprint(&mut cache);
                 }
             }
             | _ => eprintln!("{error}"),
@@ -134,7 +126,7 @@ impl DiagnosticRenderer {
                 metadata.arguments().iter().for_each(|argument| print!("{argument}"));
                 let formatter = static_fmt::Formatter::new(analysis.scoped(), statics);
                 match result {
-                    | ss::TermAnnId::Hole(fill) => println!(" (hole): {}", fill.concise()),
+                    | ss::TermAnnId::Hole(fill) => println!(" (hole): ?{}", fill.raw_u32()),
                     | ss::TermAnnId::Kind(kind) => {
                         println!(" (kind): {}", Self::pretty(&formatter, *kind))
                     }

@@ -1,14 +1,13 @@
 use super::*;
 use crate::representation::RepresentationStrategy;
 use std::fmt::Write as _;
-use zydeco_stackir::{SpsScheme, arena::Construct as _};
-use zydeco_statics::arena::StaticsScope;
+use zydeco_stackir::{SpsScheme, SpsScope, arena::Construct as _};
 
 mod depth;
 
 struct Fixture {
     arena: sk::SpsLowArena,
-    definitions: IdAllocator<StaticsScope>,
+    definitions: IdAllocator<SpsScope>,
 }
 
 impl Default for Fixture {
@@ -302,8 +301,6 @@ impl Fixture {
         Lowerer {
             allocator: IdAllocator::new(),
             arena: AssemblyArena::default(),
-            scoped: &ScopedArena::default(),
-            statics: &StaticsArena::default(),
             sps_low: &self.arena,
             root,
             unboxing,
@@ -318,9 +315,7 @@ impl Fixture {
     fn lower(
         program: &SpsLowProgram, native: bool, policy: RepresentationStrategy,
     ) -> AssemblyBuild {
-        let scoped = ScopedArena::default();
-        let statics = StaticsArena::default();
-        let mut lowerer = Lowerer::with_policy(&scoped, &statics, program, &policy);
+        let mut lowerer = Lowerer::with_policy(program, &policy);
         lowerer.native_frames = native;
         lowerer.run()
     }
@@ -390,8 +385,8 @@ impl Fixture {
     fn native(
         program: &SpsLowProgram, policy: RepresentationStrategy,
     ) -> crate::frames::NativeProgram {
-        use zydeco_utils::pass::CompilerPass as _;
-        crate::LoweringPipeline::new(&ScopedArena::default(), &StaticsArena::default())
+        use zydeco_foundation::pass::CompilerPass as _;
+        crate::LoweringPipeline::new()
             .with_representation(policy)
             .with_native_frames()
             .run(program)

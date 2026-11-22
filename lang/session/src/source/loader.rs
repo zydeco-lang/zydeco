@@ -8,16 +8,16 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
+use zydeco_foundation::{
+    prelude::{ArenaDense, FrozenArena},
+    span::FileMap,
+};
 use zydeco_surface::{
     diagnostic::Diagnostics,
     textual::{
         ImportSite, ImportTarget, ParseError, SourceInventory, SourceView, StrictParser,
         syntax as t,
     },
-};
-use zydeco_utils::{
-    prelude::{ArenaDense, FrozenArena},
-    span::FileMap,
 };
 
 pub(crate) trait SourceProvider {

@@ -77,6 +77,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ar_archive_writer"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "523e5e187fff36fcb8d1d19ccf0ca4ca43ec3d158316057f66dc6f72716bc5ec"
+dependencies = [
+ "object",
+]
+
+[[package]]
 name = "archery"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -196,11 +205,11 @@ dependencies = [
  "thiserror",
  "tokio",
  "tower-lsp",
+ "zydeco-foundation",
  "zydeco-session",
  "zydeco-statics",
  "zydeco-surface",
  "zydeco-syntax",
- "zydeco-utils",
 ]
 
 [[package]]
@@ -1248,6 +1257,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "object"
+version = "0.39.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e5a6c098c7a3b6547378093f5cc30bc54fd361ce711e05293a5cc589562739b"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1440,6 +1458,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "psm"
+version = "0.1.32"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4dcd034599e63b970727f70d79e02d62390a4a84f7c6b827c27c46d5ac3fa622"
+dependencies = [
+ "ar_archive_writer",
+ "cc",
 ]
 
 [[package]]
@@ -1713,12 +1741,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
 
 [[package]]
-name = "sequence_trie"
-version = "0.3.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ee22067b7ccd072eeb64454b9c6e1b33b61cd0d49e895fd48676a184580e0c3"
-
-[[package]]
 name = "serde"
 version = "1.0.229"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1759,15 +1781,6 @@ dependencies = [
  "serde",
  "serde_core",
  "zmij",
-]
-
-[[package]]
-name = "serde_plain"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ce1fc6db65a611022b23a0dec6975d63fb80a302cb3388835ff02c097258d50"
-dependencies = [
- "serde",
 ]
 
 [[package]]
@@ -1868,6 +1881,19 @@ name = "stable_deref_trait"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
+
+[[package]]
+name = "stacker"
+version = "0.1.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "707f49d46706bacf8a2b00d51dace3f9de527c13eec3778f570c411f89e69967"
+dependencies = [
+ "cc",
+ "cfg-if",
+ "libc",
+ "psm",
+ "windows-sys 0.61.2",
+]
 
 [[package]]
 name = "static_assertions"
@@ -2265,12 +2291,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
-name = "unindent"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7264e107f553ccae879d21fbea1d6724ac785e8c3bfc762137959b5802826ef3"
-
-[[package]]
 name = "url"
 version = "2.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2563,10 +2583,10 @@ dependencies = [
  "derive_more",
  "strum",
  "zydeco-assembly",
+ "zydeco-foundation",
  "zydeco-machine",
  "zydeco-stackir",
  "zydeco-syntax",
- "zydeco-utils",
 ]
 
 [[package]]
@@ -2575,16 +2595,13 @@ version = "0.3.0"
 dependencies = [
  "derive_more",
  "pretty",
- "rpds",
  "rustc-hash",
  "thiserror",
  "zydeco-derive",
+ "zydeco-foundation",
  "zydeco-machine",
  "zydeco-stackir",
- "zydeco-statics",
- "zydeco-surface",
  "zydeco-syntax",
- "zydeco-utils",
 ]
 
 [[package]]
@@ -2604,6 +2621,8 @@ dependencies = [
  "zydeco-amd64",
  "zydeco-assembly",
  "zydeco-dynamics",
+ "zydeco-foundation",
+ "zydeco-ir",
  "zydeco-machine",
  "zydeco-session",
  "zydeco-stackir",
@@ -2611,7 +2630,6 @@ dependencies = [
  "zydeco-surface",
  "zydeco-syntax",
  "zydeco-tui",
- "zydeco-utils",
  "zydeco-wasm-sps",
 ]
 
@@ -2634,15 +2652,38 @@ dependencies = [
  "libffi",
  "pretty",
  "rand",
- "rpds",
  "tempfile",
  "thiserror",
  "zydeco-derive",
+ "zydeco-foundation",
+ "zydeco-ir",
  "zydeco-machine",
- "zydeco-statics",
- "zydeco-surface",
  "zydeco-syntax",
- "zydeco-utils",
+]
+
+[[package]]
+name = "zydeco-foundation"
+version = "0.3.0"
+dependencies = [
+ "dashmap 6.2.1",
+ "derive_more",
+ "indexmap",
+ "la-arena",
+ "rustc-hash",
+ "stacker",
+ "thiserror",
+]
+
+[[package]]
+name = "zydeco-ir"
+version = "0.3.0"
+dependencies = [
+ "derive_more",
+ "pretty",
+ "rustc-hash",
+ "thiserror",
+ "zydeco-foundation",
+ "zydeco-syntax",
 ]
 
 [[package]]
@@ -2664,30 +2705,28 @@ dependencies = [
  "zydeco-amd64",
  "zydeco-assembly",
  "zydeco-dynamics",
+ "zydeco-foundation",
+ "zydeco-ir",
  "zydeco-stackir",
  "zydeco-statics",
  "zydeco-surface",
  "zydeco-syntax",
- "zydeco-utils",
 ]
 
 [[package]]
 name = "zydeco-stackir"
 version = "0.3.0"
 dependencies = [
- "ariadne",
  "derive_more",
  "indexmap",
  "pretty",
  "rustc-hash",
  "serde",
- "serde_plain",
  "thiserror",
  "zydeco-derive",
- "zydeco-statics",
- "zydeco-surface",
+ "zydeco-foundation",
+ "zydeco-ir",
  "zydeco-syntax",
- "zydeco-utils",
 ]
 
 [[package]]
@@ -2704,9 +2743,10 @@ dependencies = [
  "strum",
  "thiserror",
  "zydeco-derive",
+ "zydeco-foundation",
+ "zydeco-ir",
  "zydeco-surface",
  "zydeco-syntax",
- "zydeco-utils",
 ]
 
 [[package]]
@@ -2722,15 +2762,14 @@ dependencies = [
  "pretty",
  "regex",
  "rpds",
- "sequence_trie",
+ "rustc-hash",
  "serde",
  "strum",
  "thiserror",
- "unindent",
  "walkdir",
  "zydeco-derive",
+ "zydeco-foundation",
  "zydeco-syntax",
- "zydeco-utils",
 ]
 
 [[package]]
@@ -2744,8 +2783,8 @@ dependencies = [
  "strum",
  "thiserror",
  "zydeco-derive",
+ "zydeco-foundation",
  "zydeco-machine",
- "zydeco-utils",
 ]
 
 [[package]]
@@ -2758,6 +2797,7 @@ dependencies = [
  "walkdir",
  "zydeco-assembly",
  "zydeco-cli",
+ "zydeco-ir",
  "zydeco-machine",
  "zydeco-session",
  "zydeco-stackir",
@@ -2775,21 +2815,12 @@ dependencies = [
  "tempfile",
  "thiserror",
  "zydeco-dynamics",
+ "zydeco-foundation",
+ "zydeco-ir",
  "zydeco-session",
  "zydeco-statics",
  "zydeco-surface",
  "zydeco-syntax",
- "zydeco-utils",
-]
-
-[[package]]
-name = "zydeco-utils"
-version = "0.3.0"
-dependencies = [
- "derive_more",
- "la-arena",
- "rustc-hash",
- "thiserror",
 ]
 
 [[package]]

@@ -14,7 +14,7 @@ pub(super) struct PendingForeignImport {
     pub(super) value: ss::ValueId,
     pub(super) classifier: ss::TypeId,
     pub(super) target: ss::ForeignTarget,
-    pub(super) stack: rpds::VectorSync<TyckTask>,
+    pub(super) stack: std::sync::Arc<[TyckTask]>,
 }
 
 /// Validate and record the static attachment point of one foreign implementation.
@@ -42,7 +42,7 @@ impl BuiltinTypeResolution {
             | [] => tycker.err(TyckError::MissingBuiltinTypeRole { role: self.0 }),
             | [witness] => {
                 let kind = tycker.statics.annotations_abst[witness];
-                Ok(Alloc::alloc(tycker, *witness, kind, env))
+                Ok(Alloc::alloc(tycker, *witness, kind, &()))
             }
             | _ => tycker.err(TyckError::AmbiguousBuiltinTypeRole { role: self.0, witnesses }),
         }
@@ -64,58 +64,23 @@ pub(crate) struct IntrinsicStatics {
 }
 
 impl IntrinsicStatics {
-    pub(super) fn new<'db>(
-        db: &'db dyn crate::query::TyckDb, data: crate::query::ScopedData<'db>,
-        statics: &mut StaticsArena,
-    ) -> Self {
-        use crate::query::IntrinsicKey;
-        let mut materializer = IntrinsicMaterializer { db, data, statics };
-        Self {
-            vtype: materializer.kind(IntrinsicKey::VType),
-            ctype: materializer.kind(IntrinsicKey::CType),
-            thk: materializer.ty(IntrinsicKey::Thk),
-            ret: materializer.ty(IntrinsicKey::Ret),
-            unit: materializer.ty(IntrinsicKey::Unit),
-            primitives: ss::PrimitiveType::all()
-                .map(|primitive| (primitive, materializer.ty(IntrinsicKey::Primitive(primitive))))
-                .collect(),
-        }
-    }
-}
-
-struct IntrinsicMaterializer<'arena, 'db> {
-    db: &'db dyn crate::query::TyckDb,
-    data: crate::query::ScopedData<'db>,
-    statics: &'arena mut StaticsArena,
-}
-
-impl IntrinsicMaterializer<'_, '_> {
-    fn singleton(&self, key: crate::query::IntrinsicKey) -> crate::query::IntrinsicSingleton {
-        let key = crate::query::InternedIntrinsic::new(self.db, key);
-        crate::query::intrinsic_singleton(self.db, self.data, key)
-    }
-
-    fn kind(&mut self, key: crate::query::IntrinsicKey) -> KindId {
-        let crate::query::IntrinsicSingleton::Kind { id, kind } = self.singleton(key) else {
-            unreachable!("an intrinsic kind key produces a kind singleton")
-        };
-        self.statics.kinds_pre.insert_new(id, ss::Fillable::Done(kind));
-        id
-    }
-
-    fn ty(&mut self, key: crate::query::IntrinsicKey) -> TypeId {
-        let crate::query::IntrinsicSingleton::Type { kinds, ty: (ty, node), ann } =
-            self.singleton(key)
-        else {
-            unreachable!("an intrinsic type key produces a type singleton")
-        };
-        for (id, kind) in kinds {
-            self.statics.kinds_pre.insert_new(id, ss::Fillable::Done(kind));
-        }
-        self.statics.types_pre.insert_new(ty, ss::Fillable::Done(node), ann);
-        let env = self.statics.intern_env(&TyEnv::default());
-        self.statics.env_type.insert_new(ty, env);
-        ty
+    pub(super) fn new(statics: &mut StaticsArena) -> Self {
+        let vtype = statics.kinds_pre.alloc(ss::Fillable::Done(ss::Kind::VType(ss::VType)));
+        let ctype = statics.kinds_pre.alloc(ss::Fillable::Done(ss::Kind::CType(ss::CType)));
+        let thk_kind = statics.kinds_pre.alloc(ss::Fillable::Done(ss::Arrow(ctype, vtype).into()));
+        let thk = statics.types_pre.alloc(ss::Fillable::Done(ss::ThkTy.into()), thk_kind);
+        let ret_kind = statics.kinds_pre.alloc(ss::Fillable::Done(ss::Arrow(vtype, ctype).into()));
+        let ret = statics.types_pre.alloc(ss::Fillable::Done(ss::RetTy.into()), ret_kind);
+        let unit = statics.types_pre.alloc(ss::Fillable::Done(ss::UnitTy.into()), vtype);
+        let primitives = ss::PrimitiveType::all()
+            .map(|primitive| {
+                let ty = statics
+                    .types_pre
+                    .alloc(ss::Fillable::Done(ss::PrimitiveTy(primitive).into()), vtype);
+                (primitive, ty)
+            })
+            .collect();
+        Self { vtype, ctype, thk, ret, unit, primitives }
     }
 }
 
@@ -148,10 +113,10 @@ impl InternalTerm {
                 let kind = ss::VType.build(tycker, env);
                 let variables = ["left", "right"].map(|name| {
                     let definition =
-                        Alloc::alloc(tycker, ss::VarName(name.into()), AnnId::Type(domain), &());
+                        Alloc::alloc(tycker, ss::VarName::new(name), AnnId::Type(domain), &());
                     let binder =
-                        Alloc::alloc(tycker, ss::ValuePattern::Var(definition), domain, env);
-                    let value = Alloc::alloc(tycker, ss::Value::Var(definition), domain, env);
+                        Alloc::alloc(tycker, ss::ValuePattern::Var(definition), domain, &());
+                    let value = Alloc::alloc(tycker, ss::Value::Var(definition), domain, &());
                     (binder, value)
                 });
                 let mut body = Alloc::alloc(
@@ -161,7 +126,7 @@ impl InternalTerm {
                         operands: variables.map(|(_, value)| value),
                     }),
                     domain,
-                    env,
+                    &(),
                 );
                 tycker.statics.terms.record(self.1, ss::TermId::Value(body));
                 let mut codomain = domain;
@@ -174,27 +139,21 @@ impl InternalTerm {
                         }),
                         codomain,
                     };
-                    codomain = Alloc::alloc(tycker, classifier, kind, env);
+                    codomain = Alloc::alloc(tycker, classifier, kind, &());
                     body = Alloc::alloc(
                         tycker,
                         ss::Abs(ss::ValBinder::Value(binder), body),
                         codomain,
-                        env,
+                        &(),
                     );
                 }
                 TermAnnId::Value(body, codomain)
             }
             | su::Internal::OS => self.builtin_type(tycker, env, ss::BuiltinTypeRole::OS)?,
             | su::Internal::Monad | su::Internal::Algebra => {
-                let term = crate::query::InternedTerm::new(tycker.db, self.1);
-                let env_data = crate::query::EnvData::new(tycker.db, env.clone());
-                if let Some(error) =
-                    crate::query::internal_judgment(tycker.db, tycker.data, term, env_data)
-                {
-                    tycker.err(error)?
-                } else {
-                    unreachable!("intrinsic rejections are query-produced")
-                }
+                tycker.err(TyckError::Expressivity(
+                    "`Monad` and `Algebra` are ordinary library bindings, not intrinsic terms",
+                ))?
             }
         };
         self.reconcile(tycker, synthesized, switch)
@@ -310,19 +269,19 @@ impl ForeignAttachment {
             value,
             classifier,
             target: self.target,
-            stack: tycker.tasks.clone(),
+            stack: std::sync::Arc::from(tycker.tasks.as_slice()),
         });
         tycker
             .statics
             .fills
             .iter()
             .filter_map(|(fill, site)| {
-                (*site == ss::InferenceSite::Term(self.implementation)).then_some(*fill)
+                (*site == ss::InferenceSite::Term(self.implementation)).then_some(fill)
             })
             .collect::<Vec<_>>()
             .into_iter()
             .for_each(|fill| {
-                tycker.statics.fill_hints.remove(&fill);
+                tycker.statics.fill_hints.remove(fill);
             });
         Ok(())
     }
@@ -332,8 +291,8 @@ impl Tycker<'_> {
     /// Peel named wrappers and inference fills to a primitive type, if the
     /// type resolves to one.
     pub(super) fn primitive_type_of(&self, ty: ss::TypeId) -> Option<ss::PrimitiveType> {
-        match self.statics.types_pre.get(&ty)?.to_owned() {
-            | ss::Fillable::Fill(fill) => match self.statics.solus.get(&fill) {
+        match self.statics.types_pre.get(ty)?.to_owned() {
+            | ss::Fillable::Fill(fill) => match self.statics.solus.get(fill) {
                 | Some(ss::AnnId::Type(solution)) => self.primitive_type_of(*solution),
                 | _ => None,
             },

@@ -6,6 +6,10 @@ use std::{
 use tower_lsp::lsp_types::{
     SemanticToken, SemanticTokenModifier, SemanticTokenType, SemanticTokensLegend,
 };
+use zydeco_foundation::{
+    arena::ArenaAccess,
+    span::{FileMap, Span},
+};
 use zydeco_statics::{
     arena::StaticsArena,
     syntax::{AnnId, Kind, TermAnnId},
@@ -18,10 +22,6 @@ use zydeco_surface::{
     textual::{LexicalRole, LexicalTokens, syntax::SpanArena},
 };
 use zydeco_syntax::{Abs, Alias, Ann, Ctor, Label, Named, Proj, ProjectionPattern};
-use zydeco_utils::{
-    arena::ArenaAccess,
-    span::{FileMap, Span},
-};
 
 /// Compiler-backed semantic highlighting for one source document.
 pub(crate) struct SemanticHighlighter;
@@ -231,7 +231,7 @@ impl<'source> SemanticDocument<'source> {
         let parameters = ParameterDefinitions::new(scoped).collect();
         let classifier = NameClassifier::new(statics, &parameters);
         scoped.defs.iter().for_each(|(definition, name)| {
-            let style = classifier.classify(*definition, name.0.as_str());
+            let style = classifier.classify(*definition, name.as_str());
             (!scoped.is_prelude_definition(*definition))
                 .then(|| Self::entity_span(spans, scoped, (*definition).into()))
                 .flatten()
@@ -291,9 +291,9 @@ impl<'source> SemanticDocument<'source> {
         scoped.terms.iter().for_each(|(term, body)| {
             let field = match body {
                 | Term::Named(Named(field, _)) | Term::Label(Label(field, _)) => {
-                    Some((field.0.as_str(), FieldOccurrence::First))
+                    Some((field.as_str(), FieldOccurrence::First))
                 }
-                | Term::Proj(Proj(_, field)) => Some((field.0.as_str(), FieldOccurrence::Last)),
+                | Term::Proj(Proj(_, field)) => Some((field.as_str(), FieldOccurrence::Last)),
                 | _ => None,
             };
             field.into_iter().for_each(|(field, occurrence)| {
@@ -319,7 +319,7 @@ impl<'source> SemanticDocument<'source> {
                 })
                 .into_iter()
                 .for_each(|within| {
-                    self.overlay_field(within, field.0.as_str(), FieldOccurrence::First)
+                    self.overlay_field(within, field.as_str(), FieldOccurrence::First)
                 });
         });
         self

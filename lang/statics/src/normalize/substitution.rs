@@ -5,12 +5,7 @@ use crate::fold::{TypeFolder, TypeRebuilder, TypeScope};
 
 impl TypeId {
     pub fn subst_env(&self, tycker: &mut Tycker<'_>, env: &TyEnv) -> Result<TypeId> {
-        LexicalSubstitution { env }.fold_type(tycker, *self)
-    }
-    pub fn subst(&self, tycker: &mut Tycker<'_>, var: DefId, with: TypeId) -> Result<TypeId> {
-        let scope = tycker.statics.env_type[self].skolem_scope().clone();
-        let env = TyEnv::from_iter([(var, with.into())]).with_skolem_scope(scope);
-        self.subst_env(tycker, &env)
+        LexicalSubstitution { env, memo: Default::default() }.fold_type(tycker, *self)
     }
 }
 
@@ -25,36 +20,59 @@ impl TypeId {
     pub fn subst_absts(
         &self, tycker: &mut Tycker<'_>, assignments: &[(AbstId, TypeId)],
     ) -> Result<TypeId> {
-        AbstractSubstitution { assignments }.fold_type(tycker, *self)
+        AbstractSubstitution::new(assignments).fold_type(tycker, *self)
     }
 }
 
 struct LexicalSubstitution<'a> {
     env: &'a TyEnv,
+    memo: rustc_hash::FxHashMap<TypeId, TypeId>,
 }
 
 impl TypeFolder for LexicalSubstitution<'_> {
     fn fold_type(&mut self, tycker: &mut Tycker<'_>, source: TypeId) -> Result<TypeId> {
+        if !tycker.statics.types_pre.summary(source).intersects(
+            TypeSummary::HAS_FILL
+                .union(TypeSummary::HAS_FREE_VAR)
+                .union(TypeSummary::HAS_PROJ)
+                .union(TypeSummary::HAS_BETA_OR_SEAL),
+        ) {
+            return Ok(source);
+        }
+        if let Some(&cached) = self.memo.get(&source) {
+            return Ok(cached);
+        }
         let kind = tycker.statics.type_kind(source);
-        let target = match tycker.statics.types_pre[&source].clone() {
-            | Fillable::Fill(fill) => match tycker.statics.solus.get(&fill).copied() {
-                | Some(AnnId::Type(solution)) => self.fold_type(tycker, solution)?,
-                | Some(_) => tycker.err(TyckError::SortMismatch)?,
-                | None => source,
-            },
-            | Fillable::Done(Type::Var(definition)) => match self.env.get(&definition) {
-                | Some(AnnId::Type(replacement)) => *replacement,
-                | Some(_) => tycker.err(TyckError::SortMismatch)?,
-                | None => source,
-            },
-            | Fillable::Done(node) => self.fold_children(tycker, source, node, kind, self.env)?,
-        };
-        target.normalize(tycker, tycker.statics.type_kind(target))
+        let target = zydeco_foundation::stack::maybe_grow(|| {
+            match tycker.statics.types_pre[&source].clone() {
+                | Fillable::Fill(fill) => match tycker.statics.solus.get(fill).copied() {
+                    | Some(AnnId::Type(solution)) => self.fold_type(tycker, solution),
+                    | Some(_) => tycker.err(TyckError::SortMismatch),
+                    | None => Ok(source),
+                },
+                | Fillable::Done(Type::Var(definition)) => match self.env.get(&definition) {
+                    | Some(AnnId::Type(replacement)) => Ok(*replacement),
+                    | Some(_) => tycker.err(TyckError::SortMismatch),
+                    | None => Ok(source),
+                },
+                | Fillable::Done(node) => self.fold_children(tycker, source, node, kind),
+            }
+        })?;
+        let res = target.normalize(tycker, tycker.statics.type_kind(target))?;
+        self.memo.insert(source, res);
+        Ok(res)
     }
 }
 
 struct AbstractSubstitution<'a> {
     assignments: &'a [(AbstId, TypeId)],
+    memo: rustc_hash::FxHashMap<TypeId, TypeId>,
+}
+
+impl<'a> AbstractSubstitution<'a> {
+    fn new(assignments: &'a [(AbstId, TypeId)]) -> Self {
+        Self { assignments, memo: Default::default() }
+    }
 }
 
 impl TypeFolder for AbstractSubstitution<'_> {
@@ -62,40 +80,53 @@ impl TypeFolder for AbstractSubstitution<'_> {
         if self.assignments.is_empty() {
             return Ok(source);
         }
+        if !tycker.statics.types_pre.summary(source).intersects(
+            TypeSummary::HAS_FILL
+                .union(TypeSummary::HAS_FREE_ABST)
+                .union(TypeSummary::HAS_PROJ)
+                .union(TypeSummary::HAS_BETA_OR_SEAL),
+        ) {
+            return Ok(source);
+        }
+        if let Some(&cached) = self.memo.get(&source) {
+            return Ok(cached);
+        }
         let kind = tycker.statics.type_kind(source);
-        let env = tycker.statics.env_at(source);
-        let target = match tycker.statics.types_pre[&source].clone() {
-            | Fillable::Fill(fill) => match tycker.statics.solus.get(&fill).copied() {
-                | Some(AnnId::Type(solution)) => self.fold_type(tycker, solution)?,
-                | Some(_) => tycker.err(TyckError::SortMismatch)?,
-                | None => source,
-            },
-            | Fillable::Done(Type::Abst(witness)) => {
-                match self.assignments.iter().position(|(bound, _)| *bound == witness) {
-                    | Some(position) => {
-                        AbstractSubstitution { assignments: &self.assignments[position + 1..] }
-                            .fold_type(tycker, self.assignments[position].1)?
+        let target = zydeco_foundation::stack::maybe_grow(|| {
+            match tycker.statics.types_pre[&source].clone() {
+                | Fillable::Fill(fill) => match tycker.statics.solus.get(fill).copied() {
+                    | Some(AnnId::Type(solution)) => self.fold_type(tycker, solution),
+                    | Some(_) => tycker.err(TyckError::SortMismatch),
+                    | None => Ok(source),
+                },
+                | Fillable::Done(Type::Abst(witness)) => {
+                    match self.assignments.iter().position(|(bound, _)| *bound == witness) {
+                        | Some(position) => {
+                            AbstractSubstitution::new(&self.assignments[position + 1..])
+                                .fold_type(tycker, self.assignments[position].1)
+                        }
+                        | None => Ok(source),
                     }
-                    | None => source,
                 }
-            }
-            | Fillable::Done(Type::Proj(Proj(head, name))) => {
-                let target = self.fold_type(tycker, head)?;
-                match tycker.type_filled(&target)? {
-                    | Type::Named(Named(found, inner)) if found == name => inner,
-                    | _ => TypeRebuilder::rebuild(
-                        tycker,
-                        source,
-                        Proj(target, name).into(),
-                        kind,
-                        &env,
-                        target != head,
-                    ),
+                | Fillable::Done(Type::Proj(Proj(head, name))) => {
+                    let target = self.fold_type(tycker, head)?;
+                    match tycker.type_filled(&target)? {
+                        | Type::Named(Named(found, inner)) if found == name => Ok(inner),
+                        | _ => Ok(TypeRebuilder::rebuild(
+                            tycker,
+                            source,
+                            Proj(target, name).into(),
+                            kind,
+                            target != head,
+                        )),
+                    }
                 }
+                | Fillable::Done(node) => self.fold_children(tycker, source, node, kind),
             }
-            | Fillable::Done(node) => self.fold_children(tycker, source, node, kind, &env)?,
-        };
-        target.normalize(tycker, tycker.statics.type_kind(target))
+        })?;
+        let res = target.normalize(tycker, tycker.statics.type_kind(target))?;
+        self.memo.insert(source, res);
+        Ok(res)
     }
 
     fn fold_body(
@@ -104,12 +135,15 @@ impl TypeFolder for AbstractSubstitution<'_> {
         // Opening a telescope substitutes its body after removing the binder.
         // A complete quantified type nested in an argument still binds its
         // own witness, even when a shared source node reuses that identity.
+        if !self.assignments.iter().any(|(witness, _)| scope.binds(*witness)) {
+            return self.fold_type(tycker, source);
+        }
         let assignments = self
             .assignments
             .iter()
             .copied()
             .filter(|(witness, _)| !scope.binds(*witness))
             .collect::<Vec<_>>();
-        AbstractSubstitution { assignments: &assignments }.fold_type(tycker, source)
+        AbstractSubstitution::new(&assignments).fold_type(tycker, source)
     }
 }

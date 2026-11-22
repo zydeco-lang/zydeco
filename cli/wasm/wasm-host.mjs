@@ -406,27 +406,6 @@ class ZydecoHost {
     for (const [name, width, signed] of integerTypes) {
       const decode = (word) =>
         signed ? this.words.decodeSigned(word, width) : this.words.decodeUnsigned(word, width);
-      const encode = (value, spare) => signed
-        ? this.words.encodeSigned(value, width, spare)
-        : this.words.encodeUnsigned(value, width, spare);
-      const arithmetic = {
-        add: (left, right) => left + right,
-        sub: (left, right) => left - right,
-        mul: (left, right) => left * right,
-        div: (left, right) => {
-          if (right === 0n) ZydecoHost.fail("integer division by zero");
-          return left / right;
-        },
-        mod: (left, right) => {
-          if (right === 0n) ZydecoHost.fail("integer remainder by zero");
-          return left % right;
-        },
-      };
-      for (const [operation, evaluate] of Object.entries(arithmetic)) {
-        functions.set(`${name}_${operation}`, (first, second, spare) =>
-          encode(evaluate(decode(first), decode(second)), spare),
-        );
-      }
       functions.set(`${name}_to_string`, (word) => this.values.string(decode(word).toString()));
       const storageWidth = width === 63 ? 64 : width;
       this.installScalarMemory(functions, name, storageWidth);
@@ -450,17 +429,6 @@ class ZydecoHost {
     ];
     for (const [name, width] of floats) {
       const decode = (word) => this.decodeFloat(word, width);
-      const arithmetic = {
-        add: (left, right) => left + right,
-        sub: (left, right) => left - right,
-        mul: (left, right) => left * right,
-        div: (left, right) => left / right,
-      };
-      for (const [operation, evaluate] of Object.entries(arithmetic)) {
-        functions.set(`${name}_${operation}`, (first, second, spare) =>
-          this.encodeFloat(evaluate(decode(first), decode(second)), width, spare),
-        );
-      }
       functions.set(`${name}_to_string`, (word) => this.values.string(FloatText.render(decode(word), width)));
       // Preserve the IEEE payload, including NaNs, without converting through a JS Number.
       this.installScalarMemory(functions, name, width);
@@ -490,15 +458,6 @@ class ZydecoHost {
     }
     this.floatScratch.setBigUint64(0, this.words.loadBits(word), true);
     return this.floatScratch.getFloat64(0, true);
-  }
-
-  encodeFloat(value, width, spare) {
-    if (width === 32) {
-      this.floatScratch.setFloat32(0, value, true);
-      return RuntimeWords.immediateUnsigned(BigInt(this.floatScratch.getUint32(0, true)));
-    }
-    this.floatScratch.setFloat64(0, value, true);
-    return this.words.storeBits(spare, this.floatScratch.getBigUint64(0, true));
   }
 
   installText(functions) {

@@ -5,7 +5,7 @@
 
 use crate::*;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use zydeco_utils::arena::ArenaAccess;
+use zydeco_foundation::arena::ArenaAccess;
 
 mod scope;
 mod substitution;

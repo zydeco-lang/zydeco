@@ -16,49 +16,32 @@ impl PatternChecker<'_> {
             | Switch::Ana(AnnId::Type(expected)) => {
                 self.check_named_ana_type(tycker, name, inner, expected, skolems)
             }
-            | Switch::Ana(AnnId::Set) => {
-                let input = crate::query::InternedPatNamedAna::new(
-                    tycker.db,
-                    crate::query::PatNamedAnaArm::SortMismatch,
-                );
-                let outcome = tycker.judge(self.inner, input, crate::query::pat_named_ana_judgment);
-                let crate::query::PatNamedAnaOutcome::Error(error) = outcome else {
-                    unreachable!("the set arm of named pattern judgments is query-produced")
-                };
-                tycker.err(error)
-            }
+            | Switch::Ana(AnnId::Set) => tycker.err(TyckError::SortMismatch),
         }
     }
 
     /// Synthesize a named pattern: a static inner pattern names a type
-    /// pattern through the judgment, a value inner pattern a labeled value.
+    /// pattern, a value inner pattern a labeled value.
     fn check_named_syn(
         &self, tycker: &mut Tycker<'_>, name: FieldName, inner: su::PatId, skolems: PatternSkolems,
     ) -> Result<CheckedPattern> {
         let checked =
             self.mk(inner).tyck(tycker, PatternAction::syn().with_skolems(skolems.clone()))?;
         match checked.annotation {
-            | inner_out @ (PatAnnId::Kind(_) | PatAnnId::Type(_, _)) => {
-                let inner_interned = crate::query::InternedPatAnn::new(tycker.db, inner_out);
-                match tycker.judge(self.inner, inner_interned, crate::query::pat_named_syn_judgment)
-                {
-                    | crate::query::PatNamedSynOutcome::Type { kind_id, kind, named_id, named } => {
-                        tycker.statics.kinds_pre.insert_new(kind_id, ss::Fillable::Done(kind));
-                        tycker.statics.tpats.insert_new(named_id, named);
-                        tycker.statics.annotations_tpat.insert_new(named_id, kind_id);
-                        tycker.statics.env_tpat.insert_new(named_id, self.info.clone());
-                        Ok(checked.with_annotation(PatAnnId::Type(named_id, kind_id)))
-                    }
-                    | crate::query::PatNamedSynOutcome::Error(error) => tycker.err(error),
-                }
+            | PatAnnId::Type(inner, inner_kind) => {
+                let kind_id = Alloc::alloc(tycker, ss::Label(name, inner_kind), (), &());
+                let named_id = Alloc::alloc(tycker, ss::Named(name, inner), kind_id, &());
+                Ok(checked.with_annotation(PatAnnId::Type(named_id, kind_id)))
+            }
+            | PatAnnId::Kind(_) => {
+                tycker.err(TyckError::Expressivity("named kind components are not supported"))
             }
             | PatAnnId::Value(inner, inner_ty) => {
                 let inner_kind = tycker.statics.type_kind(inner_ty);
                 let vtype = ss::VType.build(tycker, &self.info);
                 Lub::lub(vtype, inner_kind, tycker)?;
-                let named_ty =
-                    Alloc::alloc(tycker, ss::Label(name.clone(), inner_ty), vtype, &self.info);
-                let named = Alloc::alloc(tycker, ss::Named(name, inner), named_ty, &self.info);
+                let named_ty = Alloc::alloc(tycker, ss::Label(name, inner_ty), vtype, &());
+                let named = Alloc::alloc(tycker, ss::Named(name, inner), named_ty, &());
                 Ok(checked.with_annotation(PatAnnId::Value(named, named_ty)))
             }
         }
@@ -75,27 +58,14 @@ impl PatternChecker<'_> {
             tycker.err(TyckError::KindMismatch)?
         };
         if name != expected_name {
-            tycker.err(TyckError::NamedLabelMismatch {
-                expected: expected_name,
-                found: name.clone(),
-            })?
+            tycker.err(TyckError::NamedLabelMismatch { expected: expected_name, found: name })?
         }
         let checked = self
             .mk(inner)
             .tyck(tycker, PatternAction::ana(inner_kind.into()).with_skolems(skolems.clone()))?;
         let (inner, _) = checked.try_as_type(tycker, TyckError::SortMismatch)?;
-        let input = crate::query::InternedPatNamedAna::new(
-            tycker.db,
-            crate::query::PatNamedAnaArm::Kind { name, inner, expected },
-        );
-        let outcome = tycker.judge(self.inner, input, crate::query::pat_named_ana_judgment);
-        let crate::query::PatNamedAnaOutcome::Type { id, pat, kd } = outcome else {
-            unreachable!("the kind arm of named pattern judgments is query-produced")
-        };
-        tycker.statics.tpats.insert_new(id, pat);
-        tycker.statics.annotations_tpat.insert_new(id, kd);
-        tycker.statics.env_tpat.insert_new(id, self.info.clone());
-        Ok(checked.with_annotation(PatAnnId::Type(id, kd)))
+        let id = Alloc::alloc(tycker, ss::Named(name, inner), expected, &());
+        Ok(checked.with_annotation(PatAnnId::Type(id, expected)))
     }
 
     /// Check a named value pattern against a named value type.
@@ -113,27 +83,14 @@ impl PatternChecker<'_> {
             })?
         };
         if name != expected_name {
-            tycker.err(TyckError::NamedLabelMismatch {
-                expected: expected_name,
-                found: name.clone(),
-            })?
+            tycker.err(TyckError::NamedLabelMismatch { expected: expected_name, found: name })?
         }
         let checked = self
             .mk(inner)
             .tyck(tycker, PatternAction::ana(inner_ty.into()).with_skolems(skolems.clone()))?;
         let (inner, _) = checked.try_as_value(tycker, TyckError::SortMismatch)?;
-        let input = crate::query::InternedPatNamedAna::new(
-            tycker.db,
-            crate::query::PatNamedAnaArm::Type { name, inner, expected },
-        );
-        let outcome = tycker.judge(self.inner, input, crate::query::pat_named_ana_judgment);
-        let crate::query::PatNamedAnaOutcome::Value { id, pat, ty } = outcome else {
-            unreachable!("the type arm of named pattern judgments is query-produced")
-        };
-        tycker.statics.vpats.insert_new(id, pat);
-        tycker.statics.annotations_vpat.insert_new(id, ty);
-        tycker.statics.env_vpat.insert_new(id, self.info.clone());
-        Ok(checked.with_annotation(PatAnnId::Value(id, ty)))
+        let id = Alloc::alloc(tycker, ss::Named(name, inner), expected, &());
+        Ok(checked.with_annotation(PatAnnId::Value(id, expected)))
     }
 
     pub(super) fn check_project<'db>(
@@ -141,15 +98,7 @@ impl PatternChecker<'_> {
         skolems: PatternSkolems,
     ) -> Result<CheckedPattern> {
         Ok(match switch {
-            | Switch::Syn => {
-                let pat = crate::query::InternedPat::new(tycker.db, self.inner);
-                let Some(error) =
-                    crate::query::pat_project_syn_judgment(tycker.db, tycker.data, pat)
-                else {
-                    unreachable!("projection pattern judgments are query-produced")
-                };
-                tycker.err(error)?
-            }
+            | Switch::Syn => tycker.err(TyckError::MissingAnnotation)?,
             | Switch::Ana(AnnId::Kind(expected)) => {
                 let candidate = FieldProjectionResolver::r#type(tycker, expected, &field)?;
                 let checked = self.mk(inner).tyck(

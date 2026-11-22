@@ -1,79 +1,8 @@
 use super::{check::FragmentProgram, syntax::*};
-use crate::protocol::SourceProtocols;
-use crate::scheme::SpsScheme;
-use ariadne::{Label, Report, ReportKind};
+use crate::{ir, scheme::SpsScheme};
 use derive_more::{AsMut, AsRef};
-use std::ops::Range;
-use thiserror::Error;
-use zydeco_statics::{
-    BuiltinPackagePlan, BuiltinPackagePlanError, BuiltinPackageValue, arena::StaticsArena,
-    syntax as ss,
-};
-use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
-use zydeco_utils::{
-    fold::Explicit,
-    pass::CompilerPass,
-    prelude::ArenaAccess,
-    span::{PathDisplay, Span, internal_ariadne_span},
-};
-
-/// An internal invariant failure in a purportedly residual typed program.
-/// Source-level static-elimination failures are reported by the shared checker.
-#[derive(Clone, Debug, Error)]
-pub enum SpsLoweringError {
-    #[error("internal compiler error: a static value operation survived static elimination")]
-    ResidualStaticValue { value: ss::ValueId },
-}
-
-impl SpsLoweringError {
-    /// The typed node blamed for the failure.
-    fn value(&self) -> ss::ValueId {
-        match self {
-            | Self::ResidualStaticValue { value } => *value,
-        }
-    }
-
-    /// Primary source span of this lowering failure.
-    pub fn primary_span(
-        &self, spans: &SpanArena, scoped: &ScopedArena, statics: &StaticsArena,
-    ) -> Span {
-        statics
-            .terms
-            .source(&ss::TermId::Value(self.value()))
-            .map(|term| *zydeco_syntax::span_via_back(spans, scoped, term))
-            .unwrap_or_else(Span::dummy)
-    }
-
-    /// Create an Ariadne report for this lowering error.
-    ///
-    /// `spans` resolves the span into a file and byte range, while `scoped`
-    /// and `statics` render the blamed term.
-    pub fn to_report(
-        &self, spans: &SpanArena, scoped: &ScopedArena, statics: &StaticsArena,
-    ) -> Report<'static, (PathDisplay, Range<usize>)> {
-        let span = self.primary_span(spans, scoped, statics);
-        let (file_path, range) = spans
-            .source_map()
-            .and_then(|map| map.ariadne_range(span))
-            .unwrap_or_else(internal_ariadne_span);
-        let formatter = zydeco_statics::fmt::Formatter::new(scoped, statics);
-        let term = self.value().ugly(&formatter);
-        let label = "this value should have been eliminated before lowering";
-        Report::build(ReportKind::Error, (file_path.clone(), range.clone()))
-            .with_message(self.to_string())
-            .with_label(Label::new((file_path, range)).with_message(format!("{label}:\n{term}")))
-            .finish()
-    }
-}
-
-/// Errors of lowering one executable root applied to the host Builtin package.
-#[derive(Debug, Error)]
-pub enum BuiltinRootLowerError {
-    #[error(transparent)]
-    Package(#[from] BuiltinPackagePlanError),
-    #[error("static elimination left an invalid residual program")]
-    Sps(Vec<SpsLoweringError>),
-}
+use std::convert::Infallible;
+use zydeco_foundation::{dense::SecondaryMap, fold::Explicit, pass::CompilerPass};
 
 mod builtin;
 mod fold;
@@ -85,11 +14,11 @@ use fold::LoweringFolder;
 struct ValueBinding {
     binder: VPatId,
     bindee: ValueId,
-    site: Option<ss::TermId>,
+    site: Option<ir::TermId>,
 }
 
 impl ValueBinding {
-    fn bind(self, lo: &mut Lowerer, tail: CompuId) -> CompuId {
+    fn bind(self, lo: &mut Lowerer<'_>, tail: CompuId) -> CompuId {
         let Self { binder, bindee, site } = self;
         if let ValuePattern::Ctor(Ctor(ctor, _)) = &lo.arena.inner.vpats[&binder] {
             // Static value elimination can leave an irrefutable constructor binder.
@@ -138,7 +67,7 @@ impl<T> ValuePlan<T> {
 }
 
 impl<T> ValuePlan<T> {
-    fn bind(self, lo: &mut Lowerer, tail: CompuId) -> CompuId {
+    fn bind(self, lo: &mut Lowerer<'_>, tail: CompuId) -> CompuId {
         self.steps.into_iter().rev().fold(tail, |tail, step| match step {
             | ValueStep::Bind(binding) => binding.bind(lo, tail),
         })
@@ -153,61 +82,39 @@ enum Pushed {
     Named { frame: StackId, ambient: StackId },
 }
 
-/// Stateful lowering pass from typed syntax into stack IR.
+/// Stateful lowering pass from residual [`ir::CoreProgram`] into stack IR.
 #[derive(AsRef, AsMut)]
 pub struct Lowerer<'a> {
     #[as_ref]
     #[as_mut]
     pub arena: SpsArena,
-    pub scoped: &'a ScopedArena,
-    pub statics: &'a StaticsArena,
-    /// Internal residual invariant failures collected during lowering.
-    lower_errors: Vec<SpsLoweringError>,
-    protocols: SourceProtocols<'a>,
+    pub core: &'a ir::CoreProgram,
+    var_map: SecondaryMap<ir::VarId, DefId>,
     /// Where this lowering names the current stack.
     scheme: SpsScheme,
 }
 
 /// Lowering pass for one checked computation root.
-pub struct RootLowerer<'a> {
-    pub scoped: &'a ScopedArena,
-    pub statics: &'a StaticsArena,
-    pub scheme: SpsScheme,
-}
-
-/// Lowering pass for a package-dependent root applied to the host Builtin package.
-pub struct BuiltinRootLowerer<'a> {
-    pub scoped: &'a ScopedArena,
-    pub statics: &'a StaticsArena,
-    pub signature: ss::PackPi,
+pub struct RootLowerer {
     pub scheme: SpsScheme,
 }
 
 impl<'a> Lowerer<'a> {
-    /// Create a structural lowerer with fresh stack arenas.
-    pub fn new(scoped: &'a ScopedArena, statics: &'a StaticsArena, scheme: SpsScheme) -> Self {
-        let arena = SpsArena::default();
-        let lower_errors = Vec::new();
-        Self {
-            arena,
-            scoped,
-            statics,
-            lower_errors,
-            protocols: SourceProtocols::new(statics),
-            scheme,
+    /// Create a structural lowerer with fresh stack arenas seeded from `core`.
+    pub fn new(core: &'a ir::CoreProgram, scheme: SpsScheme) -> Self {
+        let mut arena = SpsArena::default();
+        let mut var_map = SecondaryMap::with_capacity(core.vars.len());
+        for (var, &name) in core.vars.iter() {
+            let def = arena.admin.fresh_def();
+            arena.admin.insert_def(def, name);
+            var_map.insert_new(var, def);
         }
+        arena.inner.protocols = core.protocols.clone();
+        Self { arena, core, var_map, scheme }
     }
 
-    fn product_arity(&self, ty: ss::TypeId) -> usize {
-        match self.statics.normalized_at(ty) {
-            | Some(ss::Type::Unit(_)) => 0,
-            | Some(ss::Type::Prod(ss::Prod(components))) => components.len(),
-            | _ => unreachable!("VCons must have Unit or product type"),
-        }
-    }
-
-    fn product_layout(&self, ty: ss::TypeId) -> ProductLayout {
-        ProductLayout { arity: self.product_arity(ty) }
+    fn def(&self, var: ir::VarId) -> DefId {
+        self.var_map[var]
     }
 
     fn alloc_projection_def(&mut self) -> DefId {
@@ -216,30 +123,27 @@ impl<'a> Lowerer<'a> {
 
     fn alloc_admin_def(&mut self, role: &str) -> DefId {
         let def = self.arena.admin.fresh_def();
-        self.arena.admin.insert_def(def, VarName(role.to_owned()));
+        self.arena.admin.insert_def(def, VarName::new(role));
         def
     }
 
     /// Whether a pattern must be lowered through the match-plan machinery
     /// instead of a structural binder. Constructors need explicit coproduct
     /// elimination even when coverage proves that their tag is irrefutable.
-    fn pattern_needs_match_plan(&self, pattern: ss::VPatId) -> bool {
+    fn pattern_needs_match_plan(&self, pattern: ir::VPatId) -> bool {
         let mut pending = vec![pattern];
         while let Some(pattern) = pending.pop() {
-            match &self.statics.vpats[&pattern] {
-                | ss::ValuePattern::Lit(_) | ss::ValuePattern::Ctor(_) => return true,
-                | ss::ValuePattern::View(_) => unreachable!("static elaboration eliminates views"),
-                | ss::ValuePattern::Named(Named(_, pattern))
-                | ss::ValuePattern::SCons(ss::ConsN(_, pattern)) => pending.push(*pattern),
-                | ss::ValuePattern::Alias(Alias(patterns)) => {
+            match &self.core.vpats[pattern] {
+                | ir::ValuePattern::Lit(_) | ir::ValuePattern::Ctor { .. } => return true,
+                | ir::ValuePattern::Alias(Alias(patterns)) => {
                     pending.extend(patterns.iter().rev().copied());
                 }
-                | ss::ValuePattern::VCons(patterns) => {
-                    pending.extend(patterns.iter().rev().copied());
+                | ir::ValuePattern::VCons(VCons { items, .. }) => {
+                    pending.extend(items.iter().rev().copied());
                 }
-                | ss::ValuePattern::Hole(_)
-                | ss::ValuePattern::Var(_)
-                | ss::ValuePattern::Triv(_) => {}
+                | ir::ValuePattern::Hole(_)
+                | ir::ValuePattern::Var(_)
+                | ir::ValuePattern::Triv(_) => {}
             }
         }
         false
@@ -247,41 +151,32 @@ impl<'a> Lowerer<'a> {
 
     /// A direct coproduct arm consumes one constructor head itself. Its payload
     /// must be structural; nested decisions and constructor aliases use plans.
-    fn match_arm_needs_match_plan(&self, mut pattern: ss::VPatId) -> bool {
-        loop {
-            match &self.statics.vpats[&pattern] {
-                | ss::ValuePattern::Named(Named(_, inner))
-                | ss::ValuePattern::SCons(ss::ConsN(_, inner)) => pattern = *inner,
-                | ss::ValuePattern::Ctor(Ctor(_, payload)) => {
-                    return self.pattern_needs_match_plan(*payload);
-                }
-                | _ => return self.pattern_needs_match_plan(pattern),
-            }
+    fn match_arm_needs_match_plan(&self, pattern: ir::VPatId) -> bool {
+        match &self.core.vpats[pattern] {
+            | ir::ValuePattern::Ctor { payload, .. } => self.pattern_needs_match_plan(*payload),
+            | _ => self.pattern_needs_match_plan(pattern),
         }
     }
 
-    fn is_coprod_pattern(&self, pattern: ss::VPatId) -> bool {
+    fn is_coprod_pattern(&self, pattern: ir::VPatId) -> bool {
         let mut pending = vec![pattern];
         while let Some(pattern) = pending.pop() {
-            match &self.statics.vpats[&pattern] {
-                | ss::ValuePattern::Ctor(_) => return true,
-                | ss::ValuePattern::Named(Named(_, pattern))
-                | ss::ValuePattern::SCons(ss::ConsN(_, pattern)) => pending.push(*pattern),
-                | ss::ValuePattern::Alias(Alias(patterns)) => {
+            match &self.core.vpats[pattern] {
+                | ir::ValuePattern::Ctor { .. } => return true,
+                | ir::ValuePattern::Alias(Alias(patterns)) => {
                     pending.extend(patterns.iter().rev().copied());
                 }
-                | ss::ValuePattern::View(_) => unreachable!("static elaboration eliminates views"),
-                | ss::ValuePattern::Hole(_)
-                | ss::ValuePattern::Var(_)
-                | ss::ValuePattern::Lit(_)
-                | ss::ValuePattern::Triv(_)
-                | ss::ValuePattern::VCons(_) => {}
+                | ir::ValuePattern::Hole(_)
+                | ir::ValuePattern::Var(_)
+                | ir::ValuePattern::Lit(_)
+                | ir::ValuePattern::Triv(_)
+                | ir::ValuePattern::VCons(_) => {}
             }
         }
         false
     }
 
-    fn is_coprod_match(&self, arms: &[Matcher<ss::VPatId, ss::CompuId>]) -> bool {
+    fn is_coprod_match(&self, arms: &[Matcher<ir::VPatId, ir::CompuId>]) -> bool {
         match arms {
             | [Matcher { binder, tail: _ }] => self.is_coprod_pattern(*binder),
             | _ => true,
@@ -291,7 +186,7 @@ impl<'a> Lowerer<'a> {
     /// The stack one arm of a branch consumes. A branch that names its stack gives every arm a
     /// fresh `•`; otherwise each arm but the last consumes its own copy of the branch's stack,
     /// and the last arm consumes the stack itself.
-    fn arm_stack(&mut self, stack: StackId, last: bool, site: Option<ss::TermId>) -> StackId {
+    fn arm_stack(&mut self, stack: StackId, last: bool, site: Option<ir::TermId>) -> StackId {
         if self.scheme.shares_branch_stack() {
             StackVar.build(self, site)
         } else if last {
@@ -303,7 +198,7 @@ impl<'a> Lowerer<'a> {
 
     /// Push a frame built over the consuming stack. The full scheme names it with a stack
     /// let-binding; the other schemes extend the consuming stack with it.
-    fn push(&mut self, frame: StackId, site: Option<ss::TermId>) -> Pushed {
+    fn push(&mut self, frame: StackId, site: Option<ir::TermId>) -> Pushed {
         if self.scheme.names_frames() {
             Pushed::Named { frame, ambient: StackVar.build(self, site) }
         } else {
@@ -314,7 +209,7 @@ impl<'a> Lowerer<'a> {
     /// Push a frame, collecting it in `named` when the scheme names it, and return the stack
     /// that the consuming computation receives.
     fn push_onto(
-        &mut self, frame: StackId, named: &mut Vec<StackId>, site: Option<ss::TermId>,
+        &mut self, frame: StackId, named: &mut Vec<StackId>, site: Option<ir::TermId>,
     ) -> StackId {
         match self.push(frame, site) {
             | Pushed::Extended(stack) => stack,
@@ -328,7 +223,7 @@ impl<'a> Lowerer<'a> {
     /// Guard a branch with the stack its arms share, when the scheme names it.
     /// `None` names the ambient stack itself.
     fn join(
-        &mut self, stack: Option<StackId>, branch: CompuId, site: Option<ss::TermId>,
+        &mut self, stack: Option<StackId>, branch: CompuId, site: Option<ir::TermId>,
     ) -> CompuId {
         if self.scheme.shares_branch_stack() {
             let bindee = stack.unwrap_or_else(|| StackVar.build(self, site));
@@ -338,18 +233,13 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    fn finish(mut self, root: CompuId) -> Result<FragmentProgram, Vec<SpsLoweringError>> {
-        if self.lower_errors.is_empty() {
-            self.arena.inner.protocols = std::sync::Arc::new(self.protocols.graph);
-            Ok(FragmentProgram::try_new(SpsProgram::new(self.arena, root), self.scheme)
-                .expect("stack-indexed lowering must construct its scheme's fragment"))
-        } else {
-            Err(self.lower_errors)
-        }
+    fn finish(self, root: CompuId) -> FragmentProgram {
+        FragmentProgram::try_new(SpsProgram::new(self.arena, root), self.scheme)
+            .expect("stack-indexed lowering must construct its scheme's fragment")
     }
 
     fn projection_binding(
-        &mut self, head: ValueId, position: usize, layout: ProductLayout, site: Option<ss::TermId>,
+        &mut self, head: ValueId, position: usize, layout: ProductLayout, site: Option<ir::TermId>,
     ) -> (ValueBinding, ValueId) {
         assert!(position < layout.arity);
         let selected = self.alloc_projection_def();
@@ -364,46 +254,37 @@ impl<'a> Lowerer<'a> {
     }
 }
 
-impl CompilerPass<ss::CompuId> for RootLowerer<'_> {
+impl CompilerPass<&ir::CoreProgram> for RootLowerer {
     type Output = FragmentProgram;
-    type Error = Vec<SpsLoweringError>;
+    type Error = Infallible;
 
-    fn run(&mut self, root: ss::CompuId) -> Result<FragmentProgram, Self::Error> {
-        self.run_with_builtin(root, None)
+    fn run(&mut self, core: &ir::CoreProgram) -> Result<FragmentProgram, Self::Error> {
+        Ok(self.run_with_builtin(core, None))
     }
 }
 
-impl RootLowerer<'_> {
-    /// Lower either a process or a checked export, supplying its validated host package.
+impl RootLowerer {
+    /// Lower either a process or a checked export, optionally supplying its validated host package.
     pub fn run_with_builtin(
-        &mut self, root: ss::CompuId, builtin: Option<BuiltinPackagePlan>,
-    ) -> Result<FragmentProgram, Vec<SpsLoweringError>> {
-        let mut lowerer = Lowerer::new(self.scoped, self.statics, self.scheme);
-        let root = self.statics.execution_compu(root);
+        &mut self, core: &ir::CoreProgram, builtin: Option<&ir::BuiltinPackagePlan>,
+    ) -> FragmentProgram {
+        let ir::CoreRoot::Compu(root) = core.root() else {
+            panic!("stack IR lowering requires a computation root");
+        };
+        let mut lowerer = Lowerer::new(core, self.scheme);
         let mut stack = StackVar.build(&mut lowerer, None);
         let mut named = Vec::new();
         if let Some(plan) = builtin {
-            let package =
-                Explicit::run(&mut BuiltinPackageFolder { lowerer: &mut lowerer }, plan.value);
+            let package = Explicit::run(
+                &mut BuiltinPackageFolder { lowerer: &mut lowerer },
+                plan.value.clone(),
+            );
             let frame = Cons(package, stack).build(&mut lowerer, None);
             stack = lowerer.push_onto(frame, &mut named, None);
         }
         let root = LoweringFolder::new(&mut lowerer).lower(root, stack);
         let root = lowerer.arena.name_frames(named, root, None);
         lowerer.finish(root)
-    }
-}
-
-impl CompilerPass<ss::CompuId> for BuiltinRootLowerer<'_> {
-    type Output = FragmentProgram;
-    type Error = BuiltinRootLowerError;
-
-    fn run(&mut self, root: ss::CompuId) -> Result<FragmentProgram, Self::Error> {
-        let plan = BuiltinPackagePlan::for_executable(self.statics, &self.signature)?;
-        let Self { scoped, statics, scheme, .. } = *self;
-        RootLowerer { scoped, statics, scheme }
-            .run_with_builtin(root, Some(plan))
-            .map_err(BuiltinRootLowerError::Sps)
     }
 }
 

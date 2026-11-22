@@ -5,31 +5,28 @@ use crate::arena::{Construct as _, DefinitionNames as _};
 use crate::high::{
     check::FragmentProgram, syntax as high, traverse::Traversal, variables::Variables,
 };
+use crate::ir;
 use crate::protocol::{StackProtocol, ValueProtocol};
 use crate::scheme::SpsScheme;
 use derive_more::{AsMut, AsRef};
 use std::{collections::HashMap, convert::Infallible};
-use zydeco_statics::{arena::StaticsArena, syntax as ss};
-use zydeco_surface::scoped::arena::ScopedArena;
+use zydeco_foundation::{arena::ArenaAccess as _, context::Context, pass::CompilerPass};
 use zydeco_syntax::VarName;
-use zydeco_utils::{arena::ArenaAccess as _, context::Context, pass::CompilerPass};
 
 mod pattern;
 mod procedures;
 mod fold;
 
 /// Convert lexical SPS into first-order SPSLow with fresh construction state.
-pub struct SpsLowConverter<'a> {
-    pub scoped: &'a ScopedArena,
-    pub statics: &'a StaticsArena,
-}
+#[derive(Default)]
+pub struct SpsLowConverter;
 
-impl CompilerPass<FragmentProgram> for SpsLowConverter<'_> {
+impl CompilerPass<FragmentProgram> for SpsLowConverter {
     type Output = SpsLowProgram;
     type Error = Infallible;
 
     fn run(&mut self, program: FragmentProgram) -> Result<Self::Output, Self::Error> {
-        Ok(ClosureConversion::new(program, self.scoped, self.statics).convert())
+        Ok(ClosureConversion::new(program).convert())
     }
 }
 
@@ -49,14 +46,12 @@ struct PatternTranslation {
 
 /// Consume SPS and construct a fresh first-order SPSLow program.
 #[derive(AsRef, AsMut)]
-struct ClosureConversion<'a> {
+struct ClosureConversion {
     source: high::SpsArena,
     #[as_ref(low::SpsLowArena)]
     #[as_mut(low::SpsLowArena)]
     arena: low::SpsLowArena,
     root: high::CompuId,
-    scoped: &'a ScopedArena,
-    statics: &'a StaticsArena,
     envs: Vec<RenameEnv>,
     variables: Variables,
     /// The label kind of each procedure binding, or `None` for a procedure that no call reaches.
@@ -67,8 +62,8 @@ struct ClosureConversion<'a> {
     scheme: SpsScheme,
 }
 
-impl<'a> ClosureConversion<'a> {
-    fn new(program: FragmentProgram, scoped: &'a ScopedArena, statics: &'a StaticsArena) -> Self {
+impl ClosureConversion {
+    fn new(program: FragmentProgram) -> Self {
         let scheme = program.scheme();
         let high::SpsRebuild { source, target, root } = program.into_program().into_rebuild();
         let mut variables = Variables::default();
@@ -85,8 +80,6 @@ impl<'a> ClosureConversion<'a> {
             source,
             arena,
             root,
-            scoped,
-            statics,
             envs: vec![RenameEnv { parent: None, bindings: HashMap::new() }],
             variables,
             procedures,
@@ -132,16 +125,16 @@ impl<'a> ClosureConversion<'a> {
     }
 
     fn alloc_like(&mut self, original: high::DefId) -> high::DefId {
-        self.alloc_def(self.arena.admin.def_name(self.scoped, self.statics, &original).clone())
+        self.alloc_def(self.arena.admin.def_name(&original))
     }
 
     fn alloc_capture(&mut self, captured: high::DefId) -> high::DefId {
-        let VarName(name) = self.arena.admin.def_name(self.scoped, self.statics, &captured).clone();
-        self.alloc_def(VarName(format!("{name}#cap")))
+        let name = self.arena.admin.def_name(&captured);
+        self.alloc_def(VarName::new(format!("{}#cap", name.as_str())))
     }
 
     fn alloc_label(&mut self, role: &str) -> high::DefId {
-        self.alloc_def(VarName(format!("__{role}_code__")))
+        self.alloc_def(VarName::new(format!("__{role}_code__")))
     }
 
     /// The variables a body reads under `env`. A call to a closed procedure reads the variables
@@ -177,7 +170,7 @@ impl<'a> ClosureConversion<'a> {
     }
 
     fn build_product_value(
-        &mut self, items: Vec<low::ValueId>, site: Option<ss::TermId>,
+        &mut self, items: Vec<low::ValueId>, site: Option<ir::TermId>,
     ) -> low::ValueId {
         let arity = items.len();
         if arity == 0 {
@@ -187,7 +180,7 @@ impl<'a> ClosureConversion<'a> {
     }
 
     fn translated_var(
-        &mut self, def: high::DefId, env: RenameEnvId, site: Option<ss::TermId>,
+        &mut self, def: high::DefId, env: RenameEnvId, site: Option<ir::TermId>,
     ) -> low::ValueId {
         self.renamed_def(env, def).build(self, site)
     }
@@ -198,14 +191,14 @@ impl<'a> ClosureConversion<'a> {
     }
 
     fn captured_value_inside(
-        &mut self, bindings: &[(high::DefId, high::DefId)], site: Option<ss::TermId>,
+        &mut self, bindings: &[(high::DefId, high::DefId)], site: Option<ir::TermId>,
     ) -> low::ValueId {
         let values = bindings.iter().map(|(_, captured)| captured.build(self, site)).collect();
         self.build_product_value(values, site)
     }
 
     fn captured_value_outside(
-        &mut self, captures: &[high::DefId], env: RenameEnvId, site: Option<ss::TermId>,
+        &mut self, captures: &[high::DefId], env: RenameEnvId, site: Option<ir::TermId>,
     ) -> low::ValueId {
         let values =
             captures.iter().map(|capture| self.translated_var(*capture, env, site)).collect();
@@ -217,21 +210,20 @@ impl<'a> ClosureConversion<'a> {
 mod tests {
     use super::*;
     use crate::arena::Construct;
-    use zydeco_utils::arena::ArenaAccess;
+    use zydeco_foundation::arena::ArenaAccess;
 
     struct Fixture {
         arena: high::SpsArena,
-        scoped: ScopedArena,
     }
 
     impl Fixture {
         fn new() -> Self {
-            Self { arena: high::SpsArena::default(), scoped: ScopedArena::default() }
+            Self { arena: high::SpsArena::default() }
         }
 
         fn def(&mut self, name: &str) -> high::DefId {
             let def = self.arena.admin.fresh_def();
-            self.arena.admin.insert_def(def, VarName(name.into()));
+            self.arena.admin.insert_def(def, VarName::new(name));
             def
         }
 
@@ -243,8 +235,7 @@ mod tests {
         }
 
         fn convert(self, root: high::CompuId) -> SpsLowProgram {
-            let statics = StaticsArena::default();
-            fold::tests::Fixture::convert(&self.arena, root, &self.scoped, &statics)
+            fold::tests::Fixture::convert(&self.arena, root)
         }
     }
 

@@ -72,7 +72,7 @@ impl ValueProjectionTranslation {
             }
         }
         let field = ResolvedField { name: self.field.name, target: ProjTarget { products } };
-        let projected = Alloc::alloc(tycker, Proj(head, field), self.result, &env.ty);
+        let projected = Alloc::alloc(tycker, Proj(head, field), self.result, &());
         Ok((env, projected))
     }
 }

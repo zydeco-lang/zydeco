@@ -1,21 +1,18 @@
 use super::*;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex};
-use zydeco_utils::{arena::ArenaAccess, pass::CompilerPass};
+use zydeco_foundation::{arena::ArenaAccess, pass::CompilerPass};
 
 struct SourceDynamics {
-    program: zydeco_dynamics::syntax::DynamicsProgram,
+    program: Arc<zydeco_ir::CoreProgram>,
+    packages: Vec<zydeco_ir::BuiltinPackagePlan>,
 }
 
 struct SourceStack {
-    scoped: Arc<zydeco_surface::scoped::arena::ScopedArena>,
-    statics: Arc<zydeco_statics::arena::StaticsArena>,
     stackir: zydeco_stackir::FragmentProgram,
 }
 
 struct SourceSpsLow {
-    scoped: Arc<zydeco_surface::scoped::arena::ScopedArena>,
-    statics: Arc<zydeco_statics::arena::StaticsArena>,
     sps_low: zydeco_stackir::SpsLowProgram,
 }
 
@@ -38,9 +35,7 @@ enum TestPipelineError {
     #[error(transparent)]
     Executable(ExecutableError),
     #[error(transparent)]
-    Link(zydeco_dynamics::LinkError),
-    #[error(transparent)]
-    Stack(zydeco_stackir::BuiltinRootLowerError),
+    Builtin(zydeco_statics::BuiltinPackagePlanError),
     #[error(transparent)]
     Frame(zydeco_assembly::frames::FramePlanError),
 }
@@ -99,26 +94,19 @@ impl AuthoredRoot {
 
 impl CheckedProgram {
     fn dynamics(self) -> Result<SourceDynamics, TestPipelineError> {
-        let zydeco_statics::syntax::TermAnnId::Compu(root, _) = self.root else {
+        let zydeco_statics::syntax::TermAnnId::Compu(_, _) = self.root else {
             return Err(TestPipelineError::Executable(ExecutableError::NonComputation {
                 found: self.root.into(),
             }));
         };
-        Ok(SourceDynamics {
-            program: zydeco_dynamics::RootLinker {
-                scoped: self.scoped,
-                statics: self.statics,
-                root,
-            }
-            .run()
-            .map_err(TestPipelineError::Link)?,
-        })
+        let core = self.statics.core.clone().expect("checked computation must carry CoreProgram");
+        Ok(SourceDynamics { program: core, packages: Vec::new() })
     }
 
     fn dynamics_with_builtin(self) -> Result<SourceDynamics, TestPipelineError> {
         use zydeco_statics::syntax::{Fillable, TermAnnId, Type};
 
-        let TermAnnId::Compu(root, ty) = self.root else {
+        let TermAnnId::Compu(_, ty) = self.root else {
             return Err(TestPipelineError::Executable(ExecutableError::NonComputation {
                 found: self.root.into(),
             }));
@@ -130,40 +118,29 @@ impl CheckedProgram {
                 ty,
             )));
         };
-        let arena = zydeco_dynamics::BuiltinRootLinker {
-            scoped: self.scoped,
-            statics: self.statics,
-            root,
-            signature: *signature,
-        }
-        .run()
-        .map_err(TestPipelineError::Link)?;
-        Ok(SourceDynamics { program: arena })
+        let core = self.statics.core.clone().expect("checked computation must carry CoreProgram");
+        let plan = zydeco_statics::BuiltinPackagePlanner::new(&self.statics)
+            .for_executable(&signature)
+            .map_err(TestPipelineError::Builtin)?;
+        Ok(SourceDynamics { program: core, packages: vec![plan] })
     }
 
     fn stackir(self) -> Result<SourceStack, TestPipelineError> {
-        let zydeco_statics::syntax::TermAnnId::Compu(root, _) = self.root else {
+        let zydeco_statics::syntax::TermAnnId::Compu(_, _) = self.root else {
             return Err(TestPipelineError::Executable(ExecutableError::NonComputation {
                 found: self.root.into(),
             }));
         };
-        let Self { scoped, statics, .. } = self;
-        let stackir = zydeco_stackir::RootLowerer {
-            scoped: &scoped,
-            statics: &statics,
-            scheme: zydeco_stackir::SpsScheme::BranchJoin,
-        }
-        .run(root)
-        .map_err(|errors| {
-            TestPipelineError::Stack(zydeco_stackir::BuiltinRootLowerError::Sps(errors))
-        })?;
-        Ok(SourceStack { scoped, statics, stackir })
+        let core = self.statics.core.as_ref().expect("checked computation must carry CoreProgram");
+        let stackir = zydeco_stackir::RootLowerer { scheme: zydeco_stackir::SpsScheme::BranchJoin }
+            .run_infallible(core);
+        Ok(SourceStack { stackir })
     }
 
     fn sps_with_builtin(self) -> Result<SourceStack, TestPipelineError> {
         use zydeco_statics::syntax::{Fillable, TermAnnId, Type};
 
-        let TermAnnId::Compu(root, ty) = self.root else {
+        let TermAnnId::Compu(_, ty) = self.root else {
             return Err(TestPipelineError::Executable(ExecutableError::NonComputation {
                 found: self.root.into(),
             }));
@@ -175,34 +152,27 @@ impl CheckedProgram {
                 ty,
             )));
         };
-        let Self { scoped, statics, .. } = self;
-        let stackir = zydeco_stackir::BuiltinRootLowerer {
-            scoped: &scoped,
-            statics: &statics,
-            signature: *signature,
-            scheme: zydeco_stackir::SpsScheme::BranchJoin,
-        }
-        .run(root)
-        .map_err(TestPipelineError::Stack)?;
-        Ok(SourceStack { scoped, statics, stackir })
+        let core = self.statics.core.as_ref().expect("checked computation must carry CoreProgram");
+        let plan = zydeco_statics::BuiltinPackagePlanner::new(&self.statics)
+            .for_executable(&signature)
+            .map_err(TestPipelineError::Builtin)?;
+        let stackir = zydeco_stackir::RootLowerer { scheme: zydeco_stackir::SpsScheme::BranchJoin }
+            .run_with_builtin(core, Some(&plan));
+        Ok(SourceStack { stackir })
     }
 }
 
 impl SourceStack {
     fn convert(self) -> SourceSpsLow {
-        let Self { scoped, statics, stackir } = self;
-        let sps_low = zydeco_stackir::SpsLowPipeline { scoped: &scoped, statics: &statics }
-            .run_infallible(stackir);
-        SourceSpsLow { scoped, statics, sps_low }
+        let sps_low = zydeco_stackir::SpsLowPipeline.run_infallible(self.stackir);
+        SourceSpsLow { sps_low }
     }
 }
 
 impl SourceSpsLow {
     fn assemble(self) -> SourceAssembly {
-        let Self { scoped, statics, sps_low } = self;
-        let assembly =
-            zydeco_assembly::LoweringPipeline::new(&scoped, &statics).run_infallible(&sps_low);
-        SourceAssembly { sps_low, assembly }
+        let assembly = zydeco_assembly::LoweringPipeline::new().run_infallible(&self.sps_low);
+        SourceAssembly { sps_low: self.sps_low, assembly }
     }
 }
 
@@ -275,7 +245,7 @@ impl TestPipeline {
         let path = path.as_ref();
         let name = path.file_stem().and_then(|stem| stem.to_str()).unwrap().to_owned();
         let lowered = checked.sps_with_builtin()?.convert();
-        let native = zydeco_assembly::LoweringPipeline::new(&lowered.scoped, &lowered.statics)
+        let native = zydeco_assembly::LoweringPipeline::new()
             .with_native_frames()
             .run(&lowered.sps_low)
             .map_err(TestPipelineError::Frame)?;
@@ -396,7 +366,7 @@ fn resolve_program(
 
 /// The file a merged-program span belongs to, via the arena's source map.
 fn span_file(
-    spans: &zydeco_surface::textual::syntax::SpanArena, span: &zydeco_utils::span::Span,
+    spans: &zydeco_surface::textual::syntax::SpanArena, span: &zydeco_foundation::span::Span,
 ) -> Option<std::ffi::OsString> {
     spans
         .source_map()
@@ -405,22 +375,20 @@ fn span_file(
 }
 
 fn checked_trivial_computation() -> CheckedProgram {
+    use zydeco_ir::{CoreArena, CoreProgram, CoreRoot, syntax as ir};
     use zydeco_statics::{arena::StaticsArena, syntax as ss};
-    use zydeco_utils::prelude::IdAllocator;
 
-    let mut allocator = IdAllocator::<zydeco_statics::arena::StaticsScope>::new();
-    let value = allocator.alloc();
-    let root = allocator.alloc();
-    let ty = allocator.alloc();
     let mut statics = StaticsArena::default();
-    statics.values.insert_new(value, ss::Triv.into());
-    statics.compus.insert_new(root, ss::Return(value).into());
+    let value = statics.values.alloc(ss::Triv.into());
+    let root = statics.compus.alloc(ss::Return(value).into());
+    let ctype = statics.kinds_pre.alloc(ss::Fillable::Done(ss::CType.into()));
+    let ty = statics.types_pre.alloc(ss::Fillable::Done(ss::Type::OS(ss::OSTy)), ctype);
+    statics.annotations_compu.insert_new(root, ty);
     let root = ss::TermAnnId::Compu(root, ty);
-    statics.static_elaboration =
-        Some(zydeco_statics::elaborate::static_values::StaticElaboration {
-            source: root,
-            residual: Some(root),
-        });
+    let mut core = CoreArena::default();
+    let triv = core.values.alloc(ir::Value::Triv(ir::Triv));
+    let compu = core.compus.alloc(ir::Computation::Ret(ir::Return(triv)));
+    statics.core = Some(Arc::new(CoreProgram::new(core, CoreRoot::Compu(compu))));
     CheckedProgram {
         spans: Default::default(),
         scoped: Default::default(),
@@ -1066,7 +1034,7 @@ fn imported_free_names_do_not_capture_importer_bindings() {
         panic!("expected an unbound imported name, got {}", failure.error)
     };
 
-    assert_eq!(name.inner.0, "value");
+    assert_eq!(name.inner.as_str(), "value");
     assert_eq!(span_file(&failure.spans, &name.info), Some(std::ffi::OsString::from("library.zy")));
 }
 
@@ -1301,7 +1269,7 @@ fn the_declaration_free_unbound_fixture_fails_during_resolution() {
         panic!("expected an unbound variable, got {}", failure.error)
     };
 
-    assert_eq!(name.inner.0, "x");
+    assert_eq!(name.inner.as_str(), "x");
 }
 
 #[test]
@@ -1444,11 +1412,13 @@ fn a_zero_dependency_source_program_checks_and_runs_as_one_term() {
 
     assert!(matches!(checked.root, zydeco_statics::syntax::TermAnnId::Compu(_, _)));
 
-    let SourceDynamics { program: arena, .. } = checked.dynamics().unwrap();
+    let SourceDynamics { program, packages } = checked.dynamics().unwrap();
     let mut input = std::io::empty();
     let mut output = Vec::new();
     let result =
-        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], arena).run();
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], &program)
+            .with_packages(&packages)
+            .run();
 
     assert!(matches!(
         result,
@@ -1473,10 +1443,10 @@ fn a_zero_dependency_source_program_lowers_directly_to_stack_ir() {
         .check()
         .unwrap();
 
-    let SourceStack { stackir, scoped, statics, .. } = checked.stackir().unwrap();
+    let SourceStack { stackir } = checked.stackir().unwrap();
     let stackir = stackir.as_program();
     assert!(stackir.arena().inner.compus.get(&stackir.root()).is_some());
-    zydeco_stackir::high::check::check(stackir, &scoped, &statics);
+    zydeco_stackir::high::check::check(stackir);
 }
 
 #[test]
@@ -1698,11 +1668,13 @@ fn the_interpreter_constructs_and_applies_a_typed_builtin_package() {
         .check()
         .unwrap();
 
-    let SourceDynamics { program: arena, .. } = checked.dynamics_with_builtin().unwrap();
+    let SourceDynamics { program, packages } = checked.dynamics_with_builtin().unwrap();
     let mut input = std::io::empty();
     let mut output = Vec::new();
     let result =
-        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], arena).run();
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], &program)
+            .with_packages(&packages)
+            .run();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(3)));
 }
@@ -1730,12 +1702,18 @@ begin
 end
 "#,
     );
-    let dynamics = TestPipeline::check(root).unwrap().dynamics_with_builtin().unwrap().program;
+    let dynamics = TestPipeline::check(root).unwrap().dynamics_with_builtin().unwrap();
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result =
-        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
-            .run();
+    let result = zydeco_dynamics::Runtime::new(
+        &mut input,
+        &mut output,
+        &mut Vec::new(),
+        &[],
+        &dynamics.program,
+    )
+    .with_packages(&dynamics.packages)
+    .run();
 
     assert_eq!(output, b"7");
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
@@ -1785,11 +1763,11 @@ fn stack_ir_constructs_and_applies_the_same_typed_builtin_package() {
         .check()
         .unwrap();
 
-    let SourceStack { stackir, scoped, statics, .. } = checked.sps_with_builtin().unwrap();
+    let SourceStack { stackir } = checked.sps_with_builtin().unwrap();
 
     let stackir = stackir.as_program();
     assert!(stackir.arena().inner.compus.get(&stackir.root()).is_some());
-    zydeco_stackir::high::check::check(stackir, &scoped, &statics);
+    zydeco_stackir::high::check::check(stackir);
 }
 
 #[test]
@@ -1811,20 +1789,6 @@ fn declaration_free_source_reaches_native_assembly_emission() {
 
     assert_eq!(native.name, "main");
     assert!(!native.assembly.is_empty());
-}
-
-#[test]
-fn checked_arenas_drop_the_checkers_typing_environments() {
-    let checked = TestPipeline::check(repository_source("tests/demos/choice.zy")).unwrap();
-
-    // Environments are checker-internal: the checked arena retains the typed
-    // facts but none of the per-node typing environments.
-    assert_eq!(checked.statics.env_kpat.len(), 0);
-    assert_eq!(checked.statics.env_tpat.len(), 0);
-    assert_eq!(checked.statics.env_type.len(), 0);
-    assert_eq!(checked.statics.env_vpat.len(), 0);
-    assert_eq!(checked.statics.env_value.len(), 0);
-    assert_eq!(checked.statics.env_compu.len(), 0);
 }
 
 #[test]
@@ -1999,12 +1963,18 @@ fn builtin_selection_preserves_numeric_widths_and_cbpv_kinds() {
 fn legacy_tuple_example_ports_to_uniform_term_composition() {
     let root = repository_source("tests/builtin/tuple.zy");
     let checked = TestPipeline::check(&root).unwrap();
-    let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
+    let dynamics = checked.clone().dynamics_with_builtin().unwrap();
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result =
-        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
-            .run();
+    let result = zydeco_dynamics::Runtime::new(
+        &mut input,
+        &mut output,
+        &mut Vec::new(),
+        &[],
+        &dynamics.program,
+    )
+    .with_packages(&dynamics.packages)
+    .run();
     let native = TestPipeline::amd64_from_checked(root, checked).unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
@@ -2015,12 +1985,18 @@ fn legacy_tuple_example_ports_to_uniform_term_composition() {
 fn exact_signed_arithmetic_agrees_through_interpretation_and_native_emission() {
     let root = repository_source("tests/builtin/arithmetic.zy");
     let checked = TestPipeline::check(&root).unwrap();
-    let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
+    let dynamics = checked.clone().dynamics_with_builtin().unwrap();
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result =
-        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
-            .run();
+    let result = zydeco_dynamics::Runtime::new(
+        &mut input,
+        &mut output,
+        &mut Vec::new(),
+        &[],
+        &dynamics.program,
+    )
+    .with_packages(&dynamics.packages)
+    .run();
     let native = TestPipeline::amd64_from_checked(root, checked).unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
@@ -2032,12 +2008,18 @@ fn exact_signed_arithmetic_agrees_through_interpretation_and_native_emission() {
 fn recursive_nominal_types_port_to_a_declaration_free_block() {
     let root = repository_source("tests/builtin/recursive-data.zy");
     let checked = TestPipeline::check(&root).unwrap();
-    let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
+    let dynamics = checked.clone().dynamics_with_builtin().unwrap();
     let mut input = std::io::empty();
     let mut output = Vec::new();
-    let result =
-        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
-            .run();
+    let result = zydeco_dynamics::Runtime::new(
+        &mut input,
+        &mut output,
+        &mut Vec::new(),
+        &[],
+        &dynamics.program,
+    )
+    .with_packages(&dynamics.packages)
+    .run();
     let native = TestPipeline::amd64_from_checked(root, checked).unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
@@ -2066,11 +2048,13 @@ fn nonterminating_compile_examples_check_and_lower_as_root_terms() {
 
 #[test]
 fn checked_computation_roots_link_directly_to_dynamics() {
-    let SourceDynamics { program: arena, .. } = checked_trivial_computation().dynamics().unwrap();
+    let SourceDynamics { program, packages } = checked_trivial_computation().dynamics().unwrap();
     let mut input = std::io::empty();
     let mut output = Vec::new();
     let result =
-        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], arena).run();
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], &program)
+            .with_packages(&packages)
+            .run();
 
     assert!(matches!(
         result,
@@ -2082,12 +2066,11 @@ fn checked_computation_roots_link_directly_to_dynamics() {
 
 #[test]
 fn checked_computation_roots_lower_directly_to_stack_ir() {
-    let SourceStack { stackir, scoped, statics, .. } =
-        checked_trivial_computation().stackir().unwrap();
+    let SourceStack { stackir } = checked_trivial_computation().stackir().unwrap();
 
     let stackir = stackir.as_program();
     assert!(stackir.arena().inner.compus.get(&stackir.root()).is_some());
-    zydeco_stackir::high::check::check(stackir, &scoped, &statics);
+    zydeco_stackir::high::check::check(stackir);
 }
 
 #[test]

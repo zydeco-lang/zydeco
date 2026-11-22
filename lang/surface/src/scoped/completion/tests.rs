@@ -5,7 +5,7 @@ use crate::{
     scoped::{ResolveError, ResolveFolder},
     textual::{ParsedHole, RecoveringParser, syntax as t},
 };
-use zydeco_utils::pass::CompilerPass;
+use zydeco_foundation::pass::CompilerPass;
 
 struct Fixture {
     spans: t::SpanArena,
@@ -45,8 +45,8 @@ fn enumeration_selects_the_same_definition_as_reference_resolution() {
     let [candidate] = scope.definitions.as_slice() else {
         panic!("only the inner name is visible")
     };
-    assert_eq!(candidate.name.0, "value");
-    assert_eq!(program.arena.defs.iter().filter(|(_, name)| name.0 == "value").count(), 2);
+    assert_eq!(candidate.name, "value");
+    assert_eq!(program.arena.defs.iter().filter(|(_, name)| **name == "value").count(), 2);
     assert_eq!(program.arena.users.forth(&candidate.definition).iter().count(), 1);
     for user in program.arena.users.forth(&candidate.definition) {
         assert!(matches!(program.arena.terms[user], Term::Var(def) if def == candidate.definition));
@@ -61,12 +61,10 @@ fn shared_lookup_shadows_global_names_and_preserves_global_dependencies() {
     let visible_local: DefId = allocator.alloc();
     let owner: TermId = allocator.alloc();
     let dependency = BindingSite { owner, id: owner };
-    let same = VarName("same".into());
-    let other = VarName("other".into());
+    let same = VarName::new("same");
+    let other = VarName::new("other");
     let global = Global {
-        var_to_def: [(same.clone(), shadowed), (other.clone(), visible_global)]
-            .into_iter()
-            .collect(),
+        var_to_def: [(same, shadowed), (other, visible_global)].into_iter().collect(),
         under_map: [(shadowed, dependency), (visible_global, dependency)].into_iter().collect(),
     };
     let local = Local {
@@ -77,7 +75,7 @@ fn shared_lookup_shadows_global_names_and_preserves_global_dependencies() {
         boundary: None,
         prelude: Default::default(),
     }
-    .bind_group([(same.clone(), visible_local)]);
+    .bind_group([(same, visible_local)]);
     let scope = NameScope { local: &local, global: &global };
     assert_eq!(scope.lookup(&same).unwrap().definition, visible_local);
     assert!(scope.lookup(&same).unwrap().dependency.is_none());
@@ -87,7 +85,7 @@ fn shared_lookup_shadows_global_names_and_preserves_global_dependencies() {
         snapshot.definitions.iter().map(|definition| definition.definition).collect::<Vec<_>>(),
         [visible_global, visible_local]
     );
-    assert!(scope.lookup(&VarName("absent".into())).is_none());
+    assert!(scope.lookup(&VarName::new("absent")).is_none());
 }
 
 #[test]
@@ -95,12 +93,12 @@ fn unbound_references_are_diagnosed_and_replaced_only_for_completion() {
     let source = "let value = 1 in (missing, _¦, absent)";
     let completion = Fixture::new(source).complete();
     let program = completion.program.unwrap();
-    assert_eq!(completion.site.unwrap().scope.definitions[0].name.0, "value");
+    assert_eq!(completion.site.unwrap().scope.definitions[0].name, "value");
     let unbound = completion
         .diagnostics
         .iter()
         .map(|error| match error {
-            | ResolveError::UnboundVar(name) => name.inner.0.as_str(),
+            | ResolveError::UnboundVar(name) => name.inner.as_str(),
             | _ => panic!("an unbound-reference diagnostic"),
         })
         .collect::<Vec<_>>();
@@ -117,7 +115,7 @@ fn unbound_references_are_diagnosed_and_replaced_only_for_completion() {
     assert_eq!(error.len(), 2);
     for expected in ["missing", "absent"] {
         assert!(error.iter().any(
-            |error| matches!(error, ResolveError::UnboundVar(name) if name.inner.0 == expected)
+            |error| matches!(error, ResolveError::UnboundVar(name) if name.inner == expected)
         ));
     }
     assert!(Fixture::new("let missing = 1 in (missing, ¦)").complete().diagnostics.is_empty());
@@ -139,7 +137,7 @@ fn a_cursor_identity_from_another_parse_cannot_match_an_equal_span() {
 #[test]
 fn fatal_resolution_errors_allow_independent_sibling_scope_capture() {
     let completion = Fixture::new("(param invalid that invalid, fn value => ¦)").complete();
-    assert_eq!(completion.site.unwrap().scope.definitions[0].name.0, "value");
+    assert_eq!(completion.site.unwrap().scope.definitions[0].name, "value");
     assert!(
         matches!(completion.program, Err(error) if error.len() == 1 && error.iter().any(|error| matches!(error, ResolveError::UnenclosedThat(_))))
     );

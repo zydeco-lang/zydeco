@@ -1,134 +1,34 @@
 pub use zydeco_syntax::*;
 
-use crate::host::{HostRuntime, HostValue};
-use crate::statics_syntax as ss;
+use crate::{
+    env::EvalEnv,
+    host::{HostRuntime, HostValue},
+};
 use derive_more::From;
 use std::{
     io::{BufRead, Write},
     rc::Rc,
 };
-use zydeco_statics::environment::Env;
-use zydeco_utils::prelude::{ArenaSchema, ArenaSparse, FrozenArena};
+use zydeco_ir::{CoreProgram, DtorIdx, syntax as ir};
 
 #[cfg(test)]
 mod tests;
 
-/* ------------------------------- Identifier ------------------------------- */
-
-/// Definition identifier reused from the statics arena.
-pub type DefId = ss::DefId;
-/// Shared value pattern pointer for dynamic syntax.
-pub type RcVPat = Rc<ValuePattern>;
-/// Shared value pointer for dynamic syntax.
-pub type RcValue = Rc<Value>;
-/// Shared computation pointer for dynamic syntax.
-pub type RcCompu = Rc<Computation>;
-
-/* ---------------------------------- Value --------------------------------- */
-
-/// Patterns used for value binders in runtime computations.
-#[derive(From, Clone, Debug)]
-pub enum ValuePattern {
-    Hole(Hole),
-    Var(DefId),
-    Ctor(Ctor<CtorName, RcVPat>),
-    /// A refutable numeric-equality pattern on a primitive integer type.
-    Lit(Literal),
-    Alias(Alias<RcVPat>),
-    Triv(Triv),
-    VCons(Vec<RcVPat>),
-}
-
-/// Runtime values: variables, thunks, constructors, and literals.
-#[derive(From, Clone, Debug)]
-pub enum Value {
-    Hole(Hole),
-    Var(DefId),
-    Let(Let<RcVPat, RcValue, RcValue>),
-    Thunk(Thunk<RcCompu>),
-    Ctor(Ctor<CtorName, RcValue>),
-    Triv(Triv),
-    VCons(Vec<RcValue>),
-    Proj(Proj<RcValue, usize>),
-    Lit(Literal),
-    SemValue(SemValue),
-}
-
-/* ------------------------------- Computation ------------------------------ */
-
-/// A typed host operation.
-#[derive(Clone, Debug)]
-pub struct Prim {
-    pub role: BuiltinValueRole,
-}
-
-/// A checked foreign import together with its source-level argument count.
-#[derive(Clone, Debug)]
-pub struct ForeignPrim {
-    pub import: CheckedImport,
-}
-
-/// Computations in the dynamic language.
-#[derive(From, Clone, Debug)]
-pub enum Computation {
-    Hole(Hole),
-    VAbs(Abs<RcVPat, RcCompu>),
-    VApp(App<RcCompu, RcValue>),
-    Fix(Fix<RcVPat, RcCompu>),
-    Force(Force<RcValue>),
-    Ret(Return<RcValue>),
-    Do(Bind<RcVPat, RcCompu, RcCompu>),
-    Let(Let<RcVPat, RcValue, RcCompu>),
-    Match(Match<RcValue, RcVPat, RcCompu>),
-    CoMatch(CoMatch<DtorName, RcCompu>),
-    Dtor(Dtor<RcCompu, DtorName>),
-    Prim(Prim),
-    Foreign(ForeignPrim),
-}
-
-/* ---------------------------------- Arena --------------------------------- */
-
-/// Owning storage scope for linked runtime syntax.
-#[derive(Debug)]
-pub enum DynamicsScope {}
-
-impl ArenaSchema<DefId> for DynamicsScope {
-    type Item = VarName;
-}
-
-/// A linked runtime program with one computation at its top level.
-pub struct DynamicsProgram {
-    defs: FrozenArena<ArenaSparse<DynamicsScope, DefId>>,
-    root: RcCompu,
-}
-
-impl DynamicsProgram {
-    pub fn new(defs: ArenaSparse<DynamicsScope, DefId>, root: RcCompu) -> Self {
-        Self { defs: FrozenArena::new(defs), root }
-    }
-
-    pub fn defs(&self) -> &ArenaSparse<DynamicsScope, DefId> {
-        &self.defs
-    }
-
-    pub fn root(&self) -> &RcCompu {
-        &self.root
-    }
-}
-
 /* -------------------------------- Semantics ------------------------------- */
 
-/// A thunk value paired with the environment in which it was created.
+/// Runtime target executed when forcing a closure value.
 #[derive(Clone, Debug)]
-pub struct EnvThunk {
-    pub body: RcCompu,
-    pub env: Env<SemValue>,
+pub enum ThunkBody {
+    Core { body: ir::CompuId, env: EvalEnv<SemValue> },
+    Fix { param: ir::VarId, body: ir::CompuId, env: EvalEnv<SemValue> },
+    Builtin(BuiltinValueRole),
+    Foreign(CheckedImport),
 }
 
-/// Semantic values used by the evaluator.
+/// Semantic values produced and passed by the evaluator.
 #[derive(From, Clone, Debug)]
 pub enum SemValue {
-    Thunk(EnvThunk),
+    Thunk(Rc<ThunkBody>),
     Ctor(Ctor<CtorName, Rc<SemValue>>),
     Triv(Triv),
     VCons(Rc<[SemValue]>),
@@ -136,25 +36,71 @@ pub enum SemValue {
     Host(HostValue),
 }
 
+impl SemValue {
+    fn drain_children(&mut self, work: &mut Vec<SemValue>) {
+        match self {
+            | Self::Ctor(Ctor(_, payload)) => {
+                if let Some(inner) = Rc::get_mut(payload) {
+                    let extracted = std::mem::replace(inner, Self::Triv(Triv));
+                    if matches!(extracted, Self::Ctor(_) | Self::VCons(_) | Self::Thunk(_)) {
+                        work.push(extracted);
+                    }
+                }
+            }
+            | Self::VCons(fields) => {
+                if let Some(slice) = Rc::get_mut(fields) {
+                    for item in slice.iter_mut() {
+                        if matches!(item, Self::Ctor(_) | Self::VCons(_) | Self::Thunk(_)) {
+                            work.push(std::mem::replace(item, Self::Triv(Triv)));
+                        }
+                    }
+                }
+            }
+            | Self::Thunk(_) | Self::Triv(_) | Self::Literal(_) | Self::Host(_) => {}
+        }
+    }
+}
+
+impl Drop for SemValue {
+    fn drop(&mut self) {
+        if !matches!(self, Self::Ctor(_) | Self::VCons(_)) {
+            return;
+        }
+        let mut work = Vec::new();
+        self.drain_children(&mut work);
+        while let Some(mut next) = work.pop() {
+            next.drain_children(&mut work);
+        }
+    }
+}
+
 /// Runtime stack frames for computations.
 #[derive(Clone, Debug)]
 pub enum SemCompu {
-    Kont(RcCompu, Env<SemValue>, RcVPat),
+    Kont { body: ir::CompuId, env: EvalEnv<SemValue>, binder: ir::VPatId },
     App(SemValue),
-    Dtor(DtorName),
+    Dtor(DtorIdx),
 }
 
-/// Mutable runtime state threaded through evaluation.
-pub struct Runtime<'rt> {
+/// Result of one host builtin or foreign primitive invocation.
+#[derive(Clone, Debug)]
+pub enum HostAction {
+    Return(SemValue),
+    Resume { continuation: SemValue, arguments: Vec<SemValue> },
+}
+
+/// Mutable runtime state threaded through evaluation of a borrowed [`CoreProgram`].
+pub struct Runtime<'prog, 'rt> {
     pub input: &'rt mut dyn BufRead,
     pub output: &'rt mut dyn Write,
     pub stderr: &'rt mut dyn Write,
     pub args: &'rt [String],
     pub(crate) host: HostRuntime,
     pub(crate) foreign: crate::foreign::ForeignRuntime,
-    pub stack: rpds::VectorSync<SemCompu>,
-    pub env: Env<SemValue>,
-    pub program: DynamicsProgram,
+    pub stack: Vec<SemCompu>,
+    pub env: EvalEnv<SemValue>,
+    pub(crate) packages: Vec<SemValue>,
+    pub program: &'prog CoreProgram,
 }
 
 /// Program-level continuation produced by evaluation.

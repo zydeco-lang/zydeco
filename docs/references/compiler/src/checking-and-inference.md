@@ -2,7 +2,10 @@
 
 The [checker guide](../../../../lang/statics/src/check/README.md) maps the implementation modules.
 `Tycker` carries one source check's mutable state; `Tyck` and `PatternAction` select synthesis or analysis.
-Term and pattern dispatchers own task stacks, allocation-site guards, prepared expectations, and source-fact recording.
+Term and pattern dispatchers own a `Vec<TyckTask>` task stack, `Arc<[TyckTask]>` error stack snapshots,
+allocation-site guards, prepared expectations, and source-fact recording.
+Recursive checker judgments run inside [`Tycker::guarded`](../../../../lang/statics/src/check/driver.rs),
+which grows stack segments via `maybe_grow` and truncates `tasks` on frame exit.
 Syntax-family rules should use those entry points so recursive judgments preserve the same administrative invariants.
 
 [Typed syntax](../../../../lang/statics/src/syntax.rs) separates kinds, types, patterns, values, and computations.
@@ -39,12 +42,15 @@ where flexible value types arise.
 closing the region rejects newly introduced pattern fills whose solutions remain incomplete.
 A source closes independently before `CheckedTerm::reconcile` compares an import-site expectation.
 
-[Compatibility](../../../../lang/statics/src/check/lub.rs) combines constraints through `Lub`.
+[Compatibility](../../../../lang/statics/src/check/lub.rs) combines constraints through `Lub`,
+using a scoped mutable `Debruijn` binder context (`diverged_count`), identity kind reuse,
+reflexive short-circuiting, and an epoch-invalidated `lub_cache`.
 [Shape refinement](../../../../lang/statics/src/normalize/inference.rs) creates component fills
 of the required CBPV sorts and retains their originating site.
 Filling checks occurs and visible-skolem conditions.
 Sharing a flexible type across occurrences intersects admissible scopes; subsequent solutions obey that intersection.
-A failed speculative fill restores both solutions and scopes.
+A failed speculative fill restores both `solus` and `fill_scopes` in reverse chronological order
+via the `FillUndo` rollback trail, bumping `solus_epoch` to invalidate cached LUB and projection results.
 Diagnostics retain the inference site and the conflicting body or call-site constraints.
 Lexical and abstract-witness substitution follow solved type holes before rewriting their solutions.
 This lets an inferred factory result specialize independently at each application, including value-function fields;
@@ -72,8 +78,8 @@ A structural visitor alone cannot supply the missing classifier of a failed func
 
 The checker follows the [diagnostic contract](tooling.md#diagnostic-collection): each operation records its diagnostic
 where the failure arises and returns `ReportedError`, which callers propagate without reporting again.
-[CollectReported::collect_reported](../../../../lang/utils/src/err.rs) exhausts a sequence of independent requests
-and returns all successful results in order only when every request succeeds.
+[CollectReported::collect_reported](../../../../lang/foundation/src/err.rs) exhausts a sequence
+of independent requests and returns all successful results in order only when every request succeeds.
 Any failure rejects the combined result, so callers cannot accidentally publish an incomplete product or case tree.
 A probe asks whether a judgment holds, as a classifier view or completion's annotation compatibility does.
 Its failure answers the question instead of rejecting the program, so the probe keeps none
@@ -107,7 +113,7 @@ Successful programs incur no recovery scan.
 
 These outcomes belong to one checker invocation; an edited source starts a new check against the current query inputs.
 Rejected checks retain established static facts for diagnostics and tooling, but expose no checked root.
-The [source diagnostics regressions](../../../../lang/tests/tests/diagnostics.rs)
+The [source diagnostics regressions](../../../../lang/tests/tests/suite/diagnostics.rs)
 and [session regressions](../../../../lang/session/src/source/tests.rs) cover independent errors, exact locations,
 shared providers, unavailable binder scopes, rejected parent products, and correction through overlays.
 
@@ -130,8 +136,10 @@ and substitutes its abstract witnesses through the codomain.
 `ValPi` has a separate projection-based argument representation;
 its structured evidence handling does not extend `PackPi` to witnesses nested beneath arbitrary product fields.
 
-[Projection checking](../../../../lang/statics/src/check/projection) resolves a unique route
-through the receiver's allowed structure, including the identities shared by one selective opening of a packed value.
+[Projection checking](../../../../lang/statics/src/check/projection) shares deferred typing environments
+via `Arc<TyEnv>`, indexes a receiver's value and package field candidates once per `(TypeId, Arc<TyEnv>)` pair
+in `FieldIndex`, and resolves unique routes through the receiver's allowed structure,
+including the identities shared by one selective opening of a packed value.
 The resolved route records every product position and its product type.
 Selected runtime fields elaborate to ordinary typed patterns; unselected static positions receive internal witnesses.
 A whole-value alias carries the same opening's prefix for forwarding.
@@ -164,8 +172,11 @@ Nominal data and codata definitions receive fresh IDs only when their arms chang
 Filled normalization keeps nominal definition IDs and finalizes their arm classifiers through the arena-wide loop.
 This preserves the normalized lookup view attached to the existing arm IDs.
 
-The folder introduces no implicit memo table. Substitution can depend on an environment or assignment suffix,
-whereas finalization shares caches only after inference closes, as specified below.
+Each node in [`TypeArena`](../../../../lang/statics/src/arena.rs) maintains a one-byte `TypeSummary` bitmask,
+allowing `HoleResolver`, `LexicalSubstitution`, `AbstractSubstitution`, `TypeSupportCollector`,
+and `TypeId::unroll` to skip closed subgraphs in constant time while memoizing visited DAG nodes per traversal.
+Whereas finalization shares caches across all roots after inference closes, substitution
+and support memo tables stay scoped to each closed environment or assignment suffix.
 Occurrence-sensitive support collection retains its own scope-aware traversal.
 [Folder regressions](../../../../lang/statics/tests/folders.rs) check unchanged identity
 and allocation counts on shared tails; [substitution](../../../../lang/statics/tests/substitution.rs),
@@ -189,5 +200,6 @@ Finalized annotations feed coverage, residualization, and editor facts.
 [Inference fixtures](../../../../lang/tests/cases/inference),
 [classifier-query fixtures](../../../../lang/tests/cases/typeof),
 and [statics tests](../../../../lang/statics/tests) cover closure, scope, rejection, and reuse.
-The Rust [inference tests](../../../../lang/tests/tests/inference.rs) retain import boundaries and numeric matrices;
-[classifier-query tests](../../../../lang/tests/tests/typeof.rs) retain root classification and source dependencies.
+The Rust [inference tests](../../../../lang/tests/tests/suite/inference.rs) retain import boundaries
+and numeric matrices; [classifier-query tests](../../../../lang/tests/tests/suite/typeof.rs) retain root classification
+and source dependencies.

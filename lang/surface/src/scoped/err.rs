@@ -3,7 +3,7 @@ use crate::textual::syntax::SpanArena;
 use ariadne::{Label, Report, ReportKind};
 use std::ops::Range;
 use thiserror::Error;
-use zydeco_utils::span::{PathDisplay, Span, internal_ariadne_span};
+use zydeco_foundation::span::{PathDisplay, Span, internal_ariadne_span};
 
 /// Errors reported during name resolution.
 #[derive(Error, Debug, Clone)]

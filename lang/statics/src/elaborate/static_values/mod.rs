@@ -1,18 +1,24 @@
-//! Shared static value evaluation for dependent evidence and executable code.
+//! Shared static value evaluation and demand-driven elaboration into [`zydeco_ir::CoreProgram`].
 //!
 //! The evaluator retains lexical closures and mixed static/runtime structures
-//! while composing values. Only representable values are reified into the
-//! residual typed program. Source nodes remain available for editor queries;
-//! interpretation and lowering enter through the same residual root.
-//! Dependent application checking uses a shape-only inspection of this same
-//! evaluator, restricted to witness identities visible in the caller's scope.
+//! while composing values. Representable runtime terms are built directly into
+//! [`zydeco_ir::CoreArena`] on demand, keeping front-end arenas untouched for
+//! editor queries while ensuring interpretation and lowering consume a
+//! self-contained residual IR.
 
-use crate::{Alloc, Env, ReportedError, Result, SkolemScope, TyEnv, TyckError, Tycker, syntax::*};
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
+use crate::{Env, ReportedError, Result, SkolemScope, TyEnv, TyckError, Tycker, syntax::*};
+use rustc_hash::{FxHashMap, FxHashSet};
+use std::{cell::Cell, rc::Rc, sync::Arc};
+use zydeco_foundation::{
+    dense::{DenseArena, DenseId},
+    err::Report,
+    prelude::ArenaAccess,
+    span::Span,
 };
-use zydeco_utils::{err::Report, prelude::ArenaAccess};
+use zydeco_ir::{
+    CoreArena, CoreProgram, CoreRoot, DataId as IrDataId, ProductLayout, ProductProjection,
+    VCons as IrVCons, syntax as ir,
+};
 
 /// A static requirement that remains at an executable boundary.
 #[derive(Clone, Debug, thiserror::Error)]
@@ -55,14 +61,6 @@ impl StaticEliminationError {
             | Self::ReductionLimit { .. } => "static value reduction exceeded the compiler limit",
         }
     }
-}
-
-/// The original source root and its executable elaboration, when it has one.
-/// Unapplied static library values have no residual runtime root.
-#[derive(Clone, Debug)]
-pub struct StaticElaboration {
-    pub source: TermAnnId,
-    pub residual: Option<TermAnnId>,
 }
 
 /// Static evidence visible to dependent application checking. Runtime data
@@ -128,25 +126,60 @@ impl Environment {
     }
 }
 
+zydeco_foundation::define_idx! {
+    struct ShareId;
+}
+
+struct ShareSlot {
+    owner_scope: usize,
+    span: Span,
+    value: StaticValue,
+    materialized: Option<ir::VarId>,
+}
+
+#[derive(Clone, Copy)]
+struct CoreBinding {
+    binder: ir::VPatId,
+    bindee: ir::ValueId,
+    span: Span,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct EnvKey {
+    types: TypeAssignments,
+    values: Box<[(DefId, u64)]>,
+}
+
+#[derive(Default)]
+struct ScopeFrame {
+    bindings: Vec<CoreBinding>,
+    memo_keys: Vec<(CompuId, Arc<EnvKey>)>,
+}
+
 #[derive(Clone)]
-struct StaticValue(Arc<ValueInfo>);
+struct StaticValue(Rc<ValueInfo>);
 
 struct ValueInfo {
+    uid: u64,
     source: ValueId,
     ty: TypeId,
+    max_scope: usize,
     form: ValueForm,
-    /// A runtime binding established in the value's creation scope. Keeping
-    /// this alongside known structure preserves sharing through projections.
-    shared: Option<ValueId>,
+    shared: Option<ShareId>,
 }
 
 #[derive(Clone)]
 enum ValueForm {
-    Runtime(ValueId),
+    Hole { preallocated: Rc<Cell<Option<ir::ValueId>>> },
+    Triv,
+    Lit(Literal),
+    Foreign(zydeco_syntax::CheckedImport),
+    RuntimeVar(ir::VarId),
+    RuntimeTerm(Rc<Cell<Option<ir::ValueId>>>),
     Thunk { body: CompuId, env: Environment },
     Function { binder: ValBinder, body: ValueId, env: Environment },
     Product(Vec<StaticValue>),
-    Constructor(CtorName, StaticValue),
+    Constructor { data: Option<DataId>, name: CtorName, payload: StaticValue },
     Package(ConsN<StaticTermId, StaticValue>),
     Named(FieldName, StaticValue),
 }
@@ -165,19 +198,34 @@ impl StaticValue {
         }
     }
 
-    fn with_form(source: ValueId, ty: TypeId, form: ValueForm) -> Self {
-        Self(Arc::new(ValueInfo { source, ty, form, shared: None }))
-    }
-
     fn is_runtime(&self) -> bool {
         match &self.0.form {
             | ValueForm::Function { .. } => false,
-            | ValueForm::Runtime(_) | ValueForm::Thunk { .. } => true,
+            | ValueForm::Hole { .. }
+            | ValueForm::Triv
+            | ValueForm::Lit(_)
+            | ValueForm::Foreign(_)
+            | ValueForm::RuntimeVar { .. }
+            | ValueForm::RuntimeTerm { .. }
+            | ValueForm::Thunk { .. } => true,
             | ValueForm::Product(values) => values.iter().all(Self::is_runtime),
-            | ValueForm::Constructor(_, value)
-            | ValueForm::Package(ConsN(_, value))
-            | ValueForm::Named(_, value) => value.is_runtime(),
+            | ValueForm::Constructor { payload, .. }
+            | ValueForm::Package(ConsN(_, payload))
+            | ValueForm::Named(_, payload) => payload.is_runtime(),
         }
+    }
+
+    fn is_opaque_runtime(&self) -> bool {
+        matches!(
+            self.0.form,
+            ValueForm::Hole { .. }
+                | ValueForm::Triv
+                | ValueForm::Lit(_)
+                | ValueForm::Foreign(_)
+                | ValueForm::RuntimeVar { .. }
+                | ValueForm::RuntimeTerm { .. }
+                | ValueForm::Thunk { .. }
+        )
     }
 
     fn unnamed(&self) -> Self {
@@ -188,12 +236,6 @@ impl StaticValue {
     }
 }
 
-#[derive(Clone)]
-struct Binding {
-    binder: VPatId,
-    bindee: ValueId,
-}
-
 struct MatchFailure<'a> {
     scrutinee: StaticValue,
     arms: &'a [Matcher<VPatId, CompuId>],
@@ -201,27 +243,63 @@ struct MatchFailure<'a> {
     source: CompuId,
 }
 
-/// Builder for fresh residual terms in the checker's unpublished arena.
+/// Demand-driven static evaluator emitting self-contained [`CoreProgram`] nodes.
 pub(crate) struct StaticElaborator<'a, 'db> {
     tycker: &'a mut Tycker<'db>,
-    types: HashMap<(TypeId, TypeAssignments), TypeId>,
-    representations: HashMap<TypeId, bool>,
+    core: CoreArena,
+    protocols: crate::elaborate::protocols::SourceProtocols,
+    data_map: FxHashMap<DataId, IrDataId>,
+    types: FxHashMap<(TypeId, TypeAssignments), TypeId>,
+    representations: FxHashMap<TypeId, bool>,
+    unrolled_cache: FxHashMap<TypeId, TypeId>,
+    thunk_free_defs: FxHashMap<CompuId, Arc<[DefId]>>,
+    value_free_defs: FxHashMap<ValueId, Arc<[DefId]>>,
+    memoized_thunks: FxHashMap<(CompuId, Arc<EnvKey>), ir::VarId>,
+    shares: DenseArena<ShareId, ShareSlot>,
+    scopes: Vec<ScopeFrame>,
+    free_vars: FxHashMap<DefId, ir::VarId>,
+    next_uid: u64,
     reduction_depth: usize,
     remaining_reductions: usize,
     purpose: Purpose,
-    aliases: HashSet<DefId>,
+    aliases: FxHashSet<DefId>,
     application_site: Option<ValueId>,
 }
 
-mod value;
-mod pattern;
 mod computation;
+mod pattern;
 mod residual;
+mod value;
 
 impl<'a, 'db> StaticElaborator<'a, 'db> {
     const MAX_REDUCTION_DEPTH: usize = 128;
     const MAX_REDUCTIONS: usize = 65_536;
-    pub(crate) fn run(tycker: &'a mut Tycker<'db>, root: TermAnnId) -> Result<StaticElaboration> {
+
+    fn with_purpose(tycker: &'a mut Tycker<'db>, purpose: Purpose) -> Self {
+        Self {
+            tycker,
+            core: CoreArena::default(),
+            protocols: crate::elaborate::protocols::SourceProtocols::default(),
+            data_map: FxHashMap::default(),
+            types: FxHashMap::default(),
+            representations: FxHashMap::default(),
+            unrolled_cache: FxHashMap::default(),
+            thunk_free_defs: FxHashMap::default(),
+            value_free_defs: FxHashMap::default(),
+            memoized_thunks: FxHashMap::default(),
+            shares: DenseArena::default(),
+            scopes: Vec::new(),
+            free_vars: FxHashMap::default(),
+            next_uid: 0,
+            reduction_depth: 0,
+            remaining_reductions: Self::MAX_REDUCTIONS,
+            purpose,
+            aliases: FxHashSet::default(),
+            application_site: None,
+        }
+    }
+
+    pub(crate) fn run(tycker: &'a mut Tycker<'db>, root: TermAnnId) -> Result<Option<CoreProgram>> {
         let purpose = if matches!(root, TermAnnId::Value(..)) {
             Purpose::SelectExports
         } else {
@@ -231,72 +309,62 @@ impl<'a, 'db> StaticElaborator<'a, 'db> {
     }
 
     pub(crate) fn run_export(
-        tycker: &'a mut Tycker<'db>, root: TermAnnId,
-    ) -> Result<StaticElaboration> {
-        Self::run_with_purpose(tycker, root, Purpose::SelectExports)
+        tycker: &'a mut Tycker<'db>, root: CompuId, root_ty: TypeId,
+    ) -> Result<CoreProgram> {
+        let program = Self::run_with_purpose(
+            tycker,
+            TermAnnId::Compu(root, root_ty),
+            Purpose::SelectExports,
+        )?;
+        Ok(program.expect("computation root must yield a core program"))
     }
 
     fn run_with_purpose(
         tycker: &'a mut Tycker<'db>, root: TermAnnId, purpose: Purpose,
-    ) -> Result<StaticElaboration> {
-        let mut evaluator = Self {
-            tycker,
-            types: HashMap::new(),
-            representations: HashMap::new(),
-            reduction_depth: 0,
-            remaining_reductions: Self::MAX_REDUCTIONS,
-            purpose,
-            aliases: HashSet::new(),
-            application_site: None,
-        };
+    ) -> Result<Option<CoreProgram>> {
+        let mut evaluator = Self::with_purpose(tycker, purpose);
         let env = Environment::default();
-        let residual = match root {
+        let root = match root {
             | TermAnnId::Compu(root, _) => {
-                let residual = evaluator.computation(root, &env)?;
-                Some(TermAnnId::Compu(
-                    residual,
-                    evaluator.tycker.statics.annotations_compu[&residual],
-                ))
+                let compu = evaluator.computation(root, &env)?;
+                CoreRoot::Compu(compu)
             }
             | TermAnnId::Value(root, _) => {
-                let mut bindings = Vec::new();
-                let value = evaluator.value(root, &env, &mut bindings)?;
+                let root_scope = evaluator.enter_scope();
+                debug_assert_eq!(root_scope, 0);
+                let value = evaluator.value(root, &env)?;
                 if value.is_runtime() && evaluator.runtime_type(value.0.ty) {
-                    let value = evaluator.reify(&value)?;
-                    let residual = evaluator.value_bindings(bindings, value);
-                    Some(TermAnnId::Value(
-                        residual,
-                        evaluator.tycker.statics.annotations_value[&residual],
-                    ))
+                    let residual = evaluator.reify(&value)?;
+                    let frame = evaluator.exit_scope();
+                    let wrapped = evaluator.wrap_value_bindings(frame.bindings, residual);
+                    CoreRoot::Value(wrapped)
                 } else {
-                    None
+                    let _ = evaluator.exit_scope();
+                    return Ok(None);
                 }
             }
-            | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Type(_, _) => None,
+            | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Type(_, _) => {
+                return Ok(None);
+            }
         };
-        Ok(StaticElaboration { source: root, residual })
+        evaluator.core.protocols = Arc::new(evaluator.protocols.graph);
+        Ok(Some(CoreProgram::new(evaluator.core, root)))
     }
 
-    pub(crate) fn inspect(tycker: &'a mut Tycker<'db>, value: ValueId) -> StaticShape {
+    pub(crate) fn inspect(
+        tycker: &'a mut Tycker<'db>, value: ValueId, scope: &SkolemScope,
+    ) -> StaticShape {
         let errors = tycker.errors.len();
-        let scope = tycker.statics.env_value[&value].skolem_scope().clone();
-        let mut evaluator = Self {
-            tycker,
-            types: HashMap::new(),
-            representations: HashMap::new(),
-            reduction_depth: 0,
-            remaining_reductions: Self::MAX_REDUCTIONS,
-            purpose: Purpose::Inspect,
-            aliases: HashSet::new(),
-            application_site: None,
-        };
+        let mut evaluator = Self::with_purpose(tycker, Purpose::Inspect);
+        evaluator.enter_scope();
         // An unresolved type or value means evidence is unavailable. The
         // application checker owns that diagnostic. This evidence query
         // performs substitution, but no unification or execution.
-        let result = evaluator.value(value, &Environment::default(), &mut Vec::new());
+        let result = evaluator.value(value, &Environment::default());
+        let _ = evaluator.exit_scope();
         evaluator.tycker.errors.truncate(errors);
         result
-            .map(|value| value.shape().in_scope(evaluator.tycker, &scope))
+            .map(|value| value.shape().in_scope(evaluator.tycker, scope))
             .unwrap_or(StaticShape::Opaque)
     }
 

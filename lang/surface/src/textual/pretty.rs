@@ -2561,11 +2561,11 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn variable(&self, name: &VarName) -> RcDoc<'arena> {
-        RcDoc::text(name.0.clone())
+        RcDoc::text(name.as_str())
     }
 
     fn field(&self, name: &FieldName) -> RcDoc<'arena> {
-        RcDoc::text(name.0.clone())
+        RcDoc::text(name.as_str())
     }
 
     /// A field name marked with `#`, used on the left of `=` and `::`.
@@ -2574,11 +2574,11 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn constructor(&self, name: &CtorName) -> RcDoc<'arena> {
-        RcDoc::text(name.0.clone())
+        RcDoc::text(name.as_str())
     }
 
     fn destructor(&self, name: &DtorName) -> RcDoc<'arena> {
-        RcDoc::text(name.0.clone())
+        RcDoc::text(name.as_str())
     }
 
     fn literal(&self, literal: &Literal) -> RcDoc<'arena> {
@@ -2626,8 +2626,8 @@ mod tests {
     use super::*;
     use crate::bitter::{SourceUnitDesugarer, fmt::Formatter as BitterFormatter};
     use crate::textual::{LexicalRole, LexicalTokens, StrictParser};
+    use zydeco_foundation::pass::CompilerPass;
     use zydeco_syntax::Ugly;
-    use zydeco_utils::pass::CompilerPass;
 
     struct ParsedSource {
         unit: SourceUnit,
@@ -2842,8 +2842,6 @@ mod tests {
             ("f (g x)", "f (g x)\n"),
             ("(f x)/field", "(f x)/field\n"),
             ("((#field = field))", "(= field)\n"),
-            ("comatch x => x end", "fn x => x\n"),
-            ("! comatch x => x end", "! (fn x => x)\n"),
         ];
 
         cases.into_iter().for_each(|(source, expected)| {

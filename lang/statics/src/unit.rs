@@ -72,7 +72,7 @@ impl UnitClassifier<'_> {
                 | PrimitiveType::String => UnitValueType::String,
             },
             | Type::Label(Label(name, child)) => UnitValueType::Named {
-                name: name.0.clone(),
+                name: name.plain(),
                 value: Box::new(self.value(*child, depth + 1, remaining)?),
             },
             | Type::Prod(Prod(fields)) => UnitValueType::Product(

@@ -284,6 +284,10 @@ mod impl_span_arena {
         pub fn attach_map(&mut self, map: Arc<SourceMap>) {
             self.map = Some(map);
         }
+        /// Look up the span stored for an existing textual entity, if present.
+        pub fn get(&self, entity: impl Into<EntityId>) -> Option<&Span> {
+            self.index_of(entity.into()).map(|index| &self.spans[index])
+        }
         /// The source map decoding the stored spans, when one was attached.
         pub fn source_map(&self) -> Option<&SourceMap> {
             self.map.as_deref()

@@ -1,6 +1,6 @@
 use super::{AnnotationCompatibility, Switch, Tycker};
 use crate::{arena::ArenaAssoc, surface_syntax as su, syntax::*};
-use zydeco_utils::arena::ArenaAccess;
+use zydeco_foundation::arena::ArenaAccess;
 
 /// Incoming analytic constraints and per-definition evidence from one completion check.
 #[derive(Clone, Debug)]
@@ -102,7 +102,7 @@ mod tests {
             TyEnvT::new(environment, root).tyck(tycker, Action::ana(AnnId::Kind(vtype))).unwrap();
 
             let candidate =
-                Alloc::alloc(tycker, ss::VarName("candidate".to_owned()), AnnId::Kind(vtype), &());
+                Alloc::alloc(tycker, ss::VarName::new("candidate"), AnnId::Kind(vtype), &());
             let typing = tycker.completion_typing(&[candidate]).unwrap();
             assert_eq!(typing.expectations(), [AnnId::Set, AnnId::Kind(vtype)]);
             assert_eq!(typing.compatibility(candidate), AnnotationCompatibility::Mismatch);
@@ -118,8 +118,8 @@ mod tests {
             let vtype = ss::VType.build(tycker, &empty);
             let unit = ss::UnitTy.build(tycker, &empty);
             let definition =
-                Alloc::alloc(tycker, ss::VarName("Alias".to_owned()), AnnId::Kind(vtype), &());
-            let alias: ss::TypeId = Alloc::alloc(tycker, definition, vtype, &empty);
+                Alloc::alloc(tycker, ss::VarName::new("Alias"), AnnId::Kind(vtype), &());
+            let alias: ss::TypeId = Alloc::alloc(tycker, definition, vtype, &());
             let environment = empty + [(definition, AnnId::Type(unit))];
             TyEnvT::new(environment, root).tyck(tycker, Action::ana(alias.into())).unwrap();
 
@@ -136,22 +136,21 @@ mod tests {
             let vtype = ss::VType.build(tycker, &environment);
             let unit = ss::UnitTy.build(tycker, &environment);
             let fill = Alloc::alloc(tycker, root, (), &());
-            let pending: ss::TypeId = Alloc::alloc(tycker, fill, vtype, &environment);
+            let pending: ss::TypeId = Alloc::alloc(tycker, fill, vtype, environment.skolem_scope());
 
             assert!(
                 TyEnvT::new(environment, root).tyck(tycker, Action::ana(pending.into())).is_err()
             );
-            let value =
-                Alloc::alloc(tycker, ss::VarName("value".to_owned()), AnnId::Type(unit), &());
+            let value = Alloc::alloc(tycker, ss::VarName::new("value"), AnnId::Type(unit), &());
             let type_name =
-                Alloc::alloc(tycker, ss::VarName("TypeName".to_owned()), AnnId::Kind(vtype), &());
+                Alloc::alloc(tycker, ss::VarName::new("TypeName"), AnnId::Kind(vtype), &());
             let errors = tycker.errors.len();
             let typing = tycker.completion_typing(&[value, type_name]).unwrap();
 
             assert_eq!(typing.expectations(), [AnnId::Type(pending)]);
             assert_eq!(typing.compatibility(value), AnnotationCompatibility::Unknown);
             assert_eq!(typing.compatibility(type_name), AnnotationCompatibility::Mismatch);
-            assert!(tycker.statics.solus.get(&fill).is_none());
+            assert!(tycker.statics.solus.get(fill).is_none());
             assert_eq!(tycker.errors.len(), errors);
         });
     }

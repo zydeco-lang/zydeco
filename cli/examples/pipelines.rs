@@ -14,12 +14,12 @@ use std::{
     time::{Duration, Instant},
 };
 use zydeco_cli::CommandCompiler;
-use zydeco_session::ExecutableProgram;
-use zydeco_stackir::{BuiltinRootLowerer, FragmentProgram, SpsScheme, high::normalize::Normalizer};
-use zydeco_utils::{
+use zydeco_foundation::{
     pass::{CompilerPass, PassSequence},
     pipeline,
 };
+use zydeco_session::ExecutableProgram;
+use zydeco_stackir::{FragmentProgram, RootLowerer, SpsScheme, high::normalize::Normalizer};
 
 struct CountComputations<'a> {
     result: &'a Cell<usize>,
@@ -49,14 +49,9 @@ impl Measurement {
     where
         P: CompilerPass<FragmentProgram, Output = FragmentProgram, Error = Infallible>,
     {
-        let mut lower = BuiltinRootLowerer {
-            scoped: &checked.scoped,
-            statics: &checked.statics,
-            signature: checked.signature.clone(),
-            scheme: SpsScheme::BranchJoin,
-        };
+        let mut lower = RootLowerer { scheme: SpsScheme::BranchJoin };
         (0..count.get()).try_fold(Self::default(), |mut total, _| {
-            let input = lower.run(checked.root)?;
+            let input = lower.run_with_builtin(&checked.core, Some(&checked.builtin));
             let start = Instant::now();
             let mut passes = black_box(configure());
             total.construction += start.elapsed();

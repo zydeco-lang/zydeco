@@ -4,8 +4,8 @@ use std::{
     io,
     path::{Path, PathBuf},
 };
+use zydeco_foundation::span::Span;
 use zydeco_surface::metadata::DiscoveryRuleKind;
-use zydeco_utils::span::Span;
 
 /// Explicit discovery expands a project's source inputs before resolution starts.
 pub(crate) struct PackageDiscovery<'a> {

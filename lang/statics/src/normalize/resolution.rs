@@ -12,10 +12,18 @@ pub(crate) struct HoleResolver {
 
 impl HoleResolver {
     pub(crate) fn resolve(&mut self, root: TypeId, tycker: &mut Tycker<'_>) -> Result<TypeId> {
+        if !tycker
+            .statics
+            .types_pre
+            .summary(root)
+            .intersects(TypeSummary::HAS_FILL.union(TypeSummary::HAS_PROJ))
+        {
+            return Ok(root);
+        }
         if let Some(resolved) = self.types.get(&root).copied() {
             return Ok(resolved);
         }
-        root.resolve_holes(tycker, self)
+        zydeco_foundation::stack::maybe_grow(|| root.resolve_holes(tycker, self))
     }
 
     fn remember(&mut self, roots: impl IntoIterator<Item = TypeId>, resolved: TypeId) -> TypeId {
@@ -56,7 +64,7 @@ impl TypeId {
         // recursively lookup unfilled types as much as possible
         while let Fillable::Fill(fill) = tycker.statics.types_pre[&res].to_owned() {
             aliases.push(res);
-            let solu = match tycker.statics.solus.get(&fill).cloned() {
+            let solu = match tycker.statics.solus.get(fill).cloned() {
                 | None => break,
                 | Some(AnnId::Type(ty)) => ty,
                 | Some(AnnId::Set | AnnId::Kind(_)) => tycker.err(TyckError::SortMismatch)?,
@@ -66,7 +74,6 @@ impl TypeId {
                 return Ok(resolver.remember(aliases.into_iter().chain([root]), resolved));
             }
         }
-        let env = tycker.statics.env_at(res);
         let res = match tycker.statics.types_pre[&res].to_owned() {
             | Fillable::Fill(fill) => {
                 resolver.missing.insert(fill);
@@ -81,13 +88,12 @@ impl TypeId {
                         res,
                         Proj(target, name).into(),
                         tycker.statics.type_kind(res),
-                        &env,
                         target != head,
                     ),
                 }
             }
             | Fillable::Done(node) => {
-                resolver.fold_children(tycker, res, node, tycker.statics.type_kind(res), &env)?
+                resolver.fold_children(tycker, res, node, tycker.statics.type_kind(res))?
             }
         };
         Ok(resolver.remember(aliases.into_iter().chain([root, res]), res))
@@ -106,7 +112,7 @@ impl<'a> Tycker<'a> {
         match id {
             | AnnId::Set => f_set(self),
             | AnnId::Kind(id) => match self.statics.kinds_pre[id].to_owned() {
-                | Fillable::Fill(fill) => match self.statics.solus.get(&fill).cloned() {
+                | Fillable::Fill(fill) => match self.statics.solus.get(fill).cloned() {
                     | Some(AnnId::Kind(kind)) => {
                         self.filling(&kind.into(), f_set, f_kind, f_type, f_fill)
                     }
@@ -116,7 +122,7 @@ impl<'a> Tycker<'a> {
                 | Fillable::Done(kind) => f_kind(self, kind),
             },
             | AnnId::Type(id) => match self.statics.types_pre[id].to_owned() {
-                | Fillable::Fill(fill) => match self.statics.solus.get(&fill).cloned() {
+                | Fillable::Fill(fill) => match self.statics.solus.get(fill).cloned() {
                     | Some(AnnId::Type(ty)) => {
                         self.filling(&ty.into(), f_set, f_kind, f_type, f_fill)
                     }

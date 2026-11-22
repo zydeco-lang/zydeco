@@ -1,14 +1,14 @@
 pub use super::arena::*;
 pub use crate::{arena::*, syntax::*};
+pub use zydeco_foundation::span::{Sp, Span};
 pub use zydeco_syntax::*;
-pub use zydeco_utils::span::{Sp, Span};
 
 use crate::textual::syntax as t;
 use derive_more::From;
 
 /* ------------------------------- Identifier ------------------------------- */
 
-zydeco_utils::new_key_type! {
+zydeco_foundation::new_key_type! {
     pub struct DefId;
     pub struct PatId;
     pub struct TermId;

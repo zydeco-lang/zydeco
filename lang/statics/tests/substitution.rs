@@ -2,13 +2,11 @@ mod common;
 
 use common::TestFixture;
 use zydeco_statics::{Alloc, Lub, StaticsAlloc, Tycker, environment::*, syntax::*};
-use zydeco_utils::prelude::ArenaAccess;
 
 impl TestFixture {
     fn abst_type(tycker: &mut Tycker<'_>, kind: KindId) -> (AbstId, TypeId) {
-        let env = TyEnv::new();
         let abst = Alloc::alloc(tycker, None::<DefId>, kind, &());
-        let ty = Alloc::alloc(tycker, abst, kind, &env);
+        let ty = Alloc::alloc(tycker, abst, kind, &());
         (abst, ty)
     }
 }
@@ -17,16 +15,15 @@ impl TestFixture {
 fn lexical_substitution_specializes_a_solved_hole_without_mutating_its_solution() {
     TestFixture::run(|tycker| {
         let (vtype, _) = TestFixture::kinds(tycker);
-        let env = TyEnv::new();
-        let source_def: DefId = tycker.fresh();
-        let source = Alloc::alloc(tycker, source_def, vtype, &env);
-        let solution = Alloc::alloc(tycker, Prod(vec![source, source]), vtype, &env);
+        let source_def: DefId = tycker.fresh_def();
+        let source = Alloc::alloc(tycker, source_def, vtype, &());
+        let solution = Alloc::alloc(tycker, Prod(vec![source, source]), vtype, &());
         let site = tycker.data.root(tycker.db);
         let fill: FillId = Alloc::alloc(tycker, InferenceSite::Term(site), (), &());
-        let hole: TypeId = Alloc::alloc(tycker, fill, vtype, &env);
+        let hole: TypeId = Alloc::alloc(tycker, fill, vtype, &Default::default());
         assert!(fill.fill(tycker, solution.into()).is_ok());
-        let unit = Alloc::alloc(tycker, UnitTy, vtype, &env);
-        let opaque = Alloc::alloc(tycker, OpaqueTy, vtype, &env);
+        let unit = Alloc::alloc(tycker, UnitTy, vtype, &());
+        let opaque = Alloc::alloc(tycker, OpaqueTy, vtype, &());
 
         for replacement in [unit, opaque] {
             let substitution = TyEnv::from_iter([(source_def, replacement.into())]);
@@ -37,7 +34,7 @@ fn lexical_substitution_specializes_a_solved_hole_without_mutating_its_solution(
                 panic!("specialization must retain the solved product shape")
             };
             assert_eq!(components.as_slice(), [replacement, replacement]);
-            assert_eq!(tycker.statics.solus.get(&fill), Some(&solution.into()));
+            assert_eq!(tycker.statics.solus.get(fill), Some(&solution.into()));
         }
     });
 }
@@ -46,10 +43,9 @@ fn lexical_substitution_specializes_a_solved_hole_without_mutating_its_solution(
 fn abstract_substitution_rewrites_product_components() {
     TestFixture::run(|tycker| {
         let (vtype, _) = TestFixture::kinds(tycker);
-        let env = TyEnv::new();
         let (variable, variable_ty) = TestFixture::abst_type(tycker, vtype);
-        let product = Alloc::alloc(tycker, Prod(vec![variable_ty, variable_ty]), vtype, &env);
-        let replacement = Alloc::alloc(tycker, UnitTy, vtype, &env);
+        let product = Alloc::alloc(tycker, Prod(vec![variable_ty, variable_ty]), vtype, &());
+        let replacement = Alloc::alloc(tycker, UnitTy, vtype, &());
 
         let Ok(substituted) = product.subst_abst(tycker, (variable, replacement)) else {
             panic!("abstract substitution through a product failed")
@@ -66,17 +62,14 @@ fn nominal_substitution_reuses_unchanged_definitions() {
     TestFixture::run(|tycker| {
         let (vtype, _) = TestFixture::kinds(tycker);
         let empty = TyEnv::new();
-        let source_def: DefId = tycker.fresh();
-        let source = Alloc::alloc(tycker, source_def, vtype, &empty);
-        let replacement = Alloc::alloc(tycker, UnitTy, vtype, &empty);
+        let source_def: DefId = tycker.fresh_def();
+        let source = Alloc::alloc(tycker, source_def, vtype, &());
+        let replacement = Alloc::alloc(tycker, UnitTy, vtype, &());
         let substitution = TyEnv::from_iter([(source_def, replacement.into())]);
 
-        let data_id: DataId = tycker.fresh();
-        tycker
-            .statics
-            .datas
-            .insert_new(data_id, Data::new([(CtorName("make".to_owned()), source)]));
-        let data = Alloc::alloc(tycker, data_id, vtype, &empty);
+        let data_id: DataId =
+            tycker.statics.datas.alloc(Data::new([(CtorName::new("make"), source)]));
+        let data = Alloc::alloc(tycker, data_id, vtype, &());
 
         let Ok(unchanged_data) = data.subst_env(tycker, &empty) else {
             panic!("no-op data substitution failed")
@@ -90,16 +83,13 @@ fn nominal_substitution_reuses_unchanged_definitions() {
         };
         assert_ne!(specialized_data_id, data_id);
         assert_eq!(
-            tycker.statics.datas[&specialized_data_id].get(&CtorName("make".to_owned())),
+            tycker.statics.datas[&specialized_data_id].get(&CtorName::new("make")),
             Some(replacement)
         );
 
-        let codata_id: CoDataId = tycker.fresh();
-        tycker
-            .statics
-            .codatas
-            .insert_new(codata_id, CoData::new([(DtorName("open".to_owned()), source)]));
-        let codata = Alloc::alloc(tycker, codata_id, vtype, &empty);
+        let codata_id: CoDataId =
+            tycker.statics.codatas.alloc(CoData::new([(DtorName::new("open"), source)]));
+        let codata = Alloc::alloc(tycker, codata_id, vtype, &());
 
         let Ok(unchanged_codata) = codata.subst_env(tycker, &empty) else {
             panic!("no-op codata substitution failed")
@@ -114,7 +104,7 @@ fn nominal_substitution_reuses_unchanged_definitions() {
         };
         assert_ne!(specialized_codata_id, codata_id);
         assert_eq!(
-            tycker.statics.codatas[&specialized_codata_id].get(&DtorName("open".to_owned())),
+            tycker.statics.codatas[&specialized_codata_id].get(&DtorName::new("open")),
             Some(replacement),
         );
     });
@@ -124,13 +114,12 @@ fn nominal_substitution_reuses_unchanged_definitions() {
 fn abstract_substitution_stops_at_type_abstraction_binders() {
     TestFixture::run(|tycker| {
         let (vtype, _) = TestFixture::kinds(tycker);
-        let env = TyEnv::new();
         let (witness, body) = TestFixture::abst_type(tycker, vtype);
-        let binder = TypeBinder::with_witness(tycker, witness, &env);
+        let binder = TypeBinder::with_witness(tycker, witness);
         let function_kind = Alloc::alloc(tycker, Arrow(vtype, vtype), (), &());
         let abstraction =
-            Alloc::alloc(tycker, TypeAbstraction { binder, body }, function_kind, &env);
-        let replacement = Alloc::alloc(tycker, UnitTy, vtype, &env);
+            Alloc::alloc(tycker, TypeAbstraction { binder, body }, function_kind, &());
+        let replacement = Alloc::alloc(tycker, UnitTy, vtype, &());
 
         let Ok(substituted) = abstraction.subst_abst(tycker, (witness, replacement)) else {
             panic!("substitution through a type abstraction failed")
@@ -142,20 +131,19 @@ fn abstract_substitution_stops_at_type_abstraction_binders() {
 #[test]
 fn abstract_substitution_respects_nested_quantifiers() {
     TestFixture::run(|tycker| {
-        let env = TyEnv::new();
         let (vtype, ctype) = TestFixture::kinds(tycker);
-        let unit = Alloc::alloc(tycker, UnitTy, vtype, &env);
+        let unit = Alloc::alloc(tycker, UnitTy, vtype, &());
         let (witness, witness_ty) = TestFixture::abst_type(tycker, vtype);
-        let binder = TypeBinder::with_witness(tycker, witness, &env);
+        let binder = TypeBinder::with_witness(tycker, witness);
         let ret_kind = Alloc::alloc(tycker, Arrow(vtype, ctype), (), &());
-        let ret = Alloc::alloc(tycker, RetTy, ret_kind, &env);
-        let returns = Alloc::alloc(tycker, App(ret, witness_ty), ctype, &env);
-        let universal = Alloc::alloc(tycker, Forall(binder.clone(), returns), ctype, &env);
+        let ret = Alloc::alloc(tycker, RetTy, ret_kind, &());
+        let returns = Alloc::alloc(tycker, App(ret, witness_ty), ctype, &());
+        let universal = Alloc::alloc(tycker, Forall(binder.clone(), returns), ctype, &());
         let existential = Alloc::alloc(
             tycker,
             Exists { binder: binder.clone(), mode: ExistsMode::Abstract, body: witness_ty },
             vtype,
-            &env,
+            &(),
         );
         // A shared complete type retains its binder; only an opened body
         // receives the instantiation of that binder's witness.
@@ -174,7 +162,7 @@ fn abstract_substitution_respects_nested_quantifiers() {
         let opened = returns
             .subst_abst(tycker, (witness, unit))
             .unwrap_or_else(|_| panic!("substitution or comparison must succeed"));
-        let expected = Alloc::alloc(tycker, App(ret, unit), ctype, &env);
+        let expected = Alloc::alloc(tycker, App(ret, unit), ctype, &());
         Lub::lub(expected, opened, tycker)
             .unwrap_or_else(|_| panic!("substitution or comparison must succeed"));
 
@@ -186,7 +174,7 @@ fn abstract_substitution_respects_nested_quantifiers() {
             instantiated, universal,
             "later assignments must not capture a replacement's binder"
         );
-        let wrong = Alloc::alloc(tycker, Forall(binder, expected), ctype, &env);
+        let wrong = Alloc::alloc(tycker, Forall(binder, expected), ctype, &());
         assert!(
             Lub::lub(universal, wrong, tycker).is_err(),
             "a constant result is not the bound result"

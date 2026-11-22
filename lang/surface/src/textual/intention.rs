@@ -5,7 +5,7 @@ use std::{
     collections::BTreeSet,
     ops::{Bound::Excluded, Range},
 };
-use zydeco_utils::arena::{ArenaAccess, ArenaAssoc};
+use zydeco_foundation::arena::{ArenaAccess, ArenaAssoc};
 
 /// A zero-based source line used only for relative layout comparisons.
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]

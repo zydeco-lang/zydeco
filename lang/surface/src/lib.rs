@@ -1,6 +1,6 @@
 /// Defines the GenArena and the id types for all the structures
 pub mod arena {
-    pub use zydeco_utils::arena::*;
+    pub use zydeco_foundation::arena::*;
 }
 
 /// Typed interpretations of structurally parsed metadata annotations.

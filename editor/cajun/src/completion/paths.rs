@@ -7,12 +7,12 @@ use tower_lsp::lsp_types::{
     CompletionItem, CompletionItemKind, CompletionList, CompletionResponse, CompletionTextEdit,
     TextEdit,
 };
+use zydeco_foundation::span::FileMap;
 use zydeco_session::{
     CompilerSession,
     source::{SourceKind, SourcePathCandidateKind},
 };
 use zydeco_surface::textual::{LexicalRole, LexicalTokens, escape::LiteralEscapes};
-use zydeco_utils::span::FileMap;
 
 pub(super) struct SourcePathCursor {
     directory: PathBuf,

@@ -196,7 +196,7 @@ A polymorphic relay can retain an entry such
 as `closure[forall a0 . forall a1 . Int :: a0 :: a0 :: Thk(a0 :: a0 :: a1) :: a1]`.
 These names describe source relationships and convey no representation size or allocation policy.
 
-[Protocol regressions](../../../../../lang/tests/tests/stack_protocols.rs) check those surviving descriptions,
+[Protocol regressions](../../../../../lang/tests/tests/suite/stack_protocols.rs) check those surviving descriptions,
 rejected argument/result and observation conflicts, graph integrity, and a source computation
 that accumulates a runtime-dependent number of argument/tag frames before its installed continuation.
 That program dynamically selects and returns its codata consumer, and also calls a returned arithmetic worker

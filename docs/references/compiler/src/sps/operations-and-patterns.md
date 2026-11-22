@@ -2,29 +2,32 @@
 
 ## Primitive Calls
 
-A known primitive thunk initially has the form `closure • => extern f •`.
-Recognizing it through aliases, projections, or constructor payloads exposes the external call even
-at several call sites: only the operation identity is copied, with each site's original stack.
-Known integer or float arithmetic with two visible arguments becomes `Primitive { operation, operands }`:
+Integer and float arithmetic builtins construct intrinsic closures directly in `ExternalFunction::make_function`:
 
 ```text
-extern add (arg(x) :: arg(y) :: (kont z => M)) ==> let z = PrimitiveAdd(x, y) in M
+closure • => let arg(x) :: • = • in let arg(y) :: • = • in • @ PrimitiveOp(x, y)
 ```
 
-The argument stack's construction order evaluates the second operand before the first.
-The remaining stack must satisfy the movement conditions above.
-The result stays shared, and exposing its continuation as a binding avoids allocating a continuation record.
+When normalized against visible arguments, an applied arithmetic primitive eliminates the wrapper
+and exposes `Primitive { operation, operands }` in place:
+
+```text
+primitive(arg(x) :: arg(y) :: (kont z => M)) ==> let z = PrimitiveAdd(x, y) in M
+```
+
+The argument stack's construction order evaluates the first operand before the second,
+and when the remaining continuation or trailing stack is movable,
+entering the intrinsic closure binds any trapping leading operand in evaluation order
+before discarding dead pure results.
 Literal folding obeys [L13's numeric rules](../../../language/src/primitives-and-capabilities.md).
 A zero divisor remains a runtime operation at its original position, even if its result is unused.
 
-When optional normalization is disabled, retained arithmetic calls execute through the ordinary host-call ABI.
-The native runtime and WebAssembly host implement those calls with the same numeric rules
-and spare-box contracts as their corresponding primitive instructions.
-
-Escaping arithmetic retains its thunk interface, with an inline primitive in its body.
+Even when optional normalization is disabled or an arithmetic worker escapes as a first-class closure,
+it retains its thunk interface with an inline `Primitive` instruction inside its body rather
+than invoking a host arithmetic stub.
 An unknown callee remains indirect.
-Scalar comparisons, address calculation, and scalar memory accesses have the intrinsic bodies described below;
-other known Builtin operations remain external calls.
+Scalar comparisons, address calculation, and scalar memory accesses likewise carry intrinsic bodies;
+other known builtin operations remain external host calls.
 The typed primitive survives SPSLow;
 [scalar region lowering](../native-runtime.md#scalar-value-boundaries) then makes representation conversions explicit
 for ZASM and direct Wasm instruction selection.
@@ -174,7 +177,7 @@ Structural aliases survive SPS and SPSLow; assembly saves and reloads their bind
 Resolved field routes already consist of ordinary structural patterns and erased witness evidence.
 
 Normalizer and pipeline tests pair reductions with shared closures, traps, unknown branches, and suspended recursion.
-[Demand tests](../../../../../lang/tests/tests/demand.rs),
+[Demand tests](../../../../../lang/tests/tests/suite/demand.rs),
 [pattern fixtures](../../../../../lang/tests/cases/literal-pattern),
-and [core fixtures](../../../../../lang/tests/tests/core.rs) exercise field pruning and compiled decisions.
+and [core fixtures](../../../../../lang/tests/tests/suite/core.rs) exercise field pruning and compiled decisions.
 A new reduction needs both a reducible example and a case where sharing, stack movement, or effects prevent it.

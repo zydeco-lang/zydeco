@@ -1,7 +1,7 @@
 use crate::bitter::syntax as b;
 use crate::textual::syntax as t;
 use derive_more::{AsMut, AsRef};
-use zydeco_utils::prelude::{FrozenArena, IdAllocator};
+use zydeco_foundation::prelude::{FrozenArena, IdAllocator};
 
 /// Owns bitter allocation and provenance independently of a lowering operation.
 #[derive(Debug, AsRef, AsMut)]

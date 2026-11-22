@@ -17,8 +17,8 @@ use crate::{
     },
 };
 use std::{collections::HashMap, ops::Range};
+use zydeco_foundation::pass::CompilerPass;
 use zydeco_syntax::Ugly;
-use zydeco_utils::pass::CompilerPass;
 
 use super::*;
 
@@ -328,7 +328,6 @@ fn separates_term_body_arrows_from_type_arrows() {
         "fix recur => ret ()",
         "match value | _ => ret () end",
         "comatch | .read => ret () end",
-        "comatch value => ret value end",
     ]
     .into_iter()
     .for_each(|source| {
@@ -343,6 +342,7 @@ fn separates_term_body_arrows_from_type_arrows() {
         "fn value -> ret value",
         "fix recur -> ret ()",
         "match value | _ -> ret () end",
+        "comatch value => ret value end",
         "comatch | .read -> ret () end",
         "comatch value -> ret value end",
     ]
@@ -1961,7 +1961,7 @@ fn named_projection_binds_tighter_than_undelimited_prefix_forms() {
     let Term::Proj(Proj(receiver, field)) = &constructor_parser.arena.terms[projected] else {
         panic!("expected constructor introduction to consume a projection")
     };
-    assert_eq!(name.0, "+Some");
+    assert_eq!(name, "+Some");
     assert!(matches!(constructor_parser.arena.terms[receiver], Term::Var(_)));
     assert_eq!(field.plain(), "value");
 }
