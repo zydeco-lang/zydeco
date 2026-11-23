@@ -169,9 +169,9 @@ system/package.zy          system data types and capability-preserving assembly
 algebra/monoid.zy          general-purpose monoid dictionary
 
 effect/monad.zy            Top, Monad, Algebra, MonadInstance, and WithMonad; no host argument
-effect/{ret,reader,writer,option}.zy  elementary carriers and derived transformers
+effect/{ret,reader,writer,option}.zy  provider-independent carriers and derived transformers
 effect/transformer*.zy              shared transformer interfaces and derivation adapters
-effect/{state,exception,state-exn}.zy  state, exceptions, and their combination
+effect/{state,exception,state-exn}.zy  provider-independent state, exceptions, and their combination
 effect/nondet.zy           MonadNonDet interface and make factory for ordered search and observers
 ```
 
@@ -341,8 +341,8 @@ to open a concrete instance and pass it to a generic client.
 The
 [elementary effect reference](../../docs/references/library/src/effects/transformers-and-instances.md#elementary-effect-instances)
 specifies Reader's scoped replacement, Writer's pure monoid contract, and Optional's short-circuiting. Import
-[Ret](effect/ret.zy), [Reader](effect/reader.zy), [Writer](effect/writer.zy), or [Option](effect/option.zy) explicitly
-with the same Builtin value used by other modules. Reader, Writer, Option, State, Exception, and NonDet use the shared
+[Ret](effect/ret.zy), [Reader](effect/reader.zy), [Writer](effect/writer.zy), or [Option](effect/option.zy) directly
+without a Builtin argument. Reader, Writer, Option, State, Exception, and NonDet use the shared
 [derived transformer interface](../../docs/references/library/src/effects/transformers-and-instances.md#derived-relative-monad-transformers).
 Their transformer instances package a lift together with the monad and effect operations. The
 [translated example](../tests/effects/effect-monadic.zy) shows their carrier-polymorphic clients, the
@@ -369,9 +369,9 @@ the exact constructors and runners.
 For example, StateT over Writer keeps state operations and base output at one transformed carrier:
 
 ```zydeco
-param (/string; builtin) : @(import("builtin.zy")) in
-let writer = builtin |> (@(import("effect/writer.zy"))) in
-let state = builtin |> (@(import("effect/state.zy"))) in
+param (/string) : @(import("builtin.zy")) in
+let writer = @(import("effect/writer.zy")) in
+let state = @(import("effect/state.zy")) in
 let (W, w) = writer/instance String (#empty = "", #append = string/append) in
 let (SW, sw) = state/transformer_instance Int W w/monad in
 ! state/run_state_t Int W Int 3 {

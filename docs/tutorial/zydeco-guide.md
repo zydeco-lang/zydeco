@@ -507,7 +507,7 @@ and the [relative-monad contract](../references/library/src/effects/relative-mon
 
 ## 9. Effect modules
 
-The effect modules are ordinary value-function builders from Builtin to packed values:
+The elementary effect modules are provider-independent packed values imported directly without a Builtin argument:
 
 | Module | Exports |
 | --- | --- |
@@ -516,12 +516,10 @@ The effect modules are ordinary value-function builders from Builtin to packed v
 | `exception.zy` | `Exception`, `MonadThrow`, `IException`, `instance`, `raise`, `catch`, `handle_exception` |
 | `state-exn.zy` | `StateExn`, `IStateExn`, `instance`, `run_state_exn` |
 
-Apply a builder and open the selected fields directly:
+Open the selected fields directly:
 
 ```zydeco
-param (/Int; builtin) : @(import("../../lib/std/builtin.zy")) in
-let make_state = @(import("../../lib/std/effect/state.zy")) in
-let (/instance; /eval_state) = builtin |> make_state in
+let (/instance; /eval_state) = @(import("../../lib/std/effect/state.zy")) in
 let ops = instance Int in
 ! eval_state Int Int 7 { ! ops/state .get }
 ```
@@ -536,9 +534,7 @@ The runners provide convenient interfaces; their necessity depends on the expose
 the handler operations expose its alternatives to clients.
 
 ```zydeco
-param (/String; /Int; /Ret; builtin) : @(import("../../lib/std/builtin.zy")) in
-let make_exception = @(import("../../lib/std/effect/exception.zy")) in
-let (/instance; /raise; /handle_exception) = builtin |> make_exception in
+let (/instance; /raise; /handle_exception) = @(import("../../lib/std/effect/exception.zy")) in
 let (M, ops) = instance String in
 ! handle_exception String Int (Ret Int)
   { ! raise String (M, ops) Int { comatch end } "stop" }
@@ -564,11 +560,8 @@ The client then adapts the dictionaries to the operation signatures written with
 This example reads the old state, replaces it, and returns both the old and final state:
 
 ```zydeco
-param (/VType; /Thk; /Ret; /Unit; /Int; builtin) : @(import("../../lib/std/builtin.zy")) in
-let monad_basis = @(import("../../lib/std/effect/monad.zy")) in
-let (/Monad; /Algebra; /WithMonad) = monad_basis in
-let make_state = @(import("../../lib/std/effect/state.zy")) in
-let (/IState; /instance; /run_state) = builtin |> make_state in
+let (/Monad; /Algebra; /WithMonad) = @(import("../../lib/std/effect/monad.zy")) in
+let (/IState; /instance; /run_state) = @(import("../../lib/std/effect/state.zy")) in
 let program : Thk (pi ((M, _) : WithMonad (IState Int)) . Int -> M Int) = {
   fn ((M, (/monad; /state)) : WithMonad (IState Int)) =>
     (@[monadic] fn (get : Thk (Ret Int)) (put : Thk (Int -> Ret Unit)) (next : Int) =>

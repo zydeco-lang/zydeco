@@ -30,7 +30,7 @@ fn either_shares_its_carrier_with_exception_and_the_data_signature() {
     let source = EitherCase::source(&format!(
         r#"
 let (/Either = DirectEither) = @(import("{library}/data/either.zy")) in
-let (/ExceptionT) = builtin |> (@(import("{library}/effect/exception.zy"))) in
+let (/ExceptionT) = @(import("{library}/effect/exception.zy")) in
 let _ = val (L : VType) (R : VType) (value : Either L R) =>
   (
     value : DirectEither L R

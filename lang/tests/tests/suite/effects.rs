@@ -180,3 +180,32 @@ let hidden = { fn (ops : WithMonad (IState Int)) => ! read ops } in
         TyckDiagnosticCode::PackageWitnessesUnavailable,
     );
 }
+
+#[test]
+fn pure_effect_modules_import_directly_without_builtin_application() {
+    let effect = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../lib/std/effect")
+        .display()
+        .to_string();
+    let accepted = format!(
+        r#"
+let (/instance = ret_instance) = @(import("{effect}/ret.zy")) in
+let (/State; /instance = state_instance; /eval_state) = @(import("{effect}/state.zy")) in
+let (S, s) = state_instance Int in
+let _ : Thk (Ret Int) = {{ ! ret_instance/monad .return Int 7 }} in
+let _ : Thk (Ret Int) = {{ ! eval_state Int Int 7 {{ ! s/state .get }} }} in
+! exit 0
+"#
+    );
+    SourceCase::assert_accepted(SourceCase::check_invariants(&accepted));
+    SourceCase::assert_accepted(SourceCase::lower(&accepted));
+
+    let rejected = format!(
+        r#"
+let _ = builtin |> (@(import("{effect}/state.zy"))) in
+! exit 0
+"#
+    );
+    SourceCase::assert_rejected(SourceCase::check(&rejected), TyckDiagnosticCode::TypeExpected);
+    SourceCase::assert_rejected(SourceCase::lower(&rejected), TyckDiagnosticCode::TypeExpected);
+}

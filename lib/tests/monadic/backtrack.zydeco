@@ -5,7 +5,7 @@ param (/numeric; /stdio; /process; builtin) : @(import(
 let (/make = make_data) = @(import("../../std/data/package.zy")) in
 let (/Bool; /List; /list; /bool; data_package) = make_data builtin in
 let (/Monad; /Algebra) = @(import("../../std/effect/monad.zy")) in
-let (/instance = ret_instance) = builtin |> (@(import("../../std/effect/ret.zy"))) in
+let (/instance = ret_instance) = @(import("../../std/effect/ret.zy")) in
 let nondet =
   let (/make = make_nondet) = @(import("../../std/effect/nondet.zy")) in
   make_nondet builtin data_package
@@ -30,8 +30,11 @@ let search : Thk (N (Int * Int)) = {
       do matches <- ! eq sum 5;
       do _ <- ! guard matches;
       ret (x, y)
-  ) N n/monad Bool { comatch end }
-  { ! nondet/choose (N, n) Int xs } { ! nondet/choose (N, n) Int ys } {
+  ) N n/monad Bool {
+    comatch
+    end
+  }
+    { ! nondet/choose (N, n) Int xs } { ! nondet/choose (N, n) Int ys } {
     fn x y =>
       ! nondet/transformer (Ret, ret_instance/monad) .lift Int { ! numeric/int/add x y }
   } {

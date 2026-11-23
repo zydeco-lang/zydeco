@@ -5,8 +5,8 @@ param (/numeric; /string; builtin) : @(import(
 )) in
 let (/List; /list; data_package) = builtin |> make_data in
 let nondet = (builtin |> make_nondet) data_package in
-let reader = builtin |> (@(import("../../std/effect/reader.zy"))) in
-let (/Monoid; writer) = builtin |> (@(import("../../std/effect/writer.zy"))) in
+let reader = @(import("../../std/effect/reader.zy")) in
+let (/Monoid; writer) = @(import("../../std/effect/writer.zy")) in
 let (/with_trace) = builtin |> (@(import("effect-test-basis.zy"))) in
 let (/render) = (builtin |> (@(import("nondet-test-basis.zy")))) data_package in
 let (/branch_laws) = builtin |> (@(import("nondet-law-suite.zy"))) in

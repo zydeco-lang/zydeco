@@ -9,133 +9,132 @@ let MonadState
   | .put : S -> M Unit
   end
 in
-val ((/OS = _; builtin) : @(import("../builtin.zy"))) =>
+begin
+  let (/MonadTrans; /from_monadic; /from_instance) = @(import("transformer.zy")) in
+  let (/instance = ret_instance) = @(import("ret.zy")) in
   begin
-    let (/MonadTrans; /from_monadic; /from_instance) = @(import("transformer.zy")) in
-    let (/instance = ret_instance) = builtin |> (@(import("ret.zy"))) in
-    begin
-      let triv : Thk Top = {
-        comatch
-        end
-      } that
-      let StateSource (S : VType) (A : VType) = S -> Ret (A * S) that
-      let StateT (S : VType) (M : VType -> CType) =
-        (@[monadic] StateSource) M S
-      that
-      let State (S : VType) = StateT S Ret that
-      let IState (S : VType) (M : VType -> CType) = (#state :: Thk (MonadState S M)) that
-
-      let val transformer_instance (S : VType) (M : VType -> CType) (base : Thk (Monad M)) =
-        let translated = {
-          (
-            @[monadic] begin
-              let (/with_lift) = @(import("transformer-source.zy")) in
-              let State = StateSource in
-
-              let Source (S : VType) =
-                codata
-                | .core : Transformer Ret (State S)
-                | .state : MonadState S (State S)
-                end
-              in
-              fn (S : VType) =>
-                (
-                  comatch
-                  | .core => ! with_lift (State S) {
-                    comatch
-                    | .return A a => fn s => ret (a, s)
-                    | .bind A B m f => fn s =>
-                      do (a, next) <- ! m s;
-                      ! f a next
-                    end
-                  }
-                  | .state =>
-                    comatch
-                    | .get => fn s => ret (s, s)
-                    | .put next => fn _ => ret ((), next)
-                    end
-                  end : Source S
-                )
-            end
-          ) M base S triv
-        } in
-        let core = { ! from_monadic M (StateT S M) { ! translated .core } } in
-        pack (T as StateT S M)
-        where
-          #monad = { ! core .monad },
-          #lift = { ! core .lift },
-          #state = (
-            {
-              comatch
-              | .get => ! translated .state .get
-              | .put => ! translated .state .put
-              end
-            } : Thk (MonadState S (StateT S M))
-          )
-        end
-      that
-      let val instance (S : VType) =
-        let (T, operations) = transformer_instance S Ret ret_instance/monad in
-        pack (M as State S)
-        where
-          #monad = operations/monad, #state = operations/state end
-      that
-
-      def ! transformer (S : VType) : MonadTrans (StateT S) =
-        fn (M, base) =>
-          let (T, (/monad; /lift)) = transformer_instance S M base in
-          ! from_instance M T (= monad, = lift)
-      that
-
-      def ! run_state_t (S : VType) (M : VType -> CType) (A : VType)
-        (initial : S) (m : Thk (StateT S M A))
-      : M (A * S) = ! m initial that
-
-      def ! modify (S : VType)
-        ((M, (/monad; /state)) : WithMonad (IState S))
-        (f : Thk (S -> Ret S))
-      : M Unit =
-          ! monad .bind S Unit { ! state .get } {
-            fn s =>
-              do s' <- ! f s;
-              ! state .put s'
-          }
-      that
-
-      -- Runners expose the final state to an arbitrary computation continuation,
-      -- so the module remains independent of OS.
-      def ! run_state (S : VType)
-        (A : VType)
-        (B : CType)
-        (initial : S)
-        (m : Thk (State S A))
-        (k : Thk (S -> A -> B))
-      : B =
-          do (a, s') <- ! m initial;
-          ! k s' a
-      that
-
-      def ! eval_state (S : VType)
-        (A : VType)
-        (initial : S)
-        (m : Thk (State S A))
-      : Ret A =
-          do (a, _) <- ! m initial;
-          ret a
-      that
-      pack
-        (= State as State)
-        (= StateT as StateT)
-        (= MonadState as MonadState)
-        (= IState as IState)
-      where
-        = instance,
-        = transformer_instance,
-        = transformer,
-        = modify,
-        = run_state,
-        = run_state_t,
-        = eval_state
+    let triv : Thk Top = {
+      comatch
       end
+    } that
+    let StateSource (S : VType) (A : VType) = S -> Ret (A * S) that
+    let StateT (S : VType) (M : VType -> CType) =
+      (@[monadic] StateSource) M S
+    that
+    let State (S : VType) = StateT S Ret that
+    let IState (S : VType) (M : VType -> CType) = (#state :: Thk (MonadState S M)) that
+
+    let val transformer_instance (S : VType) (M : VType -> CType) (base : Thk (Monad M)) =
+      let translated = {
+        (
+          @[monadic] begin
+            let (/with_lift) = @(import("transformer-source.zy")) in
+            let State = StateSource in
+
+            let Source (S : VType) =
+              codata
+              | .core : Transformer Ret (State S)
+              | .state : MonadState S (State S)
+              end
+            in
+            fn (S : VType) =>
+              (
+                comatch
+                | .core => ! with_lift (State S) {
+                  comatch
+                  | .return A a => fn s => ret (a, s)
+                  | .bind A B m f => fn s =>
+                    do (a, next) <- ! m s;
+                    ! f a next
+                  end
+                }
+                | .state =>
+                  comatch
+                  | .get => fn s => ret (s, s)
+                  | .put next => fn _ => ret ((), next)
+                  end
+                end : Source S
+              )
+          end
+        ) M base S triv
+      } in
+      let core = { ! from_monadic M (StateT S M) { ! translated .core } } in
+      pack (T as StateT S M)
+      where
+        #monad = { ! core .monad },
+        #lift = { ! core .lift },
+        #state = (
+          {
+            comatch
+            | .get => ! translated .state .get
+            | .put => ! translated .state .put
+            end
+          } : Thk (MonadState S (StateT S M))
+        )
+      end
+    that
+    let val instance (S : VType) =
+      let (T, operations) = transformer_instance S Ret ret_instance/monad in
+      pack (M as State S)
+      where
+        #monad = operations/monad, #state = operations/state end
+    that
+
+    def ! transformer (S : VType) : MonadTrans (StateT S) =
+      fn (M, base) =>
+        let (T, (/monad; /lift)) = transformer_instance S M base in
+        ! from_instance M T (= monad, = lift)
+    that
+
+    def ! run_state_t (S : VType) (M : VType -> CType) (A : VType)
+      (initial : S) (m : Thk (StateT S M A))
+    : M (A * S) = ! m initial that
+
+    def ! modify (S : VType)
+      ((M, (/monad; /state)) : WithMonad (IState S))
+      (f : Thk (S -> Ret S))
+    : M Unit =
+        ! monad .bind S Unit { ! state .get } {
+          fn s =>
+            do s' <- ! f s;
+            ! state .put s'
+        }
+    that
+
+    -- Runners expose the final state to an arbitrary computation continuation,
+    -- so the module remains independent of OS.
+    def ! run_state (S : VType)
+      (A : VType)
+      (B : CType)
+      (initial : S)
+      (m : Thk (State S A))
+      (k : Thk (S -> A -> B))
+    : B =
+        do (a, s') <- ! m initial;
+        ! k s' a
+    that
+
+    def ! eval_state (S : VType)
+      (A : VType)
+      (initial : S)
+      (m : Thk (State S A))
+    : Ret A =
+        do (a, _) <- ! m initial;
+        ret a
+    that
+    pack
+      (= State as State)
+      (= StateT as StateT)
+      (= MonadState as MonadState)
+      (= IState as IState)
+    where
+      = instance,
+      = transformer_instance,
+      = transformer,
+      = modify,
+      = run_state,
+      = run_state_t,
+      = eval_state
     end
   end
+end

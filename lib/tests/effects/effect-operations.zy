@@ -2,10 +2,10 @@ param (/numeric; /string; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
 let (/Monad; /Algebra; /WithMonad) = @(import("../../std/effect/monad.zy")) in
-let (/instance = ret_instance) = builtin |> (@(import("../../std/effect/ret.zy"))) in
-let reader = builtin |> (@(import("../../std/effect/reader.zy"))) in
-let (/Monoid; writer) = builtin |> (@(import("../../std/effect/writer.zy"))) in
-let (/Option; optional) = builtin |> (@(import("../../std/effect/option.zy"))) in
+let (/instance = ret_instance) = @(import("../../std/effect/ret.zy")) in
+let reader = @(import("../../std/effect/reader.zy")) in
+let (/Monoid; writer) = @(import("../../std/effect/writer.zy")) in
+let (/Option; optional) = @(import("../../std/effect/option.zy")) in
 let (/with_trace) = builtin |> (@(import("effect-test-basis.zy"))) in
 let (R, r) = reader/instance Int in
 let output : Monoid String = (#empty = "", #append = string/append) in

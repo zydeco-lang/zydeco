@@ -1,22 +1,21 @@
 -- The ambient relative monad, reusable as the base of a transformer.
 
 let (/Monad) = @(import("monad.zy")) in
-val ((/OS = _; builtin) : @(import("../builtin.zy"))) =>
-  begin
-    let instance =
-      pack (M as Ret)
-      where
-        #monad = (
-          {
-            comatch
-            | .return A a => ret a
-            | .bind A B m f =>
-              do a <- ! m;
-              ! f a
-            end
-          } : Thk (Monad Ret)
-        )
-      end
-    in
-    (= instance)
-  end
+begin
+  let instance =
+    pack (M as Ret)
+    where
+      #monad = (
+        {
+          comatch
+          | .return A a => ret a
+          | .bind A B m f =>
+            do a <- ! m;
+            ! f a
+          end
+        } : Thk (Monad Ret)
+      )
+    end
+  in
+  (= instance)
+end

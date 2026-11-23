@@ -8,108 +8,107 @@ let MonadWriter (W : VType) (M : VType -> CType) =
   | .listen : forall (A : VType) . Thk (M A) -> M (A * W)
   end
 in
-val ((/OS = _; builtin) : @(import("../builtin.zy"))) =>
+begin
+  let (/MonadTrans; /from_monadic; /from_instance) = @(import("transformer.zy")) in
+  let (/instance = ret_instance) = @(import("ret.zy")) in
   begin
-    let (/MonadTrans; /from_monadic; /from_instance) = @(import("transformer.zy")) in
-    let (/instance = ret_instance) = builtin |> (@(import("ret.zy"))) in
-    begin
-      let triv : Thk Top = {
-        comatch
-        end
-      } that
-
-      let WriterSource (W : VType) (A : VType) = Ret (A * W) that
-      let WriterT (W : VType) (M : VType -> CType) =
-        (@[monadic] WriterSource) M W
-      that
-      let Writer (W : VType) = WriterT W Ret that
-      let IWriter (W : VType) (M : VType -> CType) = (#writer :: Thk (MonadWriter W M)) that
-
-      let val transformer_instance (W : VType) (output : Monoid W)
-        (M : VType -> CType) (base : Thk (Monad M))
-      =
-        let translated = {
-          (
-            @[monadic] begin
-              let (/with_lift) = @(import("transformer-source.zy")) in
-              let Writer = WriterSource in
-
-              let Source (W : VType) =
-                codata
-                | .core : Transformer Ret (Writer W)
-                | .writer : MonadWriter W (Writer W)
-                end
-              in
-              fn (W : VType) (empty : W) (append : Thk (W -> W -> Ret W)) =>
-                (
-                  comatch
-                  | .core => ! with_lift (Writer W) {
-                    comatch
-                    | .return A a => ret (a, empty)
-                    | .bind A B m f =>
-                      do (a, first) <- ! m;
-                      do (b, second) <- ! f a;
-                      do combined <- ! append first second;
-                      ret (b, combined)
-                    end
-                  }
-                  | .writer =>
-                    comatch
-                    | .tell written => ret ((), written)
-                    | .listen A m =>
-                      do (a, written) <- ! m;
-                      ret ((a, written), written)
-                    end
-                  end : Source W
-                )
-            end
-          ) M base W triv output/empty {
-            fn first second =>
-              do combined <- ! output/append first second;
-              ! base .return W combined
-          }
-        } in
-        let core = { ! from_monadic M (WriterT W M) { ! translated .core } } in
-        pack (T as WriterT W M)
-        where
-          #monad = { ! core .monad },
-          #lift = { ! core .lift },
-          #writer = (
-            {
-              comatch
-              | .tell => ! translated .writer .tell
-              | .listen A => ! translated .writer .listen A triv
-              end
-            } : Thk (MonadWriter W (WriterT W M))
-          )
-        end
-      that
-      let val instance (W : VType) (output : Monoid W) =
-        let (T, operations) = transformer_instance W output Ret ret_instance/monad in
-        pack (M as Writer W)
-        where
-          #monad = operations/monad, #writer = operations/writer end
-      that
-
-      def ! transformer (W : VType) (output : Monoid W) : MonadTrans (WriterT W) =
-        fn (M, base) =>
-          let (T, (/monad; /lift)) = transformer_instance W output M base in
-          ! from_instance M T (= monad, = lift)
-      that
-
-      def ! run_writer_t (W : VType) (M : VType -> CType) (A : VType) (m : Thk (WriterT W M A)) :
-        M (A * W) = ! m that
-
-      def ! run_writer (W : VType) (A : VType) (m : Thk (Writer W A)) :
-        Ret (A * W) = ! run_writer_t W Ret A m that
-      pack
-        (= Writer as Writer)
-        (= WriterT as WriterT)
-        (= Monoid as Monoid)
-        (= MonadWriter as MonadWriter)
-        (= IWriter as IWriter)
-      where
-        = instance, = transformer_instance, = transformer, = run_writer, = run_writer_t
+    let triv : Thk Top = {
+      comatch
       end
+    } that
+
+    let WriterSource (W : VType) (A : VType) = Ret (A * W) that
+    let WriterT (W : VType) (M : VType -> CType) =
+      (@[monadic] WriterSource) M W
+    that
+    let Writer (W : VType) = WriterT W Ret that
+    let IWriter (W : VType) (M : VType -> CType) = (#writer :: Thk (MonadWriter W M)) that
+
+    let val transformer_instance (W : VType) (output : Monoid W)
+      (M : VType -> CType) (base : Thk (Monad M))
+    =
+      let translated = {
+        (
+          @[monadic] begin
+            let (/with_lift) = @(import("transformer-source.zy")) in
+            let Writer = WriterSource in
+
+            let Source (W : VType) =
+              codata
+              | .core : Transformer Ret (Writer W)
+              | .writer : MonadWriter W (Writer W)
+              end
+            in
+            fn (W : VType) (empty : W) (append : Thk (W -> W -> Ret W)) =>
+              (
+                comatch
+                | .core => ! with_lift (Writer W) {
+                  comatch
+                  | .return A a => ret (a, empty)
+                  | .bind A B m f =>
+                    do (a, first) <- ! m;
+                    do (b, second) <- ! f a;
+                    do combined <- ! append first second;
+                    ret (b, combined)
+                  end
+                }
+                | .writer =>
+                  comatch
+                  | .tell written => ret ((), written)
+                  | .listen A m =>
+                    do (a, written) <- ! m;
+                    ret ((a, written), written)
+                  end
+                end : Source W
+              )
+          end
+        ) M base W triv output/empty {
+          fn first second =>
+            do combined <- ! output/append first second;
+            ! base .return W combined
+        }
+      } in
+      let core = { ! from_monadic M (WriterT W M) { ! translated .core } } in
+      pack (T as WriterT W M)
+      where
+        #monad = { ! core .monad },
+        #lift = { ! core .lift },
+        #writer = (
+          {
+            comatch
+            | .tell => ! translated .writer .tell
+            | .listen A => ! translated .writer .listen A triv
+            end
+          } : Thk (MonadWriter W (WriterT W M))
+        )
+      end
+    that
+    let val instance (W : VType) (output : Monoid W) =
+      let (T, operations) = transformer_instance W output Ret ret_instance/monad in
+      pack (M as Writer W)
+      where
+        #monad = operations/monad, #writer = operations/writer end
+    that
+
+    def ! transformer (W : VType) (output : Monoid W) : MonadTrans (WriterT W) =
+      fn (M, base) =>
+        let (T, (/monad; /lift)) = transformer_instance W output M base in
+        ! from_instance M T (= monad, = lift)
+    that
+
+    def ! run_writer_t (W : VType) (M : VType -> CType) (A : VType) (m : Thk (WriterT W M A)) :
+      M (A * W) = ! m that
+
+    def ! run_writer (W : VType) (A : VType) (m : Thk (Writer W A)) :
+      Ret (A * W) = ! run_writer_t W Ret A m that
+    pack
+      (= Writer as Writer)
+      (= WriterT as WriterT)
+      (= Monoid as Monoid)
+      (= MonadWriter as MonadWriter)
+      (= IWriter as IWriter)
+    where
+      = instance, = transformer_instance, = transformer, = run_writer, = run_writer_t
     end
   end
+end

@@ -4,7 +4,7 @@ let (/Monad; /Algebra; /WithMonad) = @(import("${std}/effect/monad.zy")) in
 let (/List; /list; data_package) = builtin |> make_data in
 let (/NonDet; /NonDetT; /MonadNonDet; /INonDet; nondet) =
   (builtin |> make_nondet) data_package in
-let optional = builtin |> (@(import("${std}/effect/option.zy"))) in
+let optional = @(import("${std}/effect/option.zy")) in
 let (N, n) = nondet/instance in
 let (O, o) = optional/instance in
 let (NO, no) = nondet/transformer_instance O o/monad in

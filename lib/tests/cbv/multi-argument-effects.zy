@@ -6,10 +6,10 @@
 -- a counterfactual that must flip the answer.
 begin
   let (/Monad; /Algebra) = @(import("../../std/effect/monad.zy")) that
-  param (/VType; /CType; /Thk; /Ret; /Unit; /OS; /Int; /int; /process; builtin) : @(import(
+  param (/VType; /CType; /Thk; /Ret; /Unit; /OS; /Int; /int; /process) : @(import(
     "../../std/builtin.zy"
   )) that
-  let (/State; /instance; /run_state) = builtin |> (@(import("../../std/effect/state.zy"))) in
+  let (/State; /instance; /run_state) = @(import("../../std/effect/state.zy")) in
   let (_, state_instance) = instance Int in
   begin
     def ! require (want : Int) (got : Int) (k : Thk OS) : OS =

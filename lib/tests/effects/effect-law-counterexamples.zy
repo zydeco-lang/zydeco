@@ -3,7 +3,7 @@ param (/numeric; /string; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
 let (/Monad) = @(import("../../std/effect/monad.zy")) in
-let (/Monoid; writer) = builtin |> (@(import("../../std/effect/writer.zy"))) in
+let (/Monoid; writer) = @(import("../../std/effect/writer.zy")) in
 let (/with_trace) = builtin |> (@(import("effect-test-basis.zy"))) in
 let (/laws) = builtin |> (@(import("effect-law-suite.zy"))) in
 -- Duplicating either argument is observable even when its returned answers agree.

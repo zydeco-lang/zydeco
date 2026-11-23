@@ -7,10 +7,10 @@
 -- the same two steps the other way round, which must flip it.
 begin
   let (/Monad; /Algebra) = @(import("../../std/effect/monad.zy")) that
-  param (/VType; /CType; /Thk; /Ret; /Unit; /OS; /Int; /int; /process; builtin) : @(import(
+  param (/VType; /CType; /Thk; /Ret; /Unit; /OS; /Int; /int; /process) : @(import(
     "../../std/builtin.zy"
   )) that
-  let (/State; /instance; /run_state) = builtin |> (@(import("../../std/effect/state.zy"))) in
+  let (/State; /instance; /run_state) = @(import("../../std/effect/state.zy")) in
   let (_, state_instance) = instance Int in
   begin
     def ! require (want : Int) (got : Int) (k : Thk OS) : OS =
@@ -22,17 +22,25 @@ begin
       @[monadic] begin
         fn (put : Thk (Int -> Ret Unit)) =>
           do walk <- @[cbv] (
-            let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+            let VType = @(intrinsic(vtype)) that
+            let Int : VType = @(intrinsic(int)) that
             let Unit : VType = @(intrinsic(unit)) that
-            def List : VType = data | +Nil : Unit | +Cons : Int * List end that
+            def List : VType =
+              data
+              | +Nil : Unit
+              | +Cons : Int * List
+              end
+            that
             fn (write : Int -> Unit) =>
               let fix go (l : List) : Unit =
                 match l
-                | +Nil _ => ()
-                | +Cons (x, rest) => let _ = write x in go rest
+                | +Nil(_) => ()
+                | +Cons(x, rest) =>
+                  let _ = write x in
+                  go rest
                 end
               in
-              go (+Cons (1, +Cons (2, +Nil ())))
+              go +Cons(1, +Cons(2, +Nil()))
           );
           do _ <- ! walk put;
           ret 0
@@ -44,17 +52,25 @@ begin
       @[monadic] begin
         fn (put : Thk (Int -> Ret Unit)) =>
           do walk <- @[cbv] (
-            let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+            let VType = @(intrinsic(vtype)) that
+            let Int : VType = @(intrinsic(int)) that
             let Unit : VType = @(intrinsic(unit)) that
-            def List : VType = data | +Nil : Unit | +Cons : Int * List end that
+            def List : VType =
+              data
+              | +Nil : Unit
+              | +Cons : Int * List
+              end
+            that
             fn (write : Int -> Unit) =>
               let fix go (l : List) : Unit =
                 match l
-                | +Nil _ => ()
-                | +Cons (x, rest) => let _ = go rest in write x
+                | +Nil(_) => ()
+                | +Cons(x, rest) =>
+                  let _ = go rest in
+                  write x
                 end
               in
-              go (+Cons (1, +Cons (2, +Nil ())))
+              go +Cons(1, +Cons(2, +Nil()))
           );
           do _ <- ! walk put;
           ret 0
@@ -66,21 +82,31 @@ begin
       @[monadic] begin
         fn (put : Thk (Int -> Ret Unit)) =>
           do walk <- @[cbv] (
-            let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+            let VType = @(intrinsic(vtype)) that
+            let Int : VType = @(intrinsic(int)) that
             let Unit : VType = @(intrinsic(unit)) that
-            def Label : VType = data | +Stop : Unit | +Label : Int * Link end that
-            def Link : VType = data | +Link : Label end that
+            def Label : VType =
+              data
+              | +Stop : Unit
+              | +Label : Int * Link
+              end
+            that
+            def Link : VType =
+              data
+              | +Link : Label
+              end
+            that
             fn (write : Int -> Unit) =>
               let fix go (l : Label) : Unit =
                 match l
-                | +Stop _ => ()
-                | +Label (x, link) =>
+                | +Stop(_) => ()
+                | +Label(x, link) =>
                   let _ = write x in
-                  let +Link next = link in
+                  let +Link(next) = link in
                   go next
                 end
               in
-              go (+Label (3, +Link (+Label (4, +Link (+Stop ())))))
+              go +Label(3, +Link(+Label(4, +Link(+Stop()))))
           );
           do _ <- ! walk put;
           ret 0

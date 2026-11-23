@@ -110,10 +110,10 @@ supported by duplicated contract definitions (`Types`, `FieldOperations`, `Stora
 
 Remove parameters that are already unused without altering the compiler or bootstrap prelude:
 
-1. **Pure effect modules**: Remove the `Builtin` parameter
-   from `effect/{ret,reader,writer,option,state,exception,state-exn}.zy`, remove `builtin |>`
-   at internal `ret.zy` imports (including inside `effect/nondet.zy`), and update callers, templates, tests,
-   and documentation to import them directly with `let`.
+1. **Pure effect modules (completed)**: Removed the `Builtin` parameter
+   from `effect/{ret,reader,writer,option,state,exception,state-exn}.zy`, removed `builtin |>`
+   at internal `ret.zy` imports (including inside `effect/nondet.zy`), and updated callers, templates,
+   tests, and documentation to import them directly with `let`.
 2. **Numeric builders**: Remove the unused `Builtin` parameter and the canonical `Bool`
    and `String` parameters from [`numeric/integer.zy`](../../lib/std/numeric/integer.zy)
    and [`numeric/float.zy`](../../lib/std/numeric/float.zy),

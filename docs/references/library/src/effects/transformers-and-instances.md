@@ -85,6 +85,9 @@ preserving the caller's existing `List` witness.
 ## Elementary Effect Instances
 
 The [effect library](../../../../../lib/std/effect) exports elementary effects independently of OS capabilities.
+`ret.zy`, `reader.zy`, `writer.zy`, `option.zy`, `state.zy`, `exception.zy`,
+and `state-exn.zy` are provider-independent concrete packages requiring no `Builtin` argument
+(whereas [`nondet.zy`](../../../../../lib/std/effect/nondet.zy) still accepts `Builtin` and `DataPackage`).
 Except for the bootstrap `Ret` instance, each concrete instance specializes its derived transformer
 to the reusable `Monad Ret` dictionary.
 `Ret` is the ambient computation carrier, not a separate pure identity effect.

@@ -1,11 +1,11 @@
 -- Packed-pi clients use State and Exception without choosing their carriers.
-param (/numeric; /string; /stdio; /process; builtin) : @(import("../../std/builtin.zy")) in
+param (/numeric; /string; /stdio; /process) : @(import("../../std/builtin.zy")) in
 let (/Monad; /Algebra; /WithMonad) = @(import("../../std/effect/monad.zy")) in
 let (/IState; /instance = state_instance; /modify; /run_state; /eval_state) =
-  builtin |> (@(import("../../std/effect/state.zy")))
+  @(import("../../std/effect/state.zy"))
 in
 let (/IException; /instance = exception_instance; /raise; /catch; /handle_exception) =
-  builtin |> (@(import("../../std/effect/exception.zy")))
+  @(import("../../std/effect/exception.zy"))
 in
 let step : Thk (pi ((M, _) : WithMonad (IState Int)) . M Int) = {
   fn (M, (/monad; /state)) =>

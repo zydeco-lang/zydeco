@@ -17,7 +17,7 @@ begin
       param val (/Bool; /Option; /List; /list) : DataPackage in
 
       let (/MonadTrans; /from_monadic; /from_instance) = @(import("transformer.zy")) in
-      let (/instance = ret_instance) = builtin |> (@(import("ret.zy"))) in
+      let (/instance = ret_instance) = @(import("ret.zy")) in
       begin
         let triv : Thk Top = {
           comatch
