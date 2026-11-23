@@ -46,8 +46,7 @@ or the phase's acceptance boundary.
 
 The implemented [resumable execution contract](../references/compiler/src/compiler-data.md#resumable-folder-execution)
 provides an explicit-stack driver for residual lowering, Builtin packed value materialization,
-SPS reconstruction and pattern decisions, closure conversion, SPSLow structural analysis, local unboxing,
-and [CPS assembly lowering](../references/compiler/src/zasm.md#cps-assembly-lowering).
+SPS reconstruction and pattern decisions, closure conversion, SPSLow structural analysis, and local unboxing.
 Their behavior and depth checks support using the interface for those boundaries.
 The following sections record boundaries skipped after evaluation because their ownership
 or consumer interfaces need a further design choice.

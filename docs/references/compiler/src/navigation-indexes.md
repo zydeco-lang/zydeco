@@ -18,9 +18,10 @@
 | Closed inference and stable normalized types | C5 | C6, linking, and all lowering |
 | Representable executable residual | C6 and executable selection | C7–C14 |
 | Lexical single occurrence and branch joins | SPS and SPSLow validators, C8–C9 | Normalization, capture analysis, local unboxing |
-| Native activation and initialization contracts | C11 preparation | Emitter, frame model, collector |
-| Tagged words and shared record layouts | C12 model and C13 ABI | Host adapters, generated code, runtime |
-| Complete mutable roots at collection | C11 maps and C12 publication | Native moving collector |
+| Local unboxing and bounded scalar plans | C10 analyses | Cranelift and WebAssembly emitters |
+| Cranelift liveness, tail ABI, and units | C11 lowering and linking | Native `.o` emission, FFI adapters, collector |
+| Tagged words, `ClifVmCtxHeader`, and shared ABI | C12 model and C13 Wasm | Host adapters, generated code, runtime |
+| Complete mutable roots at safepoints | C11 `CaseLiveness` and C12 `CheneyHeap` | Native moving collector |
 | Revision-correct semantic identity | C3 and C15 | Editor results and interactive actions |
 
 The phase table in C1 is the entry-point index; chapter links lead to the owning modules and focused regressions.

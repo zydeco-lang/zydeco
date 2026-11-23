@@ -80,7 +80,7 @@ follow the [shared compilation-unit design](native-emission.md#compilation-unit-
 Prefer existing domain types and shared declarations at each common boundary.
 
 Diagnostic investigation starts from the saved source site and the earliest representation whose invariant fails.
-The textual, scoped, statics, SPS, and assembly debug printers expose successive views;
+The textual, scoped, statics, and SPSLow debug printers expose successive views;
 use the relevant phase's verifier before interpreting a downstream crash as a source-language failure.
 Keep commands in [CONTRIBUTING](../../../../CONTRIBUTING.md#run-tests).
 Automated work reserves the full workspace suite for an explicit request.

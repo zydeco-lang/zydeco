@@ -51,8 +51,8 @@ A worker compiled at `forall (A : VType) . A -> Ret A` can forward its argument
 without learning its size, layout, or concrete type.
 That works because the argument is one ordinary value word and type arguments erase.
 Giving each instantiation a different number of argument slots would need a different calling contract.
-The current [representation policies](../references/compiler/src/zasm.md#policy-selection) do not
-select such a contract.
+The current [representation policies](../references/compiler/src/representation-and-scalar-regions.md#policy-selection)
+do not select such a contract.
 
 The proposal has two access levels to this same model:
 
@@ -98,8 +98,8 @@ The low bit distinguishes an immediate from a pointer-shaped word, not `Int` fro
 | `Addr` | Raw unmanaged data address word | An explicitly unsafe address carrier whose extent, alignment, permission, and lifetime belong to its owner |
 | `Reader`, `Writer` | Tagged instance-local handle indices | Typed resource handles from the matching provider; no assumption that their bits are operating-system descriptors |
 
-The [word model](../../lang/machine/src/word.rs), [native scalar helpers](../../runtime/stub.rs),
-and [literal emission](../../lang/amd64/src/emit.rs) implement these encodings today.
+The [word model](../../lang/machine/src/word.rs), [native runtime helpers](../../runtime/clif.rs),
+and [literal emission](../../lang/cranelift/src/lower.rs) implement these encodings today.
 Scalar boxes are opaque to tracing; their bits must never be scanned as managed references.
 The [scalar value boundary](../references/compiler/src/native-runtime.md#scalar-value-boundaries) owns
 exact-width boxing and local raw transport.
@@ -122,7 +122,7 @@ in an arbitrary host allocation does not register a managed object or its refere
 | Nominal or abstract `A` | Its selected implementation's value word | Forward/store it opaquely and use the operations supplied by its defining interface |
 
 The current product lowering and the `[tag, payload]` constructor representation are visible
-in [ZASM lowering](../../lang/assembly/src/lower.rs).
+in [Cranelift lowering](../../lang/cranelift/src/lower.rs).
 The [shared closure record](../../lang/machine/src/closure.rs) fixes environment before code.
 Code and environment must stay paired; a function
 with the same apparent argument types cannot consume an unrelated closure environment.

@@ -1,16 +1,19 @@
 # C12. Shared Runtime Model, Allocation, and Collection
 
 Three shared `#![no_std]`-capable crates factor runtime layout and host support out of compiler backends:
-[zydeco-machine](../../../../lang/machine/src/lib.rs) defines tagged words,
-closure records, host-transfer records, manual memory primitives, and frame actions;
+[zydeco-machine](../../../../lang/machine/src/lib.rs) defines tagged words, closure records,
+manual memory primitives, and the [`clif` ABI contract](../../../../lang/machine/src/clif.rs);
 [zydeco-abi](../../../../lang/abi/src/lib.rs) defines the canonical builtin role catalog,
 calling modes, spare-box markers, C FFI/unit boundary specs, `RuntimeFailure`, and `HostIoErrorKind`;
 and [zydeco-host](../../../../lang/host/src/lib.rs) implements the growable copying collector,
 managed string layout, I/O handle table, OS entropy helper, and WASI runtime exports.
-Code generation derives layout from 64-bit carriers; native stubs check their `usize` representation against them.
-The bundled model sources determine fingerprinted process and library entry symbols,
-so mismatched compiler/runtime source bundles fail to link.
-This is artifact pairing, not verification of handwritten instruction selection.
+Code generation derives byte displacements from 64-bit carriers (`Word`
+and [`ClifVmCtxHeader`](../../../../lang/machine/src/clif.rs));
+target stubs verify their `usize` offsets with compile-time assertions.
+The bundled `zydeco-machine` sources determine the fingerprinted
+[`CLIF_ENTRY_SYMBOL`](../../../../lang/machine/src/clif.rs), so mismatched compiler
+and runtime source bundles fail to link.
+This is artifact pairing, not verification of generated machine instructions.
 
 Odd words are immediate. Even words are pointer-shaped.
 `Int`/`UInt`, narrower integers, `Float32`, characters, and tags fit in an immediate word.
@@ -54,9 +57,9 @@ The rewrite cancels `Decode(Encode(raw))`, removes unused conversions, and verif
 The [execution regression](../../../../cli/tests/passes.rs) compares both policies with the interpreter
 and all compiled backends, and counts the removed scalar allocation sites.
 
-Native preparation assigns checked, distinct homes for value words and raw bits.
-The [AMD64 emitter](../../../../lang/amd64/src/emit/primitive.rs) initializes additional value homes
-before allocation and places raw homes below an explicit collector root cursor.
+Cranelift keeps additional temporary values live inside virtual registers and stack root slots across allocations.
+[`scalar::emit_scalar_call`](../../../../lang/cranelift/src/scalar.rs) evaluates inputs in operand order
+before inline arithmetic and keeps raw bits in unspilled SSA registers outside the GC root slot (`roots_slot`).
 Live box pointers can therefore move during collection while raw numeric bits remain unchanged.
 The [Wasm emitter](../../../../lang/wasm-common/src/word.rs) uses distinct locals; its heap currently does not collect.
 Signed minimum divided by `-1` is handled before target overflow traps.
@@ -93,12 +96,14 @@ Its instruction set contains no source calls, managed values, scanned fields, or
 Ordinary `ScalarProgram` inputs and results continue to require the value ABI.
 No raw entry convention is inferred for a source function or unknown callback.
 
-ZASM keeps the complete kernel in one instruction, consuming two addresses and its ordinary scalar arguments.
-Native lowering loads once, executes the checked arithmetic sequence, and stores once;
-literal and intermediate scalars introduce no boxes, callback objects, or successful-path calls inside the kernel.
-Raw definitions have distinct temporary stack homes, with no collection inside that area.
-Fatal arithmetic helpers do not return; required failures precede the store and later arithmetic.
-This removes allocation sites without claiming register allocation or minimal spill traffic.
+[`ScalarPlans`](../../../../lang/stackir/src/low/scalar.rs) keeps the complete kernel
+in one `MemoryCall` consuming two addresses and its ordinary scalar arguments.
+[`scalar::emit_memory_call`](../../../../lang/cranelift/src/scalar.rs) decodes ordinary arguments once,
+loads from the unaligned little-endian address, executes raw Cranelift arithmetic instructions,
+and performs one exact-width store, with no heap allocations or calls along the fast path.
+Raw SSA temporaries remain untraced, and fatal trapping division helpers call `zydeco_clif_fail`
+and abort before the store or later arithmetic.
+This eliminates boxing sites in generated code without adding a separate assembly peephole pass.
 Wasm uses raw locals and emits unaligned little-endian linear-memory load and store instructions directly
 over WASI linear memory, with no virtual-memory host call or lookup cost.
 
@@ -114,68 +119,59 @@ in [memory compilation](../../../proposals/memory-compilation.md#44-carry-raw-co
 
 ## Runtime Instances
 
-[RuntimeInstance](../../../../runtime/stub.rs) owns the managed heap, frame store, stack root bound,
-host-transfer record, retained immutable allocations, I/O handles, invocation arguments, and host-owned strings.
-A thread-local pointer dispatches helpers to the active instance; it owns no language state itself.
-Entry saves its predecessor and installs a fresh instance, while normal completion restores
-that predecessor and drops the completed instance before releasing its unit guard.
-Nested calls into different units therefore preserve the suspended caller's heap, roots, transfer state, and resources.
-The [source entry profile](../../language/src/foreign-interfaces.md#compiled-libraries-and-c-exports)
-defines concurrency and fault behavior.
+[`ClifRuntimeInstance`](../../../../runtime/clif.rs) places `ClifVmCtxHeader` at offset 0
+and owns the [`CheneyHeap`](../../../../lang/host/src/gc.rs), growable SPS stack buffer (`sps_storage`),
+[`RetainedMemory`](../../../../lang/machine/src/memory.rs), `HostIoRuntime`,
+invocation arguments, and C reentrancy guard pointer.
+A thread-local pointer tracks the active instance across C entry boundaries.
+`zydeco_clif_entry_begin` saves any predecessor or parked state and installs a fresh or reset instance,
+while normal completion restores that predecessor and releases the unit guard.
+Nested calls into distinct compiled units therefore isolate their heaps, SPS stacks, transfer slots,
+and I/O handles cleanly; [manual memory helpers](../../../../runtime/clif_memory.rs) expose `allocate`,
+`free`, `retain`, `release`, `null`, and byte codecs over the same instance.
 
-The process launcher in [runtime/main.rs](../../../../runtime/main.rs) uses the same instance API,
-with process arguments and the established executable entry.
-Reusable support disables the `process-entry` feature.
-On normal C FFI completion, [runtime/stub.rs](../../../../runtime/stub.rs) resets the active instance's heap,
-frame store, retained allocations, and I/O handles and parks it in a single-slot reusable `ParkedInstance` cache
-for subsequent FFI calls into the library.
-Semispace words and block indices are heap-allocated, avoiding multi-megabyte stack temporaries on each C entry.
-Static string literals are emitted into 8-byte-aligned `.rodata` as `(byte_len: u64, utf8_bytes...)`;
-dynamic strings allocate opaque GC-managed blocks on the same `(byte_len: u64, utf8_bytes...)` layout
-so managed GC reclaims dead dynamic strings automatically.
-String-allocating host builtins receive the live control-stack cursor and root live managed arguments
-across any triggered collection, while CLI arguments remain cached outside the managed heap
-as `StaticHeapString` blocks with no managed pointers.
+The process launcher in [`runtime/main.rs`](../../../../runtime/main.rs) initializes the runtime archive
+with process arguments and invokes `zydeco_machine::clif::clif_entry`.
+Library support builds disable the `process-entry` feature.
+On normal C FFI exit, [`zydeco_clif_entry_end`](../../../../runtime/clif.rs) resets the active heap,
+shrinks oversized SPS storage exceeding `SHRINK_SPS_WORDS` (8,192 words) back
+to `INITIAL_SPS_WORDS` (1,024 words), clears retained memory and I/O handles,
+and parks the instance in a thread-local `ParkedClifInstance` for reuse on subsequent calls.
+Semispace buffers and block indices are heap-allocated, avoiding multi-megabyte stack frames on C entry.
+Static string literals are emitted into 8-byte-aligned `.rodata` as `(byte_len: u64 LE, utf8_bytes...)`;
+dynamic strings allocate opaque GC-managed blocks using the same layout
+so Cheney GC reclaims unreachable strings automatically.
 
-## Environment Actions and Roots
+## Safepoint Roots and Control Stack
 
-[frames::Environment](../../../../lang/machine/src/frames.rs) exposes Enter, Suspend, Resume, and Roots actions.
-Enter reserves before changing state and returns the possibly relocated active base.
-Suspend validates captures and creates a tagged suspension ID; Resume validates its owner
-and nesting, then restores the frame.
-Roots returns mutable addresses for the active map joined with all pending suspension maps.
-Only initialized live slots are roots; reserved capacity and dead tagged words are insufficient evidence of liveness.
+Every compiled `Case` maintains `sps_sp` in a virtual register and receives `vmctx` pointing to `ClifVmCtxHeader`.
+Before any slow-path collection (`zydeco_clif_alloc_slow`) or collection-capable host helper,
+generated code writes live `DefId` bindings and active temporary `Variable`s
+into the function's explicit `roots_slot` and flushes `sps_sp` to `vmctx.sps_sp`.
+Host control builtins write the target closure and up to two arguments
+into `vmctx.transfer` ([`ClifHostTransfer`](../../../../lang/machine/src/clif.rs)), then return to Cranelift glue
+in [`externs::emit_extern_call`](../../../../lang/cranelift/src/externs.rs), which grows `sps_storage` if needed,
+pushes the transfer words, and executes `return_call_indirect` to the closure code pointer.
 
-The retained store grows geometrically and caches capacity at its high-water mark.
-Only successful Enter may relocate retained frame words; Suspend keeps the active base stable.
-Slot access uses raw pointers without constructing Rust references over generated-code storage.
-Metadata vectors hold indices and checked suspension IDs, so their growth cannot invalidate logical frame references.
-Failed word reservation preserves existing words, bases, and suspension IDs;
-zeroed capacity does not count as an initialized binding.
-Transitions may allocate Rust metadata but do not collect the managed heap;
-metadata allocation still has the Rust allocator's ordinary failure behavior.
-Root addresses expire at the next attempted environment transition, including a failed reservation.
-Managed collection may rewrite those values but cannot relocate their published addresses.
-A model declaration generates action headers and serialization order;
-emitted records and target carriers share checked alignment.
-A return prologue removes `suspension(F)` while preserving `result :: S`,
-resumes the owner, restores `rbp`, and then binds the result.
-Returning host and C calls enter that same prologue.
-
-The [native environment proposal](../../../proposals/native-frames.md) compares alternative environment representations;
-they do not extend the environment contract described here.
+There is no separate Rust-managed activation frame stack (`frames::Environment` was retired
+with the ZASM/AMD64 backend).
+Continuation captures use ordinary heap-allocated `ContinuationPackage` records or explicit CPS closures tracked
+through `sps_storage` (`sps_base..sps_sp`) and per-case `roots_slot`.
 
 ## Managed Allocation
 
-The [native stub](../../../../runtime/stub.rs) uses [CheneyHeap](../../../../lang/host/src/gc.rs)
+[`ClifRuntimeInstance`](../../../../runtime/clif.rs) uses [`CheneyHeap`](../../../../lang/host/src/gc.rs)
 with two geometrically growing semispaces starting at `DEFAULT_INITIAL_SPACE_BYTES` (64 KiB) by default.
 When live objects and an allocation request outgrow the current semispace,
 collection doubles target semispace capacity (up to any configured ceiling in `CheneyHeap::with_limits`,
 or unbounded by default for normal execution) and preserves the relocated live graph before completing the allocation.
 Reusable instances shrink semispaces exceeding `REUSE_SHRINK_THRESHOLD_BYTES` (4 MiB) back
 to initial capacity on `CheneyHeap::reset`.
-Allocation receives a deferred root source: a successful fast allocation does not enumerate roots;
-collection requests the control-stack range, registered host roots, and live frame slots and updates them in place.
+Inline allocation checks `alloc_limit - alloc_ptr` directly in Cranelift IR,
+advancing the cursor in a few instructions without touching Rust or enumerating roots on the fast path;
+only [`zydeco_clif_alloc_slow`](../../../../runtime/clif.rs) flushes roots and triggers collection
+over `[sps_base..sps_sp)`, the active function's `roots_slot` slice (`roots_ptr`,
+`roots_len`), and registered host roots, updating them in place.
 An oversized request exceeding an explicit ceiling is rejected before enumeration;
 a collection that still leaves insufficient room preserves the relocated live graph cleanly.
 
@@ -185,8 +181,9 @@ Cheney scanning traverses pointer-bearing payloads; opaque scalar bits are copie
 Unmanaged pointers remain stable.
 Scanning order and forwarding must never reinterpret scalar bits as managed references.
 
-Host helpers that can trigger collection must publish every live managed word and reload relocated roots afterward.
-Raw borrowed C argument frames are discarded before any result-box allocation that can collect.
-[GC regressions](../../../../lang/tests/tests/suite/native_gc.rs) cover roots, interior pointers,
-aliasing, cycles, capacity failure, and allocation after collection.
-Frame storage reclamation and managed-value liveness are separate obligations.
+Host helpers that can trigger collection must publish `sps_sp`, use deferred or registered root slots
+for newly live objects, and read relocated words afterward.
+Raw borrowed C argument slots stay outside the traced SPS stack range before result allocation runs.
+[Host GC tests](../../../../lang/host/src/gc.rs)
+and [native GC regressions](../../../../lang/tests/tests/suite/native_gc.rs) cover roots,
+interior pointers, aliasing, cycles, capacity failure, and allocation after collection.

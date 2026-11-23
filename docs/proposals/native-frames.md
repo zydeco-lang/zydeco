@@ -1,9 +1,13 @@
 # Native environment alternatives and evaluation
 
-Retained activation frames are implemented and remain the AMD64 default.
-[C11](../references/compiler/src/native-emission.md#activation-lifetime) owns their preparation and lifetime justification;
-[C12](../references/compiler/src/native-runtime.md#environment-actions-and-roots) owns default environment transitions and roots.
-This proposal keeps the alternatives that remain to be compared and the decisions that would precede a new default.
+Retained activation frames (`frames::Environment`) were retired with the ZASM/AMD64 backend
+when `zydeco-cranelift` adopted explicit `sps_storage` stacks and safepoint root slots.
+[C11](../references/compiler/src/native-emission.md#activation-lifetime) owns the Cranelift execution convention
+and activation lifetime;
+[C12](../references/compiler/src/native-runtime.md#safepoint-roots-and-control-stack) owns control-stack
+and safepoint root collection.
+This proposal keeps the historical environment alternatives that remain useful when comparing stack-slot
+and frame-cell designs (see [escape unboxing](escape-unboxing.md)).
 
 The remaining work compares storage choices and integrates stronger lifetime or relocation mechanisms.
 [Escape analysis](escape-unboxing.md) owns individual value representation selection;
@@ -67,8 +71,8 @@ Existing native programs, including effect-library examples and returning C impo
 Focused tests should compare interpreter results with each candidate native scheme and check heap pointer survival
 under forced collection.
 
-Use the existing [native model and GC regressions](../references/compiler/src/native-emission.md#activation-lifetime) as the baseline
-when introducing another engine; extend them with its distinct failure and relocation cases.
+Use the existing [native model and GC regressions](../references/compiler/src/native-emission.md#activation-lifetime)
+as the baseline when introducing another engine; extend them with its distinct failure and relocation cases.
 
 Measure execution time, capture allocations, value words copied, collection work,
 environment and control-stack high-water usage, peak live heap, and generated code size.
@@ -127,7 +131,8 @@ without choosing a new default:
 - Remove provably local control transitions when known entry contexts establish
   that no suspension bookkeeping is needed.
   Preserve the full protocol for indirect returns and host callbacks;
-  [primitive normalization](../references/compiler/src/sps/operations-and-patterns.md#primitive-calls) is the implemented starting point.
+  [primitive normalization](../references/compiler/src/sps/operations-and-patterns.md#primitive-calls) is
+  the implemented starting point.
 - Compare activation-level shared captures with selective retention for dense, overlapping suspensions.
   Measure copying, duplicate roots, metadata, and total reserved space; older captures must survive inner resumptions.
 - Reclaim word storage and metadata together during deep-to-shallow phases.

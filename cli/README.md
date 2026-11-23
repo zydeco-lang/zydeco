@@ -31,12 +31,13 @@ See [source packages](../docs/references/language/src/sources/packages.md#source
 and discovery, and the [standard library guide](../lib/std/README.md#source-packages-and-tests)
 for fixture-dependent tests.
 Native execution uses `runtime/` by default; `--runtime-dir PATH` selects another source directory.
-WebAssembly execution produces standalone WASI (`wasm32-wasip1`) executables and runs them with `wasmtime` (`WASMTIME` selects the executable, falling back to `node` `node:wasi`).
+WebAssembly execution produces standalone WASI (`wasm32-wasip1`) executables and runs them
+with `wasmtime` (`WASMTIME` selects the executable, falling back to `node` `node:wasi`).
 
 ### Selecting an Execution Backend
 
 Backend selection is command-line execution policy, independent of package meta annotations.
-`run SOURCE -t TARGET` selects one of `interpreter`, `exe` (AMD64), or `wasm-sps`.
+`run SOURCE -t TARGET` selects one of `interpreter`, `exe` (native Cranelift executable), or `wasm-sps`.
 `--target` is the long spelling; omitting it selects `interpreter`.
 `run` inherits terminal streams, forwards arguments after `--`, and returns the program's exit status.
 `--dry` checks and selects the executable root without linking, emitting code, or requiring backend tools.
@@ -53,7 +54,8 @@ Every test/backend pair reports a labeled result.
 Zero exits pass; nonzero exits display captured stdout and stderr.
 Runtime errors also fail their pair, and remaining pairs still run.
 The summary counts pairs, and the command fails if any pair fails.
-Wasm execution requires `wasmtime` (or Node.js `node:wasi` fallback); native execution requires the AMD64 tools and runtime sources.
+Wasm execution requires `wasmtime` (or Node.js `node:wasi` fallback); native execution requires `ar`,
+a linker, the Rust compiler, and the runtime sources.
 
 ## Interactive REPL
 
@@ -82,44 +84,41 @@ explains source history, repeated effects, and captured execution.
 | Target | Output |
 | --- | --- |
 | `zir` | First-order SPSLow on stdout. |
-| `zasm` | ZASM on stdout. |
-| `asm` | AMD64 assembly on stdout. |
-| `exe` (default) | AMD64 executable. |
+| `exe` (default) | Native Cranelift executable (`aarch64` or `x86_64`). |
 | `wasm-sps` | WebAssembly module. |
 | `object` | Native Zydeco unit or C library with interfaces and manifest. |
 | `staticlib`, `sharedlib` | C library with interfaces and manifest. |
 
 `--execute` runs the linked `exe` artifact.
-`zasm` and `wasm-sps` reject it; use `run -t TARGET` to execute a program on the interpreter or WebAssembly.
+`wasm-sps` rejects it; `zir` prints SPSLow without running effects; use `run -t TARGET` to execute a program
+on the interpreter or WebAssembly.
 
 ### Native Executables
 
-Install `nasm`, `ar`, a linker, and the Rust target for the selected OS.
-Running the output requires AMD64 execution support.
+Install `ar`, a linker (`cc`), and the Rust target for the selected OS (`aarch64` or `x86_64` on Linux or macOS).
 On Linux or macOS:
 
 ```sh
-zydeco build path/to/main.zy --target exe --target-arch x86-64 --build-dir build --runtime-dir runtime
+zydeco build path/to/main.zy --target exe --build-dir build --runtime-dir runtime
 ```
 
 The result is `build/main.exe`. Add `--execute` to run it after linking.
-Architecture and OS default to the host; `--target-arch` and `--target-os` select them explicitly.
-Native targets reject every architecture other than AMD64 before compiling,
-so an ARM host must pass `--target-arch x86-64`.
+Architecture and OS default to the host; `--target-arch` (`aarch64`/`arm64`,
+`x86-64`/`x86`/`amd64`) and `--target-os` (`linux`, `macos`) select them explicitly.
+Cross-target linking also requires compatible target toolchains and sysroots when targeting another OS or architecture.
 Build and runtime directories default to `build/` and `runtime/` relative to the working directory.
 
-Native linking copies runtime sources into the build directory, writes the compiler's embedded model
-to `build/machine/`, caches optimized `rustc` builds of `zydeco-machine` and `zydeco-runtime`
-under `ZYDECO_RUNTIME_CACHE_DIR` (or the system temporary cache directory) with zero external crate dependencies,
-and links the generated archive against them.
+Native linking copies runtime sources into the build directory, writes the compiler's embedded bundles
+to `build/machine/`, `build/abi/`, and `build/host/`, caches optimized `rustc` builds of `zydeco-machine`, `zydeco-abi`,
+`zydeco-host`, and `zydeco-runtime` under `ZYDECO_RUNTIME_CACHE_DIR` (or the system temporary cache directory)
+with zero external crate dependencies, and links the Cranelift-emitted archive against them.
 Keep runtime edits in the source directory and rebuild the compiler after model changes.
-Custom manifests inherit `zydeco-machine` through workspace dependencies,
-following [runtime/Cargo.toml](../runtime/Cargo.toml).
-See the [shared model contract](../DESIGN.md#shared-rust-runtime-model) for compatibility checks.
+Custom manifests inherit those workspace dependencies, following [runtime/Cargo.toml](../runtime/Cargo.toml).
+See the [shared model contract](../DESIGN.md#shared-rust-runtime-crates) for compatibility checks.
 
 Cached runtime compilation uses optimization level 2, single codegen-unit emission,
 PIC relocation, aborting panics, and `lto = "off"` to preserve exports referenced
-by generated assembly while linking warm executables directly through `rustc`.
+by generated object files while linking warm executables directly through `rustc`.
 The `native_model` module of `suite` checks cached and release runtime linking and execution.
 
 ### WebAssembly
@@ -130,7 +129,8 @@ Build a module from first-order SPSLow:
 zydeco build path/to/main.zy --target wasm-sps --build-dir build
 ```
 
-The command links `build/main.sps.wasm`, a standalone WASI (`wasm32-wasip1`) module importing only `wasi_snapshot_preview1`.
+The command links `build/main.sps.wasm`,
+a standalone WASI (`wasm32-wasip1`) module importing only `wasi_snapshot_preview1`.
 Use `run -t wasm-sps` for compilation and execution, or run an existing module directly with `wasmtime`:
 
 ```sh
@@ -145,7 +145,7 @@ Build the [arithmetic example](../lib/ffi/arithmetic.zy):
 
 ```sh
 zydeco check lib/ffi/arithmetic.zy
-zydeco build lib/ffi/arithmetic.zy --target sharedlib --target-arch x86-64 --build-dir build --runtime-dir runtime
+zydeco build lib/ffi/arithmetic.zy --target sharedlib --build-dir build --runtime-dir runtime
 ```
 
 The command publishes `build/example.arithmetic.sharedlib.library.json`, a C header,
@@ -165,14 +165,15 @@ int main(void) {
 }
 ```
 
-On AMD64 Linux, compile and run it with:
+On Linux, compile and run it with:
 
 ```sh
 cc consumer.c -Ibuild -Lbuild -lexample.arithmetic -Wl,-rpath,"$PWD/build" -o consumer
 ./consumer
 ```
 
-On macOS, add `-arch x86_64` to the compiler command.
+On macOS, invoke `cc`
+with the host architecture (`cc consumer.c -Ibuild -Lbuild -lexample.arithmetic -Wl,-rpath,"$PWD/build" -o consumer`).
 For a Zydeco consumer, save this as `consumer.zy` in the repository root:
 
 ```zydeco
@@ -185,7 +186,7 @@ do sum <- ! api/add 19 23;
 Pass the manifest when building or running:
 
 ```sh
-zydeco build consumer.zy --target exe --target-arch x86-64 --build-dir client-build \
+zydeco build consumer.zy --target exe --build-dir client-build \
   --link-library build/example.arithmetic.sharedlib.library.json
 zydeco run consumer.zy -t exe --link-library build/example.arithmetic.sharedlib.library.json
 ```
@@ -212,7 +213,7 @@ Build its initializer object and interface:
 
 ```sh
 zydeco check math.zy
-zydeco build math.zy --target object --target-arch x86-64 --build-dir unit-build --runtime-dir runtime
+zydeco build math.zy --target object --build-dir unit-build --runtime-dir runtime
 ```
 
 This publishes `unit-build/example.math.unit.json`, `example.math.unit.o`,
@@ -232,7 +233,7 @@ do result <- ! add_seven 35;
 Build with the unit manifest:
 
 ```sh
-zydeco build client.zy --target exe --target-arch x86-64 --build-dir client-build --runtime-dir runtime \
+zydeco build client.zy --target exe --build-dir client-build --runtime-dir runtime \
   --link-library unit-build/example.math.unit.json
 ```
 
@@ -246,11 +247,12 @@ Run focused regressions with `cargo test -p zydeco-cli --test unit --test unit_m
 Select a representation strategy per build:
 
 ```sh
-zydeco build lib/tests/core/representation-policies.zy --target asm --target-arch x86-64 --representation shared
+zydeco build lib/tests/core/representation-policies.zy --target exe --representation shared
 zydeco build lib/tests/core/representation-policies.zy --target wasm-sps --representation boxed
 ```
 
-[Policy selection](../docs/references/compiler/src/zasm.md#policy-selection) defines the strategies and target scope.
+[Policy selection](../docs/references/compiler/src/representation-and-scalar-regions.md#policy-selection)
+defines the strategies and target scope.
 Compare static allocation sites and field words with:
 
 ```sh
@@ -263,7 +265,8 @@ recording the [runtime profile](#native-executables).
 Validate selection and execution with:
 
 ```sh
-cargo test -p zydeco-assembly --lib
+cargo test -p zydeco-stackir --lib
+cargo test -p zydeco-cranelift
 cargo test -p zydeco-cli --test representation
 cargo test -p zydeco-tests --test suite -- representation_policies::
 ```

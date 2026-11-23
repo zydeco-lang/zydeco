@@ -99,20 +99,21 @@ The trust and borrowing obligations belong to [L14](../../language/src/foreign-i
 The Unix [interpreter adapter](../../../../lang/dynamics/src/foreign.rs) lazily loads libraries and symbols,
 caches call interfaces by target and signature, and calls through libffi while borrowing scalar argument storage.
 Missing libraries and symbols are runtime errors; generated native programs do not depend on libffi.
-AMD64 marshals the retained source arguments into a temporary raw C frame,
-loads the SysV argument registers, and discards that frame before encoding the result.
+Cranelift marshals the retained source arguments into the target C ABI signature (`c_abi_signature`,
+handling both SysV AMD64 and AAPCS64 integer extensions) and executes the direct C call
+before boxing any full-width integer result.
 A valid result resumes the ordinary return continuation; an invalid `Int` or `UInt` result reports a range error.
 Integer components retain their source type and signedness through the call plan.
 `IntegerType::bits` describes arithmetic width; `storage_bits` describes the byte and C carrier width.
 Native encoders truncate C return registers to the carrier width before checking the source range;
 the [SysV ABI clarification](https://gitlab.com/x86-psABIs/x86-64-ABI/-/merge_requests/61)
 leaves excess integer register bits unspecified.
-`Int64` and `UInt64` results are boxed after the raw scratch frame has been discarded;
-the raw result remains in an untraced callee-saved register during allocation.
+`Int64` and `UInt64` results are boxed after the C call completes; during result allocation,
+the unspilled raw return value stays in an untraced SSA register.
 Other integer results and unit fit immediate words.
-For C exports, raw input registers are saved above the instance's traced stack bound.
-Each incoming full-width integer receives a box, and the entry allocator roots previously encoded arguments.
-Result decoding happens before the instance is destroyed, returning all payload bits in the C result register.
+For C exports, [`emit_c_export_wrapper`](../../../../lang/cranelift/src/externs.rs) keeps incoming C arguments out
+of the traced SPS stack range, encodes each argument onto `sps_storage` (relying on allocation root maps
+for earlier boxed arguments), decodes the `Ret` result after case 0 returns, and tears down the instance cleanly.
 The libffi adapter uses exact scalar storage and return types for integers,
 and its explicit void-return operation avoids reading nonexistent result storage.
 Native address marshalling moves the pointer word directly, with no host conversion call.

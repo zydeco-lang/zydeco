@@ -7,8 +7,8 @@ It explores explicit control flow, stack-manipulating computation, and relative 
 Its [term-oriented design](docs/references/language/src/conventions.md#term-oriented-composition) uses expressions
 for type construction, local programming, and library composition.
 
-The repository includes an interpreter, a terminal REPL, a compiler to native AMD64 executables,
-and editor support through the Cajun language server.
+The repository includes an interpreter, a terminal REPL, a native Cranelift compiler for `aarch64`
+and `x86_64` executables (and WebAssembly/WASI), and editor support through the Cajun language server.
 
 ## Quick Start
 
@@ -101,15 +101,17 @@ See the [REPL workflow](cli/README.md#interactive-repl) for submission keys and 
 
 ## Compiling Programs
 
-The compiler lowers a checked program through stack-passing style to a native AMD64 executable.
+The compiler lowers a checked program through stack-passing style to a native executable (`aarch64`
+or `x86_64` on Linux and macOS) or a standalone WASI executable (`wasm-sps`).
 Compile and run `hello-world.zy` in one step, or build the executable:
 
 ```sh
 zydeco run hello-world.zy -t exe
-zydeco build hello-world.zy --target exe --target-arch x86-64
+zydeco build hello-world.zy --target exe
 ```
 
-`build` defaults to the host architecture, so an ARM host passes `--target-arch x86-64`.
+`build` defaults to the host architecture (`aarch64` or `x86-64`) and operating system (`--target-arch`
+and `--target-os` select targets explicitly).
 The [native executable guide](cli/README.md#native-executables) lists the required tools,
 and the [compiler reference](docs/references/compiler/src/architecture.md#selecting-and-inspecting-passes) explains how
 to inspect the stack-passing-style program with `--target zir`.

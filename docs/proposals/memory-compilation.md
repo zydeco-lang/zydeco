@@ -3,10 +3,9 @@
 A systems program should be able to describe a byte layout, allocate it with a chosen allocator,
 initialize selected fields, and update an element without manufacturing a logical copy of the object.
 
-**Ordinary values** leave their physical representation to the compiler.
-**Explicit memory interfaces** establish programmer-selected storage contracts;
-optimization must preserve them. This applies the existing
-[storage and representation boundary](../references/compiler/src/zasm.md#storage-evidence-and-machine-calls)
+**Ordinary values** leave their physical representation to the compiler. **Explicit memory interfaces** establish
+programmer-selected storage contracts; optimization must preserve them. This applies the existing
+[storage and representation boundary](../references/compiler/src/representation-and-scalar-regions.md#storage-evidence-and-machine-calls)
 to the proposed interfaces and lowering.
 
 The worked example follows a header-array update from source types to machine code.
@@ -243,7 +242,7 @@ Matching the raw Zydeco API is an intermediate milestone because that path also 
 [Static elimination](../references/language/src/static-elimination.md) already removes fixed recipes and type witnesses.
 `Ptr L S` has no state or layout fields, and fixed fields need no carried displacement.
 Ordinary products, operation thunks, captured values, and continuation frames still follow the
-[compiler representation policy](../references/compiler/src/zasm.md#policy-selection).
+[compiler representation policy](../references/compiler/src/representation-and-scalar-regions.md#policy-selection).
 The [typed field/header comparison](../evaluations/2026-09-15-typed-memory/README.md) shows a fixed view forming
 the same local kernel as its raw baseline, while the checked header abstraction retains extra generated sites.
 Its counts are static code sites, not executed allocations or timings.
@@ -332,8 +331,8 @@ This memory proposal requires compatible lowering across those boundaries, witho
 Both `Ret Int64` and a CPS successor accepting `Int64` can use raw transport when their entry contracts support it.
 Their control protocols do not themselves select boxing.
 
-[Local unboxing](../references/compiler/src/zasm.md#product-layout-and-local-unboxing) removes some product cells
-while retaining the tagged-word field convention.
+[Local unboxing](../references/compiler/src/representation-and-scalar-regions.md#product-layout-and-local-unboxing)
+removes some product cells while retaining the tagged-word field convention.
 Wide scalars can still box; pairs, fat handles, array builders, and closure environments can still allocate,
 especially when passed or captured.
 Selecting the layout of manually allocated payloads does not select the representation of these ordinary values.

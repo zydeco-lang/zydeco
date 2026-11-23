@@ -11,9 +11,11 @@ The CLI links the emitted object against cached `wasm32-wasip1` `rlib` builds of
 and `rust-lld` (`-C target-feature=+tail-call -C link-arg=--no-check-features`),
 producing a standalone `.sps.wasm` WASI executable whose only import module is `wasi_snapshot_preview1`.
 
-Emission starts from SPSLow, after shared closure conversion and before ZASM lowering.
-Starting at SPS would duplicate closure conversion, and recovering structure
-from ZASM would require reconstructing lexical regions and stack effects from machine program points.
+Emission starts directly from first-order SPSLow (`SpsLowProgram`),
+alongside [`LocalUnboxing`](../../../../lang/stackir/src/low/unbox.rs)
+and [`ScalarPlans`](../../../../lang/stackir/src/low/scalar.rs).
+Starting at SPS would duplicate closure conversion across backends, while working over SPSLow lets Wasm
+and Cranelift share closure conversion, local unboxing decisions, and verified scalar regions.
 SPSLow retains lexical blocks and closed labels,
 so each becomes one WebAssembly case function taking its ambient stack parameter (`(i64) -> ()`),
 with structured WebAssembly instructions and per-case locals (`LocalPlan::for_case`) carrying its lexical bindings.

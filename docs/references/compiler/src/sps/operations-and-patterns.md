@@ -58,9 +58,8 @@ and all three predicates are false when either float is NaN.
 Constant folding and the interpreter share `ComparisonOp::evaluate`.
 
 Closure conversion retains the comparison and its shared stack.
-ZASM evaluates the second operand before the first, then its comparison terminator consumes both
-and selects one successor.
-AMD64 emits signed or unsigned conditional jumps, with an explicit unordered check for floating-point comparisons.
+`zydeco-cranelift` evaluates the second operand before the first, then emits `icmp` / `fcmp` branches
+with explicit unordered handling for floating-point values across `x86_64` and `aarch64`.
 The Wasm backend emits typed comparison instructions and structured branches.
 The comparison itself allocates no result and makes no host call.
 It consumes ordinary scalar values, decoding existing wide scalar boxes at that boundary;
@@ -92,8 +91,7 @@ Normalization removes a known zero displacement only when evaluating that displa
 trapping operand evaluation remains at its original position.
 
 Closure conversion preserves the operation.
-Its ZASM instruction consumes the address and tagged displacement and produces one address word.
-AMD64 decodes the signed `Int` and adds it directly to the address bits;
+Cranelift decodes the signed `Int` and adds it directly to the 64-bit address bits;
 the Wasm backend uses wrapping 64-bit arithmetic on its virtual addresses.
 The operation itself allocates nothing and makes no host call.
 Its operands evaluate displacement first, then base, matching argument-stack construction.
@@ -122,8 +120,9 @@ Memory effects do not enter pure value commoning or arithmetic evaluation.
 An unknown callback remains an ordinary thunk invocation after the access;
 primitive recognition alone asserts no callback lifetime, uniqueness, or contification guarantee.
 
-Closure conversion and ZASM preserve the ordered operation.
-AMD64 emits one unaligned, exact-width load or store, with scalar decoding and encoding at the ordinary value boundary.
+Closure conversion and shared scalar planning preserve the ordered operation.
+Cranelift emits one unaligned, exact-width load or store via trusted `MemFlagsData`,
+with scalar decoding and encoding at the ordinary value boundary.
 `Int` and `UInt` use eight-byte carriers but reject out-of-domain bits before publishing a loaded result.
 Signed narrow loads extend their sign, and float loads/stores preserve IEEE bits, including NaN payloads.
 Unmanaged address slots retain address semantics rather than becoming scalar integer conversions.

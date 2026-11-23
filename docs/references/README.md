@@ -36,7 +36,7 @@ Chapter contents provide the detailed topic indexes.
 | --- | --- | --- |
 | Bindings and scope | [Bindings and Scope](language/src/bindings-and-scope.md) | [C4: resolution](compiler/src/parsing-and-resolution.md#name-resolution) |
 | Classification and inference | [Classification and Inference](language/src/classification-and-inference.md) | [C5: checking and reuse](compiler/src/checking-and-inference.md#inference-and-reuse) |
-| Values and products | [Values, Products, and Data](language/src/values-products-and-data.md) | [C9: closure conversion](compiler/src/closure-conversion.md), [C10: local representation](compiler/src/zasm.md) |
+| Values and products | [Values, Products, and Data](language/src/values-products-and-data.md) | [C9: closure conversion](compiler/src/closure-conversion.md), [C10: local representation](compiler/src/representation-and-scalar-regions.md) |
 | Computations and stack protocols | [Computations and Control](language/src/computations-and-control.md) | [C7: evaluator](compiler/src/reference-interpreter.md) |
 | Patterns and coverage | [Patterns and Coverage](language/src/patterns-and-coverage.md) | [C6: pattern checking](compiler/src/sps/operations-and-patterns.md#pattern-decisions-and-validation) |
 | Value functions and views | [Value Functions and Views](language/src/value-functions-and-views.md) | [C6: static elaboration](compiler/src/elaboration-and-validation.md#static-elimination) |

@@ -205,18 +205,8 @@ while `run_source` returns early on that failure.
 - [ ] Remove the duplicate lifecycle or absorb it into the coarse query, keeping the rejected outcome
   and one orchestration point.
 
-## Host-call arity above the SysV register limit
+## Host-call arity above the SysV register limit (resolved by Cranelift)
 
-Observed at `e2dd8979` on 2026-11-05; unchanged at `c6c90588`.
-[C14 foreign calls](../references/compiler/src/builtins-and-foreign-calls.md#foreign-calls)
-and [C11 native emission](../references/compiler/src/native-emission.md) govern host calls.
-The host-call loop in the [AMD64 emitter](../../lang/amd64/src/emit.rs) at `emit.rs:927-938` pops arguments
-into SysV registers for indices 1 through 6 and reaches `todo!()` at `emit.rs:936` for index 7 and above.
-The arity comes from the builtin role:
-[lower.rs:373-378](../../lang/assembly/src/lower.rs) records `arity: role.arity()`,
-and the [role table](../../lang/syntax/src/lib.rs) caps source arguments at five (`lib.rs:738`).
-The hidden spare box can occupy the sixth register, so the panic is unreachable today but unvalidated.
-
-Repair: reject an over-limit host role when the role or its extern is constructed,
-or pass overflowing arguments on the stack; keep a regression for either choice.
-A future role with six source arguments would also need a spare-box index beyond the register map.
+Observed at `e2dd8979` on 2026-11-05; retired with `zydeco-assembly` and `zydeco-amd64`
+in favor of [`emit_host_call`](../../lang/cranelift/src/externs.rs), which passes C helper arguments
+through Cranelift signatures rather than a hardcoded register array.

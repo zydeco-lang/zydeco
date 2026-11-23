@@ -3,7 +3,7 @@
 ## Motivation and boundary
 
 Local product and closure construction can often be eliminated when the value is immediately projected or forced.
-[C10](../references/compiler/src/zasm.md) owns the implemented pack/unpack fusion
+[C10](../references/compiler/src/representation-and-scalar-regions.md) owns the implemented pack/unpack fusion
 and variable-level projection analysis.
 This proposal extends that boundary to constraint-based representation choices over SPSLow:
 unboxed fields, a frame-resident cell, or a managed heap cell.
@@ -29,8 +29,8 @@ The historical fixture comparison below motivates further measurement at that lo
 
 ## Existing evidence and representation experiments
 
-The [local policy contract](../references/compiler/src/zasm.md#policy-selection) separates validity evidence from a Rust
-policy's preferences, including optional local closure splitting.
+The [local policy contract](../references/compiler/src/representation-and-scalar-regions.md#policy-selection) separates
+validity evidence from a Rust policy's preferences, including optional local closure splitting.
 [Stored-call interfaces](../references/library/src/memory/views-and-buffers.md#stored-call-interfaces) share source
 carriers over the existing word convention;
 [word entries](../references/compiler/src/closure-conversion/word-contracts-and-protocols.md#word-entry-contracts) and
@@ -125,8 +125,9 @@ supplies no optimization proof.
 
 ## Remaining machine-call boundary
 
-The [local analysis](../../lang/assembly/src/unbox.rs) deliberately treats call arguments and argument-stack uses
-of a variable as escapes, and the [lowerer](../../lang/assembly/src/lower.rs) consumes its local pack/unpack decisions.
+The [local analysis](../../lang/stackir/src/low/unbox.rs) deliberately treats call arguments
+and argument-stack uses of a variable as escapes,
+and the [Cranelift lowerer](../../lang/cranelift/src/lower.rs) consumes its local pack/unpack decisions.
 SPSLow does not retain a source carrier's layout as a shared component contract for indirect calls or returns.
 Changing only the caller's packing would therefore change the stack shape expected by existing callees.
 
@@ -447,7 +448,8 @@ jump code
 
 ## Validation boundary
 
-Use [C10's implementation map](../references/compiler/src/zasm.md) for current local unboxing.
+Use [C10's implementation map](../references/compiler/src/representation-and-scalar-regions.md)
+for current local unboxing.
 A stack-cell implementation additionally needs paired checks for operand order, frame cleanup, call alignment,
 escaping references, and collection while a retained frame holds managed pointers.
 Inspection must show the removed allocation, while unknown consumers retain boxing.
@@ -517,7 +519,7 @@ for Zydeco's current representation policies or arbitrary computation protocols.
 
 - The Stack IR phase boundaries in [`DESIGN.md`](../../DESIGN.md) record the SPSLow invariants this analysis builds on.
 - [C11](../references/compiler/src/native-emission.md)
-  and [C12](../references/compiler/src/native-runtime.md#environment-actions-and-roots) own current native lifetime
+  and [C12](../references/compiler/src/native-runtime.md#safepoint-roots-and-control-stack) own current native lifetime
   and root contracts; [native frame design](native-frames.md) keeps the alternative storage requirements.
-- [C10](../references/compiler/src/zasm.md) owns current product layouts;
+- [C10](../references/compiler/src/representation-and-scalar-regions.md) owns current product layouts;
   the older product exploration remains historical.

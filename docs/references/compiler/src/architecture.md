@@ -19,9 +19,9 @@ flowchart TD
     Sps --> Normalize[Selected SPS passes: normalization by default]
     Normalize --> Low[SpsLowProgram: closure conversion]
     Low --> Wasm[Structured WebAssembly]
-    Low --> Portable[Portable ZASM, stack analysis, and rendering]
-    Low --> Native[Native ZASM and checked frame preparation]
-    Native --> AMD64[AMD64 emission and runtime linking]
+    Low --> Rep[Local unboxing and scalar regions]
+    Rep --> Cranelift[Cranelift object emission: aarch64 and x86_64]
+    Cranelift --> Link[Native runtime bundling and linking]
 ```
 
 The main boundaries are concrete program types:
@@ -34,11 +34,10 @@ The main boundaries are concrete program types:
 | `CoreProgram` | [Static elaborator](../../../../lang/statics/src/elaborate/static_values/mod.rs) via `StaticsArena::core` | Readiness validation, Builtin planning, interpretation, and SPS lowering |
 | `ExecutableProgram` | `CompilerSession::executable_program` | Reference interpreter (`Runtime::new`) or `RootLowerer` |
 | `FragmentProgram` | [`RootLowerer`](../../../../lang/stackir/src/high/lower.rs) | Selected SPS transformations, then closure conversion |
-| `SpsLowProgram` | [`SpsLowPipeline`](../../../../lang/stackir/src/pipeline.rs) | Structured Wasm or assembly lowering |
-| `AssemblyProgram` | [`LoweringPipeline::run`](../../../../lang/assembly/src/pipeline.rs) | ZASM rendering and representation analysis |
-| `NativeProgram` | Native pipeline from `LoweringPipeline::with_native_frames` | AMD64 emitter |
+| `SpsLowProgram` | [`SpsLowPipeline`](../../../../lang/stackir/src/pipeline.rs) | Structured Wasm or Cranelift native emission via `LocalUnboxing` and `ScalarPlans` |
+| `NativeArtifact` | [`Emitter::run`](../../../../lang/cranelift/src/lib.rs) | Relocatable ELF/Mach-O object linking (`aarch64` and `x86_64`) |
 
-Checked-root lowering, SPSLow conversion, and assembly lowering compose through typed compiler passes;
+Checked-root lowering and SPSLow conversion compose through typed compiler passes;
 [compiler pass composition](#compiler-pass-composition) below owns their execution and error contract.
 
 Consider this executable, which exits successfully:
@@ -169,22 +168,16 @@ each compilation creates fresh invocation counts and temporary pass state.
 The SPS observer verifies lexical ownership, the placement rule of the program's scheme,
 and root closure using borrowed phase data.
 The unobserved default retains static composition.
-`BackendProgram` records the selection that produced its frozen SPSLow input,
-and its assembly cache belongs to that product.
-Selecting another SPS plan or scheme requires a new lowering result, so cached assembly cannot cross selections.
-[Assembly representation policy](zasm.md#policy-selection) remains independently selectable and invalidates
-that product's assembly cache.
+`BackendProgram` records the selection that produced its frozen `SpsLowProgram` input together
+with the configured [`RepresentationStrategy`](representation-and-scalar-regions.md#policy-selection).
+Selecting another SPS plan or scheme requires a new lowering result,
+whereas `BackendProgram::with_representation` reconfigures unboxing and scalar boxing
+over the same immutable `SpsLowProgram` before emitting native Cranelift objects or structured Wasm.
 
-SPS is the configurable optimization boundary.
-[`LoweringPipeline`](../../../../lang/assembly/src/pipeline.rs) composes required assembly construction,
-stack analysis, and publication from a borrowed SPSLow program.
-Its `with_native_frames` option returns a pass that ends in checked `NativeProgram::prepare`,
-retaining the distinct portable and native output types and the native frame-planning error.
-A future assembly rewrite must execute before the affected analyses,
-or explicitly reestablish them before publishing the completed program.
-Convergence and shared analysis caching require additional change and invalidation contracts.
-Stage scheduling and prerequisite order are explicit in the selected sequence;
-source query caching and revision ownership remain with the [session's Salsa database](sessions-and-queries.md).
+SPS is the configurable optimization boundary. Both [Cranelift emission](native-emission.md)
+and [WebAssembly emission](webassembly.md) consume `SpsLowProgram` together with shared `LocalUnboxing`
+and `ScalarPlans` analyses directly, keeping source query caching and revision ownership
+with the [session's Salsa database](sessions-and-queries.md).
 
 ### Selecting and Inspecting Passes
 
@@ -244,7 +237,7 @@ cargo test -p zydeco-foundation -p zydeco-stackir --lib
 cargo test -p zydeco-cli --test passes
 ```
 
-The `zasm` target renders lowering without executing host effects, while the native
-and WebAssembly backends execute them.
+The `zir` target prints `SpsLowProgram` on stdout without executing host effects,
+while the native and WebAssembly backends execute them.
 Arithmetic operations always lower to typed inline primitives inside their closure bodies, including
 under an empty pass selection, as described under [primitive calls](sps/operations-and-patterns.md#primitive-calls).

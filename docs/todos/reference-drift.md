@@ -58,14 +58,11 @@ not a missing positivity guarantee to add to the reference.
   The tests register exactly those three ([builtin.rs:82-103](../../lang/tests/tests/suite/builtin.rs)
   and [ffi_examples.rs:165](../../lang/tests/tests/suite/ffi_examples.rs)).
   Repair both sentences to say three backends and keep the existing test and specimen lists.
-- [ ] **`--representation` scope.** The [C10 policy selection](../references/compiler/src/zasm.md#policy-selection)
-  account says at `compiler.md:2493` that the CLI's `build --representation` applies
-  to "ZASM, AMD64 assembly/executables, and the Wasm backend".
-  The [CLI compiler](../../cli/src/compile.rs) also applies the selected policy to library and unit lowering:
-  `lower_export` at `compile.rs:142` and `lower_unit` at `compile.rs:163` call `with_representation`,
-  and the CLI's own rejection message includes object, staticlib, and sharedlib at `main.rs:583`.
-  Decide whether the reference widens its scope sentence or the implementation narrows its selection,
-  then add an end-to-end C-library or native-unit test that observes the selected policy in the emitted artifact.
+- [x] **`--representation` scope.** Updated
+  in [C10 policy selection](../references/compiler/src/representation-and-scalar-regions.md#policy-selection)
+  so `--representation` matches `exe`, `wasm-sps`, `object`, `staticlib`, and `sharedlib` (while `zir` rejects it).
+  Remaining optional follow-up: add an end-to-end C-library or native-unit test observing the selected policy directly
+  in emitted code.
 
 ## Native and host boundary accounts
 
@@ -80,16 +77,10 @@ not a missing positivity guarantee to add to the reference.
   as a separate implementation.
   Repair the comment to describe a cross-language copy checked by the parity test,
   or share one table across the implementations; do not imply shared code.
-- [ ] **Exported host-symbol prefix.** [C11 native preparation](../references/compiler/src/native-emission.md)
-  and [C12 native runtime](../references/compiler/src/native-runtime.md) own the native model,
-  but neither explains the leading `\x01` in exported host symbol names.
-  [runtime/stub.rs:548](../../runtime/stub.rs) exports `\x01zydeco_frame_step`,
-  and [lang/machine/build.rs:51-65](../../lang/machine/build.rs) generates the `\x01`-prefixed link and export names.
-  Mach-O normally underscores C symbols;
-  the prefix yields the bare names the [AMD64 emitter](../../lang/amd64/src/emit.rs) declares for host externs
-  at `emit.rs:648` and `emit.rs:677`, and `nm` on a built runtime archive reports bare `zydeco_frame_step`
-  and `zydeco_entry_frames_<fingerprint>`.
-  Document the convention where C11 or C12 owns the native model, or remove the need for the prefix.
+- [x] **Exported host-symbol prefix.** Retired when `zydeco-cranelift` replaced `zydeco-amd64`;
+  `cranelift-object` handles platform symbol mangling (leading underscore on Mach-O) automatically
+  from standard `extern "C"` exports in [`runtime/clif.rs`](../../runtime/clif.rs)
+  and [`CLIF_ENTRY_SYMBOL`](../../lang/machine/build.rs).
 
 ## Component and client accounts
 

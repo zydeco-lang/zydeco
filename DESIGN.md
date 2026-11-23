@@ -550,8 +550,8 @@ SPSLow checks explicit environment/result entry roles and closure/continuation r
 [word entry contract](docs/references/compiler/src/closure-conversion/word-contracts-and-protocols.md#word-entry-contracts).
 It also preserves and checks
 [partial source protocols](docs/references/compiler/src/closure-conversion/word-contracts-and-protocols.md#partial-source-protocols)
-through normalization, including scoped type parameters, instantiated recursive codata, and returned thunks. ZASM makes
-the control-flow graph explicit for assembly-derived targets.
+through normalization, including scoped type parameters, instantiated recursive codata, and returned thunks. Shared
+local unboxing and scalar-region analyses consume SPSLow directly before Cranelift and Wasm code generation.
 
 | Responsibility | Owning reference | Implementation |
 | --- | --- | --- |
@@ -561,19 +561,20 @@ the control-flow graph explicit for assembly-derived targets.
 | Core IR, protocols, and readiness | [C6–C8](docs/references/compiler/src/elaboration-and-validation.md) | `lang/ir/src` |
 | Linking and interpretation | [C7](docs/references/compiler/src/reference-interpreter.md) | `lang/dynamics/src` |
 | SPS, demand, and closure conversion | [C8–C9](docs/references/compiler/src/sps.md) | `lang/stackir/src/{high,low}` |
-| ZASM and representation analysis | [C10](docs/references/compiler/src/zasm.md) | `lang/assembly/src` |
-| Native preparation, emission, and runtime | [C11–C12](docs/references/compiler/src/native-emission.md) | `lang/{assembly,amd64,machine}`, `runtime` |
+| Local representations and scalar regions | [C10](docs/references/compiler/src/representation-and-scalar-regions.md) | `lang/stackir/src/low/{unbox.rs,scalar.rs}` |
+| Native Cranelift emission and runtime | [C11–C12](docs/references/compiler/src/native-emission.md) | `lang/{cranelift,machine}`, `runtime` |
 | WebAssembly emission and embedding | [C13](docs/references/compiler/src/webassembly.md) | `lang/{wasm-sps,wasm-common}` |
 | Source formatting | [C15](docs/references/compiler/src/tooling/formatting-and-rendering.md) | `lang/fmt/src` |
 
 Each completed representation has one selected program root and the storage needed by its syntax.
 Phase-owned builders publish immutable products; later metadata lives in phase-local deltas.
 [C2](docs/references/compiler/src/compiler-data.md) defines allocation and provenance,
-and C8–C9 define lexical ownership before control-flow lowering.
+and C8–C9 define lexical ownership before backend lowering.
 Local representation selection accepts a Rust policy type or a per-compilation strategy enum;
-[C10's policy boundary](docs/references/compiler/src/zasm.md#policy-selection) keeps preferences separate
-from the evidence that permits removing a cell.
-Policies feed assembly lowering before stack and frame validation.
+[C10's policy boundary](docs/references/compiler/src/representation-and-scalar-regions.md#policy-selection)
+keeps preferences separate from the evidence that permits removing a cell.
+Policies parameterize `LocalUnboxing` and `ScalarPlans` directly over immutable `SpsLowProgram`
+before native or Wasm emission.
 
 ### Compiler Pass Composition
 
@@ -765,92 +766,64 @@ by compiler phases and both native and WASI stubs.
 calling modes, FFI/unit boundary metadata, `RuntimeFailure`, and `HostIoErrorKind`,
 while [`zydeco-host`](lang/host/src/lib.rs) provides the growable Cheney collector,
 managed/static string helpers, I/O handle table, OS entropy, and `wasm32-wasip1` runtime exports.
-`zydeco-machine` owns the tagged-word operations described above, the closure field order used by ZASM,
-the AMD64 host-transfer representation, manual memory primitives, and nested environment transitions.
-The frame model uses Rust's `alloc` for control metadata and growable environment storage.
+`zydeco-machine` owns the tagged-word operations described above, the closure field order used across targets,
+the [`clif` VM-context and host-transfer layout](lang/machine/src/clif.rs),
+and manual memory primitives (`RetainedMemory`).
 Compiler-specific literal resolution stays in `zydeco-syntax`.
 
-Closure records are parameterized by their word carrier.
-Code generation derives byte offsets from `Closure<u64>` and `HostTransfer<u64>`,
-so an ARM or 32-bit compiler host cannot change the AMD64 layout accidentally.
-The native stub uses the same records with `usize` words; target-side assertions check their sizes,
-alignment, and offsets against the 64-bit layouts.
-The closure declaration also generates the field traversal used by ZASM packing and opening.
-Likewise, the frame action declaration generates both the runtime record and its emitter traversal.
+Closure records and host-transfer records are parameterized by their word carrier.
+Code generation derives byte offsets from `ClifVmCtxHeader` and `ClifHostTransfer<Word>`,
+matching the 64-bit targets emitted by `zydeco-cranelift` (`aarch64` and `x86_64`).
+The native stub uses the same structs with `usize` words; compile-time assertions check their sizes,
+alignment, and offsets against the shared layout constants (`VMCTX_*`, `BLOCK_HEADER_*`).
 
-The host-control protocol is represented by `HostArguments` and a shared resumption catalog.
-A host operation returns a pointer to a `HostTransfer` containing a bridge address, a closure, and up to two arguments.
-The stub selects that address from the arguments' arity; the emitter generates each bridge
-from the same catalog and record offsets.
-The bridge loads the closure, pushes arguments in reverse consumption order,
-pushes the closure environment, and jumps to its code.
-The stub has one reusable transfer slot, consumed before another host call occurs.
+The host-control protocol is represented by `HostCallMode` and a shared builtin role catalog in `zydeco-abi`.
+A control operation writes a closure pointer and up to two arguments into `ClifVmCtxHeader.transfer`;
+Cranelift wrapper code in `lang/cranelift/src/externs.rs` pushes those arguments onto `sps_storage`
+and tail-jumps (`return_call_indirect`) to the closure's `CallConv::Tail` entrypoint.
+The runtime instance holds one reusable transfer slot, consumed before another host call occurs.
 This record is separate from a source-language `Ret` continuation on the control stack.
 
-The compiler embeds a self-contained source bundle of the model and supplies it to each native build.
-Both compilations derive the native entry symbol from a deterministic fingerprint
-of the model sources, including its manifest and build script.
+The compiler embeds self-contained source bundles for `zydeco-machine`, `zydeco-abi`,
+and `zydeco-host` and supplies them to each native build.
+Both compilations derive `CLIF_ENTRY_SYMBOL` from a deterministic fingerprint
+of the `zydeco-machine` sources, manifest, and build script.
 Different source identities therefore fail to link.
-This is a conservative compatibility check: even a comment change requires rebuilding both sides.
-It checks artifact pairing, while the shared definitions remove duplicated layout and protocol decisions;
-it does not prove the correctness of handwritten instruction selection or host implementations.
-See [native build packaging](cli/README.md#native-executables) for the build-directory contract.
+This checks artifact pairing across compiler and runtime builds while sharing one set of layout definitions;
+see [native build packaging](cli/README.md#native-executables) for the build-directory contract.
 
-The frame model implements entry, suspension, resumption, and sparse root discovery.
-Native preparation checks activation ownership, initialized bindings, and continuation slot aliases before emission;
-the emitter supplies static action descriptors consumed by the same model in the stub.
-The [native preparation](docs/references/compiler/src/native-emission.md)
-and [environment actions](docs/references/compiler/src/native-runtime.md#environment-actions-and-roots) own those phase
-and transition contracts.
-Register assignment, stack alignment, control-stack instruction selection,
-and individual builtin signatures remain outside the model.
-The collector owns its private headers and forwarding algorithm,
-while the model supplies allocation kinds and the immediate tag.
-A future scheme can introduce its own state and transition types in this crate; there is no universal runtime trait.
-Retained frames implement the narrower `frames::Environment` capability: noncollecting actions,
-nested tokens, declared captures, and mutable roots.
-The fixed and growable environment stores share the narrow `frames::storage::Storage` contract.
+### Native Control Stack and Cranelift Safepoints
 
-### Native Environments and Control Stack
-
-The AMD64 backend uses the machine stack for arguments, destructor tags, continuations, and temporary values.
-The variable environment uses activation frames in a separate, geometrically growing Rust allocation.
-Generated closure entries establish an active frame and load its base into `rbp`;
-local branches preserve it, and return entries restore the retained caller's base.
-Bindings use statically packed offsets within their activation, including bindings introduced by its continuations.
-Packing accounts for both current execution and every possibly pending continuation.
-Entry can relocate the backing allocation; saved frame offsets remain valid and the returned base replaces `rbp`.
-Managed collection does not move this allocation.
-
-Portable SPSLow and ZASM retain explicit capture products.
-Native preparation uses checked continuation provenance to replace a return continuation's capture product
-with a suspension ID for the retained frame.
-Resumption reads the retained slots directly and binds the returned value.
-Ordinary closures continue to own explicit capture environments, which can outlive their creating activation.
-The compiler reference owns [activation lifetime](docs/references/compiler/src/native-emission.md#activation-lifetime),
-entry, reclamation, roots, and bounded tail-space invariants.
-The [native environment proposal](docs/proposals/native-frames.md) retains remaining storage and optimization questions.
+The Cranelift backend separates Zydeco's growable SPS control stack (`sps_storage`,
+indexed by `sps_sp`) from the native CPU stack and compiles every block and closed label
+into a standalone `CallConv::Tail` function taking `(vmctx, sps_sp)`.
+Lexical bindings stay in Cranelift virtual SSA registers inside each function,
+while continuations capture cross-call bindings explicitly via `ContinuationPackage` records.
+Before any slow-path heap allocation, per-case liveness (`CaseLiveness`) spills live `DefId` registers
+and live temporary values into an explicit `StackSlot` (`roots_slot`), updates `vmctx.sps_sp`,
+and reloads all slots after Cheney collection finishes.
+Because tail transfers use `return_call` / `return_call_indirect` over `sps_storage` with `CallConv::Tail`,
+unbounded tail recursion runs in constant native stack space on both `x86_64` and `aarch64`.
 
 ### Native Garbage Collection
 
-The native runtime uses Cheney copying collection with two geometrically growing semispaces starting
-at 64 KiB (`DEFAULT_INITIAL_SPACE_BYTES`) by default.
+The native runtime ([`ClifRuntimeInstance`](runtime/clif.rs)) uses Cheney copying collection
+with two geometrically growing semispaces starting at 64 KiB (`DEFAULT_INITIAL_SPACE_BYTES`) by default.
 When live objects and an allocation request outgrow a semispace, collection doubles semispace capacity
 and preserves the relocated live graph (stopping only at an explicit ceiling if configured).
-Collection updates the control stack, live slots in active and suspended frames, and registered host roots,
-preserving sharing, cycles, and word-aligned interior pointers into payloads.
-Frame slot maps exclude reserved, uninitialized, and dead slots; word tags then identify immediate values.
+Collection updates the SPS stack (`sps_base..sps_sp`), the active function's explicit safepoint `roots_slot`,
+and registered host roots, preserving sharing, cycles, and word-aligned interior pointers into payloads.
+Word tags identify immediate values while block headers record payload length and scan kind.
 Dynamic strings allocate GC-managed opaque heap blocks using `(byte_len: u64, utf8_bytes...)`
 and static literals sit in aligned `.rodata`, while reusable C FFI instances reset and cache spaces up
-to 4 MiB (`REUSE_SHRINK_THRESHOLD_BYTES`) across calls via `ParkedInstance`.
+to 4 MiB (`REUSE_SHRINK_THRESHOLD_BYTES`) across calls via `ParkedClifInstance`.
 
-Allocation receives a deferred root source.
-If a cell fits, it advances the allocation cursor without enumerating frame or host roots.
-If collection is needed, the source publishes the complete root set once,
-and the collector updates those locations before allocation continues.
+Inline bump allocation checks `alloc_limit - alloc_ptr` directly in Cranelift IR.
+If a cell fits, it advances the allocation cursor without calling Rust or enumerating roots.
+If collection is needed, [`zydeco_clif_alloc_slow`](runtime/clif.rs) enumerates those root sources
+and updates every moved address before allocation continues.
 An oversized request exceeding an explicit ceiling is rejected before enumeration;
 a collection that still leaves insufficient room preserves the relocated live graph cleanly.
-The native frame model continues to own which slots are live, independently of when they are enumerated.
 
 Each semispace maintains a block-start index that locates the owning header
 with one index-region read and one header read.
@@ -907,7 +880,7 @@ The supported classifier has the form `Thk (A1 -> ... -> An -> Ret B)`, with eac
 or `Addr`, and result `B` a supported integer or `Unit` (C `void`).
 An address supplies one C pointer; the binding supplies any length separately and establishes validity.
 The C call admits at most six arguments.
-The checker records one typed call plan used by the Unix interpreter's libffi path and the AMD64 emitter.
+The checker records one typed call plan used by the Unix interpreter's libffi path and the Cranelift emitter.
 Checking a declaration does not load its library or validate the real C symbol's signature.
 The WebAssembly backend rejects native foreign imports.
 The [foreign-interface reference](docs/references/language/src/foreign-interfaces.md) owns the supported ABI
@@ -920,8 +893,8 @@ Aggregate and code-pointer transport remain proposed extensions.
 
 ## WebAssembly backend
 
-The `wasm-sps` target emits WebAssembly directly from first-order SPSLow,
-so selecting it never constructs a ZASM program.
+The `wasm-sps` target emits WebAssembly directly from first-order SPSLow together
+with shared local unboxing and scalar plans.
 Its qualified name records the lowering it relies on while the unqualified `wasm` target remains undecided;
 the [WebAssembly backend proposal](docs/proposals/wasm-backends.md) records the criteria for that default
 and the open runtime questions.
@@ -998,13 +971,13 @@ into a standalone `.sps.wasm` binary whose only imports belong to `wasi_snapshot
   enter computations to discover static functions or witnesses. Demand does not yet flow through runtime
   witness-dependent computation applications, so their arguments materialize whole
   ([Module composition](docs/references/language/src/polymorphism-and-packed-values.md#module-interfaces-and-shared-openings)).
-- Native execution is AMD64 on Linux or macOS.
-  `build` defaults to the host architecture, so an ARM host needs explicit AMD64 target selection.
-  `run -t exe` and `test -t exe` select AMD64 directly; execution still requires appropriate tools and host support.
+- Native execution supports `aarch64` and `x86_64` on Linux and macOS via `zydeco-cranelift`.
+  Both `build -t exe` and `run -t exe` default to the host architecture and OS;
+  execution still requires appropriate linker tools and target support.
 - WebAssembly produces standalone `wasi_snapshot_preview1` executables with tail calls
   and linear-memory I/O, without native C FFI or Zydeco unit imports.
-  Its heap grows without garbage collection, and the backend still allocates persistent stack frames
-  and boxes products without ZASM's local-unboxing analysis.
+  Its heap grows without garbage collection, and it currently shares scalar unboxing
+  while keeping persistent stack frames.
 - Native interoperability includes the explicit [C boundary](docs/references/language/src/foreign-interfaces.md)
   and [Zydeco unit initializers](docs/references/language/src/foreign-interfaces.md#native-zydeco-units);
   callbacks and retained foreign handles remain deferred.

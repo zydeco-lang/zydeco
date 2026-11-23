@@ -26,8 +26,8 @@ The library supplies the other types:
 | `StaticAlloc Context`, `Alloc` | Fixed and runtime allocation services | Explicit context; runtime interface carries ordinary operations |
 | `Buffer` | Incremental byte construction | Address, capacity, initialized-prefix length |
 
-The table describes payload requirements. Products, closures,
-and runtime-selected dictionaries still use the [ordinary representation policy](../../../compiler/src/zasm.md).
+The table describes payload requirements. Products, closures, and runtime-selected dictionaries still
+use the [ordinary representation policy](../../../compiler/src/representation-and-scalar-regions.md).
 CPS alone does not guarantee allocation-free callbacks or stack frames.
 `Buffer` builds bytes; the [array factory](layouts-and-aggregates.md#array-storage-and-element-builders)
 also provides generic element builders.
