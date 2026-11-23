@@ -106,18 +106,18 @@ supported by duplicated contract definitions (`Types`, `FieldOperations`, `Stora
 
 ## Phased Roadmap
 
-### Phase 1A: Stdlib Dead-Parameter Cleanup (Zero Compiler Changes)
+### Phase 1A: Stdlib Dead-Parameter Cleanup (Completed, Zero Compiler Changes)
 
-Remove parameters that are already unused without altering the compiler or bootstrap prelude:
+Removed parameters that were already unused without altering the compiler or bootstrap prelude:
 
 1. **Pure effect modules (completed)**: Removed the `Builtin` parameter
    from `effect/{ret,reader,writer,option,state,exception,state-exn}.zy`, removed `builtin |>`
    at internal `ret.zy` imports (including inside `effect/nondet.zy`), and updated callers, templates,
    tests, and documentation to import them directly with `let`.
-2. **Numeric builders**: Remove the unused `Builtin` parameter and the canonical `Bool`
+2. **Numeric builders (completed)**: Removed the unused `Builtin` parameter and the canonical `Bool`
    and `String` parameters from [`numeric/integer.zy`](../../lib/std/numeric/integer.zy)
    and [`numeric/float.zy`](../../lib/std/numeric/float.zy),
-   and update [`numeric/package.zy`](../../lib/std/numeric/package.zy).
+   and updated [`numeric/package.zy`](../../lib/std/numeric/package.zy).
 
 ### Phase 1B: Pure Primitive Operations as Canonical Intrinsics (Compiler + Stdlib)
 

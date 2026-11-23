@@ -1,7 +1,7 @@
 let (/BoolModule) = @(import("../data/package.zy")) in
 let (/Numeric) = @(import("dictionary.zy")) in
 begin
-  let IntegerModule (Bool : VType) (Integer : VType) (String : VType) =
+  let IntegerModule (Integer : VType) =
       (#add :: Thk (Integer -> Integer -> Ret Integer))
     * (#sub :: Thk (Integer -> Integer -> Ret Integer))
     * (#mul :: Thk (Integer -> Integer -> Ret Integer))
@@ -20,7 +20,7 @@ begin
     * (#max :: Thk (Integer -> Integer -> Ret Integer))
     * (#to_string :: Thk (Integer -> Ret String))
   in
-  let PrimitiveIntegerModule (Integer : VType) (String : VType) =
+  let PrimitiveIntegerModule (Integer : VType) =
       (#add :: Thk (Integer -> Integer -> Ret Integer))
     * (#sub :: Thk (Integer -> Integer -> Ret Integer))
     * (#mul :: Thk (Integer -> Integer -> Ret Integer))
@@ -49,37 +49,29 @@ begin
   let Builder =
     begin
       let Package
-        (Bool : VType)
         (Scalar : VType)
-        (String : VType)
       =
-          (#operations :: IntegerModule Bool Scalar String)
+          (#operations :: IntegerModule Scalar)
         * (#dictionary :: Numeric Bool Scalar)
       in
       val pi
-        (Bool : VType)
         (Scalar : VType)
-        (String : VType)
         (
-          (/OS = _; builtin) : @(import("../builtin.zy")),
           _ : BoolModule Bool,
-          _ : PrimitiveIntegerModule Scalar String,
+          _ : PrimitiveIntegerModule Scalar,
           _ : Scalar,
           _ : Scalar
         )
       .
-        Package Bool Scalar String
+        Package Scalar
     end
   in
   let make : Builder =
     begin
-      param val Bool : VType that
       param val Scalar : VType that
-      param val String : VType that
       param val (
-        (/OS = _) : @(import("../builtin.zy")),
         bool : BoolModule Bool,
-        primitive : PrimitiveIntegerModule Scalar String,
+        primitive : PrimitiveIntegerModule Scalar,
         zero : Scalar,
         one : Scalar
       ) that
@@ -101,7 +93,7 @@ begin
           { ret bool/true }
           { ret bool/false }
       in
-      let operations : IntegerModule Bool Scalar String = (
+      let operations : IntegerModule Scalar = (
         #add = primitive/add,
         #sub = primitive/sub,
         #mul = primitive/mul,

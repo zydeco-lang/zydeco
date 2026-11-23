@@ -2,8 +2,8 @@
 let (/DataPackage) = @(import("../data/package.zy")) in
 begin
   param val (
-    (/numeric; builtin) : @(import("../builtin.zy")),
-    (/Bool; /bool) : DataPackage
+    (/numeric) : @(import("../builtin.zy")),
+    (/bool) : DataPackage
   ) that
   let (/make = make_integer) = @(import("integer.zy")) that
   let (/make = make_float) = @(import("float.zy")) that
@@ -21,7 +21,6 @@ begin
   let float64 = numeric/float64 in
   let (/operations = int8_module; /dictionary = int8_dictionary) =
     (
-      builtin,
       bool,
       (
         #add = int8/add,
@@ -36,11 +35,10 @@ begin
       ),
       0,
       1
-    ) |> make_integer Bool Int8 String
+    ) |> make_integer Int8
   in
   let (/operations = int16_module; /dictionary = int16_dictionary) =
     (
-      builtin,
       bool,
       (
         #add = int16/add,
@@ -55,11 +53,10 @@ begin
       ),
       0,
       1
-    ) |> make_integer Bool Int16 String
+    ) |> make_integer Int16
   in
   let (/operations = int32_module; /dictionary = int32_dictionary) =
     (
-      builtin,
       bool,
       (
         #add = int32/add,
@@ -74,11 +71,10 @@ begin
       ),
       0,
       1
-    ) |> make_integer Bool Int32 String
+    ) |> make_integer Int32
   in
   let (/operations = int64_module; /dictionary = int64_dictionary) =
     (
-      builtin,
       bool,
       (
         #add = int64/add,
@@ -93,11 +89,10 @@ begin
       ),
       0,
       1
-    ) |> make_integer Bool Int64 String
+    ) |> make_integer Int64
   in
   let (/operations = int_module; /dictionary = int_dictionary) =
     (
-      builtin,
       bool,
       (
         #add = int/add,
@@ -112,11 +107,10 @@ begin
       ),
       0,
       1
-    ) |> make_integer Bool Int String
+    ) |> make_integer Int
   in
   let (/operations = uint8_module; /dictionary = uint8_dictionary) =
     (
-      builtin,
       bool,
       (
         #add = uint8/add,
@@ -131,11 +125,10 @@ begin
       ),
       0,
       1
-    ) |> make_integer Bool UInt8 String
+    ) |> make_integer UInt8
   in
   let (/operations = uint16_module; /dictionary = uint16_dictionary) =
     (
-      builtin,
       bool,
       (
         #add = uint16/add,
@@ -150,11 +143,10 @@ begin
       ),
       0,
       1
-    ) |> make_integer Bool UInt16 String
+    ) |> make_integer UInt16
   in
   let (/operations = uint32_module; /dictionary = uint32_dictionary) =
     (
-      builtin,
       bool,
       (
         #add = uint32/add,
@@ -169,11 +161,10 @@ begin
       ),
       0,
       1
-    ) |> make_integer Bool UInt32 String
+    ) |> make_integer UInt32
   in
   let (/operations = uint64_module; /dictionary = uint64_dictionary) =
     (
-      builtin,
       bool,
       (
         #add = uint64/add,
@@ -188,11 +179,10 @@ begin
       ),
       0,
       1
-    ) |> make_integer Bool UInt64 String
+    ) |> make_integer UInt64
   in
   let (/operations = uint_module; /dictionary = uint_dictionary) =
     (
-      builtin,
       bool,
       (
         #add = uint/add,
@@ -207,11 +197,10 @@ begin
       ),
       0,
       1
-    ) |> make_integer Bool UInt String
+    ) |> make_integer UInt
   in
   let (/operations = float32_module; /dictionary = float32_dictionary) =
     (
-      builtin,
       bool,
       (
         #add = float32/add,
@@ -225,11 +214,10 @@ begin
       ),
       0.0,
       1.0
-    ) |> make_float Bool Float32 String
+    ) |> make_float Float32
   in
   let (/operations = float64_module; /dictionary = float64_dictionary) =
     (
-      builtin,
       bool,
       (
         #add = float64/add,
@@ -243,7 +231,7 @@ begin
       ),
       0.0,
       1.0
-    ) |> make_float Bool Float64 String
+    ) |> make_float Float64
   in
   (
     #int8 = int8_module,
