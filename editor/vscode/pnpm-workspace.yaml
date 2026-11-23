@@ -3,3 +3,8 @@ allowBuilds:
   esbuild: true
   keytar: false
 preferSymlinkedExecutables: true
+overrides:
+  # GHSA-g3hv-75wg-m249: upstream consumers still request minimatch 10.
+  'minimatch@>=7 <11.0.1': ^11.0.9
+  # GHSA-3g3m-2fjr-6pw4: VSCE still requests glob 13.
+  '@vscode/vsce>glob': ^14.0.6
