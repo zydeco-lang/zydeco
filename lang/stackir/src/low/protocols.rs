@@ -121,7 +121,7 @@ impl<'a> ProtocolValidator<'a> {
         let entry = self
             .arena
             .entry_protocols
-            .get(&id)
+            .get(id)
             .cloned()
             .unwrap_or_else(|| EntryProtocol::unknown(parameters.kind()));
         if entry.kind() != parameters.kind() {
@@ -135,7 +135,7 @@ impl<'a> ProtocolValidator<'a> {
     }
 
     fn parameter(&self, pattern: VPatId, found: &ValueProtocol) -> Result<(), ProtocolError> {
-        if let Some(expected) = self.arena.pattern_protocols.get(&pattern)
+        if let Some(expected) = self.arena.pattern_protocols.get(pattern)
             && !self.arena.protocols.values_agree(expected, found)
         {
             return Err(ProtocolError::Parameter {
@@ -149,7 +149,7 @@ impl<'a> ProtocolValidator<'a> {
 
     fn bind(&self, id: VPatId, mut fact: ValueFact, context: &mut Context) {
         zydeco_foundation::stack::maybe_grow(|| {
-            if let Some(protocol) = self.arena.pattern_protocols.get(&id) {
+            if let Some(protocol) = self.arena.pattern_protocols.get(id) {
                 fact.protocol = fact.protocol.with_evidence(protocol);
                 if fact.fields.is_empty() {
                     fact.fields = ValueFact::with_protocol(fact.protocol.clone()).fields;
@@ -276,7 +276,7 @@ impl<'a> ProtocolValidator<'a> {
                 }
                 | Value::Hole(_) => ValueFact::default(),
             };
-            if let Some(protocol) = self.arena.value_protocols.get(&id) {
+            if let Some(protocol) = self.arena.value_protocols.get(id) {
                 if matches!(self.arena.values[&id], Value::Ext(ValueExt::ClosurePackage(_))) {
                     self.check_value(id, protocol, &fact.protocol)?;
                 }
@@ -320,7 +320,7 @@ impl<'a> ProtocolValidator<'a> {
         zydeco_foundation::stack::maybe_grow(|| {
             let SCoMatch { scrut, arms } = case;
             let supplied = self.stack(*scrut, &context)?;
-            let expected = match self.arena.case_protocols.get(&id) {
+            let expected = match self.arena.case_protocols.get(id) {
                 | Some(expected) => {
                     self.check_stack(id, expected, &supplied)?;
                     expected

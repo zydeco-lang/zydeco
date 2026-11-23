@@ -3,14 +3,17 @@
 use super::{check::SpsLowProgram, syntax as low};
 use crate::arena::{Construct as _, DefinitionNames as _};
 use crate::high::{
-    check::FragmentProgram, syntax as high, traverse::Traversal, variables::Variables,
+    check::FragmentProgram,
+    syntax as high,
+    traverse::{Together, Traversal},
+    variables::Variables,
 };
 use crate::ir;
 use crate::protocol::{StackProtocol, ValueProtocol};
 use crate::scheme::SpsScheme;
 use derive_more::{AsMut, AsRef};
 use std::{collections::HashMap, convert::Infallible};
-use zydeco_foundation::{arena::ArenaAccess as _, context::Context, pass::CompilerPass};
+use zydeco_foundation::{context::Context, dense::SecondaryMap, pass::CompilerPass};
 use zydeco_syntax::VarName;
 
 mod pattern;
@@ -55,9 +58,9 @@ struct ClosureConversion {
     envs: Vec<RenameEnv>,
     variables: Variables,
     /// The label kind of each procedure binding, or `None` for a procedure that no call reaches.
-    procedures: HashMap<high::CompuId, Option<low::LabelKind>>,
+    procedures: SecondaryMap<high::CompuId, Option<low::LabelKind>>,
     /// The variables that every jump to a converted label pushes, in order; none for a local label.
-    labels: HashMap<high::DefId, Vec<high::DefId>>,
+    labels: SecondaryMap<high::DefId, Vec<high::DefId>>,
     /// Conversion is homomorphic on stack lets, so the output keeps the input's fragment.
     scheme: SpsScheme,
 }
@@ -66,9 +69,10 @@ impl ClosureConversion {
     fn new(program: FragmentProgram) -> Self {
         let scheme = program.scheme();
         let high::SpsRebuild { source, target, root } = program.into_program().into_rebuild();
-        let mut variables = Variables::default();
-        Traversal { arena: &source.inner }.run(root.into(), &mut variables);
-        let procedures = procedures::Placement::analyze(&source.inner, root);
+        let mut analyses =
+            Together { first: Variables::default(), second: procedures::Placement::default() };
+        Traversal { arena: &source.inner }.run(root.into(), &mut analyses);
+        let Together { first: variables, second: placement } = analyses;
         let arena = low::SpsLowArena {
             admin: low::SpsLowAdminArena::continuing(target.admin),
             inner: low::SpsLowInnerArena {
@@ -82,8 +86,8 @@ impl ClosureConversion {
             root,
             envs: vec![RenameEnv { parent: None, bindings: HashMap::new() }],
             variables,
-            procedures,
-            labels: HashMap::new(),
+            procedures: placement.kinds,
+            labels: SecondaryMap::new(),
             scheme,
         }
     }
@@ -91,8 +95,7 @@ impl ClosureConversion {
     fn convert(mut self) -> SpsLowProgram {
         let source = self.root;
         let root = fold::ConversionFolder::new(&mut self).run(source);
-        SpsLowProgram::try_new(self.arena, root, self.scheme)
-            .expect("closure conversion produces closed first-order SPSLow")
+        SpsLowProgram::from_pass(self.arena, root, self.scheme)
     }
 
     fn extend_env(
@@ -119,9 +122,7 @@ impl ClosureConversion {
     }
 
     fn alloc_def(&mut self, name: VarName) -> high::DefId {
-        let id = self.arena.admin.fresh_def();
-        self.arena.admin.insert_def(id, name);
-        id
+        self.arena.admin.alloc_def(name)
     }
 
     fn alloc_like(&mut self, original: high::DefId) -> high::DefId {
@@ -147,7 +148,7 @@ impl ClosureConversion {
                 - excluded;
         let mut vars: Vec<_> = free
             .into_iter()
-            .flat_map(|def| match self.labels.get(&self.renamed_def(env, def)) {
+            .flat_map(|def| match self.labels.get(self.renamed_def(env, def)) {
                 | Some(variables) => variables.clone(),
                 | None => vec![def],
             })
@@ -210,7 +211,6 @@ impl ClosureConversion {
 mod tests {
     use super::*;
     use crate::arena::Construct;
-    use zydeco_foundation::arena::ArenaAccess;
 
     struct Fixture {
         arena: high::SpsArena,
@@ -222,9 +222,7 @@ mod tests {
         }
 
         fn def(&mut self, name: &str) -> high::DefId {
-            let def = self.arena.admin.fresh_def();
-            self.arena.admin.insert_def(def, VarName::new(name));
-            def
+            self.arena.admin.alloc_def(VarName::new(name))
         }
 
         fn build<U, S, T>(&mut self, node: U) -> T
@@ -327,7 +325,7 @@ mod tests {
             low::Computation::Ext(low::CompuExt::OpenContinuation(_))
         ));
         let package = *package;
-        assert!(program.arena().inner.continuations.get(&package).is_some());
+        assert!(program.arena().inner.continuations.get(package).is_some());
         let (mut arena, root) = program.into_parts();
         let wrong_result = low::Hole.build(&mut arena, None);
         arena.inner.continuations[&package].result = wrong_result;

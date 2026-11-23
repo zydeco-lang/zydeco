@@ -108,7 +108,7 @@ impl PatternFolder<'_> {
     }
 
     fn finish(&mut self, source: high::VPatId, translated: PatternTranslation) -> Step<Self> {
-        if let Some(protocol) = self.conversion.source.inner.pattern_protocols.get(&source) {
+        if let Some(protocol) = self.conversion.source.inner.pattern_protocols.get(source) {
             self.conversion
                 .arena
                 .inner

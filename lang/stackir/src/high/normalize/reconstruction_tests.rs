@@ -23,9 +23,10 @@ impl Fixture {
         let arena = SpsArena {
             admin: AdminArena {
                 defs: source.admin.defs.clone(),
-                pats: source.admin.pats.clone(),
-                terms: source.admin.terms.clone(),
-                ..Default::default()
+                pat_sites: source.admin.pat_sites.clone(),
+                value_sites: source.admin.value_sites.clone(),
+                stack_sites: source.admin.stack_sites.clone(),
+                compu_sites: source.admin.compu_sites.clone(),
             },
             inner: SpsInnerArena {
                 protocols: source.inner.protocols.clone(),
@@ -124,8 +125,8 @@ struct Snapshot {
 }
 
 impl Snapshot {
-    fn sorted<Id: ArenaId, T>(items: impl Iterator<Item = (Id, T)>) -> Vec<(u32, T)> {
-        let mut items = items.map(|(id, value)| (id.raw().into_u32(), value)).collect::<Vec<_>>();
+    fn sorted<Id: DenseId, T>(items: impl Iterator<Item = (Id, T)>) -> Vec<(u32, T)> {
+        let mut items = items.map(|(id, value)| (id.raw_u32(), value)).collect::<Vec<_>>();
         items.sort_by_key(|(slot, _)| *slot);
         items
     }
@@ -133,27 +134,21 @@ impl Snapshot {
     fn of(program: &SpsProgram) -> Self {
         let arena = program.arena();
         let formatter = crate::high::fmt::Formatter::new(&arena.admin, &arena.inner);
-        // Keep all raw allocation slots and source identities, normalizing only
-        // the independently allocated output key spaces of nodes and generated definitions.
-        let rendered = program
-            .root()
-            .ugly(&formatter)
-            .replace(&format!("[{:?}#", program.root().key_space()), "[output#")
-            .replace(&format!("[{:?}#", arena.admin.definition_key_space()), "[definition#");
+        let rendered = program.root().ugly(&formatter);
         let mut terms = arena
             .inner
             .values
             .iter()
-            .map(|(id, _)| TermId::Value(*id))
-            .chain(arena.inner.stacks.iter().map(|(id, _)| TermId::Stack(*id)))
-            .chain(arena.inner.compus.iter().map(|(id, _)| TermId::Compu(*id)))
+            .map(|(id, _)| TermId::Value(id))
+            .chain(arena.inner.stacks.iter().map(|(id, _)| TermId::Stack(id)))
+            .chain(arena.inner.compus.iter().map(|(id, _)| TermId::Compu(id)))
             .map(|id| {
                 let slot = match id {
-                    | TermId::Value(id) => id.raw().into_u32(),
-                    | TermId::Stack(id) => id.raw().into_u32(),
-                    | TermId::Compu(id) => id.raw().into_u32(),
+                    | TermId::Value(id) => id.raw_u32(),
+                    | TermId::Stack(id) => id.raw_u32(),
+                    | TermId::Compu(id) => id.raw_u32(),
                 };
-                (slot, arena.admin.terms.back(&id).copied())
+                (slot, arena.admin.term_site(id))
             })
             .collect::<Vec<_>>();
         terms.sort_by_key(|(slot, _)| *slot);
@@ -167,16 +162,16 @@ impl Snapshot {
             ],
             terms,
             patterns: Self::sorted(
-                arena.inner.vpats.iter().map(|(id, _)| (*id, arena.admin.pats.back(id).copied())),
+                arena.inner.vpats.iter().map(|(id, _)| (id, arena.admin.pattern_site(id))),
             ),
             value_protocols: Self::sorted(
-                arena.inner.value_protocols.iter().map(|(id, protocol)| (*id, protocol.clone())),
+                arena.inner.value_protocols.iter().map(|(id, protocol)| (id, protocol.clone())),
             ),
             pattern_protocols: Self::sorted(
-                arena.inner.pattern_protocols.iter().map(|(id, protocol)| (*id, protocol.clone())),
+                arena.inner.pattern_protocols.iter().map(|(id, protocol)| (id, protocol.clone())),
             ),
             compu_protocols: Self::sorted(
-                arena.inner.compu_protocols.iter().map(|(id, protocol)| (*id, protocol.clone())),
+                arena.inner.compu_protocols.iter().map(|(id, protocol)| (id, protocol.clone())),
             ),
         }
     }
@@ -184,13 +179,11 @@ impl Snapshot {
 
 #[test]
 fn normalization_preserves_reconstruction_sites_and_protocols() {
-    use zydeco_foundation::dense::DenseId;
     let mut arena = SpsArena::default();
     let pattern_site = crate::ir::VPatId::from_index(0);
     let value_site = crate::ir::TermId::Value(crate::ir::ValueId::from_index(0));
     let computation_site = crate::ir::TermId::Compu(crate::ir::CompuId::from_index(0));
-    let parameter: DefId = arena.admin.fresh_def();
-    arena.admin.insert_def(parameter, VarName::new("argument"));
+    let parameter: DefId = arena.admin.alloc_def(VarName::new("argument"));
     let binder = parameter.build(&mut arena, Some(pattern_site));
     arena.inner.pattern_protocols.insert_new(binder, ValueProtocol::Unit);
     let value = parameter.build(&mut arena, Some(value_site));
@@ -199,8 +192,7 @@ fn normalization_preserves_reconstruction_sites_and_protocols() {
     let tail = SReturn { stack, value }.build(&mut arena, None);
     let stack = StackVar.build(&mut arena, None);
     let body = Let { binder: Cons(binder, StackVar), bindee: stack, tail }.build(&mut arena, None);
-    let param: DefId = arena.admin.fresh_def();
-    arena.admin.insert_def(param, VarName::new("recursive"));
+    let param: DefId = arena.admin.alloc_def(VarName::new("recursive"));
     let stack = StackVar.build(&mut arena, None);
     let root = SFix { param, stack, body }.build(&mut arena, Some(computation_site));
     let protocol = StackProtocol::Argument(
@@ -216,8 +208,8 @@ fn normalization_preserves_reconstruction_sites_and_protocols() {
     assert_eq!(snapshot.compu_protocols.len(), 1);
     assert_eq!(normalized.arena().inner.compu_protocols[&normalized.root()], protocol);
     assert_eq!(
-        normalized.arena().admin.terms.back(&TermId::Compu(normalized.root())),
-        Some(&computation_site)
+        normalized.arena().admin.term_site(TermId::Compu(normalized.root())),
+        Some(computation_site)
     );
     assert!(snapshot.patterns.iter().any(|(_, site)| *site == Some(pattern_site)));
     assert!(snapshot.terms.iter().any(|(_, site)| *site == Some(value_site)));

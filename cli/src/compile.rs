@@ -304,6 +304,9 @@ impl BackendProgram {
             lower_sps,
         ]
         .run(core)?;
+        if inspection.verify {
+            sps_low.validate()?;
+        }
         Ok(Self {
             sps_low,
             assembly: OnceLock::new(),
@@ -429,7 +432,7 @@ impl BackendProgram {
     }
 
     pub fn emit_wasm_sps(&self) -> Result<Vec<u8>, CompileError> {
-        use zydeco_assembly::representation::RepresentationPolicy as _;
+        use zydeco_stackir::low::representation::RepresentationPolicy as _;
         zydeco_wasm_sps::Emitter::new(&self.sps_low)
             .with_scalar_boxing(self.representation.scalar_boxing())
             .run()
@@ -453,6 +456,8 @@ pub enum CompileError {
     Library(zydeco_statics::LibraryCheckError),
     #[error("SPS pipeline: {0}")]
     SpsPass(#[source] SpsFailure),
+    #[error("SPSLow validation failed: {0}")]
+    SpsLowValidation(#[from] zydeco_stackir::SpsLowValidationError),
     #[error(transparent)]
     Analysis(AnalysisError),
     #[error("type checking failed")]

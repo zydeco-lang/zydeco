@@ -10,7 +10,7 @@ pub type Formatter<'a> = crate::fmt::Formatter<'a, Sps>;
 impl<'a> Pretty<'a, Formatter<'a>> for DefId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let name = f.admin.def_name(self);
-        RcDoc::text(format!("{}{}", name.plain(), self.concise()))
+        RcDoc::text(format!("{}[#{}]", name.plain(), self.index()))
     }
 }
 
@@ -24,7 +24,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for ValueId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         zydeco_foundation::stack::maybe_grow(|| match f.inner.values.get(self) {
             | Some(value) => value.pretty(f),
-            | None => RcDoc::text(format!("<value:{}>", self.concise())),
+            | None => RcDoc::text(format!("<value:[#{}]>", self.index())),
         })
     }
 }
@@ -39,7 +39,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for CompuId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         zydeco_foundation::stack::maybe_grow(|| match f.inner.compus.get(self) {
             | Some(compu) => compu.pretty(f),
-            | None => RcDoc::text(format!("<compu:{}>", self.concise())),
+            | None => RcDoc::text(format!("<compu:[#{}]>", self.index())),
         })
     }
 }

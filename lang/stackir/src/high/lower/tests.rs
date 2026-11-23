@@ -261,10 +261,10 @@ fn shared_typed_children_have_fresh_output_ownership_and_source_protocols() {
     let Value::VCons(VCons { items, .. }) = &arena.inner.values[&value] else { panic!("product") };
     assert_ne!(items[0], items[1]);
     for item in items {
-        assert_eq!(arena.admin.terms.back(&(*item).into()), Some(&ir::TermId::Value(unit)));
+        assert_eq!(arena.admin.term_site(TermId::Value(*item)), Some(ir::TermId::Value(unit)));
         assert_eq!(arena.inner.value_protocols[item], crate::protocol::ValueProtocol::Unit);
     }
-    assert_eq!(arena.admin.terms.back(&value.into()), Some(&ir::TermId::Value(pair)));
+    assert_eq!(arena.admin.term_site(TermId::Value(value)), Some(ir::TermId::Value(pair)));
 }
 
 #[test]
@@ -334,6 +334,6 @@ fn computation_roots_lower_as_single_program_roots() {
     let stackir = fixture.lower(root);
     let stackir = stackir.as_program();
 
-    assert!(stackir.arena().inner.compus.get(&stackir.root()).is_some());
+    assert!(stackir.arena().inner.compus.get(stackir.root()).is_some());
     super::super::check::check(stackir);
 }

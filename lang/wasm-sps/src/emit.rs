@@ -499,7 +499,7 @@ impl ModulePlan {
             .values
             .iter()
             .filter_map(|(id, value)| {
-                matches!(value, sps::Value::Literal(Literal::String(_))).then_some(*id)
+                matches!(value, sps::Value::Literal(Literal::String(_))).then_some(id)
             })
             .collect::<Vec<_>>();
         string_values.sort_unstable();
@@ -1418,8 +1418,7 @@ mod tests {
         // bound as a local label and then as a closed one.
         for (kind, cases) in [(sps::LabelKind::Local, 1), (sps::LabelKind::Closed, 2)] {
             let mut fixture = Fixture::new();
-            let label: DefId =
-                sps::IdAllocator::<zydeco_stackir::high::arena::SpsScope>::new().alloc();
+            let label: DefId = fixture.arena.admin.fresh_def();
             let body = fixture.hole();
             let jumps = [0, 1].map(|_| {
                 let stack = sps::StackVar.build(&mut fixture.arena, None);
@@ -1464,7 +1463,7 @@ mod tests {
     #[test]
     fn per_case_local_plan_isolates_tiny_blocks_from_large_roots() {
         let mut fixture = Fixture::new();
-        let label: DefId = sps::IdAllocator::<zydeco_stackir::high::arena::SpsScope>::new().alloc();
+        let label: DefId = fixture.arena.admin.fresh_def();
         let environment = sps::Hole.build(&mut fixture.arena, None);
         let block_body = fixture.hole();
         let block = sps::Block {

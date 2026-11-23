@@ -4,12 +4,14 @@
 use std::path::PathBuf;
 use zydeco_assembly::{
     LoweringPipeline,
-    representation::{RepresentationPolicy, RepresentationStrategy, Shared, UnboxingOpportunity},
     syntax::{AssemblyProgram, Instruction, Program},
-    unbox::LocalUnboxing,
 };
 use zydeco_cli::{BackendProgram, CommandCompiler};
 use zydeco_foundation::pass::CompilerPass;
+use zydeco_stackir::low::{
+    representation::{RepresentationPolicy, RepresentationStrategy, Shared, UnboxingOpportunity},
+    unbox::LocalUnboxing,
+};
 
 /// A type-level policy experiment that needs no change to the analysis or emitters.
 struct FieldLimit<P, const MAX: usize>(P);

@@ -6,8 +6,6 @@ pub mod arena;
 pub mod fmt;
 pub mod lower;
 pub mod analyze;
-pub mod unbox;
-pub mod representation;
 pub mod frames;
 
 mod pipeline;

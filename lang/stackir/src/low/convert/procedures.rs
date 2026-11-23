@@ -7,9 +7,8 @@
 //! are placed first, because a closed procedure moves the calls in its body to another frame.
 
 use super::{high, low};
-use crate::high::traverse::{EntityId, Node, Traversal, Visitor};
-use std::collections::HashMap;
-use zydeco_foundation::context::CoContext;
+use crate::high::traverse::{EntityId, Node, Visitor};
+use zydeco_foundation::{context::CoContext, dense::SecondaryMap};
 
 /// The calls a subtree makes to procedures bound outside it, split by whether they stay in the
 /// subtree's frame.
@@ -40,22 +39,22 @@ impl Calls {
 }
 
 /// Bottom-up placement of every procedure binding. `None` marks a procedure that no call reaches.
+#[derive(Default)]
 pub(super) struct Placement {
-    summaries: HashMap<EntityId, Calls>,
-    kinds: HashMap<high::CompuId, Option<low::LabelKind>>,
+    values: SecondaryMap<high::ValueId, Calls>,
+    stacks: SecondaryMap<high::StackId, Calls>,
+    compus: SecondaryMap<high::CompuId, Calls>,
+    pub(super) kinds: SecondaryMap<high::CompuId, Option<low::LabelKind>>,
 }
 
 impl Placement {
-    pub(super) fn analyze(
-        arena: &high::SpsInnerArena, root: high::CompuId,
-    ) -> HashMap<high::CompuId, Option<low::LabelKind>> {
-        let mut placement = Self { summaries: HashMap::new(), kinds: HashMap::new() };
-        Traversal { arena }.run(root.into(), &mut placement);
-        placement.kinds
-    }
-
     fn take(&mut self, child: impl Into<EntityId>) -> Calls {
-        self.summaries.remove(&child.into()).unwrap_or_default()
+        match child.into() {
+            | EntityId::Pattern(_) => Calls::default(),
+            | EntityId::Value(id) => self.values.remove(id).unwrap_or_default(),
+            | EntityId::Stack(id) => self.stacks.remove(id).unwrap_or_default(),
+            | EntityId::Computation(id) => self.compus.remove(id).unwrap_or_default(),
+        }
     }
 
     fn children(&mut self, node: Node<'_>) -> Calls {
@@ -99,7 +98,7 @@ impl Visitor<high::Sps> for Placement {
                     | (true, false) => Some(low::LabelKind::Local),
                     | (false, false) => None,
                 };
-                self.kinds.insert(id, kind);
+                self.kinds.insert_new(id, kind);
                 let tail = tail.without(procedure);
                 let body =
                     if kind == Some(low::LabelKind::Closed) { body.enclosed() } else { body };
@@ -107,6 +106,11 @@ impl Visitor<high::Sps> for Placement {
             }
             | _ => self.children(node),
         };
-        self.summaries.insert(node.id(), calls);
+        match node.id() {
+            | EntityId::Pattern(_) => {}
+            | EntityId::Value(id) => self.values.insert_new(id, calls),
+            | EntityId::Stack(id) => self.stacks.insert_new(id, calls),
+            | EntityId::Computation(id) => self.compus.insert_new(id, calls),
+        }
     }
 }

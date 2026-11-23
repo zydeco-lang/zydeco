@@ -209,22 +209,83 @@ pub struct Traversal<'a, N: Nodes> {
 
 impl<N: Nodes> Traversal<'_, N> {
     pub fn run(&self, root: EntityId<N::Phase>, visitor: &mut impl Visitor<N::Phase>) {
+        let states = VisitStates::for_arena(self.arena);
         Explicit::run(
-            &mut AnalysisFolder { arena: self.arena, visitor, states: FxHashMap::default() },
+            &mut AnalysisFolder { arena: self.arena, visitor, states },
             (root, Edge::Root),
         );
     }
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
 enum VisitState {
+    Unvisited,
     Active,
     Complete,
+}
+
+impl VisitState {
+    fn from_byte(byte: u8) -> Self {
+        match byte {
+            | 1 => Self::Active,
+            | 2 => Self::Complete,
+            | _ => Self::Unvisited,
+        }
+    }
+
+    fn as_byte(self) -> u8 {
+        match self {
+            | Self::Unvisited => 0,
+            | Self::Active => 1,
+            | Self::Complete => 2,
+        }
+    }
+}
+
+struct VisitStates {
+    vpats: Vec<u8>,
+    values: Vec<u8>,
+    stacks: Vec<u8>,
+    compus: Vec<u8>,
+}
+
+impl VisitStates {
+    fn for_arena<N: Nodes>(arena: &N) -> Self {
+        Self {
+            vpats: vec![0; arena.vpats().len()],
+            values: vec![0; arena.values().len()],
+            stacks: vec![0; arena.stacks().len()],
+            compus: vec![0; arena.compus().len()],
+        }
+    }
+
+    #[inline]
+    fn get<P: Phase>(&self, id: EntityId<P>) -> VisitState {
+        let byte = match id {
+            | EntityId::Pattern(id) => self.vpats[id.index()],
+            | EntityId::Value(id) => self.values[id.index()],
+            | EntityId::Stack(id) => self.stacks[id.index()],
+            | EntityId::Computation(id) => self.compus[id.index()],
+        };
+        VisitState::from_byte(byte)
+    }
+
+    #[inline]
+    fn set<P: Phase>(&mut self, id: EntityId<P>, state: VisitState) {
+        let byte = state.as_byte();
+        match id {
+            | EntityId::Pattern(id) => self.vpats[id.index()] = byte,
+            | EntityId::Value(id) => self.values[id.index()] = byte,
+            | EntityId::Stack(id) => self.stacks[id.index()] = byte,
+            | EntityId::Computation(id) => self.compus[id.index()] = byte,
+        }
+    }
 }
 
 struct AnalysisFolder<'a, 'visitor, N: Nodes, V> {
     arena: &'a N,
     visitor: &'visitor mut V,
-    states: FxHashMap<EntityId<N::Phase>, VisitState>,
+    states: VisitStates,
 }
 
 impl<'a, N: Nodes, V: Visitor<N::Phase>> Folder for AnalysisFolder<'a, '_, N, V> {
@@ -233,17 +294,17 @@ impl<'a, N: Nodes, V: Visitor<N::Phase>> Folder for AnalysisFolder<'a, '_, N, V>
     type Frame = (Node<'a, N::Phase>, usize);
 
     fn enter(&mut self, (id, edge): Self::Input) -> Step<Self> {
-        let occurrence = match self.states.get(&id) {
-            | None => Occurrence::First,
-            | Some(VisitState::Active) => Occurrence::Cyclic,
-            | Some(VisitState::Complete) => Occurrence::Shared,
+        let occurrence = match self.states.get(id) {
+            | VisitState::Unvisited => Occurrence::First,
+            | VisitState::Active => Occurrence::Cyclic,
+            | VisitState::Complete => Occurrence::Shared,
         };
         let node = id.node(self.arena);
         self.visitor.enter(node, edge, occurrence);
         if occurrence != Occurrence::First {
             return Step::Return(());
         }
-        self.states.insert(id, VisitState::Active);
+        self.states.set(id, VisitState::Active);
         self.resume((node, 0), ())
     }
 
@@ -251,7 +312,7 @@ impl<'a, N: Nodes, V: Visitor<N::Phase>> Folder for AnalysisFolder<'a, '_, N, V>
         if let Some(input) = node.child(position) {
             Step::Call { input, frame: (node, position + 1) }
         } else {
-            self.states.insert(node.id(), VisitState::Complete);
+            self.states.set(node.id(), VisitState::Complete);
             self.visitor.exit(node);
             Step::Return(())
         }

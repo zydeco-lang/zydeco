@@ -346,6 +346,11 @@ impl<Id: DenseId, V> SecondaryMap<Id, V> {
     }
 
     #[inline]
+    pub fn contains_key(&self, id: impl Borrow<Id>) -> bool {
+        self.get(id).is_some()
+    }
+
+    #[inline]
     pub fn get(&self, id: impl Borrow<Id>) -> Option<&V> {
         self.slots.get(id.borrow().index())?.as_ref()
     }
@@ -361,7 +366,30 @@ impl<Id: DenseId, V> SecondaryMap<Id, V> {
             .enumerate()
             .filter_map(|(index, slot)| slot.as_ref().map(|value| (Id::from_index(index), value)))
     }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (Id, &mut V)> {
+        self.slots
+            .iter_mut()
+            .enumerate()
+            .filter_map(|(index, slot)| slot.as_mut().map(|value| (Id::from_index(index), value)))
+    }
 }
+
+impl<Id: DenseId, V: PartialEq> PartialEq for SecondaryMap<Id, V> {
+    fn eq(&self, other: &Self) -> bool {
+        if self.len != other.len {
+            return false;
+        }
+        let max_len = self.slots.len().max(other.slots.len());
+        (0..max_len).all(|index| {
+            let left = self.slots.get(index).and_then(Option::as_ref);
+            let right = other.slots.get(index).and_then(Option::as_ref);
+            left == right
+        })
+    }
+}
+
+impl<Id: DenseId, V: Eq> Eq for SecondaryMap<Id, V> {}
 
 impl<Id: DenseId, V> Index<Id> for SecondaryMap<Id, V> {
     type Output = V;
@@ -430,6 +458,11 @@ impl<Id: DenseId> IdBitSet<Id> {
     }
 
     #[inline]
+    pub fn insert(&mut self, id: Id) -> bool {
+        self.ensure(id)
+    }
+
+    #[inline]
     pub fn ensure(&mut self, id: Id) -> bool {
         let index = id.index();
         let word = index >> 6;
@@ -482,6 +515,38 @@ impl<Id: DenseId> IdBitSet<Id> {
     }
 }
 
+impl<Id: DenseId> PartialEq for IdBitSet<Id> {
+    fn eq(&self, other: &Self) -> bool {
+        if self.len != other.len {
+            return false;
+        }
+        let max_len = self.words.len().max(other.words.len());
+        (0..max_len).all(|index| {
+            let left = self.words.get(index).copied().unwrap_or(0);
+            let right = other.words.get(index).copied().unwrap_or(0);
+            left == right
+        })
+    }
+}
+
+impl<Id: DenseId> Eq for IdBitSet<Id> {}
+
+impl<Id: DenseId> Extend<Id> for IdBitSet<Id> {
+    fn extend<T: IntoIterator<Item = Id>>(&mut self, iter: T) {
+        for id in iter {
+            self.insert(id);
+        }
+    }
+}
+
+impl<Id: DenseId> FromIterator<Id> for IdBitSet<Id> {
+    fn from_iter<T: IntoIterator<Item = Id>>(iter: T) -> Self {
+        let mut set = Self::new();
+        set.extend(iter);
+        set
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -529,5 +594,31 @@ mod tests {
         assert!(bits.remove(first));
         assert!(!bits.contains(first));
         assert_eq!(bits.len(), 1);
+    }
+
+    #[test]
+    fn secondary_map_and_bitset_equality_ignore_trailing_empty_slots_after_removals() {
+        let id0 = SampleId::from_index(0);
+        let id1 = SampleId::from_index(1);
+        let id70 = SampleId::from_index(70);
+
+        let mut left_map = SecondaryMap::new();
+        left_map.insert_new(id0, 10);
+        left_map.insert_new(id70, 99);
+        assert!(left_map.contains_key(id0));
+        assert_eq!(left_map.remove(id70), Some(99));
+        for (_, value) in left_map.iter_mut() {
+            *value += 1;
+        }
+
+        let mut right_map = SecondaryMap::new();
+        right_map.insert_new(id0, 11);
+        assert_eq!(left_map, right_map);
+
+        let mut left_bits: IdBitSet<SampleId> = [id0, id1, id70].into_iter().collect();
+        assert!(left_bits.remove(id70));
+        let mut right_bits = IdBitSet::new();
+        right_bits.extend([id0, id1]);
+        assert_eq!(left_bits, right_bits);
     }
 }

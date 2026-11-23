@@ -18,7 +18,7 @@ impl Storage {
             arena: AssemblyArena::default(),
             sps_low: &arena,
             root,
-            unboxing: crate::unbox::LocalUnboxing::default(),
+            unboxing: LocalUnboxing::default(),
             scalars: Default::default(),
             unboxed_var_slots: HashMap::new(),
             labels: HashMap::new(),

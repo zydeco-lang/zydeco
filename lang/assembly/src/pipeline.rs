@@ -1,4 +1,3 @@
-use crate::representation::{Local, RepresentationPolicy};
 use crate::{
     analyze::StackAnalyzer,
     arena::AssemblyBuild,
@@ -8,7 +7,10 @@ use crate::{
 };
 use std::convert::Infallible;
 use zydeco_foundation::{pass::CompilerPass, pipeline};
-use zydeco_stackir::SpsLowProgram;
+use zydeco_stackir::{
+    SpsLowProgram,
+    low::representation::{Local, RepresentationPolicy},
+};
 
 /// Lower Stack IR and establish the stack-layout invariants required by backends.
 pub struct LoweringPipeline<P = Local> {

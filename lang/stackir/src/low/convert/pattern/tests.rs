@@ -32,12 +32,10 @@ impl Fixture {
 #[test]
 fn pattern_translation_preserves_binding_order_origins_layouts_and_protocols() {
     let mut fixture = Fixture::new();
-    let def: DefId = fixture.arena.admin.fresh_def();
-    fixture.arena.admin.insert_def(def, VarName::new("argument"));
+    let def: DefId = fixture.arena.admin.alloc_def(VarName::new("argument"));
     let variable = fixture.pattern(def);
     let ctor = fixture.pattern(Ctor(CtorIdx { idx: 1, name: CtorName::new("+Item") }, variable));
-    let other: DefId = fixture.arena.admin.fresh_def();
-    fixture.arena.admin.insert_def(other, VarName::new("second"));
+    let other: DefId = fixture.arena.admin.alloc_def(VarName::new("second"));
     let second = fixture.pattern(other);
     let alias = fixture.pattern(Alias(ConsN(vec![ctor], second)));
     let unit = fixture.pattern(Triv);
@@ -55,7 +53,10 @@ fn pattern_translation_preserves_binding_order_origins_layouts_and_protocols() {
         assert_ne!(fresh, source);
     }
     let output = translated.pattern;
-    assert_eq!(conversion.arena.admin.pats.back(&output), conversion.source.admin.pats.back(&root));
+    assert_eq!(
+        conversion.arena.admin.pattern_site(output),
+        conversion.source.admin.pattern_site(root)
+    );
     let low::ValuePattern::VCons(low::VCons { items, layout }) =
         &conversion.arena.inner.vpats[&output]
     else {
@@ -64,8 +65,8 @@ fn pattern_translation_preserves_binding_order_origins_layouts_and_protocols() {
     assert_eq!(layout.arity, 4);
     assert_eq!(conversion.arena.inner.pattern_protocols[&items[1]], ValueProtocol::Unit);
     assert_eq!(
-        conversion.arena.admin.pats.back(&items[1]),
-        conversion.source.admin.pats.back(&unit)
+        conversion.arena.admin.pattern_site(items[1]),
+        conversion.source.admin.pattern_site(unit)
     );
     assert!(
         matches!(&conversion.arena.inner.vpats[&items[2]], low::ValuePattern::VCons(product) if product.items.is_empty() && product.layout.arity == 2)
@@ -78,8 +79,7 @@ fn deep_pattern_translation_and_destruction_use_a_small_stack() {
         .stack_size(512 * 1024)
         .spawn(|| {
             let mut fixture = Fixture::new();
-            let def: DefId = fixture.arena.admin.fresh_def();
-            fixture.arena.admin.insert_def(def, VarName::new("argument"));
+            let def: DefId = fixture.arena.admin.alloc_def(VarName::new("argument"));
             let mut root = fixture.pattern(def);
             for _ in 0..8192 {
                 let hole = fixture.pattern(Hole);

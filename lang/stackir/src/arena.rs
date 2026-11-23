@@ -1,11 +1,11 @@
 //! Shared builders and layered definition names for Stack IR.
 
 use super::syntax::*;
-use crate::{high::arena::SpsScope, ir};
+use crate::ir;
 
 /// Read-only definition names for an IR phase.
 pub trait DefinitionNames {
-    fn defs(&self) -> &ArenaSparse<SpsScope, DefId>;
+    fn defs(&self) -> &DenseArena<DefId, VarName>;
 
     fn def_name(&self, id: &DefId) -> VarName {
         self.defs().get(id).copied().unwrap_or_else(|| VarName::new("_"))
@@ -22,66 +22,55 @@ pub trait Construct<S, T, Arena>: Sized + Into<S> {
 /// Definition names and core provenance of one phase.
 #[derive(Debug)]
 pub struct AdminArena<P: Phase> {
-    /// Allocator of this phase's nodes.
-    pub(crate) node_allocator: IdAllocator<P::Scope>,
-    /// Allocator of the definitions carried across stack IR phases.
-    pub(crate) def_allocator: IdAllocator<SpsScope>,
     /// Names for definitions introduced or lowered into stack IR.
-    pub defs: ArenaSparse<SpsScope, DefId>,
-    /// One core pattern may originate several generated patterns; every generated pattern
-    /// has at most one core pattern.
-    pub pats: ArenaForth<ir::VPatId, P::VPatId>,
-    /// One core term may originate several generated nodes; every generated node has
-    /// at most one core term.
-    pub terms: ArenaForth<ir::TermId, TermId<P>>,
+    pub defs: DenseArena<DefId, VarName>,
+    /// Core pattern provenance per generated pattern, when recorded.
+    pub pat_sites: SecondaryMap<P::VPatId, ir::VPatId>,
+    /// Core term provenance per generated value, when recorded.
+    pub value_sites: SecondaryMap<P::ValueId, ir::TermId>,
+    /// Core term provenance per generated stack, when recorded.
+    pub stack_sites: SecondaryMap<P::StackId, ir::TermId>,
+    /// Core term provenance per generated computation, when recorded.
+    pub compu_sites: SecondaryMap<P::CompuId, ir::TermId>,
 }
 
 impl<P: Phase> AdminArena<P> {
     pub fn new() -> Self {
         Self {
-            node_allocator: IdAllocator::new(),
-            def_allocator: IdAllocator::new(),
-            defs: ArenaSparse::default(),
-            pats: ArenaForth::new(),
-            terms: ArenaForth::new(),
+            defs: DenseArena::new(),
+            pat_sites: SecondaryMap::new(),
+            value_sites: SecondaryMap::new(),
+            stack_sites: SecondaryMap::new(),
+            compu_sites: SecondaryMap::new(),
         }
     }
 
-    /// Continue the definitions of an earlier phase with fresh node allocation and provenance.
+    /// Continue the definitions of an earlier phase with fresh node provenance.
     pub(crate) fn continuing<Q: Phase>(earlier: AdminArena<Q>) -> Self {
-        let AdminArena { def_allocator, defs, .. } = earlier;
-        Self { def_allocator, defs, ..Self::new() }
+        let AdminArena { defs, .. } = earlier;
+        Self { defs, ..Self::new() }
     }
 
-    pub(crate) fn fresh_node<Id>(&mut self) -> Id
-    where
-        Id: ArenaId,
-        P::Scope: Allocates<Id>,
-    {
-        self.node_allocator.alloc()
+    pub fn alloc_def(&mut self, name: VarName) -> DefId {
+        self.defs.alloc(name)
     }
 
-    pub(crate) fn fresh_def(&mut self) -> DefId {
-        self.def_allocator.alloc()
-    }
-
-    /// The identity domain of the definitions this arena introduces.
-    pub fn definition_key_space(&self) -> KeySpaceId {
-        self.def_allocator.key_space()
-    }
-
-    pub(crate) fn insert_def(&mut self, id: DefId, name: VarName) {
-        self.defs.insert_new(id, name);
+    pub fn fresh_def(&mut self) -> DefId {
+        self.alloc_def(VarName::new("_"))
     }
 
     /// The core term that originated a generated node, if any.
     pub fn term_site(&self, id: impl Into<TermId<P>>) -> Option<ir::TermId> {
-        self.terms.back(&id.into()).copied()
+        match id.into() {
+            | TermId::Value(id) => self.value_sites.get(id).copied(),
+            | TermId::Stack(id) => self.stack_sites.get(id).copied(),
+            | TermId::Compu(id) => self.compu_sites.get(id).copied(),
+        }
     }
 
     /// The core pattern that originated a generated pattern, if any.
     pub fn pattern_site(&self, id: P::VPatId) -> Option<ir::VPatId> {
-        self.pats.back(&id).copied()
+        self.pat_sites.get(id).copied()
     }
 }
 
@@ -92,7 +81,7 @@ impl<P: Phase> Default for AdminArena<P> {
 }
 
 impl<P: Phase> DefinitionNames for AdminArena<P> {
-    fn defs(&self) -> &ArenaSparse<SpsScope, DefId> {
+    fn defs(&self) -> &DenseArena<DefId, VarName> {
         &self.defs
     }
 }
@@ -100,28 +89,24 @@ impl<P: Phase> DefinitionNames for AdminArena<P> {
 /// The node tables of one phase.
 pub trait Nodes: Sized {
     type Phase: Phase<Nodes = Self>;
-    fn vpats(&self) -> &ArenaSparse<<Self::Phase as Phase>::Scope, <Self::Phase as Phase>::VPatId>;
-    fn values(
+    fn vpats(
         &self,
-    ) -> &ArenaSparse<<Self::Phase as Phase>::Scope, <Self::Phase as Phase>::ValueId>;
-    fn stacks(
-        &self,
-    ) -> &ArenaSparse<<Self::Phase as Phase>::Scope, <Self::Phase as Phase>::StackId>;
-    fn compus(
-        &self,
-    ) -> &ArenaSparse<<Self::Phase as Phase>::Scope, <Self::Phase as Phase>::CompuId>;
+    ) -> &DenseArena<<Self::Phase as Phase>::VPatId, ValuePattern<<Self::Phase as Phase>::VPatId>>;
+    fn values(&self) -> &DenseArena<<Self::Phase as Phase>::ValueId, Value<Self::Phase>>;
+    fn stacks(&self) -> &DenseArena<<Self::Phase as Phase>::StackId, Stack<Self::Phase>>;
+    fn compus(&self) -> &DenseArena<<Self::Phase as Phase>::CompuId, Computation<Self::Phase>>;
     fn vpats_mut(
         &mut self,
-    ) -> &mut ArenaSparse<<Self::Phase as Phase>::Scope, <Self::Phase as Phase>::VPatId>;
+    ) -> &mut DenseArena<<Self::Phase as Phase>::VPatId, ValuePattern<<Self::Phase as Phase>::VPatId>>;
     fn values_mut(
         &mut self,
-    ) -> &mut ArenaSparse<<Self::Phase as Phase>::Scope, <Self::Phase as Phase>::ValueId>;
+    ) -> &mut DenseArena<<Self::Phase as Phase>::ValueId, Value<Self::Phase>>;
     fn stacks_mut(
         &mut self,
-    ) -> &mut ArenaSparse<<Self::Phase as Phase>::Scope, <Self::Phase as Phase>::StackId>;
+    ) -> &mut DenseArena<<Self::Phase as Phase>::StackId, Stack<Self::Phase>>;
     fn compus_mut(
         &mut self,
-    ) -> &mut ArenaSparse<<Self::Phase as Phase>::Scope, <Self::Phase as Phase>::CompuId>;
+    ) -> &mut DenseArena<<Self::Phase as Phase>::CompuId, Computation<Self::Phase>>;
 }
 
 /// Allocate one node of a phase and record its core source site.
@@ -138,37 +123,33 @@ impl<P: Phase, A: AsMut<AdminArena<P>> + AsMut<P::Nodes>> Builder<P> for A {
     fn build_pattern(
         &mut self, node: ValuePattern<P::VPatId>, site: Option<ir::VPatId>,
     ) -> P::VPatId {
-        let id = AsMut::<AdminArena<P>>::as_mut(self).fresh_node();
-        AsMut::<P::Nodes>::as_mut(self).vpats_mut().insert_new(id, node);
+        let id = AsMut::<P::Nodes>::as_mut(self).vpats_mut().alloc(node);
         if let Some(site) = site {
-            AsMut::<AdminArena<P>>::as_mut(self).pats.insert_new(site, id);
+            AsMut::<AdminArena<P>>::as_mut(self).pat_sites.insert_new(id, site);
         }
         id
     }
 
     fn build_value(&mut self, node: Value<P>, site: Option<ir::TermId>) -> P::ValueId {
-        let id = AsMut::<AdminArena<P>>::as_mut(self).fresh_node();
-        AsMut::<P::Nodes>::as_mut(self).values_mut().insert_new(id, node);
+        let id = AsMut::<P::Nodes>::as_mut(self).values_mut().alloc(node);
         if let Some(site) = site {
-            AsMut::<AdminArena<P>>::as_mut(self).terms.insert_new(site, TermId::Value(id));
+            AsMut::<AdminArena<P>>::as_mut(self).value_sites.insert_new(id, site);
         }
         id
     }
 
     fn build_stack(&mut self, node: Stack<P>, site: Option<ir::TermId>) -> P::StackId {
-        let id = AsMut::<AdminArena<P>>::as_mut(self).fresh_node();
-        AsMut::<P::Nodes>::as_mut(self).stacks_mut().insert_new(id, node);
+        let id = AsMut::<P::Nodes>::as_mut(self).stacks_mut().alloc(node);
         if let Some(site) = site {
-            AsMut::<AdminArena<P>>::as_mut(self).terms.insert_new(site, TermId::Stack(id));
+            AsMut::<AdminArena<P>>::as_mut(self).stack_sites.insert_new(id, site);
         }
         id
     }
 
     fn build_computation(&mut self, node: Computation<P>, site: Option<ir::TermId>) -> P::CompuId {
-        let id = AsMut::<AdminArena<P>>::as_mut(self).fresh_node();
-        AsMut::<P::Nodes>::as_mut(self).compus_mut().insert_new(id, node);
+        let id = AsMut::<P::Nodes>::as_mut(self).compus_mut().alloc(node);
         if let Some(site) = site {
-            AsMut::<AdminArena<P>>::as_mut(self).terms.insert_new(site, TermId::Compu(id));
+            AsMut::<AdminArena<P>>::as_mut(self).compu_sites.insert_new(id, site);
         }
         id
     }

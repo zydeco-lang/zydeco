@@ -5,7 +5,6 @@
 
 use super::SpsLowProgram;
 use super::syntax::*;
-use std::collections::{HashMap, HashSet};
 use zydeco_syntax::scalar::{
     ScalarBoxing, ScalarId, ScalarProgram, ScalarRegion, ScalarStep, ScalarType,
 };
@@ -24,28 +23,26 @@ pub struct ScalarCall {
 
 #[derive(Default)]
 pub struct ScalarPlans {
-    calls: HashMap<ValueId, ScalarCall>,
-    elided: HashSet<CompuId>,
-    memories: HashMap<CompuId, MemoryCall>,
+    calls: SecondaryMap<ValueId, ScalarCall>,
+    elided: IdBitSet<CompuId>,
+    memories: SecondaryMap<CompuId, MemoryCall>,
 }
 
 impl ScalarPlans {
     /// Build representation-checked primitive regions; source typing is supplied by the caller.
     pub fn unoptimized(arena: &SpsLowInnerArena) -> Self {
-        let calls = arena
-            .values
-            .iter()
-            .filter_map(|(&id, value)| match value {
-                | Value::Primitive(Primitive { operation, operands }) => Some((
+        let mut calls = SecondaryMap::new();
+        for (id, value) in arena.values.iter() {
+            if let Value::Primitive(Primitive { operation, operands }) = value {
+                calls.insert_new(
                     id,
                     ScalarCall {
                         inputs: operands.to_vec(),
                         program: ScalarProgram::primitive(*operation),
                     },
-                )),
-                | _ => None,
-            })
-            .collect();
+                );
+            }
+        }
         Self { calls, ..Self::default() }
     }
 
@@ -56,48 +53,49 @@ impl ScalarPlans {
         if boxing == ScalarBoxing::Keep {
             return plans;
         }
-        for (&id, value) in &arena.values {
+        for (id, value) in arena.values.iter() {
             if matches!(value, Value::Primitive(_)) {
                 let mut expressions = Expressions::default();
-                if let Some(result) = expressions.value(arena, id, None, &HashMap::new()) {
-                    plans.calls.insert(id, expressions.finish(result));
+                if let Some(result) = expressions.value(arena, id, None, &SecondaryMap::new()) {
+                    plans.calls.upsert(id, expressions.finish(result));
                 }
             }
         }
-        let mut uses = HashMap::<DefId, usize>::new();
-        for (_, value) in &arena.values {
+        let mut uses = SecondaryMap::<DefId, usize>::new();
+        for (_, value) in arena.values.iter() {
             if let Value::Var(def) = value {
-                *uses.entry(*def).or_default() += 1;
+                let count = uses.get(*def).copied().unwrap_or(0) + 1;
+                uses.upsert(*def, count);
             }
         }
         // Native continuation evidence also retains its bindings across suspension.
-        for (_, entry) in &arena.continuations {
+        for (_, entry) in arena.continuations.iter() {
             for capture in &entry.captures {
-                *uses.entry(capture.source).or_default() += 1;
-                *uses.entry(capture.binding).or_default() += 1;
+                let s_count = uses.get(capture.source).copied().unwrap_or(0) + 1;
+                uses.upsert(capture.source, s_count);
+                let b_count = uses.get(capture.binding).copied().unwrap_or(0) + 1;
+                uses.upsert(capture.binding, b_count);
             }
         }
-        plans.memories = arena
-            .compus
-            .iter()
-            .filter_map(|(&id, _)| memory::MemoryCall::at(arena, id, &uses).map(|call| (id, call)))
-            .collect();
-        let tails = arena
-            .compus
-            .iter()
-            .filter_map(|(_, compu)| match compu {
-                | Computation::LetValue(LetValue { tail, .. }) => Some(*tail),
-                | _ => None,
-            })
-            .collect::<HashSet<_>>();
-        for (&start, compu) in &arena.compus {
-            if !matches!(compu, Computation::LetValue(_)) || tails.contains(&start) {
+        for (id, _) in arena.compus.iter() {
+            if let Some(call) = memory::MemoryCall::at(arena, id, &uses) {
+                plans.memories.insert_new(id, call);
+            }
+        }
+        let mut tails = IdBitSet::<CompuId>::new();
+        for (_, compu) in arena.compus.iter() {
+            if let Computation::LetValue(LetValue { tail, .. }) = compu {
+                tails.insert(*tail);
+            }
+        }
+        for (start, compu) in arena.compus.iter() {
+            if !matches!(compu, Computation::LetValue(_)) || tails.contains(start) {
                 continue;
             }
             let mut cursor = start;
             while let Computation::LetValue(binding) = &arena.compus[&cursor] {
                 let mut expressions = Expressions::default();
-                let mut bindings = HashMap::new();
+                let mut bindings = SecondaryMap::new();
                 let Some(mut result) = expressions.value(arena, binding.bindee, None, &bindings)
                 else {
                     cursor = binding.tail;
@@ -106,20 +104,20 @@ impl ScalarPlans {
                 let mut last = cursor;
                 let mut binding = binding.clone();
                 while let ValuePattern::Var(def) = arena.vpats[&binding.binder] {
-                    if uses.get(&def) != Some(&1) {
+                    if uses.get(def) != Some(&1) {
                         break;
                     }
                     let Computation::LetValue(next) = &arena.compus[&binding.tail] else {
                         break;
                     };
                     let mut candidate = expressions.clone();
-                    bindings.insert(def, result);
+                    bindings.upsert(def, result);
                     candidate.substituted.clear();
                     let Some(next_result) = candidate.value(arena, next.bindee, None, &bindings)
                     else {
                         break;
                     };
-                    if !candidate.substituted.contains(&def) {
+                    if !candidate.substituted.contains(def) {
                         break;
                     }
                     plans.elided.insert(last);
@@ -128,7 +126,7 @@ impl ScalarPlans {
                     expressions = candidate;
                     result = next_result;
                 }
-                plans.calls.insert(binding.bindee, expressions.finish(result));
+                plans.calls.upsert(binding.bindee, expressions.finish(result));
                 cursor = binding.tail;
             }
         }
@@ -136,19 +134,19 @@ impl ScalarPlans {
     }
 
     pub fn call(&self, value: ValueId) -> &ScalarCall {
-        &self.calls[&value]
+        &self.calls[value]
     }
     pub fn memory(&self, compu: CompuId) -> Option<&MemoryCall> {
-        self.memories.get(&compu)
+        self.memories.get(compu)
     }
     pub fn elided(&self, compu: CompuId) -> bool {
-        self.elided.contains(&compu)
+        self.elided.contains(compu)
     }
     pub fn max_definitions(&self) -> usize {
         self.calls
-            .values()
-            .map(|call| call.program.representations().len())
-            .chain(self.memories.values().map(|call| call.kernel.definitions()))
+            .iter()
+            .map(|(_, call)| call.program.representations().len())
+            .chain(self.memories.iter().map(|(_, call)| call.kernel.definitions()))
             .max()
             .unwrap_or(0)
     }
@@ -165,14 +163,14 @@ enum Expression {
 struct Expressions {
     nodes: Vec<Expression>,
     operations: usize,
-    substituted: HashSet<DefId>,
+    substituted: IdBitSet<DefId>,
 }
 
 impl Expressions {
     /// Recursive descent is bounded by MAX_OPERATIONS, independently of source depth.
     fn value(
         &mut self, arena: &SpsLowInnerArena, id: ValueId, expected: Option<ScalarType>,
-        bindings: &HashMap<DefId, usize>,
+        bindings: &SecondaryMap<DefId, usize>,
     ) -> Option<usize> {
         let node = match &arena.values[&id] {
             | Value::Primitive(Primitive { operation, operands }) => {
@@ -190,7 +188,7 @@ impl Expressions {
             }
             | Value::Var(def) => {
                 let ty = expected?;
-                if let Some(&value) = bindings.get(def) {
+                if let Some(&value) = bindings.get(*def) {
                     self.substituted.insert(*def);
                     return Some(value);
                 }

@@ -2,6 +2,10 @@
 
 pub use zydeco_ir as ir;
 
+/// Compact physical representation summaries shared across stack IR analyses and backends.
+pub mod rep;
+pub use rep::RepType;
+
 /// Syntax shared by SPS and SPSLow.
 pub mod syntax;
 /// Structural traversal shared by the phases.

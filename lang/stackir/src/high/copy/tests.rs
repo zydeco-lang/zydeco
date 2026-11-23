@@ -25,9 +25,7 @@ impl Fixture {
     }
 
     fn def(&mut self, name: &str) -> DefId {
-        let def = self.arena.admin.fresh_def();
-        self.arena.admin.insert_def(def, VarName::new(name));
-        def
+        self.arena.admin.alloc_def(VarName::new(name))
     }
 
     fn term(&mut self) -> Option<ir::TermId> {
@@ -126,21 +124,21 @@ fn copies_render_alike_and_keep_sites_protocols_and_provenance() {
     let copied = fixture.evidence(copy);
     assert_ne!(copied.closure, source.closure);
     let (admin, inner) = (&fixture.arena.admin, &fixture.arena.inner);
-    let site = |value| admin.terms.back(&TermId::Value(value)).copied();
+    let site = |value| admin.term_site(TermId::Value(value));
     assert_eq!(site(copied.closure), site(source.closure));
     assert!(site(copied.closure).is_some());
-    assert_eq!(admin.pats.back(&copied.binder), admin.pats.back(&source.binder));
+    assert_eq!(admin.pattern_site(copied.binder), admin.pattern_site(source.binder));
     assert_eq!(
-        admin.terms.back(&TermId::Compu(copied.body)),
-        admin.terms.back(&TermId::Compu(source.body))
+        admin.term_site(TermId::Compu(copied.body)),
+        admin.term_site(TermId::Compu(source.body))
     );
     assert_eq!(
-        inner.value_protocols.get(&copied.closure),
-        inner.value_protocols.get(&source.closure)
+        inner.value_protocols.get(copied.closure),
+        inner.value_protocols.get(source.closure)
     );
-    assert_eq!(inner.builtin_functions.get(&copied.closure), Some(&BuiltinValueRole::Exit));
-    assert_eq!(inner.pattern_protocols.get(&copied.binder), Some(&ValueProtocol::Unit));
-    assert_eq!(inner.compu_protocols.get(&copied.body), inner.compu_protocols.get(&source.body));
+    assert_eq!(inner.builtin_functions.get(copied.closure), Some(&BuiltinValueRole::Exit));
+    assert_eq!(inner.pattern_protocols.get(copied.binder), Some(&ValueProtocol::Unit));
+    assert_eq!(inner.compu_protocols.get(copied.body), inner.compu_protocols.get(source.body));
 }
 
 #[test]

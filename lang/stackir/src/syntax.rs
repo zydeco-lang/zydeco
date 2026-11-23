@@ -4,9 +4,11 @@
 //! products, primitive calls, bindings, and data eliminations use these common forms.
 
 pub use super::arena::*;
+pub use crate::rep::RepType;
 pub use zydeco_foundation::{
-    arena::*,
+    arena::FrozenArena,
     context::{CoContext, Context},
+    dense::{DenseArena, DenseId, IdBitSet, SecondaryMap},
 };
 pub use zydeco_syntax::{fmt, *};
 
@@ -18,7 +20,7 @@ use crate::{
 use derive_more::From;
 pub use zydeco_ir::{CtorIdx, DtorIdx, ProductLayout, ProductProjection, VCons};
 
-zydeco_foundation::new_key_type! {
+zydeco_foundation::define_idx! {
     pub struct DefId;
 }
 
@@ -121,20 +123,10 @@ pub enum ExternalFunction {
 /// classification are written once over the shared forms and reach a phase's own forms
 /// through the hooks that its extension types implement.
 pub trait Phase: Copy + Eq + std::hash::Hash + std::fmt::Debug + 'static {
-    type VPatId: ArenaId + std::fmt::Debug;
-    type ValueId: ArenaId + std::fmt::Debug;
-    type StackId: ArenaId + std::fmt::Debug;
-    type CompuId: ArenaId + std::fmt::Debug;
-    /// The allocation scope whose schema stores this phase's nodes.
-    type Scope: ArenaSchema<Self::VPatId, Item = ValuePattern<Self::VPatId>>
-        + ArenaSchema<Self::ValueId, Item = Value<Self>>
-        + ArenaSchema<Self::StackId, Item = Stack<Self>>
-        + ArenaSchema<Self::CompuId, Item = Computation<Self>>
-        + Allocates<Self::VPatId>
-        + Allocates<Self::ValueId>
-        + Allocates<Self::StackId>
-        + Allocates<Self::CompuId>
-        + std::fmt::Debug;
+    type VPatId: DenseId + std::fmt::Debug;
+    type ValueId: DenseId + std::fmt::Debug;
+    type StackId: DenseId + std::fmt::Debug;
+    type CompuId: DenseId + std::fmt::Debug;
     /// The arena that holds this phase's nodes.
     type Nodes: Nodes<Phase = Self>;
     /// The value forms this phase adds to the shared ones.

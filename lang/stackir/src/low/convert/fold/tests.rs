@@ -8,9 +8,10 @@ impl Fixture {
         let arena = high::SpsArena {
             admin: high::AdminArena {
                 defs: source.admin.defs.clone(),
-                pats: source.admin.pats.clone(),
-                terms: source.admin.terms.clone(),
-                ..Default::default()
+                pat_sites: source.admin.pat_sites.clone(),
+                value_sites: source.admin.value_sites.clone(),
+                stack_sites: source.admin.stack_sites.clone(),
+                compu_sites: source.admin.compu_sites.clone(),
             },
             inner: high::SpsInnerArena {
                 builtin_functions: source.inner.builtin_functions.clone(),
@@ -136,14 +137,9 @@ fn conversion_preserves_origins_and_partial_protocols() {
             .iter()
             .any(|(_, p)| *p == low::EntryProtocol::Closure(protocol.clone()))
     );
-    assert!(
-        output.arena().inner.values.iter().any(|(id, _)| output
-            .arena()
-            .admin
-            .terms
-            .back(&low::TermId::Value(*id))
-            == Some(&closure_site))
-    );
+    assert!(output.arena().inner.values.iter().any(|(id, _)| {
+        output.arena().admin.term_site(low::TermId::Value(id)) == Some(closure_site)
+    }));
 }
 
 #[test]

@@ -91,7 +91,7 @@ impl Fixture {
                 loop {
                     match &arena.stacks[&stack] {
                         | Stack::Tag(Cons(tag, _)) if tag.name.as_str() == ".item" => {
-                            return Some((*id, stack));
+                            return Some((id, stack));
                         }
                         | Stack::Arg(Cons(_, rest)) | Stack::Tag(Cons(_, rest)) => stack = *rest,
                         | _ => return None,
@@ -153,7 +153,7 @@ fn an_instantiated_recursive_transfer_checks_arguments_after_the_first_observati
             let Stack::Tag(Cons(first, argument)) = &arena.inner.stacks[stack] else { return None };
             let Stack::Arg(Cons(_, rest)) = &arena.inner.stacks[argument] else { return None };
             let Stack::Tag(Cons(second, argument)) = &arena.inner.stacks[rest] else { return None };
-            (first.name.as_str() == ".item" && second == first).then_some((*id, *argument))
+            (first.name.as_str() == ".item" && second == first).then_some((id, *argument))
         })
         .expect("the returned stream receives two consecutive item observations");
     let Stack::Arg(Cons(value, _)) = arena.inner.stacks[&second_argument] else { unreachable!() };
@@ -243,7 +243,7 @@ fn erased_polymorphic_calls_check_repeated_value_parameters_together() {
                     Value::Literal(Literal::Integer(IntegerLiteral::Int(7)))
                 ),
             )
-            .then_some((*id, *second))
+            .then_some((id, *second))
         })
         .expect("the generic relay receives two concrete integer arguments");
     arena.inner.values[&second] = Value::Literal(Literal::Char('x'));
@@ -270,7 +270,7 @@ fn low_publication_checks_parameter_kinds_before_transfers() {
         .parameters()
         .find(|(_, kind)| *kind == ProtocolParameterKind::Value)
         .unwrap();
-    let block = *arena
+    let block = arena
         .inner
         .entry_protocols
         .iter()
@@ -400,7 +400,7 @@ fn codata_cases_retain_branch_protocols_and_complete_observations() {
     for missing_arm in [false, true] {
         let (mut arena, root) = Fixture::program().into_parts();
         let stream = Fixture::stream(&arena.inner);
-        let case = *arena
+        let case = arena
             .inner
             .case_protocols
             .iter()
@@ -540,7 +540,7 @@ fn entry_protocols_agree_with_their_roles_and_result_parameters() {
             .entry_protocols
             .iter()
             .find_map(|(id, protocol)| {
-                (*protocol == EntryProtocol::Continuation(Fixture::integer())).then_some(*id)
+                (*protocol == EntryProtocol::Continuation(Fixture::integer())).then_some(id)
             })
             .unwrap();
         let Value::Ext(ValueExt::Block(Block {

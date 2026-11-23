@@ -9,7 +9,7 @@ pub use kernel::{KernelRegion, KernelStep, ScalarKernel};
 use crate::word::ScalarRepresentation;
 use crate::{FloatType, IntegerType, Literal, PrimitiveError, PrimitiveOp};
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum ScalarType {
     Integer(IntegerType),
     Float(FloatType),

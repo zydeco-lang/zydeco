@@ -4,14 +4,62 @@ use crate::{
     syntax::*,
     traverse::{Edge, EntityId, Node, Occurrence, Traversal, Visitor},
 };
-use rustc_hash::FxHashMap;
+
+/// Collect the bound variables of `root` in left-to-right pattern order without traversing the
+/// rest of the arena.
+pub fn pattern_vars<P: Phase>(nodes: &P::Nodes, root: P::VPatId) -> Context<DefId> {
+    match &nodes.vpats()[root] {
+        | ValuePattern::Hole(_) | ValuePattern::Triv(_) => Context::new(),
+        | ValuePattern::Var(def) => Context::singleton(*def),
+        | ValuePattern::Ctor(Ctor(_, body)) => {
+            let mut vars = Vec::new();
+            let mut pending = vec![*body];
+            collect_pattern_vars::<P>(nodes, &mut pending, &mut vars);
+            Context(vars)
+        }
+        | ValuePattern::Alias(Alias(ConsN(head, tail))) => {
+            let mut vars = Vec::new();
+            let mut pending = Vec::with_capacity(head.len() + 1);
+            pending.push(*tail);
+            pending.extend(head.iter().rev().copied());
+            collect_pattern_vars::<P>(nodes, &mut pending, &mut vars);
+            Context(vars)
+        }
+        | ValuePattern::VCons(VCons { items, .. }) => {
+            let mut vars = Vec::new();
+            let mut pending: Vec<_> = items.iter().rev().copied().collect();
+            collect_pattern_vars::<P>(nodes, &mut pending, &mut vars);
+            Context(vars)
+        }
+    }
+}
+
+fn collect_pattern_vars<P: Phase>(
+    nodes: &P::Nodes, pending: &mut Vec<P::VPatId>, vars: &mut Vec<DefId>,
+) {
+    let vpats = nodes.vpats();
+    while let Some(id) = pending.pop() {
+        match &vpats[id] {
+            | ValuePattern::Hole(_) | ValuePattern::Triv(_) => {}
+            | ValuePattern::Var(def) => vars.push(*def),
+            | ValuePattern::Ctor(Ctor(_, body)) => pending.push(*body),
+            | ValuePattern::Alias(Alias(ConsN(head, tail))) => {
+                pending.push(*tail);
+                pending.extend(head.iter().rev().copied());
+            }
+            | ValuePattern::VCons(VCons { items, .. }) => {
+                pending.extend(items.iter().rev().copied());
+            }
+        }
+    }
+}
 
 /// Bottom-up facts for one immutable arena. A cycle invalidates all exposed summaries.
 pub struct Variables<P: Phase> {
-    patterns: FxHashMap<P::VPatId, Context<DefId>>,
-    values: FxHashMap<P::ValueId, CoContext<DefId>>,
-    stacks: FxHashMap<P::StackId, CoContext<DefId>>,
-    computations: FxHashMap<P::CompuId, CoContext<DefId>>,
+    patterns: SecondaryMap<P::VPatId, Context<DefId>>,
+    values: SecondaryMap<P::ValueId, CoContext<DefId>>,
+    stacks: SecondaryMap<P::StackId, CoContext<DefId>>,
+    computations: SecondaryMap<P::CompuId, CoContext<DefId>>,
     cyclic: bool,
 }
 
@@ -23,10 +71,10 @@ pub trait FreeVariables<P: Phase> {
 impl<P: Phase> Default for Variables<P> {
     fn default() -> Self {
         Self {
-            patterns: FxHashMap::default(),
-            values: FxHashMap::default(),
-            stacks: FxHashMap::default(),
-            computations: FxHashMap::default(),
+            patterns: SecondaryMap::new(),
+            values: SecondaryMap::new(),
+            stacks: SecondaryMap::new(),
+            computations: SecondaryMap::new(),
             cyclic: false,
         }
     }
@@ -38,14 +86,14 @@ impl<P: Phase> Variables<P> {
             return None;
         }
         match term {
-            | TermId::Value(id) => self.values.get(&id),
-            | TermId::Stack(id) => self.stacks.get(&id),
-            | TermId::Compu(id) => self.computations.get(&id),
+            | TermId::Value(id) => self.values.get(id),
+            | TermId::Stack(id) => self.stacks.get(id),
+            | TermId::Compu(id) => self.computations.get(id),
         }
     }
 
     pub fn bound_variables(&self, pattern: P::VPatId) -> Option<&Context<DefId>> {
-        if self.cyclic { None } else { self.patterns.get(&pattern) }
+        if self.cyclic { None } else { self.patterns.get(pattern) }
     }
 
     /// Analyze every node under `root`, which must be acyclic.
@@ -58,22 +106,22 @@ impl<P: Phase> Variables<P> {
 
     /// The bound variables of a completed pattern child.
     pub fn pattern_summary(&self, pattern: P::VPatId) -> Context<DefId> {
-        self.patterns[&pattern].clone()
+        self.patterns[pattern].clone()
     }
 
     /// The free variables of a completed value child.
     pub fn value_summary(&self, value: P::ValueId) -> CoContext<DefId> {
-        self.values[&value].clone()
+        self.values[value].clone()
     }
 
     /// The free variables of a completed stack child.
     pub fn stack_summary(&self, stack: P::StackId) -> CoContext<DefId> {
-        self.stacks[&stack].clone()
+        self.stacks[stack].clone()
     }
 
     /// The free variables of a completed computation child.
     pub fn compu_summary(&self, computation: P::CompuId) -> CoContext<DefId> {
-        self.computations[&computation].clone()
+        self.computations[computation].clone()
     }
 
     fn pattern(&self, node: &ValuePattern<P::VPatId>) -> Context<DefId> {
@@ -191,22 +239,22 @@ impl<P: Phase> Visitor<P> for Variables<P> {
         }
         match node {
             | Node::Pattern(id, node) => {
-                self.patterns.insert(id, self.pattern(node));
+                self.patterns.upsert(id, self.pattern(node));
             }
             | Node::Value(id, node) => {
-                self.values.insert(id, self.value(node));
+                self.values.upsert(id, self.value(node));
             }
             | Node::Stack(id, node) => {
-                self.stacks.insert(id, self.stack(node));
+                self.stacks.upsert(id, self.stack(node));
             }
             | Node::Computation(id, node) => {
-                self.computations.insert(id, self.computation(node));
+                self.computations.upsert(id, self.computation(node));
             }
         }
     }
 }
 
-/// The bound variables of one pattern, from a fresh analysis of its arena.
+/// The bound variables of one pattern, directly from its sub-patterns.
 pub trait Vars<P: Phase> {
     fn vars(self, arena: &impl AsRef<P::Nodes>) -> Context<DefId>;
 }

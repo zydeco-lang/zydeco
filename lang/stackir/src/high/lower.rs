@@ -105,8 +105,7 @@ impl<'a> Lowerer<'a> {
         let mut arena = SpsArena::default();
         let mut var_map = SecondaryMap::with_capacity(core.vars.len());
         for (var, &name) in core.vars.iter() {
-            let def = arena.admin.fresh_def();
-            arena.admin.insert_def(def, name);
+            let def = arena.admin.alloc_def(name);
             var_map.insert_new(var, def);
         }
         arena.inner.protocols = core.protocols.clone();
@@ -122,9 +121,7 @@ impl<'a> Lowerer<'a> {
     }
 
     fn alloc_admin_def(&mut self, role: &str) -> DefId {
-        let def = self.arena.admin.fresh_def();
-        self.arena.admin.insert_def(def, VarName::new(role));
-        def
+        self.arena.admin.alloc_def(VarName::new(role))
     }
 
     /// Whether a pattern must be lowered through the match-plan machinery
@@ -234,8 +231,7 @@ impl<'a> Lowerer<'a> {
     }
 
     fn finish(self, root: CompuId) -> FragmentProgram {
-        FragmentProgram::try_new(SpsProgram::new(self.arena, root), self.scheme)
-            .expect("stack-indexed lowering must construct its scheme's fragment")
+        FragmentProgram::from_pass(SpsProgram::new(self.arena, root), self.scheme)
     }
 
     fn projection_binding(

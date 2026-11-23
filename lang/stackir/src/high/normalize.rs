@@ -154,8 +154,7 @@ impl Normalization {
     fn run(mut self) -> FragmentProgram {
         let source_root = self.root;
         let root = NormalizationFolder::new(&mut self).run(source_root);
-        FragmentProgram::try_new(SpsProgram::new(self.arena, root), self.scheme)
-            .expect("normalization preserves lexical ownership and its scheme's fragment")
+        FragmentProgram::from_pass(SpsProgram::new(self.arena, root), self.scheme)
     }
 
     fn lookup(&self, mut env: EnvId, def: DefId) -> Rc<KnownValue> {
@@ -247,7 +246,7 @@ impl Normalization {
                 }
             }
             | Value::Ext(ValueExt::Closure(Closure { body, .. }))
-                if self.source.inner.builtin_functions.get(&id).is_some() =>
+                if self.source.inner.builtin_functions.get(id).is_some() =>
             {
                 Rc::new(KnownValue::BuiltinBody(*body))
             }
@@ -479,8 +478,7 @@ impl Normalization {
             .vars(&self.source)
             .into_iter()
             .map(|original| {
-                let fresh = self.arena.admin.fresh_def();
-                self.arena.admin.insert_def(fresh, VarName::new("__memory_read__"));
+                let fresh = self.arena.admin.alloc_def(VarName::new("__memory_read__"));
                 (original, fresh)
             })
             .collect();
@@ -560,9 +558,7 @@ mod tests {
 
     impl Fixture {
         fn def(&mut self, name: &str) -> DefId {
-            let def = self.arena.admin.fresh_def();
-            self.arena.admin.insert_def(def, VarName::new(name));
-            def
+            self.arena.admin.alloc_def(VarName::new(name))
         }
 
         fn build<U, S, T>(&mut self, node: U) -> T

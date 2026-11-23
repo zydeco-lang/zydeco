@@ -37,12 +37,8 @@ impl Primitive {
     /// never go through a host-call ABI for primitives.
     fn make_function<Arena: AsMut<SpsArena>>(arena: &mut Arena, operation: PrimitiveOp) -> ValueId {
         use crate::protocol::ValueProtocol;
-        let [first, second] = ["__primitive_first__", "__primitive_second__"].map(|name| {
-            let admin = &mut arena.as_mut().admin;
-            let def = admin.fresh_def();
-            admin.insert_def(def, VarName::new(name));
-            def
-        });
+        let [first, second] = ["__primitive_first__", "__primitive_second__"]
+            .map(|name| arena.as_mut().admin.alloc_def(VarName::new(name)));
         let value = Primitive {
             operation,
             operands: [first.build(arena, None), second.build(arena, None)],
@@ -76,12 +72,7 @@ impl CompareBranch {
         use crate::protocol::ValueProtocol;
         let [first, second, when_true, when_false] =
             ["__compare_first__", "__compare_second__", "__compare_true__", "__compare_false__"]
-                .map(|name| {
-                    let admin = &mut arena.as_mut().admin;
-                    let def = admin.fresh_def();
-                    admin.insert_def(def, VarName::new(name));
-                    def
-                });
+                .map(|name| arena.as_mut().admin.alloc_def(VarName::new(name)));
         let [when_true_body, when_false_body] = [when_true, when_false].map(|def| {
             let thunk = def.build(arena, None);
             let stack = StackVar.build(arena, None);
@@ -131,12 +122,8 @@ impl MemoryStep {
         use memory::AccessKind;
         let protocol = ValueProtocol::from(access.scalar);
         let [address, value, success] =
-            ["__memory_address__", "__memory_value__", "__memory_success__"].map(|name| {
-                let admin = &mut arena.as_mut().admin;
-                let def = admin.fresh_def();
-                admin.insert_def(def, VarName::new(name));
-                def
-            });
+            ["__memory_address__", "__memory_value__", "__memory_success__"]
+                .map(|name| arena.as_mut().admin.alloc_def(VarName::new(name)));
         let thunk = success.build(arena, None);
         let stack = StackVar.build(arena, None);
         let next = if access.kind == AccessKind::Load {
@@ -190,12 +177,8 @@ impl AddrOffset {
     fn make_function<Arena: AsMut<SpsArena>>(arena: &mut Arena) -> ValueId {
         use crate::protocol::ValueProtocol;
 
-        let [base, displacement] = ["__address_base__", "__byte_displacement__"].map(|name| {
-            let admin = &mut arena.as_mut().admin;
-            let def = admin.fresh_def();
-            admin.insert_def(def, VarName::new(name));
-            def
-        });
+        let [base, displacement] = ["__address_base__", "__byte_displacement__"]
+            .map(|name| arena.as_mut().admin.alloc_def(VarName::new(name)));
         let value = AddrOffset {
             base: base.build(arena, None),
             displacement: displacement.build(arena, None),

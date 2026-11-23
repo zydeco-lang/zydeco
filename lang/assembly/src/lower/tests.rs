@@ -1,26 +1,19 @@
 use super::*;
-use crate::representation::RepresentationStrategy;
 use std::fmt::Write as _;
-use zydeco_stackir::{SpsScheme, SpsScope, arena::Construct as _};
+use zydeco_stackir::{
+    SpsScheme, arena::Construct as _, low::representation::RepresentationStrategy,
+};
 
 mod depth;
 
+#[derive(Default)]
 struct Fixture {
     arena: sk::SpsLowArena,
-    definitions: IdAllocator<SpsScope>,
-}
-
-impl Default for Fixture {
-    fn default() -> Self {
-        Self { arena: sk::SpsLowArena::default(), definitions: IdAllocator::new() }
-    }
 }
 
 impl Fixture {
     fn definition(&mut self, name: &str) -> sk::DefId {
-        let id = self.definitions.alloc();
-        self.arena.admin.defs.insert_new(id, name.into());
-        id
+        self.arena.admin.alloc_def(name.into())
     }
 
     fn terminal(&mut self) -> sk::CompuId {
@@ -296,7 +289,7 @@ impl Fixture {
 
     /// Isolate lowering from the separate entry/protocol validators for depth and rejection fixtures.
     fn lower_raw(
-        &self, root: sk::CompuId, native_frames: bool, unboxing: crate::unbox::LocalUnboxing,
+        &self, root: sk::CompuId, native_frames: bool, unboxing: LocalUnboxing,
     ) -> AssemblyBuild {
         Lowerer {
             allocator: IdAllocator::new(),
@@ -655,5 +648,84 @@ fn labels_lower_to_static_jumps_that_keep_or_leave_the_frame() {
         let closed = kind == sk::LabelKind::Closed;
         assert_eq!(fresh_contexts, if closed { 2 } else { 0 });
         assert_eq!(lowered.frames().entries.contains_key(&targets[0]), closed);
+    }
+}
+
+#[test]
+fn policy_changes_the_emitted_layout_without_changing_stack_validity() {
+    use crate::{
+        LoweringPipeline,
+        syntax::{Instruction, Program},
+    };
+    use zydeco_foundation::pass::CompilerPass;
+    use zydeco_stackir::low::representation::{
+        RepresentationPolicy, UnboxingOpportunity, UnboxingReason,
+    };
+
+    let product_program = || {
+        let mut fixture = Fixture::default();
+        let def = fixture.definition("pair");
+        let items = (0..2).map(|_| sk::Triv.build(&mut fixture.arena, None)).collect();
+        let bindee =
+            sk::VCons::new(items, sk::ProductLayout { arity: 2 }).build(&mut fixture.arena, None);
+        let scrut = def.build(&mut fixture.arena, None);
+        let pat_items = (0..2).map(|_| sk::Hole.build(&mut fixture.arena, None)).collect();
+        let binder = sk::VCons::new(pat_items, sk::ProductLayout { arity: 2 })
+            .build(&mut fixture.arena, None);
+        let body = fixture.terminal();
+        let tail = sk::SProductMatch { scrut, binder, body }.build(&mut fixture.arena, None);
+        let var_pat = def.build(&mut fixture.arena, None);
+        let root = sk::LetValue { binder: var_pat, bindee, tail }.build(&mut fixture.arena, None);
+        SpsLowProgram::try_new(fixture.arena, root, SpsScheme::BranchJoin).unwrap()
+    };
+
+    let shared_closure_program = || {
+        let mut fixture = Fixture::default();
+        let def = fixture.definition("clo");
+        let label = fixture.definition("code");
+        let env_items = (0..2).map(|_| sk::Triv.build(&mut fixture.arena, None)).collect();
+        let env = sk::VCons::new(env_items, sk::ProductLayout { arity: 2 })
+            .build(&mut fixture.arena, None);
+        let block_body = fixture.terminal();
+        let entry =
+            sk::EntryParameters::Closure { environment: sk::Hole.build(&mut fixture.arena, None) };
+        let code = sk::Block { label, entry, body: block_body }.build(&mut fixture.arena, None);
+        let bindee = sk::ClosurePackage { environment: env, code }.build(&mut fixture.arena, None);
+        let open = |fixture: &mut Fixture, tail| {
+            let pkg = def.build(&mut fixture.arena, None);
+            let pat_items = (0..2).map(|_| sk::Hole.build(&mut fixture.arena, None)).collect();
+            let environment = sk::VCons::new(pat_items, sk::ProductLayout { arity: 2 })
+                .build(&mut fixture.arena, None);
+            let code = sk::Hole.build(&mut fixture.arena, None);
+            sk::OpenClosure { package: pkg, environment, code, body: tail }
+                .build(&mut fixture.arena, None)
+        };
+        let terminal = fixture.terminal();
+        let tail = open(&mut fixture, terminal);
+        let tail = open(&mut fixture, tail);
+        let var_pat = def.build(&mut fixture.arena, None);
+        let root = sk::LetValue { binder: var_pat, bindee, tail }.build(&mut fixture.arena, None);
+        SpsLowProgram::try_new(fixture.arena, root, SpsScheme::BranchJoin).unwrap()
+    };
+
+    for (program, reason) in [
+        (product_program(), UnboxingReason::ProjectedVariable),
+        (shared_closure_program(), UnboxingReason::SharedClosure),
+    ] {
+        for &strategy in RepresentationStrategy::ALL {
+            let assembly =
+                LoweringPipeline::new().with_representation(strategy).run_infallible(&program);
+            let allocations = assembly
+                .arena()
+                .programs
+                .iter()
+                .filter(|(_, node)| {
+                    matches!(node, Program::Instruction(Instruction::PackProduct(_), _))
+                })
+                .count();
+            let boxed = if reason == UnboxingReason::SharedClosure { 2 } else { 1 };
+            let removed = usize::from(strategy.unbox(UnboxingOpportunity { reason, fields: 2 }));
+            assert_eq!(allocations, boxed - removed, "{strategy}: {reason:?}");
+        }
     }
 }

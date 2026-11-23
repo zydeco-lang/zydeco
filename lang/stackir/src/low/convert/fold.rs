@@ -299,7 +299,7 @@ impl<'a> ConversionFolder<'a> {
     fn finish_value(&mut self, source: high::ValueId, value: impl Into<low::Value>) {
         let site = self.conversion.source.admin.term_site(source);
         let value = value.into().build(self.conversion, site);
-        if let Some(protocol) = self.conversion.source.inner.value_protocols.get(&source) {
+        if let Some(protocol) = self.conversion.source.inner.value_protocols.get(source) {
             self.conversion.arena.inner.value_protocols.insert_new(value, protocol.clone());
         }
         self.values.push(value);
@@ -426,7 +426,7 @@ impl<'a> ConversionFolder<'a> {
     fn resume_closure(&mut self, source: high::ValueId, captures: Captures) -> Step<Self> {
         let body = self.computation();
         let site = self.conversion.source.admin.term_site(source);
-        let protocol = match self.conversion.source.inner.value_protocols.get(&source) {
+        let protocol = match self.conversion.source.inner.value_protocols.get(source) {
             | Some(ValueProtocol::Thunk(protocol)) => *protocol.clone(),
             | _ => StackProtocol::Unknown,
         };
@@ -512,14 +512,8 @@ impl<'a> ConversionFolder<'a> {
     ) -> Step<Self> {
         let body = self.computation();
         let site = self.conversion.source.admin.term_site(source);
-        let protocol = self
-            .conversion
-            .source
-            .inner
-            .pattern_protocols
-            .get(&result)
-            .cloned()
-            .unwrap_or_default();
+        let protocol =
+            self.conversion.source.inner.pattern_protocols.get(result).cloned().unwrap_or_default();
         let entry = low::ContinuationEntry {
             result: binder,
             body,
@@ -653,7 +647,7 @@ impl<'a> ConversionFolder<'a> {
                         (variables, parameters)
                     }
                 };
-                self.conversion.labels.insert(label, variables);
+                self.conversion.labels.insert_new(label, variables);
                 let body_env = self.conversion.extend_env(env, parameters.iter().copied());
                 let tail_env = self.conversion.extend_env(env, [(procedure, label)]);
                 Step::Call {
@@ -928,7 +922,7 @@ impl<'a> ConversionFolder<'a> {
         let scrut = self.stack();
         let site = self.conversion.source.admin.term_site(source);
         let output = low::SCoMatch { scrut, arms }.build(self.conversion, site);
-        if let Some(protocol) = self.conversion.source.inner.compu_protocols.get(&source) {
+        if let Some(protocol) = self.conversion.source.inner.compu_protocols.get(source) {
             self.conversion.arena.inner.case_protocols.insert_new(output, protocol.clone());
         }
         self.computations.push(output);
@@ -966,7 +960,7 @@ impl<'a> ConversionFolder<'a> {
         let entry = low::EntryParameters::Closure { environment };
         let block = low::Block { label, entry, body }.build(self.conversion, site);
         let protocol =
-            self.conversion.source.inner.compu_protocols.get(&source).cloned().unwrap_or_default();
+            self.conversion.source.inner.compu_protocols.get(source).cloned().unwrap_or_default();
         self.conversion
             .arena
             .inner
@@ -1010,7 +1004,7 @@ impl<'a> ConversionFolder<'a> {
         let site = self.conversion.source.admin.term_site(source);
         let node = low::LetLabel { label, kind, body, tail }.build(self.conversion, site);
         // Jumps supply the procedure's stack under the variables a closed label pops.
-        if let Some(protocol) = self.conversion.source.inner.compu_protocols.get(&source) {
+        if let Some(protocol) = self.conversion.source.inner.compu_protocols.get(source) {
             let protocol = (0..pushed).fold(protocol.clone(), |rest, _| {
                 StackProtocol::Argument(Box::new(ValueProtocol::Unknown), Box::new(rest))
             });

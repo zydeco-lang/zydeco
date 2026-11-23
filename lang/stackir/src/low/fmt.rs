@@ -10,7 +10,7 @@ pub type Formatter<'a> = crate::fmt::Formatter<'a, SpsLow>;
 impl<'a> Pretty<'a, Formatter<'a>> for DefId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let name = f.admin.def_name(self);
-        RcDoc::text(format!("{}{}", name.plain(), self.concise()))
+        RcDoc::text(format!("{}[#{}]", name.plain(), self.index()))
     }
 }
 

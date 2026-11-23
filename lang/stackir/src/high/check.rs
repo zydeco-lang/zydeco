@@ -49,6 +49,19 @@ impl FragmentProgram {
         Ok(Self { program, scheme })
     }
 
+    /// Construct a [`FragmentProgram`] produced by a compiler pass, validating in debug builds.
+    pub(crate) fn from_pass(program: SpsProgram, scheme: SpsScheme) -> Self {
+        #[cfg(debug_assertions)]
+        {
+            Self::try_new(program, scheme)
+                .expect("compiler pass preserves lexical ownership and its scheme's fragment")
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            Self { program, scheme }
+        }
+    }
+
     /// The scheme whose fragment contains this program.
     pub fn scheme(&self) -> SpsScheme {
         self.scheme
@@ -226,7 +239,7 @@ fn check_closed_root(program: &SpsProgram) {
         .iter()
         .map(|def| {
             let name = program.arena().admin.def_name(def);
-            format!("{}{}", name.plain(), def.concise())
+            format!("{}[#{}]", name.plain(), def.index())
         })
         .collect::<Vec<_>>()
         .join(", ");

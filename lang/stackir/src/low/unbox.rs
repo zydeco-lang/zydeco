@@ -5,23 +5,25 @@
 //! represented by its fields directly. A variable bound to such a value can also
 //! be expanded into several field slots when every use is a projection or closure opening.
 //!
-//! SPSLow's single-occurrence invariant keeps the analysis local: a value node is
-//! consumed exactly once, and sharing is explicit through variables.
+//! SPSLow's single-occurrence invariant keeps the analysis linear (`O(N)`): one pass
+//! collects per-definition uses across the tree, and one pass selects unboxing opportunities
+//! in lexical pre-order.
 
-use crate::representation::{Local, RepresentationPolicy, UnboxingOpportunity, UnboxingReason};
-use std::collections::{HashMap, HashSet};
+use super::{
+    SpsLowProgram,
+    representation::{Local, RepresentationPolicy, UnboxingOpportunity, UnboxingReason},
+    syntax::{self as sk, IdBitSet, SecondaryMap},
+    traverse::{Edge, EntityId, Node, Occurrence, Traversal, Visitor},
+};
 use zydeco_foundation::fold::{Explicit, Folder, Step};
-use zydeco_stackir::low::traverse::{Edge, EntityId, Node, Occurrence, Traversal, Visitor};
 
-use zydeco_stackir::{SpsLowProgram, low::syntax as sk};
-
-/// Values, patterns, and variables that the assembly lowerer may represent
-/// without a region-allocated cell.
+/// Values, patterns, and variables that a lowering backend may represent
+/// without a heap-allocated cell.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct LocalUnboxing {
-    pub values: HashSet<sk::ValueId>,
-    pub patterns: HashSet<sk::VPatId>,
-    pub unboxed_vars: HashMap<sk::DefId, usize>,
+    pub values: IdBitSet<sk::ValueId>,
+    pub patterns: IdBitSet<sk::VPatId>,
+    pub unboxed_vars: SecondaryMap<sk::DefId, usize>,
 }
 
 impl LocalUnboxing {
@@ -33,7 +35,8 @@ impl LocalUnboxing {
         program: &SpsLowProgram, policy: &P,
     ) -> Self {
         let arena = program.arena();
-        let mut collector = Collector { arena, policy, unboxing: Self::default() };
+        let var_uses = VarUses::collect(&arena.inner, program.root());
+        let mut collector = Collector { arena, policy, var_uses, unboxing: Self::default() };
         Traversal { arena: &arena.inner }.run(program.root().into(), &mut collector);
         collector.unboxing
     }
@@ -42,6 +45,7 @@ impl LocalUnboxing {
 struct Collector<'a, P: ?Sized> {
     arena: &'a sk::SpsLowArena,
     policy: &'a P,
+    var_uses: VarUses,
     unboxing: LocalUnboxing,
 }
 
@@ -57,10 +61,10 @@ impl<P: RepresentationPolicy + ?Sized> Visitor<sk::SpsLow> for Collector<'_, P> 
             }
             | Node::Computation(
                 _,
-                sk::Computation::LetValue(sk::LetValue { binder, bindee, tail }),
+                sk::Computation::LetValue(sk::LetValue { binder, bindee, .. }),
             ) => {
                 self.mark_product_pair(*bindee, *binder);
-                self.try_unbox_variable(*binder, *bindee, *tail);
+                self.try_unbox_variable(*binder, *bindee);
             }
             | Node::Computation(
                 _,
@@ -103,7 +107,7 @@ impl<P: RepresentationPolicy + ?Sized> Collector<'_, P> {
         };
         if !self.policy.unbox(UnboxingOpportunity {
             reason: UnboxingReason::DirectClosure,
-            fields: zydeco_machine::closure::Closure::<u64>::WORDS,
+            fields: sk::ClosurePackage::FIELDS,
         }) {
             return;
         }
@@ -122,7 +126,7 @@ impl<P: RepresentationPolicy + ?Sized> Collector<'_, P> {
         }
     }
 
-    fn try_unbox_variable(&mut self, binder: sk::VPatId, bindee: sk::ValueId, body: sk::CompuId) {
+    fn try_unbox_variable(&mut self, binder: sk::VPatId, bindee: sk::ValueId) {
         let sk::ValuePattern::Var(def) = &self.arena.inner.vpats[&binder] else { return };
         let (shape, fields, reason) = match &self.arena.inner.values[&bindee] {
             | sk::Value::VCons(sk::VCons { items, layout }) => (
@@ -130,22 +134,36 @@ impl<P: RepresentationPolicy + ?Sized> Collector<'_, P> {
                 items.len(),
                 UnboxingReason::ProjectedVariable,
             ),
-            | sk::Value::Ext(sk::ValueExt::ClosurePackage(_)) => (
-                VariableShape::Closure,
-                zydeco_machine::closure::Closure::<u64>::WORDS,
-                UnboxingReason::SharedClosure,
-            ),
+            | sk::Value::Ext(sk::ValueExt::ClosurePackage(_)) => {
+                (VariableShape::Closure, sk::ClosurePackage::FIELDS, UnboxingReason::SharedClosure)
+            }
             | _ => return,
         };
-        let info = VarUse::classify(&self.arena.inner, body, *def, shape);
-        if info.all_eliminations
-            && !info.escapes
-            && self.policy.unbox(UnboxingOpportunity { reason, fields })
-        {
+        let Some(summary) = self.var_uses.get(*def) else {
+            if self.policy.unbox(UnboxingOpportunity { reason, fields }) {
+                self.unboxing.values.insert(bindee);
+                self.unboxing.unboxed_vars.insert_new(*def, fields);
+            }
+            return;
+        };
+        if summary.escapes {
+            return;
+        }
+        let compatible = match shape {
+            | VariableShape::Product { elements, arity } => {
+                summary.closures.is_empty()
+                    && summary
+                        .projections
+                        .iter()
+                        .all(|&pattern| self.vpat_shape(pattern) == Some((elements, arity)))
+            }
+            | VariableShape::Closure => summary.projections.is_empty(),
+        };
+        if compatible && self.policy.unbox(UnboxingOpportunity { reason, fields }) {
             self.unboxing.values.insert(bindee);
-            self.unboxing.unboxed_vars.insert(*def, fields);
-            self.unboxing.patterns.extend(info.projections);
-            self.unboxing.values.extend(info.closures);
+            self.unboxing.unboxed_vars.insert_new(*def, fields);
+            self.unboxing.patterns.extend(summary.projections.iter().copied());
+            self.unboxing.values.extend(summary.closures.iter().copied());
         }
     }
 
@@ -166,147 +184,135 @@ impl<P: RepresentationPolicy + ?Sized> Collector<'_, P> {
     }
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
-struct VarUse {
-    all_eliminations: bool,
-    escapes: bool,
-    projections: Vec<sk::VPatId>,
-    closures: Vec<sk::ValueId>,
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum VariableShape {
     Product { elements: usize, arity: usize },
     Closure,
 }
 
-impl VarUse {
-    fn classify(
-        arena: &sk::SpsLowInnerArena, root: sk::CompuId, def: sk::DefId, shape: VariableShape,
-    ) -> Self {
-        let mut folder = VariableUsesFolder {
-            arena,
-            def,
-            shape,
-            info: Self { all_eliminations: true, ..Self::default() },
-        };
-        Explicit::run(&mut folder, Use::Node(root.into()));
-        folder.info
+#[derive(Debug, Default, PartialEq, Eq)]
+struct VarUseSummary {
+    escapes: bool,
+    projections: Vec<sk::VPatId>,
+    closures: Vec<sk::ValueId>,
+}
+
+#[derive(Debug, Default)]
+struct VarUses {
+    defs: SecondaryMap<sk::DefId, VarUseSummary>,
+}
+
+impl VarUses {
+    fn collect(arena: &sk::SpsLowInnerArena, root: sk::CompuId) -> Self {
+        let mut collector =
+            VarUseCollector { arena, uses: Self::default(), active_block_labels: Vec::new() };
+        Explicit::run(&mut collector, EntityId::Computation(root));
+        collector.uses
+    }
+
+    fn get(&self, def: sk::DefId) -> Option<&VarUseSummary> {
+        self.defs.get(def)
+    }
+
+    fn entry(&mut self, def: sk::DefId) -> &mut VarUseSummary {
+        if !self.defs.contains_key(def) {
+            self.defs.insert_new(def, VarUseSummary::default());
+        }
+        &mut self.defs[def]
     }
 }
 
-/// This view follows executable uses of one variable. Closed blocks and binding patterns
-/// are boundaries; projections and closure openings give their immediate value child a role.
-struct VariableUsesFolder<'a> {
+struct VarUseCollector<'a> {
     arena: &'a sk::SpsLowInnerArena,
-    def: sk::DefId,
-    shape: VariableShape,
-    info: VarUse,
+    uses: VarUses,
+    active_block_labels: Vec<sk::DefId>,
 }
 
-enum Use {
-    Node(EntityId),
-    Projection { value: sk::ValueId, pattern: sk::VPatId },
-    ClosureOpening(sk::ValueId),
+struct Frame<'a> {
+    node: Node<'a>,
+    position: usize,
+    pop_label: bool,
 }
 
-impl VariableUsesFolder<'_> {
-    fn escape(&mut self) {
-        self.info.all_eliminations = false;
-        self.info.escapes = true;
-    }
-
-    fn vpat_shape_matches(&self, pattern: sk::VPatId) -> bool {
-        match &self.arena.vpats[&pattern] {
-            | sk::ValuePattern::VCons(sk::VCons { items, layout }) => {
-                self.shape == VariableShape::Product { elements: items.len(), arity: layout.arity }
-            }
-            | _ => false,
-        }
-    }
-}
-
-impl<'a> Folder for VariableUsesFolder<'a> {
-    type Input = Use;
+impl<'a> Folder for VarUseCollector<'a> {
+    type Input = EntityId;
     type Output = ();
-    type Frame = (Node<'a>, usize);
+    type Frame = Frame<'a>;
 
-    fn enter(&mut self, usage: Use) -> Step<Self> {
-        match usage {
-            | Use::Node(id) => {
-                let node = id.node(self.arena);
-                match node {
-                    | Node::Pattern(_, _)
-                    | Node::Value(_, sk::Value::Ext(sk::ValueExt::Block(_))) => {}
-                    | Node::Value(_, sk::Value::Var(def)) if *def == self.def => self.escape(),
-                    | _ => return self.resume((node, 0), ()),
+    fn enter(&mut self, id: EntityId) -> Step<Self> {
+        let node = id.node(self.arena);
+        let mut pop_label = false;
+        match node {
+            | Node::Pattern(_, _) => return Step::Return(()),
+            | Node::Value(_, sk::Value::Var(def)) => {
+                if !self.active_block_labels.contains(def) {
+                    self.uses.entry(*def).escapes = true;
                 }
+                return Step::Return(());
             }
-            | Use::Projection { value, pattern } => {
-                if matches!(self.arena.values[&value], sk::Value::Var(def) if def == self.def) {
-                    if self.vpat_shape_matches(pattern) {
-                        self.info.projections.push(pattern);
-                    } else {
-                        self.escape();
-                    }
-                } else {
-                    return Step::TailCall(Use::Node(value.into()));
-                }
+            | Node::Value(_, sk::Value::Ext(sk::ValueExt::Block(sk::Block { label, .. }))) => {
+                self.active_block_labels.push(*label);
+                pop_label = true;
             }
-            | Use::ClosureOpening(value) => {
-                if self.shape == VariableShape::Closure
-                    && matches!(self.arena.values[&value], sk::Value::Var(def) if def == self.def)
-                {
-                    self.info.closures.push(value);
-                } else {
-                    return Step::TailCall(Use::Node(value.into()));
-                }
-            }
+            | _ => {}
         }
-        Step::Return(())
+        self.resume(Frame { node, position: 0, pop_label }, ())
     }
 
-    fn resume(&mut self, (node, position): Self::Frame, (): ()) -> Step<Self> {
-        let Some((child, _)) = node.child(position) else {
-            return Step::Return(());
-        };
-        let input = match (position, node) {
-            | (
-                0,
-                Node::Computation(
+    fn resume(&mut self, mut frame: Self::Frame, (): ()) -> Step<Self> {
+        let node = frame.node;
+        loop {
+            let position = frame.position;
+            let Some((child, _)) = node.child(position) else {
+                if frame.pop_label {
+                    self.active_block_labels.pop();
+                }
+                return Step::Return(());
+            };
+            frame.position = position + 1;
+            match node {
+                | Node::Computation(
                     _,
                     sk::Computation::ProductMatch(sk::SProductMatch { scrut, binder, .. }),
-                ),
-            ) => Use::Projection { value: *scrut, pattern: *binder },
-            | (
-                0,
-                Node::Computation(
+                ) if child == EntityId::Value(*scrut) => {
+                    if let sk::Value::Var(def) = self.arena.values[*scrut] {
+                        self.uses.entry(def).projections.push(*binder);
+                        continue;
+                    }
+                }
+                | Node::Computation(
                     _,
                     sk::Computation::LetValue(sk::LetValue { bindee, binder, .. }),
-                ),
-            ) => Use::Projection { value: *bindee, pattern: *binder },
-            | (
-                0,
-                Node::Computation(
+                ) if child == EntityId::Value(*bindee) => {
+                    if let sk::Value::Var(def) = self.arena.values[*bindee] {
+                        self.uses.entry(def).projections.push(*binder);
+                        continue;
+                    }
+                }
+                | Node::Computation(
                     _,
                     sk::Computation::Ext(sk::CompuExt::OpenClosure(sk::OpenClosure {
                         package,
                         ..
                     })),
-                ),
-            ) => Use::ClosureOpening(*package),
-            | _ => Use::Node(child),
-        };
-        Step::Call { input, frame: (node, position + 1) }
+                ) if child == EntityId::Value(*package) => {
+                    if let sk::Value::Var(def) = self.arena.values[*package] {
+                        self.uses.entry(def).closures.push(*package);
+                        continue;
+                    }
+                }
+                | _ => {}
+            }
+            return Step::Call { input: child, frame };
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::representation::{Boxed, Direct, RepresentationStrategy, Shared};
-    use zydeco_foundation::arena::IdAllocator;
-    use zydeco_stackir::{SpsScheme, SpsScope, arena::Construct as _};
+    use crate::low::representation::{Boxed, Direct, RepresentationStrategy, Shared};
+    use crate::{SpsScheme, arena::Construct as _};
 
     struct Fixture;
 
@@ -330,9 +336,7 @@ mod tests {
         }
 
         fn definition(arena: &mut sk::SpsLowArena) -> sk::DefId {
-            let id = IdAllocator::<SpsScope>::new().alloc();
-            arena.admin.defs.insert_new(id, "fixture".into());
-            id
+            arena.admin.alloc_def("fixture".into())
         }
 
         fn product(arena: &mut sk::SpsLowArena) -> sk::ValueId {
@@ -495,42 +499,11 @@ mod tests {
                 let selected = Fixture::select(&program, &strategy);
                 let expected =
                     strategy == RepresentationStrategy::Shared && matches!(usage, ClosureUse::Open);
-                assert_eq!(selected.values.contains(&value), expected, "{strategy}: {usage:?}");
-                assert_eq!(selected.unboxed_vars.get(&variable), expected.then_some(&2));
+                assert_eq!(selected.values.contains(value), expected, "{strategy}: {usage:?}");
+                assert_eq!(selected.unboxed_vars.get(variable), expected.then_some(&2));
                 // Shared closure environments still cross an ordinary single-word boundary.
                 assert!(selected.patterns.is_empty());
                 assert_eq!(selected.values.len(), if expected { 3 } else { 0 });
-            }
-        }
-    }
-
-    #[test]
-    fn policy_changes_the_emitted_layout_without_changing_stack_validity() {
-        use crate::{
-            LoweringPipeline,
-            syntax::{Instruction, Program},
-        };
-        use zydeco_foundation::pass::CompilerPass;
-
-        for (program, reason) in [
-            (Fixture::projection(false).0, UnboxingReason::ProjectedVariable),
-            (Fixture::closure(ClosureUse::Open).0, UnboxingReason::SharedClosure),
-        ] {
-            for &strategy in RepresentationStrategy::ALL {
-                let assembly =
-                    LoweringPipeline::new().with_representation(strategy).run_infallible(&program);
-                let allocations = assembly
-                    .arena()
-                    .programs
-                    .iter()
-                    .filter(|(_, node)| {
-                        matches!(node, Program::Instruction(Instruction::PackProduct(_), _))
-                    })
-                    .count();
-                let boxed = if reason == UnboxingReason::SharedClosure { 2 } else { 1 };
-                let removed =
-                    usize::from(strategy.unbox(UnboxingOpportunity { reason, fields: 2 }));
-                assert_eq!(allocations, boxed - removed, "{strategy}: {reason:?}");
             }
         }
     }
@@ -546,8 +519,8 @@ mod tests {
                         strategy,
                         RepresentationStrategy::Local | RepresentationStrategy::Shared
                     );
-                assert_eq!(selected.values.contains(&value), expected);
-                assert_eq!(selected.unboxed_vars.contains_key(&variable), expected);
+                assert_eq!(selected.values.contains(value), expected);
+                assert_eq!(selected.unboxed_vars.contains_key(variable), expected);
                 assert_eq!(selected.patterns.len(), usize::from(expected));
             }
         }
@@ -578,7 +551,7 @@ mod tests {
         let mut arena = sk::SpsLowArena::default();
         let env_value = Fixture::product(&mut arena);
         let block_body = Fixture::terminal(&mut arena);
-        let label = IdAllocator::<SpsScope>::new().alloc();
+        let label = arena.admin.fresh_def();
         let entry = sk::EntryParameters::Closure { environment: sk::Hole.build(&mut arena, None) };
         let block = sk::Block { label, entry, body: block_body }.build(&mut arena, None);
         let package =
@@ -592,9 +565,9 @@ mod tests {
         assert!(selected.values.is_empty());
         assert!(selected.patterns.is_empty());
         let selected = Fixture::select(&program, &Direct);
-        assert!(selected.values.contains(&package));
-        assert!(selected.values.contains(&env_value));
-        assert!(selected.patterns.contains(&environment));
+        assert!(selected.values.contains(package));
+        assert!(selected.values.contains(env_value));
+        assert!(selected.patterns.contains(environment));
     }
 
     #[test]
@@ -618,8 +591,8 @@ mod tests {
         let program = SpsLowProgram::try_new(arena, root, SpsScheme::BranchJoin).unwrap();
 
         let unboxing = LocalUnboxing::collect(&program);
-        assert!(unboxing.values.contains(&value));
-        assert!(unboxing.patterns.contains(&pattern));
+        assert!(unboxing.values.contains(value));
+        assert!(unboxing.patterns.contains(pattern));
         assert_eq!(unboxing, Fixture::select(&program, &Direct));
         assert_eq!(Fixture::select(&program, &Boxed), LocalUnboxing::default());
     }
@@ -641,7 +614,7 @@ mod tests {
         let program = SpsLowProgram::try_new(arena, root, SpsScheme::BranchJoin).unwrap();
 
         let unboxing = LocalUnboxing::collect(&program);
-        assert!(!unboxing.values.contains(&value));
+        assert!(!unboxing.values.contains(value));
     }
 
     #[test]
@@ -679,7 +652,7 @@ mod tests {
     }
 
     #[test]
-    fn variable_use_classification_stops_at_closed_blocks() {
+    fn variable_use_classification_ignores_block_self_jumps() {
         let mut arena = sk::SpsLowArena::default();
         let label = Fixture::definition(&mut arena);
         let target = label.build(&mut arena, None);
@@ -693,11 +666,38 @@ mod tests {
         let tail = Fixture::terminal(&mut arena);
         let root = sk::LetValue { binder, bindee, tail }.build(&mut arena, None);
         let program = SpsLowProgram::try_new(arena, root, SpsScheme::BranchJoin).unwrap();
-        let shape = VariableShape::Closure;
-        assert_eq!(
-            VarUse::classify(&program.arena().inner, root, label, shape),
-            VarUse { all_eliminations: true, ..VarUse::default() }
-        );
+        let uses = VarUses::collect(&program.arena().inner, root);
+        assert_eq!(uses.get(label), None);
+    }
+
+    #[test]
+    fn local_variables_inside_closed_blocks_are_unboxed_in_single_pass() {
+        let mut arena = sk::SpsLowArena::default();
+        let label = Fixture::definition(&mut arena);
+        let def = Fixture::definition(&mut arena);
+        let scrut = def.build(&mut arena, None);
+        let projection = Fixture::pattern(&mut arena);
+        let match_body = Fixture::terminal(&mut arena);
+        let inner_tail = sk::SProductMatch { scrut, binder: projection, body: match_body }
+            .build(&mut arena, None);
+        let inner_binder = def.build(&mut arena, None);
+        let inner_bindee = Fixture::product(&mut arena);
+        let block_body =
+            sk::LetValue { binder: inner_binder, bindee: inner_bindee, tail: inner_tail }
+                .build(&mut arena, None);
+        let entry = sk::EntryParameters::Closure { environment: sk::Hole.build(&mut arena, None) };
+        let block = sk::Block { label, entry, body: block_body }.build(&mut arena, None);
+        let root = sk::LetValue {
+            binder: sk::Hole.build(&mut arena, None),
+            bindee: block,
+            tail: Fixture::terminal(&mut arena),
+        }
+        .build(&mut arena, None);
+        let program = SpsLowProgram::try_new(arena, root, SpsScheme::BranchJoin).unwrap();
+        let plan = LocalUnboxing::collect(&program);
+        assert_eq!(plan.unboxed_vars.get(def), Some(&2));
+        assert!(plan.values.contains(inner_bindee));
+        assert!(plan.patterns.contains(projection));
     }
 
     #[test]
@@ -722,9 +722,9 @@ mod tests {
                 root = sk::LetValue { binder, bindee, tail: root }.build(&mut arena, None);
                 let program = SpsLowProgram::try_new(arena, root, SpsScheme::BranchJoin).unwrap();
                 let plan = LocalUnboxing::collect(&program);
-                assert_eq!(plan.unboxed_vars.get(&def), Some(&2));
-                assert!(plan.values.contains(&bindee));
-                assert!(plan.patterns.contains(&projection));
+                assert_eq!(plan.unboxed_vars.get(def), Some(&2));
+                assert!(plan.values.contains(bindee));
+                assert!(plan.patterns.contains(projection));
             })
             .unwrap()
             .join()
@@ -748,9 +748,11 @@ mod tests {
                 let stack = sk::Cons(value, ambient).build(&mut arena, None);
                 let root = sk::SHole(stack).build(&mut arena, None);
                 // Isolate this semantic view from the separate entry and protocol validators.
-                let usage = VarUse::classify(&arena.inner, root, def, VariableShape::Closure);
+                let uses = VarUses::collect(&arena.inner, root);
+                let usage = uses.get(def).expect("def escape recorded");
                 assert!(usage.escapes);
-                assert!(!usage.all_eliminations);
+                assert!(usage.projections.is_empty());
+                assert!(usage.closures.is_empty());
             })
             .unwrap()
             .join()

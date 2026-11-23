@@ -11,7 +11,11 @@ use derive_more::{AsMut, AsRef};
 use std::collections::HashMap;
 use zydeco_foundation::fold::{Explicit, Step};
 use zydeco_machine::closure::Closure;
-use zydeco_stackir::{SpsLowProgram, arena::DefinitionNames as _, low::syntax as sk};
+use zydeco_stackir::{
+    SpsLowProgram,
+    arena::DefinitionNames as _,
+    low::{representation::RepresentationPolicy, syntax as sk, unbox::LocalUnboxing},
+};
 
 mod folder;
 use folder::*;
@@ -29,7 +33,7 @@ pub struct Lowerer<'a> {
     pub arena: AssemblyArena,
     pub sps_low: &'a sk::SpsLowArena,
     pub root: sk::CompuId,
-    unboxing: crate::unbox::LocalUnboxing,
+    unboxing: LocalUnboxing,
     scalars: zydeco_stackir::low::scalar::ScalarPlans,
     unboxed_var_slots: HashMap<sk::DefId, Vec<VarId>>,
     /// The program of each lowered label, recorded before the tail that jumps to it.
@@ -38,11 +42,11 @@ pub struct Lowerer<'a> {
 }
 
 impl<'a> Lowerer<'a> {
-    pub fn with_policy<P: crate::representation::RepresentationPolicy + ?Sized>(
+    pub fn with_policy<P: RepresentationPolicy + ?Sized>(
         sps_low: &'a SpsLowProgram, policy: &P,
     ) -> Self {
         let arena = AssemblyArena::default();
-        let unboxing = crate::unbox::LocalUnboxing::with_policy(sps_low, policy);
+        let unboxing = LocalUnboxing::with_policy(sps_low, policy);
         Self {
             allocator: IdAllocator::new(),
             arena,
@@ -78,7 +82,7 @@ impl Lowering<'_, '_> {
             }
             | VPat::Var(def) => {
                 let name = self.lo.sps_low.admin.def_name(&def);
-                if let Some(&arity) = self.lo.unboxing.unboxed_vars.get(&def) {
+                if let Some(&arity) = self.lo.unboxing.unboxed_vars.get(def) {
                     let vars = (0..arity)
                         .map(|index| {
                             VarName::from(format!("{}#unbox{}", name.plain(), index))
@@ -107,7 +111,7 @@ impl Lowering<'_, '_> {
             | VPat::VCons(sk::VCons { items, layout }) => {
                 let elements = items.len();
                 let next = self.sequence(Sequence::Patterns(items.into_iter()), next);
-                if self.lo.unboxing.patterns.contains(&id) {
+                if self.lo.unboxing.patterns.contains(id) {
                     Step::TailCall(Work::Apply(next, context))
                 } else {
                     self.emit(
@@ -156,7 +160,7 @@ impl Lowering<'_, '_> {
                 environment,
                 code,
             })) => {
-                let next = if self.lo.unboxing.values.contains(&id) {
+                let next = if self.lo.unboxing.values.contains(id) {
                     next
                 } else {
                     self.instruction(
@@ -180,7 +184,7 @@ impl Lowering<'_, '_> {
                 self.emit(Push(Atom::Imm(Imm::Triv(Triv))), context, ContextUpdate::Keep, next)
             }
             | Value::VCons(sk::VCons { items, layout }) => {
-                let next = if self.lo.unboxing.values.contains(&id) {
+                let next = if self.lo.unboxing.values.contains(id) {
                     next
                 } else {
                     self.instruction(Pack(ProductLayout::new(layout.arity, items.len())), next)
@@ -221,7 +225,7 @@ impl Lowering<'_, '_> {
     fn stack(&mut self, id: sk::StackId, context: Context, next: ContId) -> Step<Self> {
         let stack = self.lo.sps_low.inner.stacks[&id].clone();
         if self.lo.native_frames
-            && let Some(entry) = self.lo.sps_low.inner.continuations.get(&id).cloned()
+            && let Some(entry) = self.lo.sps_low.inner.continuations.get(id).cloned()
         {
             let sk::Stack::Ext(sk::StackExt::ContinuationPackage(sk::ContinuationPackage {
                 code,
@@ -412,7 +416,7 @@ impl Lowering<'_, '_> {
                     .into_iter()
                     .rev()
                     .fold(next, |next, pattern| self.then(Action::Pattern(pattern), next));
-                let next = if self.lo.unboxing.values.contains(&package) {
+                let next = if self.lo.unboxing.values.contains(package) {
                     next
                 } else {
                     self.instruction(

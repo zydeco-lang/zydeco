@@ -13,11 +13,11 @@
 use super::{
     check::FragmentProgram,
     syntax::*,
-    traverse::{Edge, EntityId, Node, Occurrence, Scopes, Traversal, Visitor},
+    traverse::{Edge, Node, Occurrence, Scopes, Traversal, Visitor},
     variables::Variables,
 };
 use crate::protocol::ValueProtocol;
-use std::{collections::HashMap, convert::Infallible};
+use std::convert::Infallible;
 use zydeco_foundation::{
     context::{CoContext, Context},
     pass::CompilerPass,
@@ -45,7 +45,7 @@ impl CompilerPass<FragmentProgram> for Localizer {
                 unreachable!("an eligible binding binds a closure")
             };
             // The procedure's body expects the stack its closure did.
-            if let Some(ValueProtocol::Thunk(stack)) = arena.inner.value_protocols.get(&bindee) {
+            if let Some(ValueProtocol::Thunk(stack)) = arena.inner.value_protocols.get(bindee) {
                 let stack = (**stack).clone();
                 arena.inner.compu_protocols.insert_new(binding, stack);
             }
@@ -57,8 +57,7 @@ impl CompilerPass<FragmentProgram> for Localizer {
         for Call { call, procedure, stack } in calls {
             arena.inner.compus.replace_existing(call, CallProc { procedure, stack }.into());
         }
-        Ok(FragmentProgram::try_new(SpsProgram::new(arena, root), scheme)
-            .expect("localization preserves lexical ownership and its scheme's fragment"))
+        Ok(FragmentProgram::from_pass(SpsProgram::new(arena, root), scheme))
     }
 }
 
@@ -70,34 +69,41 @@ impl CompilerPass<FragmentProgram> for Localizer {
 struct Escapes<'a> {
     arena: &'a SpsInnerArena,
     variables: Variables,
-    summaries: HashMap<EntityId, CoContext<DefId>>,
+    value_summaries: SecondaryMap<ValueId, CoContext<DefId>>,
+    stack_summaries: SecondaryMap<StackId, CoContext<DefId>>,
+    compu_summaries: SecondaryMap<CompuId, CoContext<DefId>>,
     /// The escaping occurrences of each closure's body, used if a binding localizes the closure.
-    bodies: HashMap<ValueId, CoContext<DefId>>,
+    bodies: SecondaryMap<ValueId, CoContext<DefId>>,
     /// Eligible bindings and their binders, innermost first.
     eligible: Vec<(CompuId, DefId)>,
 }
 
 impl<'a> Escapes<'a> {
     fn analyze(arena: &'a SpsInnerArena, root: CompuId) -> Vec<(CompuId, DefId)> {
-        let mut variables = Variables::default();
-        Traversal { arena }.run(root.into(), &mut variables);
         let mut escapes = Self {
             arena,
-            variables,
-            summaries: HashMap::new(),
-            bodies: HashMap::new(),
+            variables: Variables::default(),
+            value_summaries: SecondaryMap::new(),
+            stack_summaries: SecondaryMap::new(),
+            compu_summaries: SecondaryMap::new(),
+            bodies: SecondaryMap::new(),
             eligible: Vec::new(),
         };
         Traversal { arena }.run(root.into(), &mut escapes);
         escapes.eligible
     }
 
-    fn take(&mut self, child: impl Into<EntityId>) -> CoContext<DefId> {
-        let child = child.into();
-        if let EntityId::Value(value) = child {
-            self.bodies.remove(&value);
-        }
-        self.summaries.remove(&child).expect("a child exits before its parent")
+    fn take_value(&mut self, id: ValueId) -> CoContext<DefId> {
+        self.bodies.remove(id);
+        self.value_summaries.remove(id).expect("a child exits before its parent")
+    }
+
+    fn take_stack(&mut self, id: StackId) -> CoContext<DefId> {
+        self.stack_summaries.remove(id).expect("a child exits before its parent")
+    }
+
+    fn take_compu(&mut self, id: CompuId) -> CoContext<DefId> {
+        self.compu_summaries.remove(id).expect("a child exits before its parent")
     }
 
     fn free(&self, term: impl Into<TermId>) -> CoContext<DefId> {
@@ -112,19 +118,19 @@ impl<'a> Escapes<'a> {
         match value {
             | Value::Var(def) => CoContext::singleton(*def),
             | Value::Ext(ValueExt::Closure(Closure { body, .. })) => {
-                let body_escapes = self.take(*body);
-                self.bodies.insert(id, body_escapes);
+                let body_escapes = self.take_compu(*body);
+                self.bodies.insert_new(id, body_escapes);
                 self.free(*body)
             }
-            | Value::Ctor(Ctor(_, body)) => self.take(*body),
+            | Value::Ctor(Ctor(_, body)) => self.take_value(*body),
             | Value::VCons(VCons { items, .. }) => {
-                items.iter().fold(CoContext::new(), |acc, item| acc + self.take(*item))
+                items.iter().fold(CoContext::new(), |acc, item| acc + self.take_value(*item))
             }
-            | Value::Primitive(Primitive { operands, .. }) => {
-                operands.iter().fold(CoContext::new(), |acc, operand| acc + self.take(*operand))
-            }
+            | Value::Primitive(Primitive { operands, .. }) => operands
+                .iter()
+                .fold(CoContext::new(), |acc, operand| acc + self.take_value(*operand)),
             | Value::AddrOffset(AddrOffset { base, displacement }) => {
-                self.take(*base) + self.take(*displacement)
+                self.take_value(*base) + self.take_value(*displacement)
             }
             | Value::Hole(_) | Value::Triv(_) | Value::Literal(_) => CoContext::new(),
         }
@@ -133,11 +139,11 @@ impl<'a> Escapes<'a> {
     fn stack(&mut self, stack: &Stack) -> CoContext<DefId> {
         match stack {
             | Stack::Ext(StackExt::Kont(Kont { binder, body })) => {
-                self.take(*body) - self.bound(*binder)
+                self.take_compu(*body) - self.bound(*binder)
             }
             | Stack::Var(_) => CoContext::new(),
-            | Stack::Arg(Cons(value, rest)) => self.take(*value) + self.take(*rest),
-            | Stack::Tag(Cons(_, rest)) => self.take(*rest),
+            | Stack::Arg(Cons(value, rest)) => self.take_value(*value) + self.take_stack(*rest),
+            | Stack::Tag(Cons(_, rest)) => self.take_stack(*rest),
         }
     }
 
@@ -145,10 +151,12 @@ impl<'a> Escapes<'a> {
         match computation {
             | Computation::Hole(SHole(stack))
             | Computation::ExternCall(ExternCall { stack, .. })
-            | Computation::Ext(CompuExt::CallProc(CallProc { stack, .. })) => self.take(*stack),
+            | Computation::Ext(CompuExt::CallProc(CallProc { stack, .. })) => {
+                self.take_stack(*stack)
+            }
             | Computation::Ext(CompuExt::Force(SForce { thunk, stack })) => {
-                let thunk_escapes = self.take(*thunk);
-                let stack_escapes = self.take(*stack);
+                let thunk_escapes = self.take_value(*thunk);
+                let stack_escapes = self.take_stack(*stack);
                 if matches!(self.arena.values[thunk], Value::Var(_)) {
                     stack_escapes
                 } else {
@@ -156,30 +164,30 @@ impl<'a> Escapes<'a> {
                 }
             }
             | Computation::Ext(CompuExt::Ret(SReturn { stack, value })) => {
-                self.take(*stack) + self.take(*value)
+                self.take_stack(*stack) + self.take_value(*value)
             }
             | Computation::Ext(CompuExt::Fix(SFix { param, stack, body })) => {
-                self.take(*body);
-                self.take(*stack) + (self.free(*body) - param)
+                self.take_compu(*body);
+                self.take_stack(*stack) + (self.free(*body) - param)
             }
             | Computation::ProductMatch(SProductMatch { scrut, binder, body }) => {
-                self.take(*scrut) + (self.take(*body) - self.bound(*binder))
+                self.take_value(*scrut) + (self.take_compu(*body) - self.bound(*binder))
             }
             | Computation::Compare(CompareBranch { operands, when_true, when_false, .. }) => {
-                self.take(operands[0])
-                    + self.take(operands[1])
-                    + self.take(*when_true)
-                    + self.take(*when_false)
+                self.take_value(operands[0])
+                    + self.take_value(operands[1])
+                    + self.take_compu(*when_true)
+                    + self.take_compu(*when_false)
             }
             | Computation::CoprodMatch(SCoprodMatch { scrut, arms }) => {
-                arms.iter().fold(self.take(*scrut), |acc, Matcher { binder, tail }| {
-                    acc + (self.take(*tail) - self.bound(*binder))
+                arms.iter().fold(self.take_value(*scrut), |acc, Matcher { binder, tail }| {
+                    acc + (self.take_compu(*tail) - self.bound(*binder))
                 })
             }
             | Computation::LetValue(Let { binder, bindee, tail }) => {
                 let body = self.bodies.remove(bindee);
-                let bindee_escapes = self.take(*bindee);
-                let tail_escapes = self.take(*tail);
+                let bindee_escapes = self.take_value(*bindee);
+                let tail_escapes = self.take_compu(*tail);
                 let binder_var = match self.arena.vpats[binder] {
                     | ValuePattern::Var(def) => Some(def),
                     | _ => None,
@@ -200,36 +208,51 @@ impl<'a> Escapes<'a> {
                 }
             }
             | Computation::LetStack(Let { bindee, tail, .. }) => {
-                self.take(*bindee) + self.take(*tail)
+                self.take_stack(*bindee) + self.take_compu(*tail)
             }
             | Computation::Ext(CompuExt::LetProc(LetProc { body, tail, .. })) => {
-                self.take(*body) + self.take(*tail)
+                self.take_compu(*body) + self.take_compu(*tail)
             }
             | Computation::LetArg(Let { binder: Cons(binder, _), bindee, tail }) => {
-                self.take(*bindee) + (self.take(*tail) - self.bound(*binder))
+                self.take_stack(*bindee) + (self.take_compu(*tail) - self.bound(*binder))
             }
-            | Computation::CoCase(SCoMatch { scrut, arms }) => arms
-                .iter()
-                .fold(self.take(*scrut), |acc, CoMatcher { tail, .. }| acc + self.take(*tail)),
+            | Computation::CoCase(SCoMatch { scrut, arms }) => {
+                arms.iter().fold(self.take_stack(*scrut), |acc, CoMatcher { tail, .. }| {
+                    acc + self.take_compu(*tail)
+                })
+            }
             | Computation::Memory(MemoryStep::Load { address, result, next, .. }) => {
-                self.take(*address) + (self.take(*next) - self.bound(*result))
+                self.take_value(*address) + (self.take_compu(*next) - self.bound(*result))
             }
             | Computation::Memory(MemoryStep::Store { address, value, next, .. }) => {
-                self.take(*address) + self.take(*value) + self.take(*next)
+                self.take_value(*address) + self.take_value(*value) + self.take_compu(*next)
             }
         }
     }
 }
 
 impl Visitor<Sps> for Escapes<'_> {
+    fn enter(&mut self, node: Node<'_>, edge: Edge, occurrence: Occurrence) {
+        self.variables.enter(node, edge, occurrence);
+    }
+
     fn exit(&mut self, node: Node<'_>) {
-        let summary = match node {
-            | Node::Pattern(_, _) => return,
-            | Node::Value(id, value) => self.value(id, value),
-            | Node::Stack(_, stack) => self.stack(stack),
-            | Node::Computation(id, computation) => self.computation(id, computation),
-        };
-        self.summaries.insert(node.id(), summary);
+        self.variables.exit(node);
+        match node {
+            | Node::Pattern(_, _) => {}
+            | Node::Value(id, value) => {
+                let summary = self.value(id, value);
+                self.value_summaries.insert_new(id, summary);
+            }
+            | Node::Stack(id, stack) => {
+                let summary = self.stack(stack);
+                self.stack_summaries.insert_new(id, summary);
+            }
+            | Node::Computation(id, computation) => {
+                let summary = self.computation(id, computation);
+                self.compu_summaries.insert_new(id, summary);
+            }
+        }
     }
 }
 
@@ -243,7 +266,7 @@ struct Call {
 /// The calls of each localized binder within its binding's tail.
 struct Calls<'a> {
     arena: &'a SpsInnerArena,
-    bindings: HashMap<CompuId, DefId>,
+    bindings: SecondaryMap<CompuId, DefId>,
     /// Localized binders in scope, each opened by the tail of its binding.
     scopes: Scopes<DefId>,
     calls: Vec<Call>,
@@ -251,14 +274,16 @@ struct Calls<'a> {
 
 impl<'a> Calls<'a> {
     fn collect(
-        arena: &'a SpsInnerArena, root: CompuId, bindings: &[(CompuId, DefId)],
+        arena: &'a SpsInnerArena, root: CompuId, eligible: &[(CompuId, DefId)],
     ) -> Vec<Call> {
-        let mut calls = Self {
-            arena,
-            bindings: bindings.iter().copied().collect(),
-            scopes: Scopes::default(),
-            calls: Vec::new(),
-        };
+        if eligible.is_empty() {
+            return Vec::new();
+        }
+        let mut bindings = SecondaryMap::new();
+        for &(compu, def) in eligible {
+            bindings.insert_new(compu, def);
+        }
+        let mut calls = Self { arena, bindings, scopes: Scopes::default(), calls: Vec::new() };
         Traversal { arena }.run(root.into(), &mut calls);
         calls.calls
     }
@@ -272,7 +297,7 @@ impl Visitor<Sps> for Calls<'_> {
         self.scopes.enter(node.id());
         match node {
             | Node::Computation(id, Computation::LetValue(Let { tail, .. })) => {
-                if let Some(procedure) = self.bindings.get(&id) {
+                if let Some(procedure) = self.bindings.get(id) {
                     self.scopes.open_at((*tail).into(), *procedure);
                 }
             }

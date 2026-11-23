@@ -31,8 +31,7 @@ impl Fixture {
 #[test]
 fn pattern_copies_preserve_children_definitions_layouts_and_evidence() {
     let mut fixture = Fixture { source: SpsArena::default(), next_origin: 0 };
-    let definition: DefId = fixture.source.admin.fresh_def();
-    fixture.source.admin.insert_def(definition, VarName::new("argument"));
+    let definition: DefId = fixture.source.admin.alloc_def(VarName::new("argument"));
     let variable = fixture.pattern(definition);
     let constructor =
         fixture.pattern(Ctor(CtorIdx { idx: 2, name: CtorName::new("+Item") }, variable));
@@ -51,7 +50,7 @@ fn pattern_copies_preserve_children_definitions_layouts_and_evidence() {
         panic!("product")
     };
     assert_eq!(layout.arity, 4);
-    assert_eq!(norm.arena.admin.pats.back(&output), norm.source.admin.pats.back(&root));
+    assert_eq!(norm.arena.admin.pattern_site(output), norm.source.admin.pattern_site(root));
     let ValuePattern::Ctor(Ctor(tag, child)) = &norm.arena.inner.vpats[&items[0]] else {
         panic!("constructor")
     };
@@ -65,7 +64,7 @@ fn pattern_copies_preserve_children_definitions_layouts_and_evidence() {
     assert!(matches!(norm.arena.inner.vpats[&head[0]], ValuePattern::Hole(_)));
     assert!(matches!(norm.arena.inner.vpats[tail], ValuePattern::Triv(_)));
     assert_eq!(norm.arena.inner.pattern_protocols[tail], ValueProtocol::Unit);
-    assert_eq!(norm.arena.admin.pats.back(tail), norm.source.admin.pats.back(&unit));
+    assert_eq!(norm.arena.admin.pattern_site(*tail), norm.source.admin.pattern_site(unit));
     assert!(
         matches!(&norm.arena.inner.vpats[&items[2]], ValuePattern::VCons(VCons { items, layout }) if items.is_empty() && layout.arity == 2)
     );

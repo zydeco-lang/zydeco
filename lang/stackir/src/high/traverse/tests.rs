@@ -96,8 +96,8 @@ fn bottom_up_variables_respect_lexical_bindings_and_continuation_scopes() {
 #[test]
 fn cyclic_ownership_does_not_prevent_independent_repeated_edges_from_being_reported() {
     let mut arena = SpsArena::default();
-    let cyclic: ValueId = arena.admin.fresh_node();
-    arena.inner.values.insert_new(
+    let cyclic: ValueId = Hole.build(&mut arena, None);
+    arena.inner.values.replace_existing(
         cyclic,
         Value::Ctor(Ctor(CtorIdx { idx: 0, name: CtorName::new("loop") }, cyclic)),
     );

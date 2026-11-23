@@ -15,6 +15,7 @@ impl SpsLowPipeline {
         P: CompilerPass<FragmentProgram, Output = FragmentProgram>,
     {
         let check = move |program: FragmentProgram| {
+            #[cfg(debug_assertions)]
             crate::high::check::check(program.as_program());
             Ok::<_, P::Error>(program)
         };
@@ -64,9 +65,7 @@ mod tests {
         }
 
         fn def(&mut self, name: &str) -> DefId {
-            let def = self.arena.admin.fresh_def();
-            self.arena.admin.insert_def(def, VarName::new(name));
-            def
+            self.arena.admin.alloc_def(VarName::new(name))
         }
 
         fn primitive(&mut self, role: BuiltinValueRole) -> ValueId {

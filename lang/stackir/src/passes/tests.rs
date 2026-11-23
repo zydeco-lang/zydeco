@@ -9,8 +9,7 @@ impl Fixture {
     fn program(open: bool) -> FragmentProgram {
         let mut arena = SpsArena::default();
         let value = if open {
-            let def = arena.admin.fresh_def();
-            arena.admin.insert_def(def, VarName::new("free"));
+            let def = arena.admin.alloc_def(VarName::new("free"));
             def.build(&mut arena, None)
         } else {
             Triv.build(&mut arena, None)

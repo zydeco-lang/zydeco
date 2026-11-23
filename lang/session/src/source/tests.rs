@@ -1414,7 +1414,7 @@ fn a_zero_dependency_source_program_lowers_directly_to_stack_ir() {
 
     let SourceStack { stackir } = checked.stackir().unwrap();
     let stackir = stackir.as_program();
-    assert!(stackir.arena().inner.compus.get(&stackir.root()).is_some());
+    assert!(stackir.arena().inner.compus.get(stackir.root()).is_some());
     zydeco_stackir::high::check::check(stackir);
 }
 
@@ -1677,7 +1677,7 @@ fn stack_ir_constructs_and_applies_the_same_typed_builtin_package() {
     let SourceStack { stackir } = checked.sps_with_builtin().unwrap();
 
     let stackir = stackir.as_program();
-    assert!(stackir.arena().inner.compus.get(&stackir.root()).is_some());
+    assert!(stackir.arena().inner.compus.get(stackir.root()).is_some());
     zydeco_stackir::high::check::check(stackir);
 }
 
@@ -1687,7 +1687,7 @@ fn builtin_applied_stack_ir_reaches_analyzed_assembly() {
     let root = fixture.write("main.zy", builtin_add_exit_source());
     let SourceAssembly { sps_low, assembly, .. } = TestPipeline::zasm(root).unwrap();
 
-    assert!(sps_low.arena().inner.compus.get(&sps_low.root()).is_some());
+    assert!(sps_low.arena().inner.compus.get(sps_low.root()).is_some());
     assert!(assembly.arena().programs.get(&assembly.root()).is_some());
 }
 
@@ -1980,7 +1980,7 @@ fn checked_computation_roots_lower_directly_to_stack_ir() {
     let SourceStack { stackir } = checked_trivial_computation().stackir().unwrap();
 
     let stackir = stackir.as_program();
-    assert!(stackir.arena().inner.compus.get(&stackir.root()).is_some());
+    assert!(stackir.arena().inner.compus.get(stackir.root()).is_some());
     zydeco_stackir::high::check::check(stackir);
 }
 

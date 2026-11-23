@@ -8,9 +8,7 @@ struct Fixture {
 
 impl Fixture {
     fn definition(&mut self, name: &str) -> DefId {
-        let def = self.arena.admin.fresh_def();
-        self.arena.admin.insert_def(def, name.into());
-        def
+        self.arena.admin.alloc_def(name.into())
     }
 
     fn literal(&mut self, value: i64) -> ValueId {

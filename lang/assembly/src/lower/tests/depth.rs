@@ -1,5 +1,5 @@
 use super::*;
-use crate::unbox::LocalUnboxing;
+use zydeco_stackir::low::unbox::LocalUnboxing;
 
 struct Deep;
 

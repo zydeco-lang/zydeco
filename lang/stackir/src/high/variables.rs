@@ -49,7 +49,7 @@ impl FreeVariables<Sps> for CompuExt {
 
 impl Vars<Sps> for VPatId {
     fn vars(self, arena: &impl AsRef<SpsInnerArena>) -> Context<DefId> {
-        Variables::analyze(arena.as_ref(), self.into()).pattern_summary(self)
+        crate::variables::pattern_vars::<Sps>(arena.as_ref(), self)
     }
 }
 

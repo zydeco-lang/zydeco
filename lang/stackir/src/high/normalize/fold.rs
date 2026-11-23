@@ -282,7 +282,7 @@ impl<'a> NormalizationFolder<'a> {
     ) {
         let site = self.norm.source.admin.term_site(source);
         let node = compu.into().build(self.norm, site);
-        if let Some(protocol) = self.norm.source.inner.compu_protocols.get(&source) {
+        if let Some(protocol) = self.norm.source.inner.compu_protocols.get(source) {
             self.norm.arena.inner.compu_protocols.insert_new(node, protocol.clone());
         }
         let node = self.norm.arena.name_frames(spine, node, site);
@@ -373,10 +373,10 @@ impl<'a> NormalizationFolder<'a> {
     ) {
         let site = self.norm.source.admin.term_site(source);
         let node = value.into().build(self.norm, site);
-        if let Some(role) = self.norm.source.inner.builtin_functions.get(&source) {
+        if let Some(role) = self.norm.source.inner.builtin_functions.get(source) {
             self.norm.arena.inner.builtin_functions.insert_new(node, *role);
         }
-        if protocol && let Some(protocol) = self.norm.source.inner.value_protocols.get(&source) {
+        if protocol && let Some(protocol) = self.norm.source.inner.value_protocols.get(source) {
             self.norm.arena.inner.value_protocols.insert_new(node, protocol.clone());
         }
         self.values.push(Residual { node, demands });

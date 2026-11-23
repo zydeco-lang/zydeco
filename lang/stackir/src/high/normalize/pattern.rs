@@ -63,7 +63,7 @@ impl PatternFolder<'_> {
             | pattern => pattern,
         };
         let node = pattern.build(self.norm, site);
-        if let Some(protocol) = self.norm.source.inner.pattern_protocols.get(&frame.source) {
+        if let Some(protocol) = self.norm.source.inner.pattern_protocols.get(frame.source) {
             self.norm.arena.inner.pattern_protocols.insert_new(node, protocol.clone());
         }
         Step::Return(node)

@@ -6,7 +6,7 @@ pub use crate::syntax::*;
 use crate::syntax as common;
 use derive_more::From;
 
-zydeco_foundation::new_key_type! {
+zydeco_foundation::define_idx! {
     pub struct VPatId;
     pub struct ValueId;
     pub struct CompuId;
@@ -22,7 +22,6 @@ impl Phase for Sps {
     type ValueId = ValueId;
     type StackId = StackId;
     type CompuId = CompuId;
-    type Scope = SpsScope;
     type Nodes = SpsInnerArena;
     type ValueExt = ValueExt;
     type StackExt = StackExt;

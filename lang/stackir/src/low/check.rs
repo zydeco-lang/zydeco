@@ -5,7 +5,6 @@ use super::syntax::*;
 use super::traverse::{Edge, Node, Occurrence, Scopes, Together, Traversal, Visitor};
 use super::variables::Variables;
 use crate::scheme::{FrameShape, PlacementError, SpsScheme, StackConsumer, StackShape};
-use std::collections::HashSet;
 
 /// A lexical first-order SPS tree that keeps the stack placement of its scheme's fragment.
 #[derive(Debug)]
@@ -57,7 +56,32 @@ impl SpsLowProgram {
     pub fn try_new(
         arena: SpsLowArena, root: CompuId, scheme: SpsScheme,
     ) -> Result<Self, SpsLowValidationError> {
-        let facts = SpsLowValidator::validate(&arena.inner, root, scheme)?;
+        Self::validate_parts(&arena.inner, root, scheme)?;
+        Ok(Self { arena: FrozenArena::new(arena), root, scheme })
+    }
+
+    /// Recheck ownership, labels, entry contracts, and source protocols.
+    pub fn validate(&self) -> Result<(), SpsLowValidationError> {
+        Self::validate_parts(&self.arena.inner, self.root, self.scheme)
+    }
+
+    /// Construct an [`SpsLowProgram`] produced by a compiler pass, validating in debug builds.
+    pub(crate) fn from_pass(arena: SpsLowArena, root: CompuId, scheme: SpsScheme) -> Self {
+        #[cfg(debug_assertions)]
+        {
+            Self::try_new(arena, root, scheme)
+                .expect("closure conversion produces closed first-order SPSLow")
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            Self { arena: FrozenArena::new(arena), root, scheme }
+        }
+    }
+
+    fn validate_parts(
+        arena: &SpsLowInnerArena, root: CompuId, scheme: SpsScheme,
+    ) -> Result<(), SpsLowValidationError> {
+        let facts = SpsLowValidator::validate(arena, root, scheme)?;
         let mut variables = facts
             .free_variables(root.into())
             .expect("validated syntax")
@@ -69,9 +93,9 @@ impl SpsLowProgram {
             return Err(SpsLowValidationError::OpenRoot { variables });
         }
         drop(facts);
-        super::contracts::EntryValidator::validate(&arena.inner, root)?;
-        super::protocols::ProtocolValidator::validate(&arena.inner, root)?;
-        Ok(Self { arena: FrozenArena::new(arena), root, scheme })
+        super::contracts::EntryValidator::validate(arena, root)?;
+        super::protocols::ProtocolValidator::validate(arena, root)?;
+        Ok(())
     }
 
     /// The scheme whose converted fragment contains this program.
@@ -102,8 +126,8 @@ struct SpsLowValidator<'a> {
     scheme: SpsScheme,
     arena: &'a SpsLowInnerArena,
     error: Option<SpsLowValidationError>,
-    stacks: HashSet<StackId>,
-    labels: HashSet<DefId>,
+    stacks: IdBitSet<StackId>,
+    labels: IdBitSet<DefId>,
     blocks: Vec<ValueId>,
     /// Closed labels and their bodies, which must read no variable.
     closed_labels: Vec<(DefId, CompuId)>,
@@ -125,7 +149,7 @@ impl ContinuationEntry {
         &self, arena: &SpsLowInnerArena, stack: StackId, variables: &Variables,
     ) -> bool {
         let Some(Stack::Ext(StackExt::ContinuationPackage(ContinuationPackage { code, residual }))) =
-            arena.stacks.get(&stack)
+            arena.stacks.get(stack)
         else {
             return false;
         };
@@ -159,7 +183,10 @@ impl ContinuationEntry {
             matches!(arena.values[value], Value::Var(source) if source == capture.source)
                 && matches!(arena.vpats[pattern], ValuePattern::Var(binding) if binding == capture.binding)
         }) { return false; }
-        let bindings = self.captures.iter().map(|capture| capture.binding).collect::<HashSet<_>>();
+        let mut bindings = IdBitSet::new();
+        for capture in &self.captures {
+            bindings.insert(capture.binding);
+        }
         let free = variables
             .free_variables(self.body.into())
             .expect("validated continuation body")
@@ -182,8 +209,8 @@ impl<'a> SpsLowValidator<'a> {
             scheme,
             arena,
             error: None,
-            stacks: HashSet::new(),
-            labels: HashSet::new(),
+            stacks: IdBitSet::new(),
+            labels: IdBitSet::new(),
             blocks: Vec::new(),
             closed_labels: Vec::new(),
             scopes: Scopes::default(),
@@ -219,11 +246,10 @@ impl<'a> SpsLowValidator<'a> {
                 return Err(SpsLowValidationError::ImplicitLabelCapture { label, captures });
             }
         }
-        for (stack, entry) in &arena.continuations {
-            if !validator.stacks.contains(stack)
-                || !entry.matches_package(arena, *stack, &variables)
+        for (stack, entry) in arena.continuations.iter() {
+            if !validator.stacks.contains(stack) || !entry.matches_package(arena, stack, &variables)
             {
-                return Err(SpsLowValidationError::ContinuationContext { stack: *stack });
+                return Err(SpsLowValidationError::ContinuationContext { stack });
             }
         }
         Ok(variables)

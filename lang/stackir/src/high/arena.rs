@@ -5,32 +5,6 @@ use crate::ir;
 use derive_more::{AsMut, AsRef};
 use zydeco_derive::{AsMutSelf, AsRefSelf};
 
-/// Allocation scope for lexical SPS nodes and the definitions that stack IR lowering introduces.
-#[derive(Debug)]
-pub enum SpsScope {}
-
-impl Allocates<VPatId> for SpsScope {}
-impl Allocates<ValueId> for SpsScope {}
-impl Allocates<StackId> for SpsScope {}
-impl Allocates<CompuId> for SpsScope {}
-impl Allocates<DefId> for SpsScope {}
-
-impl ArenaSchema<DefId> for SpsScope {
-    type Item = VarName;
-}
-impl ArenaSchema<VPatId> for SpsScope {
-    type Item = ValuePattern;
-}
-impl ArenaSchema<ValueId> for SpsScope {
-    type Item = Value;
-}
-impl ArenaSchema<StackId> for SpsScope {
-    type Item = Stack;
-}
-impl ArenaSchema<CompuId> for SpsScope {
-    type Item = Computation;
-}
-
 /// Generated definition names and core provenance for lexical SPS.
 pub type AdminArena = crate::arena::AdminArena<Sps>;
 
@@ -53,45 +27,88 @@ pub struct SpsInnerArena {
     pub protocols: std::sync::Arc<crate::protocol::ProtocolGraph>,
     /// Closed compiler-defined builtin bodies may be exposed at every known call.
     /// This is compiler provenance, not an annotation on arbitrary source closures.
-    pub(crate) builtin_functions: ArenaAssoc<ValueId, BuiltinValueRole>,
-    pub value_protocols: ArenaAssoc<ValueId, crate::protocol::ValueProtocol>,
-    pub pattern_protocols: ArenaAssoc<VPatId, crate::protocol::ValueProtocol>,
+    pub(crate) builtin_functions: SecondaryMap<ValueId, BuiltinValueRole>,
+    pub value_protocols: SecondaryMap<ValueId, crate::protocol::ValueProtocol>,
+    pub pattern_protocols: SecondaryMap<VPatId, crate::protocol::ValueProtocol>,
     /// Intrinsic protocols of recursive entries, procedure bodies, and codata eliminations.
-    pub compu_protocols: ArenaAssoc<CompuId, crate::protocol::StackProtocol>,
+    pub compu_protocols: SecondaryMap<CompuId, crate::protocol::StackProtocol>,
     /// value pattern arena
-    pub vpats: ArenaSparse<SpsScope, VPatId>,
+    pub vpats: DenseArena<VPatId, ValuePattern>,
     /// value arena
-    pub values: ArenaSparse<SpsScope, ValueId>,
+    pub values: DenseArena<ValueId, Value>,
     /// stack arena
-    pub stacks: ArenaSparse<SpsScope, StackId>,
+    pub stacks: DenseArena<StackId, Stack>,
     /// computation arena
-    pub compus: ArenaSparse<SpsScope, CompuId>,
+    pub compus: DenseArena<CompuId, Computation>,
+}
+
+impl SpsInnerArena {
+    /// Physical representation summary of a value node, refining unknown protocols from syntax.
+    pub fn value_rep(&self, id: ValueId) -> RepType {
+        if let Some(protocol) = self.value_protocols.get(id) {
+            let rep = RepType::from_protocol(protocol);
+            if rep != RepType::Word {
+                return rep;
+            }
+        }
+        match &self.values[id] {
+            | Value::Triv(_) => RepType::Unit,
+            | Value::Literal(literal) => RepType::from_literal(literal),
+            | Value::Primitive(Primitive { operation, .. }) => {
+                RepType::Scalar(operation.scalar_type())
+            }
+            | Value::AddrOffset(_) => RepType::Address,
+            | Value::VCons(VCons { layout, .. }) => u16::try_from(layout.arity)
+                .map_or(RepType::Word, |arity| RepType::Product { arity }),
+            | Value::Ext(ValueExt::Closure(_)) => RepType::Closure,
+            | Value::Hole(_) | Value::Var(_) | Value::Ctor(_) => RepType::Word,
+        }
+    }
+
+    /// Physical representation summary of a value pattern, refining unknown protocols from syntax.
+    pub fn pattern_rep(&self, id: VPatId) -> RepType {
+        if let Some(protocol) = self.pattern_protocols.get(id) {
+            let rep = RepType::from_protocol(protocol);
+            if rep != RepType::Word {
+                return rep;
+            }
+        }
+        match &self.vpats[id] {
+            | ValuePattern::Triv(_) => RepType::Unit,
+            | ValuePattern::VCons(VCons { layout, .. }) => u16::try_from(layout.arity)
+                .map_or(RepType::Word, |arity| RepType::Product { arity }),
+            | ValuePattern::Hole(_)
+            | ValuePattern::Var(_)
+            | ValuePattern::Ctor(_)
+            | ValuePattern::Alias(_) => RepType::Word,
+        }
+    }
 }
 
 impl Nodes for SpsInnerArena {
     type Phase = Sps;
-    fn vpats(&self) -> &ArenaSparse<SpsScope, VPatId> {
+    fn vpats(&self) -> &DenseArena<VPatId, ValuePattern> {
         &self.vpats
     }
-    fn values(&self) -> &ArenaSparse<SpsScope, ValueId> {
+    fn values(&self) -> &DenseArena<ValueId, Value> {
         &self.values
     }
-    fn stacks(&self) -> &ArenaSparse<SpsScope, StackId> {
+    fn stacks(&self) -> &DenseArena<StackId, Stack> {
         &self.stacks
     }
-    fn compus(&self) -> &ArenaSparse<SpsScope, CompuId> {
+    fn compus(&self) -> &DenseArena<CompuId, Computation> {
         &self.compus
     }
-    fn vpats_mut(&mut self) -> &mut ArenaSparse<SpsScope, VPatId> {
+    fn vpats_mut(&mut self) -> &mut DenseArena<VPatId, ValuePattern> {
         &mut self.vpats
     }
-    fn values_mut(&mut self) -> &mut ArenaSparse<SpsScope, ValueId> {
+    fn values_mut(&mut self) -> &mut DenseArena<ValueId, Value> {
         &mut self.values
     }
-    fn stacks_mut(&mut self) -> &mut ArenaSparse<SpsScope, StackId> {
+    fn stacks_mut(&mut self) -> &mut DenseArena<StackId, Stack> {
         &mut self.stacks
     }
-    fn compus_mut(&mut self) -> &mut ArenaSparse<SpsScope, CompuId> {
+    fn compus_mut(&mut self) -> &mut DenseArena<CompuId, Computation> {
         &mut self.compus
     }
 }
@@ -132,8 +149,10 @@ impl SpsProgram {
         let Self { arena, root } = self;
         let SpsArena { mut admin, inner } = arena.into_inner();
         let source_admin = AdminArena {
-            pats: std::mem::take(&mut admin.pats),
-            terms: std::mem::take(&mut admin.terms),
+            pat_sites: std::mem::take(&mut admin.pat_sites),
+            value_sites: std::mem::take(&mut admin.value_sites),
+            stack_sites: std::mem::take(&mut admin.stack_sites),
+            compu_sites: std::mem::take(&mut admin.compu_sites),
             ..AdminArena::default()
         };
         let protocols = inner.protocols.clone();

@@ -7,7 +7,7 @@ pub use crate::syntax::*;
 use crate::syntax as common;
 use derive_more::From;
 
-zydeco_foundation::new_key_type! {
+zydeco_foundation::define_idx! {
     pub struct VPatId;
     pub struct ValueId;
     pub struct StackId;
@@ -23,7 +23,6 @@ impl Phase for SpsLow {
     type ValueId = ValueId;
     type StackId = StackId;
     type CompuId = CompuId;
-    type Scope = SpsLowScope;
     type Nodes = SpsLowInnerArena;
     type ValueExt = ValueExt;
     type StackExt = StackExt;
@@ -62,6 +61,11 @@ pub struct Block {
 pub struct ClosurePackage {
     pub environment: ValueId,
     pub code: ValueId,
+}
+
+impl ClosurePackage {
+    /// Two machine words: environment and code pointer.
+    pub const FIELDS: usize = 2;
 }
 
 /// The value forms of first-order SPSLow.
