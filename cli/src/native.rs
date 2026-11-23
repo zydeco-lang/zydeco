@@ -440,7 +440,7 @@ impl BuildOptions {
         let export_entry_symbol = zydeco_machine::native::EXPORT_ENTRY_SYMBOL;
         let contract = format!(
             "pub const ENTRY_SYMBOL: &str = {entry_symbol:?};\n\
-             #[cfg(feature = \"runtime\")]\nunsafe extern \"sysv64\" {{\n\
+             #[cfg(all(feature = \"runtime\", target_arch = \"x86_64\"))]\nunsafe extern \"sysv64\" {{\n\
              #[link_name = {:?}]\n\
              pub fn entry() -> Word;\n}}\n\
              pub const EXPORT_ENTRY_SYMBOL: &str = {export_entry_symbol:?};\n\
@@ -450,6 +450,15 @@ impl BuildOptions {
             format!("\x01{export_entry_symbol}"),
         );
         std::fs::write(machine_out.join("contract.rs"), contract)
+            .map_err(NativeError::PrepareBuildDirectory)?;
+        let clif_entry = zydeco_machine::clif::CLIF_ENTRY_SYMBOL;
+        let clif_contract = format!(
+            "pub const CLIF_ENTRY_SYMBOL: &str = {clif_entry:?};\n\
+             #[cfg(feature = \"runtime\")]\nunsafe extern \"C\" {{\n\
+             #[link_name = {clif_entry:?}]\n\
+             pub fn clif_entry(vmctx: *mut ClifVmCtxHeader);\n}}\n",
+        );
+        std::fs::write(machine_out.join("clif_contract.rs"), clif_contract)
             .map_err(NativeError::PrepareBuildDirectory)
     }
 

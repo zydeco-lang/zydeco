@@ -11,6 +11,7 @@
 
 extern crate alloc;
 
+pub mod clif;
 pub mod closure;
 pub mod frames;
 pub mod memory;

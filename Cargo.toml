@@ -15,6 +15,7 @@ members = [
     "lang/stackir",
     "lang/assembly",
     "lang/amd64",
+    "lang/cranelift",
     "lang/wasm-common",
     "lang/wasm-sps",
     "lang/session",
@@ -62,6 +63,16 @@ zydeco-stackir = { path = "lang/stackir" }
 zydeco-session = { path = "lang/session" }
 zydeco-tui = { path = "tui" }
 zydeco-cli = { path = "cli" }
+# codegen
+cranelift-codegen = { version = "0.138", default-features = false, features = [
+    "std",
+    "x86",
+    "arm64",
+] }
+cranelift-frontend = "0.138"
+cranelift-module = "0.138"
+cranelift-object = { version = "0.138", default-features = false }
+target-lexicon = "0.13"
 # meta
 proc-macro2 = "1.0"
 syn = "3.0.4"

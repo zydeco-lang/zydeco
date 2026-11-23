@@ -78,13 +78,13 @@ macro_rules! resume_bridges {
                 match self { $(Self::$arity => &[$(TransferField::$field),*]),* }
             }
 
-            #[cfg(feature = "runtime")]
+            #[cfg(all(feature = "runtime", target_arch = "x86_64"))]
             fn address(self) -> Word {
                 match self { $(Self::$arity => $symbol as *const () as Word),* }
             }
         }
 
-        #[cfg(feature = "runtime")]
+        #[cfg(all(feature = "runtime", target_arch = "x86_64"))]
         unsafe extern "sysv64" {
             $(#[link_name = concat!("\x01", stringify!($symbol))] fn $symbol();)*
         }
@@ -146,7 +146,7 @@ impl<W: Default> HostTransfer<W> {
     }
 }
 
-#[cfg(feature = "runtime")]
+#[cfg(all(feature = "runtime", target_arch = "x86_64"))]
 impl HostTransfer<Word> {
     pub fn for_closure(closure: Word, arguments: HostArguments<Word>) -> Self {
         let resume = arguments.arity().address();

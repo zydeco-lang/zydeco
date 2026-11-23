@@ -18,14 +18,16 @@ fn allocation_publishes_roots_only_when_collection_needs_them() {
     use zydeco_machine::native::{AllocationKind, Word};
     let mut heap = CheneyHeap::with_limits(64, Some(64));
     let calls = std::cell::Cell::new(0);
-    let empty = RootRange { start: std::ptr::null_mut(), end: std::ptr::null_mut() };
-    let roots = CountedRoots { calls: &calls, roots: Roots { stack: empty, slots: &mut [] } };
+    let empty = RootRange::EMPTY;
+    let roots =
+        CountedRoots { calls: &calls, roots: Roots { stack: empty, frame: empty, slots: &mut [] } };
     let retained = unsafe { heap.allocate(2, AllocationKind::Opaque, roots).unwrap() };
     unsafe {
         retained.cast::<Word>().write(71);
     }
     assert_eq!(calls.get(), 0);
-    let roots = CountedRoots { calls: &calls, roots: Roots { stack: empty, slots: &mut [] } };
+    let roots =
+        CountedRoots { calls: &calls, roots: Roots { stack: empty, frame: empty, slots: &mut [] } };
     unsafe {
         heap.allocate(2, AllocationKind::Opaque, roots).unwrap();
     }
@@ -33,7 +35,10 @@ fn allocation_publishes_roots_only_when_collection_needs_them() {
 
     let mut live = retained as Word;
     let mut slots = [&mut live as *mut Word];
-    let roots = CountedRoots { calls: &calls, roots: Roots { stack: empty, slots: &mut slots } };
+    let roots = CountedRoots {
+        calls: &calls,
+        roots: Roots { stack: empty, frame: empty, slots: &mut slots },
+    };
     unsafe {
         heap.allocate(2, AllocationKind::Opaque, roots).unwrap();
     }
@@ -41,13 +46,19 @@ fn allocation_publishes_roots_only_when_collection_needs_them() {
     assert_ne!(live, retained as Word);
     assert_eq!(unsafe { (live as *const Word).read() }, 71);
 
-    let roots = CountedRoots { calls: &calls, roots: Roots { stack: empty, slots: &mut slots } };
+    let roots = CountedRoots {
+        calls: &calls,
+        roots: Roots { stack: empty, frame: empty, slots: &mut slots },
+    };
     let error = unsafe { heap.allocate(usize::MAX, AllocationKind::Opaque, roots) }.unwrap_err();
     assert_eq!(error.requested_words, usize::MAX);
     assert_eq!(calls.get(), 1);
 
     // One live 32-byte cell leaves insufficient space for this 40-byte request.
-    let roots = CountedRoots { calls: &calls, roots: Roots { stack: empty, slots: &mut slots } };
+    let roots = CountedRoots {
+        calls: &calls,
+        roots: Roots { stack: empty, frame: empty, slots: &mut slots },
+    };
     let error = unsafe { heap.allocate(3, AllocationKind::Opaque, roots) }.unwrap_err();
     assert_eq!(error.requested_words, 3);
     assert_eq!(error.live_bytes, 32);
@@ -74,15 +85,15 @@ impl EnvironmentCollection {
         let owner = Layout { id: LayoutId(0), words: 2 };
         let callee = Layout { id: LayoutId(1), words: 1 };
         let base = frames.enter(owner).unwrap();
-        let empty = RootRange { start: std::ptr::null_mut(), end: std::ptr::null_mut() };
-        let roots = Roots { stack: empty, slots: &mut [] };
+        let empty = RootRange::EMPTY;
+        let roots = Roots { stack: empty, frame: empty, slots: &mut [] };
         let retained = unsafe { heap.allocate(1, AllocationKind::Scanned, roots).unwrap() };
         unsafe {
             retained.cast::<Word>().write(71);
             base.write(retained as Word);
         }
         let mut slots = frames.roots(owner.id, &[0]).unwrap();
-        let roots = Roots { stack: empty, slots: &mut slots };
+        let roots = Roots { stack: empty, frame: empty, slots: &mut slots };
         let dead = unsafe { heap.allocate(5, AllocationKind::Opaque, roots).unwrap() };
         unsafe {
             base.add(1).write(dead as Word);
@@ -91,7 +102,7 @@ impl EnvironmentCollection {
         let inner = frames.suspend(owner.id, &[0]).unwrap();
         frames.enter(callee).unwrap();
         let mut slots = frames.roots(callee.id, &[]).unwrap();
-        let roots = Roots { stack: empty, slots: &mut slots };
+        let roots = Roots { stack: empty, frame: empty, slots: &mut slots };
         // This allocation fits after copying the one live object, but fails if the
         // dead pointer in the same retained frame is also treated as a root.
         unsafe {
@@ -105,7 +116,7 @@ impl EnvironmentCollection {
         // A collecting allocation can fail after roots moved. Active and pending
         // copies must both be repaired, and the outer suspension must remain resumable.
         let mut slots = frames.roots(owner.id, &[0]).unwrap();
-        let roots = Roots { stack: empty, slots: &mut slots };
+        let roots = Roots { stack: empty, frame: empty, slots: &mut slots };
         let error = unsafe { heap.allocate(13, AllocationKind::Opaque, roots) }.unwrap_err();
         assert_eq!(error.live_bytes, 24);
         let restored = frames.resume(owner.id, outer).unwrap();

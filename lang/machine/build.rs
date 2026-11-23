@@ -52,7 +52,7 @@ impl ModelSources {
         let export_entry = format!("{entry}_library");
         let mut contract = format!(
             "pub const ENTRY_SYMBOL: &str = {entry:?};\n\
-             #[cfg(feature = \"runtime\")]\nunsafe extern \"sysv64\" {{\n\
+             #[cfg(all(feature = \"runtime\", target_arch = \"x86_64\"))]\nunsafe extern \"sysv64\" {{\n\
              #[link_name = {:?}]\n\
              pub fn entry() -> Word;\n}}\n",
             format!("\x01{entry}"),
@@ -64,6 +64,16 @@ impl ModelSources {
             format!("\x01{export_entry}"),
         ));
         fs::write(output.join("contract.rs"), contract).expect("write model contract identity");
+
+        let clif_entry = format!("zydeco_clif_entry_{fingerprint:032x}");
+        let clif_contract = format!(
+            "pub const CLIF_ENTRY_SYMBOL: &str = {clif_entry:?};\n\
+             #[cfg(feature = \"runtime\")]\nunsafe extern \"C\" {{\n\
+             #[link_name = {clif_entry:?}]\n\
+             pub fn clif_entry(vmctx: *mut ClifVmCtxHeader);\n}}\n",
+        );
+        fs::write(output.join("clif_contract.rs"), clif_contract)
+            .expect("write cranelift contract identity");
     }
 }
 

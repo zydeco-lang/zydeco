@@ -1,0 +1,32 @@
+[package]
+name = "zydeco-cranelift"
+version = { workspace = true }
+rust-version = { workspace = true }
+edition = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+readme = { workspace = true }
+description = "Cranelift native backend for Zydeco (aarch64 and x86_64)"
+
+[dependencies]
+zydeco-foundation = { workspace = true }
+zydeco-abi = { workspace = true }
+zydeco-machine = { workspace = true }
+zydeco-syntax = { workspace = true }
+zydeco-stackir = { workspace = true }
+thiserror = { workspace = true }
+cranelift-codegen = { workspace = true }
+cranelift-frontend = { workspace = true }
+cranelift-module = { workspace = true }
+cranelift-object = { workspace = true }
+target-lexicon = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+zydeco-ir = { workspace = true }
+zydeco-session = { workspace = true }
+zydeco-statics = { workspace = true }
+zydeco-surface = { workspace = true }
+
+[lints]
+workspace = true

@@ -191,8 +191,13 @@ pub struct RootRange {
     pub end: *mut Word,
 }
 
+impl RootRange {
+    pub const EMPTY: Self = Self { start: ptr::null_mut(), end: ptr::null_mut() };
+}
+
 pub struct Roots<'a> {
     pub stack: RootRange,
+    pub frame: RootRange,
     pub slots: &'a mut [*mut Word],
 }
 
@@ -217,6 +222,7 @@ pub struct CheneyHeap {
     next_to_capacity: usize,
     active: usize,
     used: usize,
+    indexed_used: usize,
     collections: usize,
 }
 
@@ -248,6 +254,7 @@ impl CheneyHeap {
             next_to_capacity: initial_bytes,
             active: 0,
             used: 0,
+            indexed_used: 0,
             collections: 0,
         }
     }
@@ -267,10 +274,49 @@ impl CheneyHeap {
         self.collections
     }
 
+    /// Current `[ptr, limit)` bump-allocation window in the active semispace.
+    pub fn bump_bounds(&mut self) -> (*mut u8, *mut u8) {
+        let cap = self.capacity_bytes();
+        let base = self.active_base();
+        unsafe { (base.add(self.used), base.add(cap)) }
+    }
+
+    /// Commit an inline bump-allocation cursor inside the active semispace.
+    ///
+    /// # Safety
+    ///
+    /// Every block between the previous cursor and `alloc_ptr` must start with a valid
+    /// initialized `BlockHeader` covering contiguous bytes up to `alloc_ptr`.
+    pub unsafe fn sync_bump_ptr(&mut self, alloc_ptr: *mut u8) {
+        let base = self.active_base();
+        let offset = unsafe { alloc_ptr.offset_from(base) };
+        debug_assert!(offset >= 0, "bump pointer precedes active semispace");
+        let offset = offset as usize;
+        debug_assert!(offset >= self.used, "bump pointer moved backwards");
+        debug_assert!(offset <= self.capacity_bytes(), "bump pointer overflowed semispace");
+        debug_assert_eq!(offset % WORD_BYTES, 0, "bump pointer misaligned");
+        self.used = offset;
+    }
+
+    fn sync_index(&mut self, index: usize) {
+        let base = self.spaces[index].base();
+        let mut offset = self.indexed_used;
+        while offset < self.used {
+            let header = unsafe { base.add(offset).cast::<BlockHeader>().read() };
+            let cell_bytes = Self::cell_bytes(header.size_words)
+                .expect("inline-bumped block has an invalid size");
+            self.starts[index].record(offset, cell_bytes);
+            offset += cell_bytes;
+        }
+        debug_assert_eq!(offset, self.used);
+        self.indexed_used = offset;
+    }
+
     /// Reset cursor and live state for runtime instance reuse, shrinking oversized buffers.
     pub fn reset(&mut self) {
         self.active = 0;
         self.used = 0;
+        self.indexed_used = 0;
         self.collections = 0;
         self.next_to_capacity = self.initial_bytes;
         let shrink_limit = REUSE_SHRINK_THRESHOLD_BYTES.max(self.initial_bytes);
@@ -308,8 +354,12 @@ impl CheneyHeap {
         let base = unsafe { self.active_base().add(self.used) };
         unsafe { base.cast::<BlockHeader>().write(BlockHeader::new(size_words, tag)) };
         let payload = unsafe { base.add(HEADER_BYTES) };
+        if self.indexed_used < self.used {
+            self.sync_index(self.active);
+        }
         self.starts[self.active].record(self.used, cell_bytes);
         self.used += cell_bytes;
+        self.indexed_used = self.used;
         Ok(payload)
     }
 
@@ -390,6 +440,9 @@ impl CheneyHeap {
     /// Swap semispaces and copy the transitive closure of the roots.
     unsafe fn collect(&mut self, roots: &mut Roots<'_>) {
         let from_index = self.active;
+        if self.indexed_used < self.used {
+            self.sync_index(from_index);
+        }
         let to_index = 1 - from_index;
         let from_base = self.spaces[from_index].base();
         let to_base = self.spaces[to_index].base();
@@ -397,16 +450,20 @@ impl CheneyHeap {
         let to_cap = self.space_bytes[to_index];
         let mut to_used = 0;
 
-        unsafe {
-            self.forward_range(
-                roots.stack.start,
-                roots.stack.end,
-                from_base,
-                from_used,
-                to_base,
-                &mut to_used,
-                to_cap,
-            );
+        for range in [roots.stack, roots.frame] {
+            if !range.start.is_null() {
+                unsafe {
+                    self.forward_range(
+                        range.start,
+                        range.end,
+                        from_base,
+                        from_used,
+                        to_base,
+                        &mut to_used,
+                        to_cap,
+                    );
+                }
+            }
         }
         for root in roots.slots.iter_mut().filter(|root| !root.is_null()) {
             let value = unsafe { **root };
@@ -438,6 +495,7 @@ impl CheneyHeap {
 
         self.active = to_index;
         self.used = to_used;
+        self.indexed_used = to_used;
         self.collections += 1;
     }
 
@@ -501,7 +559,11 @@ mod tests {
 
         fn roots(&mut self) -> Roots<'_> {
             let start = self.words.as_mut_ptr();
-            Roots { stack: RootRange { start, end: unsafe { start.add(N) } }, slots: &mut [] }
+            Roots {
+                stack: RootRange { start, end: unsafe { start.add(N) } },
+                frame: RootRange::EMPTY,
+                slots: &mut [],
+            }
         }
 
         unsafe fn allocate(
@@ -822,8 +884,11 @@ mod tests {
         unsafe { write_words(garbage, &[immediate(1), immediate(2)]) };
         let mut host_slots = [ptr::addr_of_mut!(host_value)];
         let empty = ptr::null_mut();
-        let root_set =
-            Roots { stack: RootRange { start: empty, end: empty }, slots: &mut host_slots };
+        let root_set = Roots {
+            stack: RootRange { start: empty, end: empty },
+            frame: RootRange::EMPTY,
+            slots: &mut host_slots,
+        };
         let fresh = unsafe { heap.allocate(2, AllocationKind::Scanned, root_set) }
             .expect("collection succeeds");
         unsafe { write_words(fresh, &[immediate(3), immediate(4)]) };
@@ -906,5 +971,114 @@ mod tests {
         assert_eq!(heap.used_bytes(), 0);
         assert_eq!(heap.collections(), 0);
         assert_eq!(heap.space_bytes, [DEFAULT_INITIAL_SPACE_BYTES, DEFAULT_INITIAL_SPACE_BYTES]);
+    }
+
+    unsafe fn bump_inline(
+        heap: &mut CheneyHeap, bump_ptr: &mut *mut u8, limit: *mut u8, words: usize,
+        tag: AllocationKind,
+    ) -> Option<*mut u8> {
+        let cell_bytes = HEADER_BYTES + words * WORD_BYTES;
+        if unsafe { limit.offset_from(*bump_ptr) } < cell_bytes as isize {
+            return None;
+        }
+        let header = (*bump_ptr).cast::<BlockHeader>();
+        unsafe { header.write(BlockHeader::new(words, tag)) };
+        let payload = unsafe { (*bump_ptr).add(HEADER_BYTES) };
+        *bump_ptr = unsafe { (*bump_ptr).add(cell_bytes) };
+        let _ = heap;
+        Some(payload)
+    }
+
+    #[test]
+    fn inline_bump_allocations_sync_index_and_survive_collection_and_growth() {
+        let mut heap = CheneyHeap::with_limits(128, None);
+        let (mut bump_ptr, mut limit) = heap.bump_bounds();
+
+        let opaque =
+            unsafe { bump_inline(&mut heap, &mut bump_ptr, limit, 2, AllocationKind::Opaque) }
+                .unwrap();
+        unsafe { write_words(opaque, &[0xDEAD_BEEF_CAFE_0000, immediate(9)]) };
+        let pair =
+            unsafe { bump_inline(&mut heap, &mut bump_ptr, limit, 2, AllocationKind::Scanned) }
+                .unwrap();
+        unsafe { write_words(pair, &[opaque as Word, immediate(42)]) };
+        // Allocate an unrooted garbage block inline too.
+        let garbage =
+            unsafe { bump_inline(&mut heap, &mut bump_ptr, limit, 1, AllocationKind::Scanned) }
+                .unwrap();
+        unsafe { write_words(garbage, &[immediate(7)]) };
+
+        unsafe { heap.sync_bump_ptr(bump_ptr) };
+        let mut frame_roots = [unsafe { pair.add(WORD_BYTES) } as Word, opaque as Word];
+        let mut sps_roots = [pair as Word];
+        let fresh = unsafe {
+            heap.allocate(
+                8,
+                AllocationKind::Scanned,
+                Roots {
+                    stack: RootRange {
+                        start: sps_roots.as_mut_ptr(),
+                        end: sps_roots.as_mut_ptr().add(sps_roots.len()),
+                    },
+                    frame: RootRange {
+                        start: frame_roots.as_mut_ptr(),
+                        end: frame_roots.as_mut_ptr().add(frame_roots.len()),
+                    },
+                    slots: &mut [],
+                },
+            )
+        }
+        .unwrap();
+        unsafe { write_words(fresh, &[immediate(100); 8]) };
+        assert_eq!(heap.collections(), 2);
+        assert_eq!(heap.capacity_bytes(), 256);
+        let (_, new_limit) = heap.bump_bounds();
+        limit = new_limit;
+        assert!(!limit.is_null());
+
+        let moved_pair = sps_roots[0] as *const Word;
+        assert_ne!(moved_pair as usize, pair as usize);
+        assert_eq!(frame_roots[0], moved_pair as Word + WORD_BYTES);
+        assert_eq!(unsafe { moved_pair.add(1).read() }, immediate(42));
+        let moved_opaque = unsafe { moved_pair.read() } as *const Word;
+        assert_eq!(frame_roots[1], moved_opaque as Word);
+        assert_eq!(unsafe { moved_opaque.read() }, 0xDEAD_BEEF_CAFE_0000);
+        assert_eq!(unsafe { moved_opaque.add(1).read() }, immediate(9));
+    }
+
+    #[test]
+    fn mixed_inline_bump_and_slow_path_allocations_share_contiguous_index() {
+        let mut heap = CheneyHeap::with_limits(512, Some(512));
+        let (mut bump_ptr, limit) = heap.bump_bounds();
+        let a = unsafe { bump_inline(&mut heap, &mut bump_ptr, limit, 3, AllocationKind::Scanned) }
+            .unwrap();
+        unsafe { write_words(a, &[immediate(1), immediate(2), immediate(3)]) };
+        unsafe { heap.sync_bump_ptr(bump_ptr) };
+
+        let mut frame = [unsafe { a.add(2 * WORD_BYTES) } as Word];
+        let roots = Roots {
+            stack: RootRange::EMPTY,
+            frame: RootRange {
+                start: frame.as_mut_ptr(),
+                end: unsafe { frame.as_mut_ptr().add(1) },
+            },
+            slots: &mut [],
+        };
+        // Fits without collecting: exercises slow-path `allocate()` syncing prior inline blocks.
+        let b = unsafe { heap.allocate(2, AllocationKind::Opaque, roots) }.unwrap();
+        unsafe { write_words(b, &[1234, 5678]) };
+
+        let mut garbage_roots = [frame[0], b as Word];
+        let mut root_set = Roots {
+            stack: RootRange::EMPTY,
+            frame: RootRange {
+                start: garbage_roots.as_mut_ptr(),
+                end: unsafe { garbage_roots.as_mut_ptr().add(2) },
+            },
+            slots: &mut [],
+        };
+        unsafe { heap.collect(&mut root_set) };
+        assert_eq!(unsafe { (garbage_roots[0] as *const Word).read() }, immediate(3));
+        assert_eq!(unsafe { (garbage_roots[1] as *const Word).read() }, 1234);
     }
 }
