@@ -294,55 +294,79 @@ fn native_preparation_failure_does_not_execute_already_prepared_interpreter_prog
 fn build_execute_outside_exe_is_rejected_or_ignored_without_running() {
     let fixture = Fixture::new();
     fixture.write("main.zy", &Fixture::file_effect());
-    for (target, message) in [
-        ("zasm", "build --execute is not supported for zasm"),
-        ("wasm-sps", "build --execute is not supported for WebAssembly"),
-    ] {
+    for target in ["zasm", "asm"] {
+        let error = Cli::try_parse_from(["zydeco", "build", "main.zy", "-t", target])
+            .err()
+            .expect("retired native text targets must be rejected");
+        assert_eq!(error.kind(), ErrorKind::InvalidValue, "{target}");
+    }
+    {
         let output = fixture
-            .command(&["build", "main.zy", "-t", target, "--execute", "-b", "build"])
+            .command(&["build", "main.zy", "-t", "wasm-sps", "--execute", "-b", "build"])
             .output()
             .unwrap();
-        assert_eq!(output.status.code(), Some(1), "{target}");
-        assert!(output.stdout.is_empty(), "{target}: {}", String::from_utf8_lossy(&output.stdout));
+        assert_eq!(output.status.code(), Some(1), "wasm-sps");
+        assert!(output.stdout.is_empty(), "wasm-sps: {}", String::from_utf8_lossy(&output.stdout));
         let stderr = String::from_utf8_lossy(&output.stderr);
-        assert!(stderr.contains(message), "{target}: {stderr}");
-        assert!(!stderr.contains("panicked"), "{target}: {stderr}");
+        assert!(
+            stderr.contains("build --execute is not supported for WebAssembly"),
+            "wasm-sps: {stderr}"
+        );
+        assert!(!stderr.contains("panicked"), "wasm-sps: {stderr}");
     }
-    let none: &[&str] = &[];
-    for (target, architecture) in [("zir", none), ("asm", &["--target-arch", "x86-64"])] {
-        let output = fixture
-            .command(&["build", "main.zy", "-t", target, "--execute", "-b", "build"])
-            .args(architecture)
-            .output()
-            .unwrap();
-        assert!(!Fixture::stdout(&output, 0).is_empty(), "{target}");
-    }
+    let output = fixture
+        .command(&["build", "main.zy", "-t", "zir", "--execute", "-b", "build"])
+        .output()
+        .unwrap();
+    assert!(!Fixture::stdout(&output, 0).is_empty(), "zir");
     assert!(!fixture.directory.path().join("executed.marker").exists());
     assert!(!fixture.directory.path().join("build").exists());
 }
 
 #[test]
-fn native_targets_reject_a_non_amd64_architecture_before_compiling() {
+fn native_targets_accept_supported_architectures_and_reject_unknown_before_compiling() {
     let fixture = Fixture::new();
     fixture.write("main.zy", &Fixture::file_effect());
-    for target in ["asm", "exe", "object", "staticlib", "sharedlib"] {
-        let output = fixture
-            .command(&["build", "main.zy", "-t", target, "--target-arch", "aarch64", "-b", "build"])
-            .output()
-            .unwrap();
-        assert_eq!(output.status.code(), Some(1), "{target}");
-        assert!(output.stdout.is_empty(), "{target}: {}", String::from_utf8_lossy(&output.stdout));
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        assert!(stderr.contains("cannot target aarch64"), "{target}: {stderr}");
-        assert!(stderr.contains("--target-arch x86-64"), "{target}: {stderr}");
-        assert!(!stderr.contains("compiled C libraries"), "{target}: {stderr}");
-        assert!(!stderr.contains("panicked"), "{target}: {stderr}");
+    for target in ["exe", "object", "staticlib", "sharedlib"] {
+        let error = Cli::try_parse_from([
+            "zydeco",
+            "build",
+            "main.zy",
+            "-t",
+            target,
+            "--target-arch",
+            "riscv64",
+            "-b",
+            "build",
+        ])
+        .err()
+        .expect("unsupported target architecture must be rejected");
+        assert_eq!(error.kind(), ErrorKind::InvalidValue, "{target}");
     }
     assert!(!fixture.directory.path().join("build").exists());
-    // The accepted counterpart: every AMD64 spelling selects the backend.
-    for architecture in ["x86-64", "x86", "amd64"] {
+
+    let builtin = Path::new(env!("CARGO_MANIFEST_DIR")).join("../lib/std/builtin.zy");
+    let unit = format!(
+        "@[\n  package(library(zydeco), name(example/unit))\n]\nparam val (/Unit) : @(import({:?})) in\n( () : Unit )\n",
+        builtin
+    );
+    fixture.write("unit.zy", &unit);
+    let runtime = Path::new(env!("CARGO_MANIFEST_DIR")).join("../runtime");
+    for architecture in ["x86-64", "x86", "amd64", "aarch64", "arm64"] {
+        let build = format!("build-{architecture}");
         let output = fixture
-            .command(&["build", "main.zy", "-t", "asm", "--target-arch", architecture])
+            .command(&[
+                "build",
+                "unit.zy",
+                "-t",
+                "object",
+                "--target-arch",
+                architecture,
+                "-b",
+                &build,
+            ])
+            .arg("--runtime-dir")
+            .arg(&runtime)
             .output()
             .unwrap();
         assert!(!Fixture::stdout(&output, 0).is_empty(), "{architecture}");

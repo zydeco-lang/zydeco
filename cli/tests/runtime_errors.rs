@@ -38,10 +38,7 @@ impl RuntimeFixture {
         }
         command.arg("build").arg(&source).args(["--target", backend, "--build-dir"]).arg(&build);
         if backend == "exe" {
-            command
-                .args(["--target-arch", "x86-64", "--runtime-dir"])
-                .arg(self.workspace.join("runtime"))
-                .arg("--execute");
+            command.arg("--runtime-dir").arg(self.workspace.join("runtime")).arg("--execute");
             return command.output().unwrap();
         }
         let output = command.output().unwrap();
@@ -157,18 +154,20 @@ fn inline_arithmetic_executes_at_every_numeric_width() {
 }
 
 #[test]
-fn amd64_arithmetic_uses_machine_instructions_without_runtime_arithmetic_calls() {
-    use zydeco_cli::{CommandCompiler, TargetOs};
+fn native_arithmetic_lowers_to_primitives_without_runtime_arithmetic_calls() {
+    use zydeco_cli::{CommandCompiler, TargetArchitecture, TargetOs};
+    use zydeco_stackir::low::syntax::{Computation, ExternalFunction, Value};
+    use zydeco_syntax::PrimitiveOp;
 
     let fixture = RuntimeFixture::new();
-    for (ty, operation, instruction) in [
-        ("Int32", "add", "add rax, rcx"),
-        ("Int", "sub", "sub rax, rcx"),
-        ("UInt", "mul", "imul rax, rcx"),
-        ("Int", "div", "idiv rcx"),
-        ("UInt", "mod", "div rcx"),
-        ("Float32", "add", "addss xmm0, xmm1"),
-        ("Float64", "add", "addsd xmm0, xmm1"),
+    for (ty, operation) in [
+        ("Int32", "add"),
+        ("Int", "sub"),
+        ("UInt", "mul"),
+        ("Int", "div"),
+        ("UInt", "mod"),
+        ("Float32", "add"),
+        ("Float64", "add"),
     ] {
         let float = ty.starts_with("Float");
         let body = RuntimeFixture::arithmetic_case(
@@ -182,21 +181,38 @@ fn amd64_arithmetic_uses_machine_instructions_without_runtime_arithmetic_calls()
         let low = backend.render_sps_low();
         let host_call = format!("<extern:{}_{operation}/2>", ty.to_lowercase());
         assert!(!low.contains(&host_call), "{low}");
-        for target in [TargetOs::Linux, TargetOs::Macos] {
-            let assembly = backend.emit_amd64(target).assembly;
-            let count = assembly.lines().filter(|line| line.trim() == instruction).count();
-            assert_eq!(count, 1, "{ty}/{operation}: {assembly}");
-            let host_call = format!("call zydeco_{}_{operation}", ty.to_lowercase());
-            assert!(!assembly.contains(&host_call), "{assembly}");
-            let declaration = format!("extern zydeco_{}_{operation}", ty.to_lowercase());
-            assert!(!assembly.contains(&declaration), "{assembly}");
-            if ty == "Int32" {
-                let primitive = assembly.split("; primitive: ").nth(1).unwrap();
-                let primitive = primitive.split("push rax").next().unwrap();
-                assert!(
-                    !primitive.contains("call "),
-                    "immediate arithmetic must not allocate or call:\n{primitive}"
-                );
+        let arena = &backend.sps_low.arena().inner;
+        assert!(
+            arena.values.iter().any(|(_, value)| matches!(value, Value::Primitive(_))),
+            "{ty}/{operation}: {low}"
+        );
+        assert!(
+            arena.compus.iter().all(|(_, compu)| {
+                !matches!(
+                    compu,
+                    Computation::ExternCall(call)
+                        if matches!(
+                            call.function,
+                            ExternalFunction::Host(role) if PrimitiveOp::from_builtin(role).is_some()
+                        )
+                )
+            }),
+            "{ty}/{operation}: {low}"
+        );
+        for arch in [TargetArchitecture::X86_64, TargetArchitecture::Aarch64] {
+            for target in [TargetOs::Linux, TargetOs::Macos] {
+                let object = backend.emit_native(arch, target).unwrap().object;
+                match target {
+                    | TargetOs::Linux => {
+                        assert!(object.starts_with(b"\x7fELF"), "{arch}/{target:?}")
+                    }
+                    | TargetOs::Macos => {
+                        assert!(
+                            object.starts_with(&0xFEED_FACF_u32.to_le_bytes()),
+                            "{arch}/{target:?}"
+                        )
+                    }
+                }
             }
         }
     }

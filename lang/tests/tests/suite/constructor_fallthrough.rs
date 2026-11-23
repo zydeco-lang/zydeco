@@ -11,9 +11,9 @@ fn unmatched_tags_share_the_remaining_pattern_rows() {
     let source = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../lib/tests/core/constructor-fallback-sharing.zy");
     let backend = zydeco_cli::CommandCompiler::default().lower(&source).unwrap();
-    let blocks = backend.assembly().arena().programs.len();
+    let compus = backend.sps_low.arena().inner.compus.len();
     assert!(
-        blocks < 2000,
-        "constructor fallthrough duplicated the remaining rows: {blocks} blocks"
+        compus < 2000,
+        "constructor fallthrough duplicated the remaining rows: {compus} computations"
     );
 }

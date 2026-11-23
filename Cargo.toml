@@ -13,8 +13,6 @@ members = [
     "lang/ir",
     "lang/dynamics",
     "lang/stackir",
-    "lang/assembly",
-    "lang/amd64",
     "lang/cranelift",
     "lang/wasm-common",
     "lang/wasm-sps",
@@ -55,10 +53,9 @@ zydeco-fmt = { path = "lang/fmt" }
 zydeco-statics = { path = "lang/statics" }
 zydeco-ir = { path = "lang/ir" }
 zydeco-dynamics = { path = "lang/dynamics" }
-zydeco-amd64 = { path = "lang/amd64" }
+zydeco-cranelift = { path = "lang/cranelift" }
 zydeco-wasm-common = { path = "lang/wasm-common" }
 zydeco-wasm-sps = { path = "lang/wasm-sps" }
-zydeco-assembly = { path = "lang/assembly" }
 zydeco-stackir = { path = "lang/stackir" }
 zydeco-session = { path = "lang/session" }
 zydeco-tui = { path = "tui" }

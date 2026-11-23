@@ -110,8 +110,8 @@ _arguments "${_arguments_options[@]}" : \
 '*--package=[Select declared packages by name; repeat for multiple packages]:NAME:_default' \
 '--target-os=[Target OS (defaults to host OS)]:TARGET_OS:(linux macos)' \
 '--target-arch=[Target architecture (defaults to host architecture)]:TARGET_ARCH:(x86-64 aarch64)' \
-'-t+[Target backend]:TARGET:(zir zasm asm object staticlib sharedlib wasm-sps exe)' \
-'--target=[Target backend]:TARGET:(zir zasm asm object staticlib sharedlib wasm-sps exe)' \
+'-t+[Target backend]:TARGET:(zir object staticlib sharedlib wasm-sps exe)' \
+'--target=[Target backend]:TARGET:(zir object staticlib sharedlib wasm-sps exe)' \
 '--representation=[Local representation policy for native, ZASM, and Wasm targets]:REPRESENTATION:(boxed direct local shared)' \
 '--sps-passes=[SPS passes\: default, none, or a comma-separated list; order and duplicates are preserved]:PLAN:_default' \
 '--sps-scheme=[Where SPS lowering names the current stack]:SCHEME:((dup\:"Copy the consumer stack into every arm of a branch"

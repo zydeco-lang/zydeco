@@ -69,8 +69,6 @@ macos\t''"
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l target-arch -d 'Target architecture (defaults to host architecture)' -r -f -a "x86-64\t''
 aarch64\t''"
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s t -l target -d 'Target backend' -r -f -a "zir\t''
-zasm\t''
-asm\t''
 object\t''
 staticlib\t''
 sharedlib\t''

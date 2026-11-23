@@ -5,8 +5,6 @@ use zydeco_surface::metadata::{PackagePath, SourceReference};
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
 pub enum BuildTarget {
     Zir,
-    Zasm,
-    Asm,
     Object,
     Staticlib,
     Sharedlib,
@@ -16,11 +14,11 @@ pub enum BuildTarget {
 }
 
 impl BuildTarget {
-    /// Whether the AMD64 backend produces this target.
+    /// Whether the native Cranelift backend produces this target.
     pub fn is_native(self) -> bool {
         match self {
-            | Self::Asm | Self::Object | Self::Staticlib | Self::Sharedlib | Self::Exe => true,
-            | Self::Zir | Self::Zasm | Self::WasmSps => false,
+            | Self::Object | Self::Staticlib | Self::Sharedlib | Self::Exe => true,
+            | Self::Zir | Self::WasmSps => false,
         }
     }
 }

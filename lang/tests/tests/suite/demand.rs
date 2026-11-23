@@ -1,9 +1,7 @@
 use std::path::PathBuf;
-use zydeco_assembly::syntax::{
-    BuiltinValueRole, Extern, Instruction, IntegerArithmetic, IntegerType, PrimitiveOp, Program,
-    Terminator, scalar::ScalarStep,
-};
 use zydeco_cli::CommandCompiler;
+use zydeco_stackir::low::syntax::{Computation, ExternalFunction, Value};
+use zydeco_syntax::{BuiltinValueRole, IntegerArithmetic, IntegerType, PrimitiveOp};
 use zydeco_tests::utils::{ExecutionTarget, SourceCase, SourceProgram};
 
 #[test]
@@ -30,36 +28,36 @@ fn fixture(relative: &str) -> PathBuf {
 }
 
 /// Dead top-level definitions, dead recursive definitions, and undemanded host
-/// operations are absent from the emitted assembly, while the operations the
-/// program calls survive as scalar arithmetic or external calls.
+/// operations are absent from the lowered SPSLow IR, while the operations the
+/// program calls survive as primitives or external calls.
 #[test]
 fn dead_definitions_and_undemanded_operations_are_not_emitted() {
     let backend = CommandCompiler::default()
         .lower(&fixture("tests/demand/prune.zy"))
         .expect("demand fixture must lower");
-    let programs = &backend.assembly().arena().programs;
-    let arithmetic = programs
+    let arena = &backend.sps_low.arena().inner;
+    let arithmetic = arena
+        .values
         .iter()
-        .filter_map(|(_, program)| match program {
-            | Program::Instruction(Instruction::Scalar(scalar), _) => Some(scalar.region()),
-            | _ => None,
-        })
-        .flat_map(|region| &region.steps)
-        .filter_map(|step| match step {
-            | ScalarStep::Arithmetic { operation, .. } => Some(*operation),
+        .filter_map(|(_, value)| match value {
+            | Value::Primitive(primitive) => Some(primitive.operation),
             | _ => None,
         })
         .collect::<Vec<_>>();
     assert_eq!(
         arithmetic,
         [PrimitiveOp::Integer(IntegerType::Int, IntegerArithmetic::Add)],
-        "only the called addition must survive as inline arithmetic:\n{}",
-        backend.render_assembly()
+        "only the called addition must survive as a primitive:\n{}",
+        backend.render_sps_low()
     );
-    let host_calls = programs
+    let host_calls = arena
+        .compus
         .iter()
-        .filter_map(|(_, program)| match program {
-            | Program::Terminator(Terminator::Extern(Extern::Host { role, .. })) => Some(*role),
+        .filter_map(|(_, compu)| match compu {
+            | Computation::ExternCall(call) => match call.function {
+                | ExternalFunction::Host(role) => Some(role),
+                | _ => None,
+            },
             | _ => None,
         })
         .collect::<Vec<_>>();
@@ -67,7 +65,7 @@ fn dead_definitions_and_undemanded_operations_are_not_emitted() {
         host_calls,
         [BuiltinValueRole::Exit],
         "only the called exit must survive as a host operation:\n{}",
-        backend.render_assembly()
+        backend.render_sps_low()
     );
 }
 
@@ -77,6 +75,11 @@ mod prune_program {
     #[test]
     fn interpreter() {
         SourceProgram::setup("tests/demand/prune.zy").test(ExecutionTarget::Interpreter);
+    }
+
+    #[test]
+    fn exe() {
+        SourceProgram::setup("tests/demand/prune.zy").test(ExecutionTarget::Exe);
     }
 
     #[test]

@@ -1,15 +1,14 @@
-//! The AMD64 scheme: retained activation frames, a machine control stack, and
-//! heap captures for closures. Layouts use explicit 64-bit words when inspected by a compiler
-//! on another host. The stub instantiates the same records with native words.
+//! Portable 64-bit native value and heap allocation tags.
 
 pub use crate::closure::{Closure, ClosureField};
 use crate::word::RuntimeWord;
-use core::mem::{offset_of, size_of};
+#[cfg(feature = "runtime")]
+use core::mem::offset_of;
+use core::mem::size_of;
 
 pub type Word = usize;
 pub const WORD_BYTES: usize = size_of::<u64>();
 pub const IMMEDIATE_TAG: Word = RuntimeWord::TAG as Word;
-pub const ENVIRONMENT_BYTES: usize = 1024 * 1024;
 
 /// Collector policy for an allocated payload. The low metadata bit is reserved
 /// for forwarding; only scanned blocks contain values to trace.
@@ -18,140 +17,6 @@ pub const ENVIRONMENT_BYTES: usize = 1024 * 1024;
 pub enum AllocationKind {
     Scanned = 0,
     Opaque = 1 << 1,
-}
-
-impl AllocationKind {
-    pub const fn symbol(self) -> &'static str {
-        match self {
-            | Self::Scanned => "zydeco_alloc_scanned",
-            | Self::Opaque => "zydeco_alloc_opaque",
-        }
-    }
-}
-
-/// A host result consumed immediately by an assembly resumption bridge.
-/// This is distinct from a source-language `Ret` continuation on the control stack.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(C)]
-pub struct HostTransfer<W> {
-    pub resume: W,
-    pub closure: W,
-    pub first: W,
-    pub second: W,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TransferField {
-    Resume,
-    Closure,
-    First,
-    Second,
-}
-
-impl TransferField {
-    pub const fn offset(self) -> usize {
-        match self {
-            | Self::Resume => offset_of!(HostTransfer<u64>, resume),
-            | Self::Closure => offset_of!(HostTransfer<u64>, closure),
-            | Self::First => offset_of!(HostTransfer<u64>, first),
-            | Self::Second => offset_of!(HostTransfer<u64>, second),
-        }
-    }
-}
-
-// One catalog supplies both the emitter's argument order and the stub's symbols.
-macro_rules! resume_bridges {
-    ($($arity:ident => $symbol:ident [$($field:ident),*]),* $(,)?) => {
-        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-        pub enum ResumeArity { $($arity),* }
-
-        impl ResumeArity {
-            pub const ALL: &[Self] = &[$(Self::$arity),*];
-
-            pub const fn symbol(self) -> &'static str {
-                match self { $(Self::$arity => stringify!($symbol)),* }
-            }
-
-            /// Arguments in the order that resumed Zydeco code consumes them.
-            /// The closure environment precedes these arguments on the stack.
-            pub const fn arguments(self) -> &'static [TransferField] {
-                match self { $(Self::$arity => &[$(TransferField::$field),*]),* }
-            }
-
-            #[cfg(all(feature = "runtime", target_arch = "x86_64"))]
-            fn address(self) -> Word {
-                match self { $(Self::$arity => $symbol as *const () as Word),* }
-            }
-        }
-
-        #[cfg(all(feature = "runtime", target_arch = "x86_64"))]
-        unsafe extern "sysv64" {
-            $(#[link_name = concat!("\x01", stringify!($symbol))] fn $symbol();)*
-        }
-    };
-}
-
-resume_bridges! {
-    Zero => zydeco_resume_0 [],
-    One => zydeco_resume_1 [First],
-    Two => zydeco_resume_2 [First, Second],
-}
-
-// Runtime support owns these bridges once per link image. Unit objects only contain their
-// source code and C adapters, so linking two units never duplicates global helper definitions.
-#[cfg(all(feature = "runtime", target_arch = "x86_64"))]
-mod bridges {
-    #[unsafe(naked)]
-    #[unsafe(export_name = "\x01zydeco_resume_0")]
-    unsafe extern "sysv64" fn zero() {
-        core::arch::naked_asm!("mov rax, [rdi + {closure}]", "mov rsi, [rax + {environment}]", "mov rax, [rax + {code}]", "push rsi", "jmp rax", closure = const super::TransferField::Closure.offset(), environment = const super::ClosureField::Environment.offset(), code = const super::ClosureField::Code.offset());
-    }
-    #[unsafe(naked)]
-    #[unsafe(export_name = "\x01zydeco_resume_1")]
-    unsafe extern "sysv64" fn one() {
-        core::arch::naked_asm!("mov rax, [rdi + {closure}]", "mov rsi, [rax + {environment}]", "mov rax, [rax + {code}]", "push qword ptr [rdi + {first}]", "push rsi", "jmp rax", first = const super::TransferField::First.offset(), closure = const super::TransferField::Closure.offset(), environment = const super::ClosureField::Environment.offset(), code = const super::ClosureField::Code.offset());
-    }
-    #[unsafe(naked)]
-    #[unsafe(export_name = "\x01zydeco_resume_2")]
-    unsafe extern "sysv64" fn two() {
-        core::arch::naked_asm!("mov rax, [rdi + {closure}]", "mov rsi, [rax + {environment}]", "mov rax, [rax + {code}]", "push qword ptr [rdi + {second}]", "push qword ptr [rdi + {first}]", "push rsi", "jmp rax", second = const super::TransferField::Second.offset(), first = const super::TransferField::First.offset(), closure = const super::TransferField::Closure.offset(), environment = const super::ClosureField::Environment.offset(), code = const super::ClosureField::Code.offset());
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum HostArguments<W> {
-    None,
-    One(W),
-    Two(W, W),
-}
-
-impl<W> HostArguments<W> {
-    pub const fn arity(&self) -> ResumeArity {
-        match self {
-            | Self::None => ResumeArity::Zero,
-            | Self::One(_) => ResumeArity::One,
-            | Self::Two(_, _) => ResumeArity::Two,
-        }
-    }
-}
-
-impl<W: Default> HostTransfer<W> {
-    pub fn with_arguments(resume: W, closure: W, arguments: HostArguments<W>) -> Self {
-        let (first, second) = match arguments {
-            | HostArguments::None => (W::default(), W::default()),
-            | HostArguments::One(first) => (first, W::default()),
-            | HostArguments::Two(first, second) => (first, second),
-        };
-        Self { resume, closure, first, second }
-    }
-}
-
-#[cfg(all(feature = "runtime", target_arch = "x86_64"))]
-impl HostTransfer<Word> {
-    pub fn for_closure(closure: Word, arguments: HostArguments<Word>) -> Self {
-        let resume = arguments.arity().address();
-        Self::with_arguments(resume, closure, arguments)
-    }
 }
 
 /// Native-sized access to the common scalar encoding.
@@ -188,35 +53,6 @@ impl Immediate {
 const _: () = {
     assert!(size_of::<Word>() == WORD_BYTES);
     assert!(size_of::<Closure<Word>>() == size_of::<Closure<u64>>());
-    assert!(size_of::<HostTransfer<Word>>() == size_of::<HostTransfer<u64>>());
-    assert!(core::mem::align_of::<HostTransfer<Word>>() == WORD_BYTES);
     assert!(offset_of!(Closure<Word>, environment) == ClosureField::Environment.offset());
     assert!(offset_of!(Closure<Word>, code) == ClosureField::Code.offset());
-    assert!(offset_of!(HostTransfer<Word>, resume) == TransferField::Resume.offset());
-    assert!(offset_of!(HostTransfer<Word>, closure) == TransferField::Closure.offset());
-    assert!(offset_of!(HostTransfer<Word>, first) == TransferField::First.offset());
-    assert!(offset_of!(HostTransfer<Word>, second) == TransferField::Second.offset());
 };
-
-// The entry symbol includes the model source identity, making stale pairs fail to link.
-include!(concat!(env!("OUT_DIR"), "/contract.rs"));
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn transfers_preserve_arguments_and_clear_unused_slots() {
-        for (arguments, arity, payload) in [
-            (HostArguments::None, ResumeArity::Zero, [0, 0]),
-            (HostArguments::One(11), ResumeArity::One, [11, 0]),
-            (HostArguments::Two(11, 23), ResumeArity::Two, [11, 23]),
-        ] {
-            assert_eq!(arguments.arity(), arity);
-            let record = HostTransfer::with_arguments(8_u64, 16, arguments);
-            assert_eq!(record.resume, 8);
-            assert_eq!(record.closure, 16);
-            assert_eq!([record.first, record.second], payload);
-        }
-    }
-}

@@ -179,7 +179,7 @@ fn interpreter() {
 }
 
 #[test]
-fn amd64() {
+fn exe() {
     Fixture::behavior(ExecutionTarget::Exe);
     Fixture::rejected_inputs(ExecutionTarget::Exe);
 }

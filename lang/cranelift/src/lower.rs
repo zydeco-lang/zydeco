@@ -476,41 +476,39 @@ impl<'a, 'b> CaseEmitter<'a, 'b> {
     fn emit_open_closure(
         &mut self, package: ValueId, environment: VPatId, code: VPatId,
     ) -> Result<(), EmitError> {
-        if self.plan.unboxing.values.contains(package) {
-            match self.arena.inner.values[&package].clone() {
-                | Value::Ext(ValueExt::ClosurePackage(sps::ClosurePackage {
-                    environment: env_val,
-                    code: code_val,
-                })) => {
-                    let temp_base = self.temp_vars.len();
-                    let env_eval = self.emit_value(env_val)?;
-                    let env_vars: Vec<Variable> = match &env_eval {
-                        | EvalValue::Word(w) => vec![self.push_temp(*w)],
-                        | EvalValue::Unboxed(ws) => ws.iter().map(|&w| self.push_temp(w)).collect(),
-                    };
-                    let code_word = self.emit_word(code_val)?;
-                    let reloaded: Vec<ClifValue> =
-                        env_vars.into_iter().map(|v| self.builder.use_var(v)).collect();
-                    self.temp_vars.truncate(temp_base);
-                    let env_reloaded = match env_eval {
-                        | EvalValue::Word(_) => EvalValue::Word(reloaded[0]),
-                        | EvalValue::Unboxed(_) => EvalValue::Unboxed(reloaded),
-                    };
-                    self.bind_pattern(environment, env_reloaded)?;
-                    self.bind_pattern(code, EvalValue::Word(code_word))?;
-                    return Ok(());
-                }
-                | Value::Var(def) if self.plan.unboxing.unboxed_vars.contains_key(def) => {
-                    let vars =
-                        self.def_vars.get(&def).ok_or(EmitError::MissingVariable(def))?.clone();
-                    let env_word = self.builder.use_var(vars[0]);
-                    let code_word = self.builder.use_var(vars[1]);
-                    self.bind_pattern(environment, EvalValue::Word(env_word))?;
-                    self.bind_pattern(code, EvalValue::Word(code_word))?;
-                    return Ok(());
-                }
-                | _ => {}
-            }
+        if let Value::Var(def) = self.arena.inner.values[&package]
+            && self.plan.unboxing.unboxed_vars.contains_key(def)
+        {
+            let vars = self.def_vars.get(&def).ok_or(EmitError::MissingVariable(def))?.clone();
+            let env_word = self.builder.use_var(vars[0]);
+            let code_word = self.builder.use_var(vars[1]);
+            self.bind_pattern(environment, EvalValue::Word(env_word))?;
+            self.bind_pattern(code, EvalValue::Word(code_word))?;
+            return Ok(());
+        }
+        if self.plan.unboxing.values.contains(package)
+            && let Value::Ext(ValueExt::ClosurePackage(sps::ClosurePackage {
+                environment: env_val,
+                code: code_val,
+            })) = self.arena.inner.values[&package].clone()
+        {
+            let temp_base = self.temp_vars.len();
+            let env_eval = self.emit_value(env_val)?;
+            let env_vars: Vec<Variable> = match &env_eval {
+                | EvalValue::Word(w) => vec![self.push_temp(*w)],
+                | EvalValue::Unboxed(ws) => ws.iter().map(|&w| self.push_temp(w)).collect(),
+            };
+            let code_word = self.emit_word(code_val)?;
+            let reloaded: Vec<ClifValue> =
+                env_vars.into_iter().map(|v| self.builder.use_var(v)).collect();
+            self.temp_vars.truncate(temp_base);
+            let env_reloaded = match env_eval {
+                | EvalValue::Word(_) => EvalValue::Word(reloaded[0]),
+                | EvalValue::Unboxed(_) => EvalValue::Unboxed(reloaded),
+            };
+            self.bind_pattern(environment, env_reloaded)?;
+            self.bind_pattern(code, EvalValue::Word(code_word))?;
+            return Ok(());
         }
         let pkg = self.emit_word(package)?;
         let env_word = self.builder.ins().load(
@@ -886,7 +884,7 @@ impl<'a, 'b> CaseEmitter<'a, 'b> {
                     return Ok(EvalValue::Word(self.builder.ins().func_addr(types::I64, fref)));
                 }
                 let vars = self.def_vars.get(&def).ok_or(EmitError::MissingVariable(def))?.clone();
-                if unboxed && self.plan.unboxing.unboxed_vars.contains_key(def) {
+                if self.plan.unboxing.unboxed_vars.contains_key(def) {
                     let words = vars.into_iter().map(|v| self.builder.use_var(v)).collect();
                     Ok(EvalValue::Unboxed(words))
                 } else {
@@ -977,7 +975,7 @@ impl<'a, 'b> CaseEmitter<'a, 'b> {
             let w = self.emit_word(item)?;
             vars.push(self.push_temp(w));
         }
-        if unboxed && explicit == arity {
+        if unboxed {
             let words = vars.into_iter().map(|v| self.builder.use_var(v)).collect();
             self.temp_vars.truncate(temp_base);
             return Ok(EvalValue::Unboxed(words));

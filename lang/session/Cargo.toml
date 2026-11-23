@@ -32,8 +32,7 @@ doctest = false
 tempfile = { workspace = true }
 zydeco-dynamics = { workspace = true }
 zydeco-stackir = { workspace = true }
-zydeco-assembly = { workspace = true }
-zydeco-amd64 = { workspace = true }
+zydeco-cranelift = { workspace = true }
 
 [lints]
 workspace = true

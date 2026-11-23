@@ -171,15 +171,12 @@ impl<'a> ExecutionRunner<'a> {
                 return Err(crate::library::LibraryError::Target.into());
             }
             let interpreter = *target == ExecutionTarget::Interpreter;
-            let architecture = if interpreter {
-                TargetArchitecture::host().map_err(NativeError::UnsupportedHostArchitecture)?
-            } else {
-                TargetArchitecture::X86_64
-            };
+            let architecture =
+                TargetArchitecture::host().map_err(NativeError::UnsupportedHostArchitecture)?;
             let platform = crate::library::LibraryPlatform::for_target(
                 architecture,
                 TargetOs::host().map_err(NativeError::UnsupportedHostOperatingSystem)?,
-            )?;
+            );
             let runtime = if interpreter {
                 None
             } else {
@@ -238,18 +235,20 @@ impl<'a> ExecutionRunner<'a> {
                 let command = match target {
                     | ExecutionTarget::Interpreter => unreachable!(),
                     | ExecutionTarget::Exe => {
+                        let architecture = TargetArchitecture::host()
+                            .map_err(NativeError::UnsupportedHostArchitecture)?;
                         let operating_system = TargetOs::host()
                             .map_err(NativeError::UnsupportedHostOperatingSystem)?;
                         let options = BuildOptions::new(
                             directory.path().to_owned(),
                             self.runtime_dir.clone(),
-                            TargetArchitecture::X86_64,
+                            architecture,
                             operating_system,
                         );
-                        let native = backend.emit_amd64(operating_system);
-                        let executable = options.link_amd64_resolved(
+                        let native = backend.emit_native(architecture, operating_system)?;
+                        let executable = options.link_native_resolved(
                             "program",
-                            &native.assembly,
+                            &native.object,
                             &native.foreign_libraries,
                             &self.libraries,
                         )?;

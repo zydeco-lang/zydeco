@@ -20,7 +20,7 @@ pub use crate::{
         BuildTarget, Cli, Commands, ExecutionOptions, ExecutionTarget, RepresentationChoice,
         SourceSelection, SpsSchemeChoice, TargetArchitecture, TargetOs, TestTarget,
     },
-    compile::{Amd64Artifact, BackendProgram, CommandCompiler, CompileError, TestInteraction},
+    compile::{BackendProgram, CommandCompiler, CompileError, NativeArtifact, TestInteraction},
     diagnostics::DiagnosticRenderer,
     execution::{ExecutionError, ExecutionRunner, PreparedExecution},
     format::{SourceFormatError, SourceFormatOutcome, SourceFormatter},

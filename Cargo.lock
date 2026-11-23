@@ -2800,35 +2800,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zydeco-amd64"
-version = "0.3.0"
-dependencies = [
- "derive_more",
- "zydeco-abi",
- "zydeco-assembly",
- "zydeco-foundation",
- "zydeco-machine",
- "zydeco-stackir",
- "zydeco-syntax",
-]
-
-[[package]]
-name = "zydeco-assembly"
-version = "0.3.0"
-dependencies = [
- "derive_more",
- "pretty",
- "rustc-hash",
- "thiserror",
- "zydeco-abi",
- "zydeco-derive",
- "zydeco-foundation",
- "zydeco-machine",
- "zydeco-stackir",
- "zydeco-syntax",
-]
-
-[[package]]
 name = "zydeco-cli"
 version = "0.3.0"
 dependencies = [
@@ -2843,8 +2814,7 @@ dependencies = [
  "toml_edit",
  "wasmparser",
  "zydeco-abi",
- "zydeco-amd64",
- "zydeco-assembly",
+ "zydeco-cranelift",
  "zydeco-dynamics",
  "zydeco-fmt",
  "zydeco-foundation",
@@ -2974,8 +2944,7 @@ dependencies = [
  "strum",
  "tempfile",
  "thiserror",
- "zydeco-amd64",
- "zydeco-assembly",
+ "zydeco-cranelift",
  "zydeco-dynamics",
  "zydeco-foundation",
  "zydeco-ir",
@@ -3070,8 +3039,8 @@ dependencies = [
  "tempfile",
  "thiserror",
  "walkdir",
- "zydeco-assembly",
  "zydeco-cli",
+ "zydeco-cranelift",
  "zydeco-host",
  "zydeco-ir",
  "zydeco-machine",

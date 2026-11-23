@@ -2,7 +2,7 @@ use std::{
     path::PathBuf,
     process::{Command, Output},
 };
-use zydeco_cli::{CommandCompiler, SpsPlan, TargetOs};
+use zydeco_cli::{CommandCompiler, SpsPlan, TargetArchitecture, TargetOs};
 
 struct Fixture {
     directory: tempfile::TempDir,
@@ -35,7 +35,7 @@ impl Fixture {
             .arg(&build);
         if target == "exe" {
             return command
-                .args(["--target-arch", "x86-64", "--runtime-dir"])
+                .arg("--runtime-dir")
                 .arg(self.workspace.join("runtime"))
                 .arg("--execute")
                 .output()
@@ -160,9 +160,10 @@ fn float_comparisons_preserve_unordered_values_and_signed_zero() {
 
 #[test]
 fn comparisons_emit_instructions_without_host_imports() {
-    for (ty, instruction) in
-        [("Int64", "cmp"), ("UInt64", "cmp"), ("Float32", "ucomiss"), ("Float64", "ucomisd")]
-    {
+    use zydeco_stackir::low::syntax::{Computation, ExternalFunction};
+    use zydeco_syntax::ComparisonOp;
+
+    for ty in ["Int64", "UInt64", "Float32", "Float64"] {
         let zero = if ty.starts_with("Float") { "0.0" } else { "0" };
         let fixture =
             Fixture::new(&Fixture::probe(ty, &[(zero, zero, 1)], "! process/exit 0".into()));
@@ -172,15 +173,34 @@ fn comparisons_emit_instructions_without_host_imports() {
             let low = backend.render_sps_low();
             assert!(low.contains(&format!("compare {}_eq", ty.to_lowercase())), "{low}");
             assert!(!Fixture::is_comparison_import(&low));
-            for target in [TargetOs::Linux, TargetOs::Macos] {
-                let assembly = backend.emit_amd64(target).assembly;
-                assert!(
-                    assembly
-                        .lines()
-                        .any(|line| line.split_whitespace().next() == Some(instruction)),
-                    "{assembly}"
-                );
-                assert!(!Fixture::is_comparison_import(&assembly));
+            assert!(
+                backend.sps_low.arena().inner.compus.iter().all(|(_, compu)| {
+                    !matches!(
+                        compu,
+                        Computation::ExternCall(call)
+                            if matches!(
+                                call.function,
+                                ExternalFunction::Host(role) if ComparisonOp::from_builtin(role).is_some()
+                            )
+                    )
+                }),
+                "{low}"
+            );
+            for arch in [TargetArchitecture::X86_64, TargetArchitecture::Aarch64] {
+                for target in [TargetOs::Linux, TargetOs::Macos] {
+                    let object = backend.emit_native(arch, target).unwrap().object;
+                    match target {
+                        | TargetOs::Linux => {
+                            assert!(object.starts_with(b"\x7fELF"), "{arch}/{target:?}")
+                        }
+                        | TargetOs::Macos => {
+                            assert!(
+                                object.starts_with(&0xFEED_FACF_u32.to_le_bytes()),
+                                "{arch}/{target:?}"
+                            )
+                        }
+                    }
+                }
             }
             let module = backend.emit_wasm_sps().unwrap();
             wasmparser::Validator::new().validate_all(&module).unwrap();

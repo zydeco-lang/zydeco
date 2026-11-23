@@ -69,7 +69,7 @@ mod host_arguments {
     }
 
     #[test]
-    fn amd64() {
+    fn exe() {
         program().test(ExecutionTarget::Exe);
     }
 
@@ -92,7 +92,7 @@ mod argument_contract {
     }
 
     #[test]
-    fn amd64() {
+    fn exe() {
         program().test(ExecutionTarget::Exe);
     }
 

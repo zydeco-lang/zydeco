@@ -153,7 +153,7 @@ mod gc_stress {
     }
 
     #[test]
-    fn amd64() {
+    fn exe() {
         program().test(ExecutionTarget::Exe);
     }
 

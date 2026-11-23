@@ -40,47 +40,69 @@ impl LibraryArtifactKind {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LibraryPlatform {
     #[serde(rename = "x86_64-unknown-linux-gnu")]
-    Linux,
+    X86_64Linux,
     #[serde(rename = "x86_64-apple-darwin")]
-    Macos,
+    X86_64Macos,
+    #[serde(rename = "aarch64-unknown-linux-gnu")]
+    Aarch64Linux,
+    #[serde(rename = "aarch64-apple-darwin")]
+    Aarch64Macos,
 }
 
 impl LibraryPlatform {
     pub fn triple(self) -> &'static str {
         match self {
-            | Self::Linux => "x86_64-unknown-linux-gnu",
-            | Self::Macos => "x86_64-apple-darwin",
+            | Self::X86_64Linux => "x86_64-unknown-linux-gnu",
+            | Self::X86_64Macos => "x86_64-apple-darwin",
+            | Self::Aarch64Linux => "aarch64-unknown-linux-gnu",
+            | Self::Aarch64Macos => "aarch64-apple-darwin",
         }
     }
 
-    pub fn for_target(
-        architecture: TargetArchitecture, os: TargetOs,
-    ) -> Result<Self, LibraryError> {
-        if architecture != TargetArchitecture::X86_64 {
-            return Err(LibraryError::Target);
+    pub fn for_target(architecture: TargetArchitecture, os: TargetOs) -> Self {
+        match (architecture, os) {
+            | (TargetArchitecture::X86_64, TargetOs::Linux) => Self::X86_64Linux,
+            | (TargetArchitecture::X86_64, TargetOs::Macos) => Self::X86_64Macos,
+            | (TargetArchitecture::Aarch64, TargetOs::Linux) => Self::Aarch64Linux,
+            | (TargetArchitecture::Aarch64, TargetOs::Macos) => Self::Aarch64Macos,
         }
-        Ok(match os {
-            | TargetOs::Linux => Self::Linux,
-            | TargetOs::Macos => Self::Macos,
-        })
+    }
+
+    pub fn native_target(self) -> zydeco_cranelift::NativeTarget {
+        use zydeco_cranelift::{NativeArch, NativeOs, NativeTarget};
+        match self {
+            | Self::X86_64Linux => NativeTarget::new(NativeArch::X86_64, NativeOs::Linux),
+            | Self::X86_64Macos => NativeTarget::new(NativeArch::X86_64, NativeOs::Macos),
+            | Self::Aarch64Linux => NativeTarget::new(NativeArch::Aarch64, NativeOs::Linux),
+            | Self::Aarch64Macos => NativeTarget::new(NativeArch::Aarch64, NativeOs::Macos),
+        }
+    }
+
+    pub const fn is_linux(self) -> bool {
+        matches!(self, Self::X86_64Linux | Self::Aarch64Linux)
+    }
+
+    pub const fn is_macos(self) -> bool {
+        matches!(self, Self::X86_64Macos | Self::Aarch64Macos)
     }
 
     fn extension(self) -> &'static str {
-        match self {
-            | Self::Linux => "so",
-            | Self::Macos => "dylib",
-        }
+        if self.is_linux() { "so" } else { "dylib" }
     }
 
     fn cc(self) -> Command {
         let mut command = Command::new("cc");
         match self {
-            | Self::Macos => {
+            | Self::X86_64Macos => {
                 command.args(["-arch", "x86_64"]);
             }
-            | Self::Linux => {
+            | Self::Aarch64Macos => {
+                command.args(["-arch", "arm64"]);
+            }
+            | Self::X86_64Linux => {
                 command.arg("-m64");
             }
+            | Self::Aarch64Linux => {}
         }
         command
     }
@@ -229,7 +251,7 @@ impl LibraryDigest {
             .collect::<Result<Vec<_>, _>>()?;
         paths.sort();
         let mut hash = Sha3_256::new();
-        hash.update(zydeco_machine::native::ENTRY_SYMBOL);
+        hash.update(zydeco_machine::clif::CLIF_ENTRY_SYMBOL);
         hash.update([0]);
         hash.update(zydeco_abi::bundle::DIGEST);
         hash.update([0]);
@@ -267,7 +289,7 @@ impl LibraryBuilder<'_> {
             return Err(LibraryError::UnitCDependency);
         }
         let platform =
-            LibraryPlatform::for_target(self.options.architecture, self.options.operating_system)?;
+            LibraryPlatform::for_target(self.options.architecture, self.options.operating_system);
         let stem = name.to_string().replace('/', ".");
         let library_name = ForeignLibraryName::parse(stem.clone()).expect("validated package name");
         if self.dependencies.entries.contains_key(&library_name) {
@@ -314,14 +336,15 @@ impl LibraryBuilder<'_> {
             .iter()
             .map(|export| {
                 let backend = self.compiler.lower_export(program, export)?;
-                Ok(backend.emit_c_export(
+                backend.emit_c_export(
+                    self.options.architecture,
                     self.options.operating_system,
-                    zydeco_amd64::emit::CExportEntry {
+                    zydeco_cranelift::CExportEntry {
                         symbol: export.symbol.clone(),
                         signature: export.signature.clone(),
                         guard: guard.clone(),
                     },
-                ))
+                )
             })
             .collect::<Result<Vec<_>, CompileError>>()?;
         let imports =
@@ -352,19 +375,15 @@ impl LibraryBuilder<'_> {
         let directory = staging.path().canonicalize()?;
         let mut objects = Vec::new();
         for (index, entry) in code.iter().enumerate() {
-            objects.push(self.assemble(
-                &directory,
-                &format!("entry_{index}"),
-                &entry.assembly,
-                platform,
-            )?);
+            let object = directory.join(format!("entry_{index}.o"));
+            std::fs::write(&object, &entry.object)?;
+            objects.push(object);
         }
-        objects.push(self.assemble(
-            &directory,
-            "guard",
-            &format!("section .data\nalign 8\nglobal {guard}\n{guard}: db 0\n"),
-            platform,
-        )?);
+        let guard_bytes = zydeco_cranelift::emit_guard_object(platform.native_target(), &guard)
+            .map_err(CompileError::Cranelift)?;
+        let guard_object = directory.join("guard.o");
+        std::fs::write(&guard_object, guard_bytes)?;
+        objects.push(guard_object);
         let artifact_name = match kind {
             | LibraryArtifactKind::Object => format!("{stem}.o"),
             | LibraryArtifactKind::Staticlib => format!("lib{stem}.a"),
@@ -385,7 +404,7 @@ impl LibraryBuilder<'_> {
         self.runtime_support(&directory, &support_name, platform)?;
         if kind == LibraryArtifactKind::Sharedlib {
             let mut linker = platform.cc();
-            linker.arg(if platform == LibraryPlatform::Macos { "-dynamiclib" } else { "-shared" });
+            linker.arg(if platform.is_macos() { "-dynamiclib" } else { "-shared" });
             linker.args(&objects);
             let external_imports = imports
                 .iter()
@@ -400,36 +419,29 @@ impl LibraryBuilder<'_> {
             )?;
             linker.arg(directory.join(&support_name));
             let export_list = directory.join("exports.txt");
-            match platform {
-                | LibraryPlatform::Linux => {
-                    std::fs::write(
-                        &export_list,
-                        format!(
-                            "{{ global: {}; local: *; }};\n",
-                            exports
-                                .iter()
-                                .map(|e| e.symbol.to_string())
-                                .collect::<Vec<_>>()
-                                .join("; ")
-                        ),
-                    )?;
-                    linker.arg(format!("-Wl,--version-script={}", export_list.display())).args([
-                        "-Wl,-Bsymbolic",
-                        "-Wl,-z,defs",
-                        "-ldl",
-                        "-lpthread",
-                        "-lm",
-                    ]);
-                }
-                | LibraryPlatform::Macos => {
-                    std::fs::write(
-                        &export_list,
-                        exports.iter().map(|e| format!("_{}\n", e.symbol)).collect::<String>(),
-                    )?;
-                    linker
-                        .arg(format!("-Wl,-exported_symbols_list,{}", export_list.display()))
-                        .arg(format!("-Wl,-install_name,@rpath/{artifact_name}"));
-                }
+            if platform.is_linux() {
+                std::fs::write(
+                    &export_list,
+                    format!(
+                        "{{ global: {}; local: *; }};\n",
+                        exports.iter().map(|e| e.symbol.to_string()).collect::<Vec<_>>().join("; ")
+                    ),
+                )?;
+                linker.arg(format!("-Wl,--version-script={}", export_list.display())).args([
+                    "-Wl,-Bsymbolic",
+                    "-Wl,-z,defs",
+                    "-ldl",
+                    "-lpthread",
+                    "-lm",
+                ]);
+            } else {
+                std::fs::write(
+                    &export_list,
+                    exports.iter().map(|e| format!("_{}\n", e.symbol)).collect::<String>(),
+                )?;
+                linker
+                    .arg(format!("-Wl,-exported_symbols_list,{}", export_list.display()))
+                    .arg(format!("-Wl,-install_name,@rpath/{artifact_name}"));
             }
             NativeTool::Linker.run(linker.arg("-o").arg(&artifact_path))?;
         }
@@ -444,7 +456,7 @@ impl LibraryBuilder<'_> {
         fingerprint.update(&identity);
         fingerprint.update(kind.name());
         for entry in &code {
-            fingerprint.update(&entry.assembly);
+            fingerprint.update(&entry.object);
         }
         fingerprint.update(LibraryDigest::file(&artifact_path)?);
         fingerprint.update(LibraryDigest::file(&directory.join(&support_name))?);
@@ -460,7 +472,7 @@ impl LibraryBuilder<'_> {
             profile: CEntryProfile::FreshFatalGuardedV1,
             kind,
             compiler,
-            model: zydeco_machine::native::ENTRY_SYMBOL.into(),
+            model: zydeco_machine::clif::CLIF_ENTRY_SYMBOL.into(),
             runtime,
             fingerprint,
             artifact: LibraryFile::in_directory(&directory, &artifact_name)?,
@@ -512,23 +524,6 @@ impl LibraryBuilder<'_> {
         return Err(LibraryError::Target);
         std::fs::rename(link, directory.join(filename))?;
         Ok(())
-    }
-
-    fn assemble(
-        &self, directory: &Path, name: &str, text: &str, platform: LibraryPlatform,
-    ) -> Result<PathBuf, LibraryError> {
-        let source = directory.join(format!("{name}.s"));
-        let object = directory.join(format!("{name}.o"));
-        std::fs::write(&source, text)?;
-        NativeTool::Nasm.run(
-            Command::new("nasm")
-                .arg("-f")
-                .arg(if platform == LibraryPlatform::Macos { "macho64" } else { "elf64" })
-                .arg("-o")
-                .arg(&object)
-                .arg(&source),
-        )?;
-        Ok(object)
     }
 
     fn runtime_support(
@@ -727,7 +722,9 @@ impl LinkedLibraries {
     /// Bundle raw units with the program before rustc examines runtime archives. A
     /// late link-arg archive can otherwise introduce helper references after the linker
     /// has already scanned the runtime. Keep one member name across incremental builds.
-    pub(crate) fn bundle_raw(&self, object: &Path, os: TargetOs) -> Result<(), NativeError> {
+    pub(crate) fn bundle_raw(
+        &self, object: &Path, arch: TargetArchitecture, os: TargetOs,
+    ) -> Result<(), NativeError> {
         let raw = self
             .linked()
             .filter(|entry| entry.manifest.kind != LibraryArtifactKind::Sharedlib)
@@ -735,26 +732,23 @@ impl LinkedLibraries {
         if raw.is_empty() && self.units.is_empty() {
             return Ok(());
         }
-        let platform = match os {
-            | TargetOs::Linux => LibraryPlatform::Linux,
-            | TargetOs::Macos => LibraryPlatform::Macos,
-        };
+        let platform = LibraryPlatform::for_target(arch, os);
         let combined = object.with_extension("units.o");
         let mut command = platform.relocatable_linker();
         command.arg(object);
         command.args(self.units.objects());
         for library in raw {
-            match (platform, library.manifest.kind) {
+            match (platform.is_linux(), library.manifest.kind) {
                 | (_, LibraryArtifactKind::Object) => {
                     command.arg(&library.artifact);
                 }
-                | (LibraryPlatform::Linux, LibraryArtifactKind::Staticlib) => {
+                | (true, LibraryArtifactKind::Staticlib) => {
                     command
                         .arg("-Wl,--whole-archive")
                         .arg(&library.artifact)
                         .arg("-Wl,--no-whole-archive");
                 }
-                | (LibraryPlatform::Macos, LibraryArtifactKind::Staticlib) => {
+                | (false, LibraryArtifactKind::Staticlib) => {
                     command.arg(format!("-Wl,-force_load,{}", library.artifact.display()));
                 }
                 | (_, LibraryArtifactKind::Sharedlib) => unreachable!(),
@@ -898,7 +892,7 @@ impl LinkedLibraries {
         }
         self.validate_image(
             &self.active,
-            zydeco_machine::native::ENTRY_SYMBOL,
+            zydeco_machine::clif::CLIF_ENTRY_SYMBOL,
             runtime,
             interpreter,
         )?;
@@ -968,13 +962,13 @@ impl LinkedLibraries {
         &self, command: &mut Command, imports: &[ForeignImport], platform: LibraryPlatform,
         origin: &Path,
     ) -> Result<(), LibraryError> {
-        if platform == LibraryPlatform::Linux {
+        if platform.is_linux() {
             command.arg("-Wl,--start-group");
         }
         for library in self.linked() {
             command.arg(&library.artifact);
         }
-        if platform == LibraryPlatform::Linux {
+        if platform.is_linux() {
             command.arg("-Wl,--end-group");
         }
         for directory in self
@@ -984,8 +978,7 @@ impl LinkedLibraries {
             .collect::<BTreeSet<_>>()
         {
             let relative = LibraryPaths::relative(origin, directory)?;
-            let loader =
-                if platform == LibraryPlatform::Macos { "@loader_path" } else { "$ORIGIN" };
+            let loader = if platform.is_macos() { "@loader_path" } else { "$ORIGIN" };
             command.arg(format!("-Wl,-rpath,{loader}/{}", relative.display()));
         }
         let ordinary = imports
@@ -1039,7 +1032,7 @@ impl LibraryPaths {
 #[derive(Debug, thiserror::Error)]
 pub enum LibraryError {
     #[error(
-        "native Zydeco units require --target object for publication and the AMD64 exe backend for execution"
+        "native Zydeco units require --target object for publication and the native exe backend for execution"
     )]
     UnitTarget,
     #[error(
@@ -1065,7 +1058,7 @@ pub enum LibraryError {
     #[error(transparent)]
     Native(#[from] NativeError),
     #[error(
-        "compiled C libraries require matching AMD64 Linux or macOS artifacts; the interpreter requires shared libraries matching its host"
+        "compiled C libraries require matching native Linux or macOS artifacts; the interpreter requires shared libraries matching its host"
     )]
     Target,
     #[error("invalid or unsupported compiled-library manifest")]
@@ -1117,12 +1110,12 @@ mod tests {
             let manifest = LibraryManifest {
                 schema: 1,
                 package: package.parse().unwrap(),
-                platform: LibraryPlatform::Linux,
+                platform: LibraryPlatform::X86_64Linux,
                 abi: ForeignAbi::C,
                 profile: CEntryProfile::FreshFatalGuardedV1,
                 kind,
                 compiler: "test-compiler".into(),
-                model: zydeco_machine::native::ENTRY_SYMBOL.into(),
+                model: zydeco_machine::clif::CLIF_ENTRY_SYMBOL.into(),
                 runtime: "test-runtime".into(),
                 fingerprint: LibraryDigest::bytes(label.as_bytes()),
                 artifact: LibraryFile::in_directory(&directory, "artifact").unwrap(),
@@ -1204,7 +1197,7 @@ mod tests {
             .unwrap()
             .validate_imports(
                 &[Fixture::import("example.math", "identity", IntegerType::Int)],
-                LibraryPlatform::Linux,
+                LibraryPlatform::X86_64Linux,
                 None,
                 true,
             )
@@ -1230,7 +1223,7 @@ mod tests {
             assert!(matches!(
                 LinkedLibraries::load(std::slice::from_ref(&path)).unwrap().validate_imports(
                     &[import],
-                    LibraryPlatform::Linux,
+                    LibraryPlatform::X86_64Linux,
                     None,
                     true
                 ),
@@ -1240,7 +1233,7 @@ mod tests {
         assert!(matches!(
             LinkedLibraries::load(std::slice::from_ref(&path)).unwrap().validate_imports(
                 &[],
-                LibraryPlatform::Macos,
+                LibraryPlatform::X86_64Macos,
                 None,
                 true
             ),
@@ -1283,14 +1276,19 @@ mod tests {
         let raw = fixture.publish("raw", "example/raw", "raw", LibraryArtifactKind::Staticlib, &[]);
         let libraries = LinkedLibraries::load(std::slice::from_ref(&raw)).unwrap();
         libraries
-            .validate_imports(&[], LibraryPlatform::Linux, Some("test-runtime"), false)
+            .validate_imports(&[], LibraryPlatform::X86_64Linux, Some("test-runtime"), false)
             .unwrap();
         assert!(matches!(
-            libraries.validate_imports(&[], LibraryPlatform::Linux, Some("other-runtime"), false),
+            libraries.validate_imports(
+                &[],
+                LibraryPlatform::X86_64Linux,
+                Some("other-runtime"),
+                false
+            ),
             Err(LibraryError::Runtime(_))
         ));
         assert!(matches!(
-            libraries.validate_imports(&[], LibraryPlatform::Linux, None, true),
+            libraries.validate_imports(&[], LibraryPlatform::X86_64Linux, None, true),
             Err(LibraryError::Target)
         ));
         let shared = fixture.publish(
@@ -1304,18 +1302,18 @@ mod tests {
         libraries
             .validate_imports(
                 &[],
-                LibraryPlatform::Linux,
+                LibraryPlatform::X86_64Linux,
                 Some("independent-consumer-runtime"),
                 false,
             )
             .unwrap();
-        libraries.validate_imports(&[], LibraryPlatform::Linux, None, true).unwrap();
+        libraries.validate_imports(&[], LibraryPlatform::X86_64Linux, None, true).unwrap();
         assert_eq!(libraries.paths().len(), 1);
         assert!(!libraries.contains(&ForeignLibraryName::parse("example.raw").unwrap()));
         assert!(matches!(
             libraries.validate_imports(
                 &[Fixture::import("example.raw", "raw", IntegerType::Int)],
-                LibraryPlatform::Linux,
+                LibraryPlatform::X86_64Linux,
                 None,
                 true
             ),
@@ -1323,7 +1321,8 @@ mod tests {
         ));
         let both = LinkedLibraries::load(&[shared, raw.clone()]).unwrap();
         assert_eq!(both.paths().len(), 2);
-        both.validate_imports(&[], LibraryPlatform::Linux, Some("test-runtime"), false).unwrap();
+        both.validate_imports(&[], LibraryPlatform::X86_64Linux, Some("test-runtime"), false)
+            .unwrap();
         let broken = fixture.publish(
             "broken",
             "example/broken",
@@ -1337,7 +1336,7 @@ mod tests {
         assert!(matches!(
             LinkedLibraries::load(&[broken]).unwrap().validate_imports(
                 &[],
-                LibraryPlatform::Linux,
+                LibraryPlatform::X86_64Linux,
                 None,
                 true
             ),
@@ -1376,7 +1375,7 @@ mod tests {
         assert!(matches!(
             LinkedLibraries::load(&[first.clone(), collision]).unwrap().validate_imports(
                 &[],
-                LibraryPlatform::Linux,
+                LibraryPlatform::X86_64Linux,
                 None,
                 true
             ),

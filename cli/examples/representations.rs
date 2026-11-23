@@ -2,15 +2,16 @@
 //! These counts describe generated code, not executed allocations or peak memory.
 
 use std::path::PathBuf;
-use zydeco_assembly::{
-    LoweringPipeline,
-    syntax::{AssemblyProgram, Instruction, Program},
-};
 use zydeco_cli::{BackendProgram, CommandCompiler};
-use zydeco_foundation::pass::CompilerPass;
-use zydeco_stackir::low::{
-    representation::{RepresentationPolicy, RepresentationStrategy, Shared, UnboxingOpportunity},
-    unbox::LocalUnboxing,
+use zydeco_stackir::{
+    SpsLowProgram,
+    low::{
+        representation::{
+            RepresentationPolicy, RepresentationStrategy, Shared, UnboxingOpportunity,
+        },
+        syntax::{ClosurePackage, Value, ValueExt},
+        unbox::LocalUnboxing,
+    },
 };
 
 /// A type-level policy experiment that needs no change to the analysis or emitters.
@@ -29,11 +30,21 @@ struct Measurement {
 }
 
 impl Measurement {
-    fn collect(program: &AssemblyProgram) -> Self {
-        program.arena().programs.iter().fold(Self::default(), |mut measurement, (_, program)| {
-            if let Program::Instruction(Instruction::PackProduct(pack), _) = program {
-                measurement.cells += 1;
-                measurement.payload_words += pack.0.arity;
+    fn collect(program: &SpsLowProgram, unboxing: &LocalUnboxing) -> Self {
+        program.arena().inner.values.iter().fold(Self::default(), |mut measurement, (id, value)| {
+            if unboxing.values.contains(id) {
+                return measurement;
+            }
+            match value {
+                | Value::VCons(vcons) => {
+                    measurement.cells += 1;
+                    measurement.payload_words += vcons.layout.arity;
+                }
+                | Value::Ext(ValueExt::ClosurePackage(_)) => {
+                    measurement.cells += 1;
+                    measurement.payload_words += ClosurePackage::FIELDS;
+                }
+                | _ => {}
             }
             measurement
         })
@@ -41,7 +52,7 @@ impl Measurement {
 
     fn print(
         &self, source: &std::path::Path, policy: &str, unboxing: &LocalUnboxing,
-        program: &zydeco_stackir::SpsLowProgram,
+        program: &SpsLowProgram,
     ) {
         let eliminated = unboxing
             .values
@@ -49,10 +60,7 @@ impl Measurement {
             .filter(|id| {
                 matches!(
                     program.arena().inner.values[id],
-                    zydeco_stackir::low::syntax::Value::VCons(_)
-                        | zydeco_stackir::low::syntax::Value::Ext(
-                            zydeco_stackir::low::syntax::ValueExt::ClosurePackage(_)
-                        )
+                    Value::VCons(_) | Value::Ext(ValueExt::ClosurePackage(_))
                 )
             })
             .count();
@@ -87,11 +95,10 @@ impl Experiment {
         );
         let compiler = CommandCompiler::default();
         for source in sources {
-            let mut backend = compiler.lower(&source)?;
+            let backend = compiler.lower(&source)?;
             for &strategy in RepresentationStrategy::ALL {
-                backend = backend.with_representation(strategy);
                 let unboxing = LocalUnboxing::with_policy(&backend.sps_low, &strategy);
-                Measurement::collect(backend.assembly()).print(
+                Measurement::collect(&backend.sps_low, &unboxing).print(
                     &source,
                     strategy.name(),
                     &unboxing,
@@ -105,11 +112,8 @@ impl Experiment {
     }
 
     fn measure_static<const MAX: usize>(source: &std::path::Path, backend: &BackendProgram) {
-        let assembly = LoweringPipeline::new()
-            .with_representation(FieldLimit::<_, MAX>(Shared))
-            .run_infallible(&backend.sps_low);
         let unboxing = LocalUnboxing::with_policy(&backend.sps_low, &FieldLimit::<_, MAX>(Shared));
-        Measurement::collect(&assembly).print(
+        Measurement::collect(&backend.sps_low, &unboxing).print(
             source,
             &format!("shared-max-{MAX}"),
             &unboxing,

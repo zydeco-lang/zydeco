@@ -71,8 +71,6 @@ impl Fixture {
                 file.to_str().unwrap(),
                 "--target",
                 target,
-                "--target-arch",
-                "x86-64",
                 "--build-dir",
                 directory,
                 "--runtime-dir",
@@ -183,7 +181,7 @@ do result <- ! init;
         ),
     );
     Fixture::success(&fixture.command(&["check", source.to_str().unwrap()]));
-    Fixture::reject(&fixture.command(&["run", source.to_str().unwrap()]), "AMD64 exe");
+    Fixture::reject(&fixture.command(&["run", source.to_str().unwrap()]), "native exe");
     Fixture::reject(&fixture.build(&source, "exe", "missing", &[]), "matching --link-library");
     assert!(!fixture.directory.path().join("missing/client.exe").exists());
 }

@@ -1,10 +1,7 @@
-use crate::{RepresentationStrategy, TargetOs};
-use std::{
-    path::Path,
-    sync::{Arc, OnceLock},
-};
+use crate::{RepresentationStrategy, TargetArchitecture, TargetOs};
+use std::{path::Path, sync::Arc};
 use thiserror::Error;
-use zydeco_assembly::{LoweringPipeline, syntax::AssemblyProgram};
+pub use zydeco_cranelift::{CExportEntry, NativeArtifact};
 use zydeco_dynamics::{ProgKont, Runtime};
 use zydeco_foundation::{pass::CompilerPass, pipeline};
 use zydeco_ir::{BuiltinPackagePlan, CoreProgram};
@@ -254,19 +251,8 @@ impl CommandCompiler {
 /// Frozen backend input independent of front-end arenas.
 pub struct BackendProgram {
     pub sps_low: SpsLowProgram,
-    /// Populated only when an assembly-derived target is requested.
-    assembly: OnceLock<AssemblyProgram>,
     representation: RepresentationStrategy,
     sps_passes: SpsPlan,
-}
-
-/// Assembly text and linker dependencies from one native lowering pass.
-#[derive(Debug)]
-pub struct Amd64Artifact {
-    pub assembly: String,
-    pub foreign_libraries: Vec<zydeco_syntax::ForeignLibraryName>,
-    pub foreign_imports: Vec<zydeco_syntax::ForeignImport>,
-    pub unit_imports: Vec<zydeco_syntax::UnitImport>,
 }
 
 impl BackendProgram {
@@ -309,7 +295,6 @@ impl BackendProgram {
         }
         Ok(Self {
             sps_low,
-            assembly: OnceLock::new(),
             representation: RepresentationStrategy::default(),
             sps_passes: plan.clone(),
         })
@@ -325,13 +310,9 @@ impl BackendProgram {
         self.sps_low.scheme()
     }
 
-    /// Reconfigure assembly lowering, invalidating any previously cached assembly.
-    /// SPSLow and its direct Wasm backend are independent of this local policy.
+    /// Reconfigure native/Wasm lowering representation policy.
     pub fn with_representation(mut self, strategy: RepresentationStrategy) -> Self {
-        if self.representation != strategy {
-            self.assembly.take();
-            self.representation = strategy;
-        }
+        self.representation = strategy;
         self
     }
 
@@ -348,87 +329,51 @@ impl BackendProgram {
         output
     }
 
-    pub fn render_assembly(&self) -> String {
-        use zydeco_assembly::fmt::*;
-        let assembly = self.assembly();
-        let formatter = Formatter::new(assembly.arena(), None, None);
-        let mut output = String::new();
-        assembly.pretty(&formatter).render_fmt(100, &mut output).unwrap();
-        output
-    }
-
-    pub fn emit_amd64(&self, operating_system: TargetOs) -> Amd64Artifact {
-        self.emit_native(operating_system, zydeco_amd64::emit::NativeEntry::Process)
+    pub fn emit_native(
+        &self, architecture: TargetArchitecture, operating_system: TargetOs,
+    ) -> Result<NativeArtifact, CompileError> {
+        self.emit_with_entry(architecture, operating_system, zydeco_cranelift::NativeEntry::Process)
     }
 
     pub fn emit_c_export(
-        &self, operating_system: TargetOs, entry: zydeco_amd64::emit::CExportEntry,
-    ) -> Amd64Artifact {
-        self.emit_native(operating_system, zydeco_amd64::emit::NativeEntry::C(entry))
+        &self, architecture: TargetArchitecture, operating_system: TargetOs, entry: CExportEntry,
+    ) -> Result<NativeArtifact, CompileError> {
+        self.emit_with_entry(
+            architecture,
+            operating_system,
+            zydeco_cranelift::NativeEntry::C(entry),
+        )
     }
 
     pub fn emit_unit(
-        &self, operating_system: TargetOs, symbol: zydeco_syntax::ForeignSymbolName,
-    ) -> Amd64Artifact {
-        self.emit_native(operating_system, zydeco_amd64::emit::NativeEntry::Unit(symbol))
+        &self, architecture: TargetArchitecture, operating_system: TargetOs,
+        symbol: zydeco_syntax::ForeignSymbolName,
+    ) -> Result<NativeArtifact, CompileError> {
+        self.emit_with_entry(
+            architecture,
+            operating_system,
+            zydeco_cranelift::NativeEntry::Unit(symbol),
+        )
     }
 
-    fn emit_native(
-        &self, operating_system: TargetOs, entry: zydeco_amd64::emit::NativeEntry,
-    ) -> Amd64Artifact {
-        let native = LoweringPipeline::new()
-            .with_representation(self.representation)
-            .with_native_frames()
-            .run(&self.sps_low)
-            .expect("native lowering must establish valid frame entry contexts");
-        let format = match operating_system {
-            | TargetOs::Linux => zydeco_amd64::TargetFormat::Elf,
-            | TargetOs::Macos => zydeco_amd64::TargetFormat::MachO,
+    fn emit_with_entry(
+        &self, architecture: TargetArchitecture, operating_system: TargetOs,
+        entry: zydeco_cranelift::NativeEntry,
+    ) -> Result<NativeArtifact, CompileError> {
+        let arch = match architecture {
+            | TargetArchitecture::X86_64 => zydeco_cranelift::NativeArch::X86_64,
+            | TargetArchitecture::Aarch64 => zydeco_cranelift::NativeArch::Aarch64,
         };
-        let emitter = zydeco_amd64::Emitter::new(&native, format);
-        let emitter = emitter.with_entry(entry);
-        let assembly = emitter.run().to_string();
-        let foreign_libraries = native
-            .assembly()
-            .arena()
-            .externs
-            .iter()
-            .filter_map(|external| match external {
-                | zydeco_assembly::syntax::Extern::Foreign(import) => {
-                    Some(import.target.library.clone())
-                }
-                | zydeco_assembly::syntax::Extern::Host { .. }
-                | zydeco_assembly::syntax::Extern::Unit(_) => None,
-            })
-            .collect::<std::collections::BTreeSet<_>>()
-            .into_iter()
-            .collect();
-        let foreign_imports = native
-            .assembly()
-            .arena()
-            .externs
-            .iter()
-            .filter_map(|external| match external {
-                | zydeco_assembly::syntax::Extern::Foreign(import) => Some(import.clone()),
-                | zydeco_assembly::syntax::Extern::Host { .. }
-                | zydeco_assembly::syntax::Extern::Unit(_) => None,
-            })
-            .collect();
-        let mut unit_imports: Vec<_> = native
-            .assembly()
-            .arena()
-            .externs
-            .iter()
-            .filter_map(|external| match external {
-                | zydeco_assembly::syntax::Extern::Unit(import) => Some(import.clone()),
-                | _ => None,
-            })
-            .collect();
-        unit_imports.sort_by(|left, right| {
-            (&left.target.library, &left.target.symbol)
-                .cmp(&(&right.target.library, &right.target.symbol))
-        });
-        Amd64Artifact { assembly, foreign_libraries, foreign_imports, unit_imports }
+        let os = match operating_system {
+            | TargetOs::Linux => zydeco_cranelift::NativeOs::Linux,
+            | TargetOs::Macos => zydeco_cranelift::NativeOs::Macos,
+        };
+        let target = zydeco_cranelift::NativeTarget::new(arch, os);
+        zydeco_cranelift::Emitter::new(&self.sps_low, target)
+            .with_entry(entry)
+            .with_representation(self.representation)
+            .run()
+            .map_err(CompileError::Cranelift)
     }
 
     pub fn emit_wasm_sps(&self) -> Result<Vec<u8>, CompileError> {
@@ -438,15 +383,6 @@ impl BackendProgram {
             .run()
             .map(zydeco_wasm_sps::WasmModule::into_bytes)
             .map_err(CompileError::WasmSps)
-    }
-
-    /// The immutable assembly product selected by this program's representation policy.
-    pub fn assembly(&self) -> &AssemblyProgram {
-        self.assembly.get_or_init(|| {
-            LoweringPipeline::new()
-                .with_representation(self.representation)
-                .run_infallible(&self.sps_low)
-        })
     }
 }
 
@@ -466,6 +402,8 @@ pub enum CompileError {
     Executable(ExecutableError),
     #[error(transparent)]
     Runtime(zydeco_dynamics::syntax::RuntimeError),
+    #[error(transparent)]
+    Cranelift(#[from] zydeco_cranelift::EmitError),
     #[error(transparent)]
     WasmSps(zydeco_wasm_sps::EmitError),
     #[error("source test expected exit code 0, got {0:?}")]

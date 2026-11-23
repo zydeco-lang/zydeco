@@ -186,8 +186,6 @@ fn shared_library_c_harness_round_trips_integer_payloads_and_has_only_declared_e
         "./library.zy",
         "--target",
         "sharedlib",
-        "--target-arch",
-        "x86-64",
         "--runtime-dir",
         runtime.to_str().unwrap(),
     ]);
@@ -232,9 +230,11 @@ fn shared_library_c_harness_round_trips_integer_payloads_and_has_only_declared_e
     let source = fixture.write("harness.c", &format!("#include {:?}\n#include <assert.h>\nint main(void) {{ for (int i = 0; i < 100; ++i) {{ {checks} assert(six(1,2,3,4,5,(INT64_MIN / 2)) == (INT64_MIN / 2)); zero(); }} assert(wide(UINT64_MAX,1,2,3,4,5) == 14); return 0; }}\n", header.to_str().unwrap()));
     let exe = fixture.directory.path().join("harness");
     let mut cc = Command::new("cc");
-    if cfg!(target_os = "macos") {
+    if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        cc.args(["-arch", "arm64"]);
+    } else if cfg!(target_os = "macos") {
         cc.args(["-arch", "x86_64"]);
-    } else {
+    } else if cfg!(target_arch = "x86_64") {
         cc.arg("-m64");
     }
     let output = cc
@@ -284,7 +284,7 @@ impl Fixture {
             .current_dir(self.directory.path())
             .arg("build")
             .arg(source)
-            .args(["--target", kind, "--target-arch", "x86-64", "--build-dir", directory])
+            .args(["--target", kind, "--build-dir", directory])
             .arg("--runtime-dir")
             .arg(Self::runtime());
         for dependency in dependencies {
@@ -346,9 +346,11 @@ impl Fixture {
         );
         let executable = self.directory.path().join("harness");
         let mut command = Command::new("cc");
-        if cfg!(target_os = "macos") {
+        if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+            command.args(["-arch", "arm64"]);
+        } else if cfg!(target_os = "macos") {
             command.args(["-arch", "x86_64"]);
-        } else {
+        } else if cfg!(target_arch = "x86_64") {
             command.arg("-m64");
         }
         command.arg(source);
@@ -367,7 +369,10 @@ impl Fixture {
         if let Some(support) = &interface.support {
             command.arg(base.join(&support.path));
         }
-        if interface.platform == LibraryPlatform::Linux {
+        if matches!(
+            interface.platform,
+            LibraryPlatform::X86_64Linux | LibraryPlatform::Aarch64Linux
+        ) {
             command.args(["-ldl", "-lpthread", "-lm"]);
         }
         command.arg("-o").arg(&executable);
@@ -493,8 +498,7 @@ do result <- ! identity -4611686018427387904;
 #[test]
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn self_importing_c_exports_assemble_for_both_native_formats() {
-    use zydeco_amd64::emit::CExportEntry;
-    use zydeco_cli::{CommandCompiler, TargetOs};
+    use zydeco_cli::{CommandCompiler, TargetArchitecture, TargetOs, compile::CExportEntry};
     use zydeco_session::source::PackageId;
     use zydeco_surface::metadata::{LibraryRole, PackageRole};
 
@@ -518,27 +522,38 @@ let other = (@(ffi(c, library("example.other"), symbol("imported"))) : Thk (I ->
     let program = compiler.library_program(&analysis, contract).unwrap();
     let export = &program.library.exports[0];
     let backend = compiler.lower_export(&program, export).unwrap();
-    for (target, format) in [(TargetOs::Linux, "elf64"), (TargetOs::Macos, "macho64")] {
-        let artifact = backend.emit_c_export(
-            target,
-            CExportEntry {
-                symbol: export.symbol.clone(),
-                signature: export.signature.clone(),
-                guard: zydeco_syntax::ForeignSymbolName::parse("zydeco_test_guard").unwrap(),
-            },
-        );
-        let source = fixture.write(&format!("entry-{format}.s"), &artifact.assembly);
-        Fixture::success(
-            &Command::new("nasm")
-                .args(["-f", format])
-                .arg(&source)
-                .arg("-o")
-                .arg(source.with_extension("o"))
-                .output()
-                .unwrap(),
-        );
-        if target == TargetOs::Linux {
-            assert!(artifact.assembly.contains("call imported wrt ..plt"));
+    for arch in [TargetArchitecture::X86_64, TargetArchitecture::Aarch64] {
+        for target in [TargetOs::Linux, TargetOs::Macos] {
+            let artifact = backend
+                .emit_c_export(
+                    arch,
+                    target,
+                    CExportEntry {
+                        symbol: export.symbol.clone(),
+                        signature: export.signature.clone(),
+                        guard: zydeco_syntax::ForeignSymbolName::parse("zydeco_test_guard")
+                            .unwrap(),
+                    },
+                )
+                .unwrap();
+            match target {
+                | TargetOs::Linux => {
+                    assert!(artifact.object.starts_with(b"\x7fELF"), "{arch}/{target:?}");
+                }
+                | TargetOs::Macos => {
+                    assert!(
+                        artifact.object.starts_with(&0xFEED_FACF_u32.to_le_bytes()),
+                        "{arch}/{target:?}"
+                    );
+                }
+            }
+            assert!(
+                artifact
+                    .foreign_imports
+                    .iter()
+                    .any(|import| import.target.symbol.as_str() == "imported"),
+                "{arch}/{target:?}"
+            );
         }
     }
 }
@@ -626,8 +641,6 @@ fn failed_late_build_preserves_the_published_library() {
         source.to_str().unwrap(),
         "--target",
         "sharedlib",
-        "--target-arch",
-        "x86-64",
         "--runtime-dir",
         runtime.to_str().unwrap(),
     ]);

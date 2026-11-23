@@ -27,9 +27,9 @@ impl Fixture {
             abi: ForeignAbi::Zydeco,
             profile: UnitEntryProfile::WordInitializerV1,
             package: package.parse().unwrap(),
-            platform: LibraryPlatform::Macos,
+            platform: LibraryPlatform::Aarch64Macos,
             compiler: LibraryDigest::file(&std::env::current_exe().unwrap()).unwrap(),
-            model: zydeco_machine::native::ENTRY_SYMBOL.into(),
+            model: zydeco_machine::clif::CLIF_ENTRY_SYMBOL.into(),
             runtime: "fixture-runtime".into(),
             symbol: ForeignSymbolName::parse(format!("zydeco_unit_{label}_init")).unwrap(),
             exports,
@@ -62,7 +62,7 @@ impl Fixture {
     fn validate(paths: &[PathBuf], imports: &[UnitImport]) -> Result<(), LibraryError> {
         LinkedLibraries::load(paths)?.validate_units(
             imports,
-            LibraryPlatform::Macos,
+            LibraryPlatform::Aarch64Macos,
             Some("fixture-runtime"),
             true,
         )
@@ -95,7 +95,7 @@ fn native_profiles_check_types_identity_and_content_before_linking() {
     assert!(matches!(
         libraries.validate_units(
             std::slice::from_ref(&import),
-            LibraryPlatform::Macos,
+            LibraryPlatform::Aarch64Macos,
             Some("fixture-runtime"),
             false
         ),
@@ -104,7 +104,7 @@ fn native_profiles_check_types_identity_and_content_before_linking() {
     assert!(matches!(
         libraries.validate_units(
             std::slice::from_ref(&import),
-            LibraryPlatform::Linux,
+            LibraryPlatform::Aarch64Linux,
             Some("fixture-runtime"),
             true
         ),

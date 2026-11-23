@@ -1,12 +1,11 @@
 //! Native word-ABI units: one explicit initializer, a closed type interface, and exact linking.
 
-use crate::{BuildOptions, CommandCompiler, library::*, native::NativeTool};
+use crate::{BuildOptions, CommandCompiler, library::*};
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Sha3_256};
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
-    process::Command,
 };
 use zydeco_session::{ProgramAnalysis, UnitProgram};
 use zydeco_surface::metadata::PackageName;
@@ -86,7 +85,7 @@ impl UnitBuilder<'_> {
         &self, name: &PackageName, analysis: &ProgramAnalysis, program: &UnitProgram,
     ) -> Result<PathBuf, LibraryError> {
         let platform =
-            LibraryPlatform::for_target(self.options.architecture, self.options.operating_system)?;
+            LibraryPlatform::for_target(self.options.architecture, self.options.operating_system);
         let stem = name.to_string().replace('/', ".");
         let library = ForeignLibraryName::parse(stem.clone()).expect("validated package name");
         if self.dependencies.contains(&library) || self.dependencies.units.contains(&library) {
@@ -109,10 +108,11 @@ impl UnitBuilder<'_> {
         }
         let identity = LibraryDigest::finish(hash);
         let symbol = ForeignSymbolName::parse(format!("zydeco_unit_{identity}_init")).unwrap();
-        let code = self
-            .compiler
-            .lower_unit(program)?
-            .emit_unit(self.options.operating_system, symbol.clone());
+        let code = self.compiler.lower_unit(program)?.emit_unit(
+            self.options.architecture,
+            self.options.operating_system,
+            symbol.clone(),
+        )?;
         if !code.foreign_imports.is_empty() {
             return Err(LibraryError::UnitCDependency);
         }
@@ -122,17 +122,9 @@ impl UnitBuilder<'_> {
         let staging =
             tempfile::Builder::new().prefix(".zydeco-unit-").tempdir_in(&self.options.build_dir)?;
         let directory = staging.path().canonicalize()?;
-        let assembly = directory.join("unit.s");
         let object_name = format!("{stem}.unit.o");
         let object = directory.join(&object_name);
-        std::fs::write(&assembly, &code.assembly)?;
-        NativeTool::Nasm.run(
-            Command::new("nasm")
-                .args(["-f", if platform == LibraryPlatform::Macos { "macho64" } else { "elf64" }])
-                .arg("-o")
-                .arg(&object)
-                .arg(&assembly),
-        )?;
+        std::fs::write(&object, &code.object)?;
 
         let bindings_name = format!("{stem}.imports.zy");
         let bindings = format!(
@@ -155,7 +147,7 @@ impl UnitBuilder<'_> {
             package: name.clone(),
             platform,
             compiler,
-            model: zydeco_machine::native::ENTRY_SYMBOL.into(),
+            model: zydeco_machine::clif::CLIF_ENTRY_SYMBOL.into(),
             runtime,
             symbol,
             exports,
@@ -352,7 +344,7 @@ impl LinkedUnits {
             if manifest.compiler != compiler {
                 return Err(LibraryError::UnitCompiler(manifest.package.clone()));
             }
-            if manifest.model != zydeco_machine::native::ENTRY_SYMBOL
+            if manifest.model != zydeco_machine::clif::CLIF_ENTRY_SYMBOL
                 || runtime != Some(manifest.runtime.as_str())
             {
                 return Err(LibraryError::Runtime(manifest.package.clone()));

@@ -776,7 +776,7 @@ let triv : Thk Top = {{ comatch end }} in
     }
 
     pub(crate) const BACKENDS_EXPECTED: &str =
-        "`all` alone or a comma-separated list of `interpreter`, `exe` (`amd64`), or `wasm-sps`";
+        "`all` alone or a comma-separated list of `interpreter`, `exe`, or `wasm-sps`";
     pub(crate) const SETUP_EXPECTED: &str = "`tempdir` or `filesystem`";
 
     impl CaseDirective {
@@ -986,7 +986,7 @@ let triv : Thk Top = {{ comatch end }} in
             let name = name.trim();
             let backend = match name {
                 | "interpreter" => ExecutionTarget::Interpreter,
-                | "exe" | "amd64" => ExecutionTarget::Exe,
+                | "exe" => ExecutionTarget::Exe,
                 | "wasm-sps" => ExecutionTarget::WasmSps,
                 | _ => {
                     return Err(CaseDirectiveError::UnknownValue {
@@ -1226,7 +1226,7 @@ mod directive_tests {
     fn parses_specific_backends_and_quoted_escapes() {
         let directive = parse(&[
             "-- stage: run",
-            "-- backends: interpreter, amd64, wasm-sps",
+            "-- backends: interpreter, exe, wasm-sps",
             "-- input: \"a\\nb\\t\\\"c\\\\d\"",
         ])
         .unwrap();
@@ -1265,8 +1265,16 @@ mod directive_tests {
             })
         );
         assert_eq!(
-            parse(&["-- stage: run", "-- backends: exe, amd64"]),
-            Err(CaseDirectiveError::DuplicateBackend { backend: "amd64".into() })
+            parse(&["-- stage: run", "-- backends: exe, exe"]),
+            Err(CaseDirectiveError::DuplicateBackend { backend: "exe".into() })
+        );
+        assert_eq!(
+            parse(&["-- stage: run", "-- backends: amd64"]),
+            Err(CaseDirectiveError::UnknownValue {
+                key: "backends",
+                value: "amd64".into(),
+                expected: BACKENDS_EXPECTED,
+            })
         );
         assert_eq!(
             parse(&["-- stage: run", "-- setup: network"]),

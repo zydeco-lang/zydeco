@@ -97,10 +97,7 @@ fn partial_patterns_report_runtime_failure_across_backends() {
             let mut command = Command::new(env!("CARGO_BIN_EXE_zydeco"));
             command.arg("build").arg(&source).args(["--target", target, "--build-dir"]).arg(&build);
             if target == "exe" {
-                command
-                    .args(["--target-arch", "x86-64", "--runtime-dir"])
-                    .arg(workspace.join("runtime"))
-                    .arg("--execute");
+                command.arg("--runtime-dir").arg(workspace.join("runtime")).arg("--execute");
             }
             let mut output = command.output().unwrap();
             if target != "exe" {
@@ -142,7 +139,7 @@ fn rebuilding_a_native_program_uses_the_current_assembly() {
         let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
             .arg("build")
             .arg(&source)
-            .args(["--target-arch", "x86-64", "--build-dir"])
+            .arg("--build-dir")
             .arg(&build)
             .arg("--runtime-dir")
             .arg(workspace.join("runtime"))

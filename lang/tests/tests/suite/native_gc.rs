@@ -67,66 +67,6 @@ fn allocation_publishes_roots_only_when_collection_needs_them() {
 }
 
 #[test]
-fn collection_updates_suspended_slots_without_retaining_dead_frame_slots() {
-    use zydeco_machine::frames::{Frames, storage::Fixed};
-    EnvironmentCollection::verify(Frames::<Fixed<8>>::EMPTY);
-}
-
-struct EnvironmentCollection;
-
-impl EnvironmentCollection {
-    fn verify(mut frames: impl zydeco_machine::frames::Environment) {
-        use gc::{CheneyHeap, RootRange, Roots};
-        use zydeco_machine::{
-            frames::{Layout, LayoutId},
-            native::{AllocationKind, Word},
-        };
-        let mut heap = CheneyHeap::with_limits(128, Some(128));
-        let owner = Layout { id: LayoutId(0), words: 2 };
-        let callee = Layout { id: LayoutId(1), words: 1 };
-        let base = frames.enter(owner).unwrap();
-        let empty = RootRange::EMPTY;
-        let roots = Roots { stack: empty, frame: empty, slots: &mut [] };
-        let retained = unsafe { heap.allocate(1, AllocationKind::Scanned, roots).unwrap() };
-        unsafe {
-            retained.cast::<Word>().write(71);
-            base.write(retained as Word);
-        }
-        let mut slots = frames.roots(owner.id, &[0]).unwrap();
-        let roots = Roots { stack: empty, frame: empty, slots: &mut slots };
-        let dead = unsafe { heap.allocate(5, AllocationKind::Opaque, roots).unwrap() };
-        unsafe {
-            base.add(1).write(dead as Word);
-        }
-        let outer = frames.suspend(owner.id, &[0]).unwrap();
-        let inner = frames.suspend(owner.id, &[0]).unwrap();
-        frames.enter(callee).unwrap();
-        let mut slots = frames.roots(callee.id, &[]).unwrap();
-        let roots = Roots { stack: empty, frame: empty, slots: &mut slots };
-        // This allocation fits after copying the one live object, but fails if the
-        // dead pointer in the same retained frame is also treated as a root.
-        unsafe {
-            heap.allocate(7, AllocationKind::Opaque, roots).unwrap();
-        }
-        assert_eq!(frames.resume(owner.id, inner).unwrap(), base);
-        let relocated = unsafe { base.read() as *mut Word };
-        assert_ne!(relocated, retained.cast());
-        assert_eq!(unsafe { relocated.read() }, 71);
-
-        // A collecting allocation can fail after roots moved. Active and pending
-        // copies must both be repaired, and the outer suspension must remain resumable.
-        let mut slots = frames.roots(owner.id, &[0]).unwrap();
-        let roots = Roots { stack: empty, frame: empty, slots: &mut slots };
-        let error = unsafe { heap.allocate(13, AllocationKind::Opaque, roots) }.unwrap_err();
-        assert_eq!(error.live_bytes, 24);
-        let restored = frames.resume(owner.id, outer).unwrap();
-        let moved_again = unsafe { restored.read() as *mut Word };
-        assert_ne!(moved_again, relocated);
-        assert_eq!(unsafe { moved_again.read() }, 71);
-    }
-}
-
-#[test]
 fn native_heap_grows_beyond_one_megabyte_live_data() {
     use zydeco_tests::utils::{ExecutionTarget, SourceProgram};
     for backend in [ExecutionTarget::Interpreter, ExecutionTarget::Exe] {

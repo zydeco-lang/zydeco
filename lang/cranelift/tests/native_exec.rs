@@ -535,3 +535,34 @@ do s <- ! numeric/int64/to_string res;
     assert_run_ok(&out);
     assert_eq!(String::from_utf8(out.stdout).unwrap(), "42\n");
 }
+
+#[test]
+fn unboxed_projected_product_variables_and_indirect_closures_execute_across_policies() {
+    let builtin = builtin_path();
+    let source = format!(
+        r#"
+param (/CType; /OS; /Ret; /Thk; /Int; /numeric; /process) : @(import({builtin:?})) in
+let Compare = Thk (forall (R : CType) . Int -> Int -> Thk R -> Thk R -> R) in
+let p = (19, 23) in
+let (a, b) = p in
+let p2 = (a, b) in
+let (x, y) = p2 in
+let fix choose (flag : Int) : Ret Compare =
+  ! numeric/int/eq (Ret Compare) flag 0 {{ ret numeric/int/lt }} {{ ret numeric/int/gt }}
+in
+do less <- ! choose 0;
+do greater <- ! choose 1;
+do sum <- ! numeric/int/add x y;
+! less OS 1 2 {{ ! greater OS sum 41 {{ ! process/exit 0 }} {{ ! process/exit 91 }} }} {{ ! process/exit 92 }}
+"#
+    );
+    for strategy in [
+        RepresentationStrategy::Local,
+        RepresentationStrategy::Shared,
+        RepresentationStrategy::Boxed,
+    ] {
+        let obj = compile_process_program(&source, strategy);
+        let out = link_and_run_process(&[&obj], &[]);
+        assert_run_ok(&out);
+    }
+}

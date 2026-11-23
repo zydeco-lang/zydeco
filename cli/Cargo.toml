@@ -26,8 +26,7 @@ zydeco-fmt = { workspace = true }
 zydeco-statics = { workspace = true }
 zydeco-dynamics = { workspace = true }
 zydeco-stackir = { workspace = true }
-zydeco-assembly = { workspace = true }
-zydeco-amd64 = { workspace = true }
+zydeco-cranelift = { workspace = true }
 zydeco-wasm-sps = { workspace = true }
 zydeco-foundation = { workspace = true }
 ariadne = { workspace = true }

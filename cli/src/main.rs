@@ -362,9 +362,6 @@ impl Application {
         &self, sources: Vec<SourceReference>, target: BuildTarget, options: BuildOptions,
         execute: bool, representation: Option<RepresentationStrategy>, libraries: LinkedLibraries,
     ) -> Result<i32, ApplicationError> {
-        if target.is_native() && options.architecture != TargetArchitecture::X86_64 {
-            return Err(NativeError::UnsupportedAmd64Architecture(options.architecture).into());
-        }
         let kind = match target {
             | BuildTarget::Object => Some(LibraryArtifactKind::Object),
             | BuildTarget::Staticlib => Some(LibraryArtifactKind::Staticlib),
@@ -375,10 +372,6 @@ impl Application {
             if execute {
                 return Err(ApplicationError::LibraryExecution);
             }
-            zydeco_cli::library::LibraryPlatform::for_target(
-                options.architecture,
-                options.operating_system,
-            )?;
             let programs = sources
                 .iter()
                 .map(|source| {
@@ -449,9 +442,6 @@ impl Application {
         if representation.is_some() && matches!(target, BuildTarget::Zir) {
             return Err(ApplicationError::RepresentationTarget);
         }
-        if execute && target == BuildTarget::Zasm {
-            return Err(ApplicationError::ZasmExecution);
-        }
         if execute && sources.len() != 1 {
             return Err(ApplicationError::SingleExecution);
         }
@@ -473,10 +463,6 @@ impl Application {
                     unreachable!()
                 }
                 | BuildTarget::Zir => println!("{}", backend.render_sps_low()),
-                | BuildTarget::Zasm => println!("{}", backend.render_assembly()),
-                | BuildTarget::Asm => {
-                    println!("{}", backend.emit_amd64(options.operating_system).assembly);
-                }
                 | BuildTarget::WasmSps => {
                     if execute {
                         return Err(NativeError::WasmBuildExecution.into());
@@ -488,11 +474,12 @@ impl Application {
                 }
                 | BuildTarget::Exe => {
                     let artifact = self.artifact_name(path)?;
-                    let native = backend.emit_amd64(options.operating_system);
+                    let native =
+                        backend.emit_native(options.architecture, options.operating_system)?;
                     let platform = zydeco_cli::library::LibraryPlatform::for_target(
                         options.architecture,
                         options.operating_system,
-                    )?;
+                    );
                     let runtime_digest =
                         zydeco_cli::library::LibraryDigest::runtime(&options.runtime_dir)?;
                     libraries.validate_imports(
@@ -507,9 +494,9 @@ impl Application {
                         Some(&runtime_digest),
                         true,
                     )?;
-                    let executable = options.link_amd64_resolved(
+                    let executable = options.link_native_resolved(
                         &artifact,
-                        &native.assembly,
+                        &native.object,
                         &native.foreign_libraries,
                         &libraries,
                     )?;
@@ -562,8 +549,6 @@ enum ApplicationError {
     LibraryExecution,
     #[error("--link-library requires --target exe, object, staticlib, or sharedlib")]
     LibraryLinkTarget,
-    #[error("build --execute is not supported for zasm; use --target exe")]
-    ZasmExecution,
     #[error("run and build --execute require exactly one selected package")]
     SingleExecution,
     #[error("cannot read the working directory: {0}")]
@@ -575,7 +560,7 @@ enum ApplicationError {
     #[error(transparent)]
     PipelinePlan(#[from] SpsPlanError),
     #[error(
-        "--representation applies to zasm, asm, exe, wasm-sps, object, staticlib, and sharedlib; this target does not select physical representations"
+        "--representation applies to exe, wasm-sps, object, staticlib, and sharedlib; this target does not select physical representations"
     )]
     RepresentationTarget,
     #[error(transparent)]

@@ -41,13 +41,10 @@ incremental = false
 [profile.dev.package.zydeco-stackir]
 incremental = false
 
-[profile.dev.package.zydeco-assembly]
+[profile.dev.package.zydeco-cranelift]
 incremental = false
 
 [profile.dev.package.zydeco-dynamics]
-incremental = false
-
-[profile.dev.package.zydeco-amd64]
 incremental = false
 
 [profile.dev.package.zydeco-cli]
@@ -59,7 +56,7 @@ incremental = false
 [profile.dev.package.cajun]
 incremental = false
 
-# Deeply nested programs exercise recursive surface, static, and assembly passes;
+# Deeply nested programs exercise recursive surface, static, and stackir passes;
 # optimizing these crates keeps their test stack frames small
 # without changing the whole profile.
 [profile.test.package.zydeco-statics]
@@ -73,10 +70,6 @@ opt-level = 1
 opt-level = 1
 incremental = false
 
-[profile.test.package.zydeco-assembly]
-opt-level = 1
-incremental = false
-
 [profile.test.package.zydeco-session]
 incremental = false
 
@@ -86,10 +79,10 @@ incremental = false
 [profile.test.package.zydeco-stackir]
 incremental = false
 
-[profile.test.package.zydeco-dynamics]
+[profile.test.package.zydeco-cranelift]
 incremental = false
 
-[profile.test.package.zydeco-amd64]
+[profile.test.package.zydeco-dynamics]
 incremental = false
 
 [profile.test.package.zydeco-cli]

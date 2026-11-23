@@ -1,7 +1,7 @@
 use super::*;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex};
-use zydeco_foundation::{arena::ArenaAccess, pass::CompilerPass};
+use zydeco_foundation::pass::CompilerPass;
 
 struct SourceDynamics {
     program: Arc<zydeco_ir::CoreProgram>,
@@ -16,14 +16,9 @@ struct SourceSpsLow {
     sps_low: zydeco_stackir::SpsLowProgram,
 }
 
-struct SourceAssembly {
-    sps_low: zydeco_stackir::SpsLowProgram,
-    assembly: zydeco_assembly::syntax::AssemblyProgram,
-}
-
 struct NativePackage {
     name: String,
-    assembly: String,
+    object: Vec<u8>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -37,7 +32,7 @@ enum TestPipelineError {
     #[error(transparent)]
     Builtin(zydeco_statics::BuiltinPackagePlanError),
     #[error(transparent)]
-    Frame(zydeco_assembly::frames::FramePlanError),
+    Cranelift(#[from] zydeco_cranelift::EmitError),
 }
 
 struct AuthoredRoot;
@@ -140,9 +135,9 @@ impl SourceStack {
 }
 
 impl SourceSpsLow {
-    fn assemble(self) -> SourceAssembly {
-        let assembly = zydeco_assembly::LoweringPipeline::new().run_infallible(&self.sps_low);
-        SourceAssembly { sps_low: self.sps_low, assembly }
+    fn emit_cranelift(&self) -> Result<zydeco_cranelift::NativeArtifact, TestPipelineError> {
+        let target = zydeco_cranelift::NativeTarget::host()?;
+        Ok(zydeco_cranelift::Emitter::new(&self.sps_low, target).run()?)
     }
 }
 
@@ -207,34 +202,25 @@ impl TestPipeline {
         session.checked_program(&analysis).ok_or(TestPipelineError::Rejected)
     }
 
-    /// Emit amd64 assembly from an already-checked program without
+    /// Emit a Cranelift native object from an already-checked program without
     /// re-analyzing it.
-    fn amd64_from_checked(
+    fn cranelift_from_checked(
         path: impl AsRef<Path>, checked: CheckedProgram,
     ) -> Result<NativePackage, TestPipelineError> {
         let path = path.as_ref();
         let name = path.file_stem().and_then(|stem| stem.to_str()).unwrap().to_owned();
         let lowered = checked.sps_with_builtin()?.convert();
-        let native = zydeco_assembly::LoweringPipeline::new()
-            .with_native_frames()
-            .run(&lowered.sps_low)
-            .map_err(TestPipelineError::Frame)?;
-        let target = if cfg!(target_os = "macos") {
-            zydeco_amd64::TargetFormat::MachO
-        } else {
-            zydeco_amd64::TargetFormat::Elf
-        };
-        let assembly = zydeco_amd64::Emitter::new(&native, target).run().to_string();
-        Ok(NativePackage { name, assembly })
+        let artifact = lowered.emit_cranelift()?;
+        Ok(NativePackage { name, object: artifact.object })
     }
 
-    fn zasm(path: impl AsRef<Path>) -> Result<SourceAssembly, TestPipelineError> {
-        Ok(Self::check(path)?.sps_with_builtin()?.convert().assemble())
+    fn sps_low(path: impl AsRef<Path>) -> Result<SourceSpsLow, TestPipelineError> {
+        Ok(Self::check(path)?.sps_with_builtin()?.convert())
     }
 
-    fn amd64(path: impl AsRef<Path>) -> Result<NativePackage, TestPipelineError> {
+    fn cranelift(path: impl AsRef<Path>) -> Result<NativePackage, TestPipelineError> {
         let path = path.as_ref();
-        Self::amd64_from_checked(path, Self::check(path)?)
+        Self::cranelift_from_checked(path, Self::check(path)?)
     }
 }
 
@@ -406,10 +392,10 @@ fn repository_source(relative: impl AsRef<Path>) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lib").join(relative)
 }
 
-fn assert_source_program_reaches_amd64(relative: impl AsRef<Path>) {
-    let native = TestPipeline::amd64(repository_source(relative)).unwrap();
+fn assert_source_program_reaches_cranelift(relative: impl AsRef<Path>) {
+    let native = TestPipeline::cranelift(repository_source(relative)).unwrap();
 
-    assert!(!native.assembly.is_empty());
+    assert!(!native.object.is_empty());
 }
 
 #[test]
@@ -1682,24 +1668,25 @@ fn stack_ir_constructs_and_applies_the_same_typed_builtin_package() {
 }
 
 #[test]
-fn builtin_applied_stack_ir_reaches_analyzed_assembly() {
+fn builtin_applied_stack_ir_reaches_cranelift_emission() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", builtin_add_exit_source());
-    let SourceAssembly { sps_low, assembly, .. } = TestPipeline::zasm(root).unwrap();
+    let lowered = TestPipeline::sps_low(root).unwrap();
+    let artifact = lowered.emit_cranelift().unwrap();
 
-    assert!(sps_low.arena().inner.compus.get(sps_low.root()).is_some());
-    assert!(assembly.arena().programs.get(&assembly.root()).is_some());
+    assert!(lowered.sps_low.arena().inner.compus.get(lowered.sps_low.root()).is_some());
+    assert!(!artifact.object.is_empty());
 }
 
 #[test]
-fn declaration_free_source_reaches_native_assembly_emission() {
+fn declaration_free_source_reaches_native_object_emission() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", builtin_add_exit_source());
     let checked = TestPipeline::check(&root).unwrap();
-    let native = TestPipeline::amd64_from_checked(root, checked).unwrap();
+    let native = TestPipeline::cranelift_from_checked(root, checked).unwrap();
 
     assert_eq!(native.name, "main");
-    assert!(!native.assembly.is_empty());
+    assert!(!native.object.is_empty());
 }
 
 #[test]
@@ -1886,10 +1873,10 @@ fn legacy_tuple_example_ports_to_uniform_term_composition() {
     )
     .with_packages(&dynamics.packages)
     .run();
-    let native = TestPipeline::amd64_from_checked(root, checked).unwrap();
+    let native = TestPipeline::cranelift_from_checked(root, checked).unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
-    assert!(!native.assembly.is_empty());
+    assert!(!native.object.is_empty());
 }
 
 #[test]
@@ -1908,11 +1895,11 @@ fn exact_signed_arithmetic_agrees_through_interpretation_and_native_emission() {
     )
     .with_packages(&dynamics.packages)
     .run();
-    let native = TestPipeline::amd64_from_checked(root, checked).unwrap();
+    let native = TestPipeline::cranelift_from_checked(root, checked).unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     // Constant arithmetic may disappear before native instruction selection.
-    assert!(!native.assembly.is_empty());
+    assert!(!native.object.is_empty());
 }
 
 #[test]
@@ -1931,10 +1918,10 @@ fn recursive_nominal_types_port_to_a_declaration_free_block() {
     )
     .with_packages(&dynamics.packages)
     .run();
-    let native = TestPipeline::amd64_from_checked(root, checked).unwrap();
+    let native = TestPipeline::cranelift_from_checked(root, checked).unwrap();
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
-    assert!(!native.assembly.is_empty());
+    assert!(!native.object.is_empty());
 }
 
 #[test]
@@ -1954,7 +1941,7 @@ fn standard_data_package_exports_a_packed_value() {
 fn nonterminating_compile_examples_check_and_lower_as_root_terms() {
     ["tests/builtin/echo.zy", "tests/core/loop.zy", "tests/core/looping.zy"]
         .into_iter()
-        .for_each(assert_source_program_reaches_amd64);
+        .for_each(assert_source_program_reaches_cranelift);
 }
 
 #[test]

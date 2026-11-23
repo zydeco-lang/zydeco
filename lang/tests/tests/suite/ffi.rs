@@ -83,17 +83,26 @@ fn xxhash_binding_reaches_the_native_c_call_boundary() {
     let backend = CommandCompiler::default().lower(&FfiCase::path("xxhash.zy")).unwrap();
 
     assert!(backend.render_sps_low().contains("<extern:XXH32/3>"));
-    let zydeco_cli::Amd64Artifact { assembly, foreign_libraries, .. } =
-        backend.emit_amd64(TargetOs::Linux);
-    assert!(assembly.contains("extern XXH32"));
-    assert!(assembly.contains("call XXH32"));
-    assert!(!assembly.contains("zydeco_ffi_borrow_memory"));
-    assert_eq!(
-        foreign_libraries.iter().map(|library| library.as_str()).collect::<Vec<_>>(),
-        ["xxhash"]
-    );
-    let macho = backend.emit_amd64(TargetOs::Macos).assembly;
-    assert!(macho.contains("call _XXH32"));
+    for arch in [TargetArchitecture::X86_64, TargetArchitecture::Aarch64] {
+        for os in [TargetOs::Linux, TargetOs::Macos] {
+            let artifact = backend.emit_native(arch, os).unwrap();
+            assert!(!artifact.object.is_empty());
+            assert_eq!(
+                artifact
+                    .foreign_libraries
+                    .iter()
+                    .map(|library| library.as_str())
+                    .collect::<Vec<_>>(),
+                ["xxhash"]
+            );
+            assert!(
+                artifact
+                    .foreign_imports
+                    .iter()
+                    .any(|import| import.target.symbol.as_str() == "XXH32")
+            );
+        }
+    }
 }
 
 #[test]
@@ -149,12 +158,23 @@ fn rejects_unsupported_classifier_components_with_specific_diagnostics() {
 #[test]
 fn boundary_fixture_lowers_without_xxhash_specific_shapes() {
     let backend = CommandCompiler::default().lower(&FfiCase::path("boundary.zy")).unwrap();
-    let zydeco_cli::Amd64Artifact { assembly, foreign_libraries, .. } =
-        backend.emit_amd64(TargetOs::Linux);
-    for name in ["zero", "echo", "bytes", "mixed", "three_bytes", "six"] {
-        assert!(assembly.contains(&format!("call zyffi_{name}")));
+    for (arch, os) in [
+        (TargetArchitecture::X86_64, TargetOs::Linux),
+        (TargetArchitecture::Aarch64, TargetOs::Macos),
+    ] {
+        let artifact = backend.emit_native(arch, os).unwrap();
+        for name in ["zero", "echo", "bytes", "mixed", "three_bytes", "six"] {
+            let expected = format!("zyffi_{name}");
+            assert!(
+                artifact
+                    .foreign_imports
+                    .iter()
+                    .any(|import| import.target.symbol.as_str() == expected),
+                "missing {expected} for {arch}/{os:?}"
+            );
+        }
+        assert_eq!(artifact.foreign_libraries[0].as_str(), "zyffi_boundary");
     }
-    assert_eq!(foreign_libraries[0].as_str(), "zyffi_boundary");
 }
 
 #[test]
@@ -172,19 +192,27 @@ fn native_c_boundary_executes_the_compositional_protocol() {
     use zydeco_cli::BuildOptions;
 
     let directory = tempfile::tempdir().unwrap();
+    let arch = TargetArchitecture::host().unwrap();
     let operating_system = TargetOs::host().unwrap();
     let library = directory.path().join(match operating_system {
         | TargetOs::Macos => "libzyffi_boundary.dylib",
         | TargetOs::Linux => "libzyffi_boundary.so",
     });
     let mut cc = Command::new("cc");
-    match operating_system {
-        | TargetOs::Macos => {
+    match (arch, operating_system) {
+        | (TargetArchitecture::Aarch64, TargetOs::Macos) => {
+            cc.args(["-arch", "arm64", "-dynamiclib"])
+                .arg(format!("-Wl,-install_name,{}", library.display()));
+        }
+        | (TargetArchitecture::X86_64, TargetOs::Macos) => {
             cc.args(["-arch", "x86_64", "-dynamiclib"])
                 .arg(format!("-Wl,-install_name,{}", library.display()));
         }
-        | TargetOs::Linux => {
+        | (TargetArchitecture::X86_64, TargetOs::Linux) => {
             cc.args(["-m64", "-shared", "-fPIC"]);
+        }
+        | (TargetArchitecture::Aarch64, TargetOs::Linux) => {
+            cc.args(["-shared", "-fPIC"]);
         }
     }
     let output = cc.arg(FfiCase::path("boundary.c")).arg("-o").arg(&library).output().unwrap();
@@ -192,14 +220,14 @@ fn native_c_boundary_executes_the_compositional_protocol() {
     let options = BuildOptions::new(
         directory.path().to_path_buf(),
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../runtime"),
-        TargetArchitecture::X86_64,
+        arch,
         operating_system,
     );
     for fixture in ["boundary.zy", "static-layout.zy", "mutable-output.zy", "integers.zy"] {
         let backend = CommandCompiler::default().lower(&FfiCase::path(fixture)).unwrap();
-        let native = backend.emit_amd64(operating_system);
+        let native = backend.emit_native(arch, operating_system).unwrap();
         let executable =
-            options.link_amd64("ffi_program", &native.assembly, &native.foreign_libraries).unwrap();
+            options.link_native("ffi_program", &native.object, &native.foreign_libraries).unwrap();
         let output = Command::new(executable.path())
             .env("LD_LIBRARY_PATH", directory.path())
             .env("DYLD_LIBRARY_PATH", directory.path())
@@ -231,11 +259,13 @@ do _ <- ! foreign;
             ),
         )
         .unwrap();
-        let native =
-            CommandCompiler::default().lower(&source).unwrap().emit_amd64(operating_system);
-        let executable = options
-            .link_amd64("ffi_rejected", &native.assembly, &native.foreign_libraries)
+        let native = CommandCompiler::default()
+            .lower(&source)
+            .unwrap()
+            .emit_native(arch, operating_system)
             .unwrap();
+        let executable =
+            options.link_native("ffi_rejected", &native.object, &native.foreign_libraries).unwrap();
         let output = Command::new(executable.path())
             .env("LD_LIBRARY_PATH", directory.path())
             .env("DYLD_LIBRARY_PATH", directory.path())

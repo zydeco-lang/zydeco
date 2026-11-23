@@ -106,49 +106,39 @@ impl BuildOptions {
         Ok(())
     }
 
-    pub fn link_amd64(
-        &self, artifact: &str, assembly: &str,
+    pub fn link_native(
+        &self, artifact: &str, object: &[u8],
         foreign_libraries: &[zydeco_syntax::ForeignLibraryName],
     ) -> Result<Executable, NativeError> {
-        self.link_amd64_resolved(
+        self.link_native_resolved(
             artifact,
-            assembly,
+            object,
             foreign_libraries,
             &crate::library::LinkedLibraries::default(),
         )
     }
 
-    pub fn link_amd64_resolved(
-        &self, artifact: &str, assembly: &str,
+    pub fn link_native_resolved(
+        &self, artifact: &str, object: &[u8],
         foreign_libraries: &[zydeco_syntax::ForeignLibraryName],
         libraries: &crate::library::LinkedLibraries,
     ) -> Result<Executable, NativeError> {
-        if self.architecture != TargetArchitecture::X86_64 {
-            return Err(NativeError::UnsupportedAmd64Architecture(self.architecture));
-        }
         self.prepare()?;
 
-        let (nasm_format, cargo_target) = match self.operating_system {
-            | TargetOs::Linux => ("elf64", "x86_64-unknown-linux-gnu"),
-            | TargetOs::Macos => ("macho64", "x86_64-apple-darwin"),
+        let cargo_target = match (self.architecture, self.operating_system) {
+            | (TargetArchitecture::X86_64, TargetOs::Linux) => "x86_64-unknown-linux-gnu",
+            | (TargetArchitecture::X86_64, TargetOs::Macos) => "x86_64-apple-darwin",
+            | (TargetArchitecture::Aarch64, TargetOs::Linux) => "aarch64-unknown-linux-gnu",
+            | (TargetArchitecture::Aarch64, TargetOs::Macos) => "aarch64-apple-darwin",
         };
         let library = format!("zy{artifact}");
-        let assembly_path = self.build_dir.join(format!("{artifact}.s"));
         let object_path = self.build_dir.join(format!("{artifact}.o"));
         let library_path =
             self.build_dir.join(format!("{}{library}.a", std::env::consts::DLL_PREFIX));
         let executable_path = self.build_dir.join(format!("{artifact}.exe"));
 
-        std::fs::write(&assembly_path, assembly).map_err(NativeError::WriteBackendOutput)?;
-        NativeTool::Nasm.run(
-            Command::new("nasm")
-                .arg("-f")
-                .arg(nasm_format)
-                .arg("-o")
-                .arg(&object_path)
-                .arg(&assembly_path),
-        )?;
-        libraries.bundle_raw(&object_path, self.operating_system)?;
+        std::fs::write(&object_path, object).map_err(NativeError::WriteBackendOutput)?;
+        libraries.bundle_raw(&object_path, self.architecture, self.operating_system)?;
         NativeTool::Archive
             .run(Command::new("ar").arg("crs").arg(&library_path).arg(&object_path))?;
 
@@ -436,21 +426,6 @@ impl BuildOptions {
     }
 
     fn write_machine_contract(machine_out: &Path) -> Result<(), NativeError> {
-        let entry_symbol = zydeco_machine::native::ENTRY_SYMBOL;
-        let export_entry_symbol = zydeco_machine::native::EXPORT_ENTRY_SYMBOL;
-        let contract = format!(
-            "pub const ENTRY_SYMBOL: &str = {entry_symbol:?};\n\
-             #[cfg(all(feature = \"runtime\", target_arch = \"x86_64\"))]\nunsafe extern \"sysv64\" {{\n\
-             #[link_name = {:?}]\n\
-             pub fn entry() -> Word;\n}}\n\
-             pub const EXPORT_ENTRY_SYMBOL: &str = {export_entry_symbol:?};\n\
-             #[macro_export]\nmacro_rules! export_native_entry {{ ($item:item) => {{\n\
-             #[unsafe(export_name = {:?})] $item\n}}; }}\n",
-            format!("\x01{entry_symbol}"),
-            format!("\x01{export_entry_symbol}"),
-        );
-        std::fs::write(machine_out.join("contract.rs"), contract)
-            .map_err(NativeError::PrepareBuildDirectory)?;
         let clif_entry = zydeco_machine::clif::CLIF_ENTRY_SYMBOL;
         let clif_contract = format!(
             "pub const CLIF_ENTRY_SYMBOL: &str = {clif_entry:?};\n\
@@ -877,7 +852,6 @@ impl Executable {
 
 #[derive(Clone, Copy, Debug)]
 pub enum NativeTool {
-    Nasm,
     Archive,
     Cargo,
     Rustc,
@@ -903,7 +877,6 @@ impl NativeTool {
 impl Display for NativeTool {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         formatter.write_str(match self {
-            | Self::Nasm => "nasm",
             | Self::Archive => "ar",
             | Self::Cargo => "cargo",
             | Self::Rustc => "rustc",
@@ -918,10 +891,6 @@ pub enum NativeError {
     UnsupportedHostArchitecture(&'static str),
     #[error("unsupported host operating system `{0}`")]
     UnsupportedHostOperatingSystem(&'static str),
-    #[error(
-        "the AMD64 backend cannot target {0}; the architecture defaults to the host, so pass `--target-arch x86-64`"
-    )]
-    UnsupportedAmd64Architecture(TargetArchitecture),
     #[error("cannot prepare the build directory: {0}")]
     PrepareBuildDirectory(#[source] std::io::Error),
     #[error("cannot read the runtime directory: {0}")]

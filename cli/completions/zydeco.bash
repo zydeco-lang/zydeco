@@ -118,11 +118,11 @@ _zydeco() {
                     return 0
                     ;;
                 --target)
-                    COMPREPLY=($(compgen -W "zir zasm asm object staticlib sharedlib wasm-sps exe" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "zir object staticlib sharedlib wasm-sps exe" -- "${cur}"))
                     return 0
                     ;;
                 -t)
-                    COMPREPLY=($(compgen -W "zir zasm asm object staticlib sharedlib wasm-sps exe" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "zir object staticlib sharedlib wasm-sps exe" -- "${cur}"))
                     return 0
                     ;;
                 --representation)

@@ -3,36 +3,39 @@ use std::{
     process::{Command, Stdio},
 };
 use zydeco_cli::{BuildOptions, CommandCompiler, NativeError, TargetArchitecture, TargetOs};
-use zydeco_machine::native::ENTRY_SYMBOL;
+use zydeco_machine::clif::CLIF_ENTRY_SYMBOL;
 
 #[test]
 fn packaged_model_links_and_a_mismatched_model_cannot_publish_an_executable() {
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let directory = tempfile::tempdir().unwrap();
+    let arch = TargetArchitecture::host().unwrap();
     let operating_system = TargetOs::host().unwrap();
     let options = BuildOptions::new(
         directory.path().to_path_buf(),
         workspace.join("runtime"),
-        TargetArchitecture::X86_64,
+        arch,
         operating_system,
     );
     // Exercises captured caller values and all three host-resumption arities.
     let backend = CommandCompiler::default()
         .lower(&workspace.join("lib/tests/builtin/host-runtime.zy"))
         .unwrap();
-    let zydeco_cli::Amd64Artifact { assembly, foreign_libraries: libraries, .. } =
-        backend.emit_amd64(operating_system);
-    let executable = options.link_amd64("matching", &assembly, &libraries).unwrap();
+    let zydeco_cli::NativeArtifact { object, foreign_libraries: libraries, .. } =
+        backend.emit_native(arch, operating_system).unwrap();
+    let executable = options.link_native("matching", &object, &libraries).unwrap();
     let output = Command::new(executable.path()).stdin(Stdio::null()).output().unwrap();
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
 
-    // Generated assembly is the only caller of many runtime exports. Optimized
+    // Generated objects are the only caller of many runtime exports. Optimized
     // builds must retain these symbols, including when Rust would otherwise use
     // local ThinLTO. Build the already packaged program without mutating process
     // environment shared with the other integration tests.
-    let target = match operating_system {
-        | TargetOs::Linux => "x86_64-unknown-linux-gnu",
-        | TargetOs::Macos => "x86_64-apple-darwin",
+    let target = match (arch, operating_system) {
+        | (TargetArchitecture::X86_64, TargetOs::Linux) => "x86_64-unknown-linux-gnu",
+        | (TargetArchitecture::X86_64, TargetOs::Macos) => "x86_64-apple-darwin",
+        | (TargetArchitecture::Aarch64, TargetOs::Linux) => "aarch64-unknown-linux-gnu",
+        | (TargetArchitecture::Aarch64, TargetOs::Macos) => "aarch64-apple-darwin",
     };
     let mut cargo = Command::new("cargo");
     cargo
@@ -50,12 +53,21 @@ fn packaged_model_links_and_a_mismatched_model_cannot_publish_an_executable() {
     let output = Command::new(optimized).stdin(Stdio::null()).output().unwrap();
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
 
-    let incompatible = assembly.replace(ENTRY_SYMBOL, "zydeco_entry_frames_incompatible");
-    let error = options.link_amd64("mismatched", &incompatible, &libraries).unwrap_err();
+    let incompatible = zydeco_cranelift::Emitter::new(
+        &backend.sps_low,
+        zydeco_cranelift::NativeTarget::host().unwrap(),
+    )
+    .with_entry(zydeco_cranelift::NativeEntry::Unit(
+        zydeco_syntax::ForeignSymbolName::parse("zydeco_clif_entry_incompatible").unwrap(),
+    ))
+    .run()
+    .unwrap()
+    .object;
+    let error = options.link_native("mismatched", &incompatible, &libraries).unwrap_err();
     let NativeError::ToolFailed { stderr, .. } = error else {
         panic!("expected the linker to reject the model identity, got {error}");
     };
-    assert!(stderr.contains(ENTRY_SYMBOL), "{stderr}");
+    assert!(stderr.contains(CLIF_ENTRY_SYMBOL), "{stderr}");
     assert!(!directory.path().join("mismatched.exe").exists());
     assert!(executable.path().exists(), "a failed build must preserve earlier executables");
 }
@@ -65,13 +77,15 @@ fn returning_calls_retain_slots_without_heap_capture_products() {
     let source =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lib/tests/builtin/host-return.zy");
     let backend = CommandCompiler::default().lower(&source).unwrap();
-    // Portable conversion still spells out the capture environment. Native
-    // preparation must remove its allocation, even for nonempty captures.
+    // Portable conversion spells out the capture environment before native emission
+    // elides heap capture products for host returns.
     assert!(backend.render_sps_low().contains("pack-continuation("));
-    let assembly = backend.emit_amd64(TargetOs::host().unwrap()).assembly;
-    assert!(assembly.contains("retain activation slots for return"));
-    assert!(!assembly.contains("pack_product"), "{assembly}");
-    assert!(!assembly.contains("call zydeco_alloc_scanned"), "{assembly}");
+    let artifact = backend
+        .emit_native(TargetArchitecture::host().unwrap(), TargetOs::host().unwrap())
+        .unwrap();
+    assert!(!artifact.object.is_empty());
+    zydeco_tests::utils::SourceProgram::setup("tests/builtin/host-return.zy")
+        .test(zydeco_tests::utils::ExecutionTarget::Exe);
 }
 
 #[test]
