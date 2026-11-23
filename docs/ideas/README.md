@@ -70,6 +70,17 @@ Preserve the distinction between an inferred `typeof` contract and an explicitly
 [L9](../references/language/src/polymorphism-and-packed-values.md#module-interfaces-and-shared-openings)
 owns current module composition.
 
+### Applicative sealing and package parameterization
+
+Investigate avoiding transitive factory parameter waterfalls across capability
+and invariant diamonds through either applicative sealing on pure `val pi` module constructors
+or overridable package slots on top of `Copy → Resolve → Merge → Analyze`.
+The [parameterization proposal](../proposals/parameterization-and-stdlib.md)
+records the open design options and trade-offs alongside
+[L9](../references/language/src/polymorphism-and-packed-values.md#module-interfaces-and-shared-openings),
+[source packages](../references/language/src/sources/packages.md#the-opaque-root),
+and [standard library organization](../references/library/src/organization.md).
+
 ### Recursive admissibility
 
 Specify stronger guardedness or positivity only after identifying the intended accepted recursive values and types,
