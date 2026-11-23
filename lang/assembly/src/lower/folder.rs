@@ -103,13 +103,46 @@ pub(super) enum Work {
 
 pub(super) enum Frame {
     Root,
-    Publish { id: ProgId, instruction: Instruction, context: Context, root: ProgId },
-    Block { symbol: SymId, name: String, context: Context, next: ContId },
-    ResumeEntry { label: sk::DefId, bindings: Vec<(VarId, VarId)>, context: Context, next: ContId },
-    Label { label: sk::DefId, kind: sk::LabelKind, tail: sk::CompuId, context: Context },
-    Branch { branches: Branches, tag: Tag },
-    CompareTrue { operation: ComparisonOp, when_false: sk::CompuId, context: Context },
-    CompareFalse { operation: ComparisonOp, when_true: ProgId, context: Context },
+    Publish {
+        id: ProgId,
+        instruction: Instruction,
+        context: Context,
+        root: ProgId,
+    },
+    Block {
+        symbol: SymId,
+        name: String,
+        context: Context,
+        next: ContId,
+    },
+    ResumeEntry {
+        label: sk::DefId,
+        bindings: Vec<(VarId, VarId)>,
+        context: Context,
+        next: ContId,
+    },
+    Label {
+        label: sk::DefId,
+        kind: sk::LabelKind,
+        stub: Option<ProgId>,
+        tail: sk::CompuId,
+        entry: Context,
+        context: Context,
+    },
+    Branch {
+        branches: Branches,
+        tag: Tag,
+    },
+    CompareTrue {
+        operation: ComparisonOp,
+        when_false: sk::CompuId,
+        context: Context,
+    },
+    CompareFalse {
+        operation: ComparisonOp,
+        when_true: ProgId,
+        context: Context,
+    },
 }
 
 pub(super) struct Lowering<'lo, 'ir> {
@@ -338,13 +371,26 @@ impl Folder for Lowering<'_, '_> {
                     next,
                 )
             }
-            | Frame::Label { label, kind, tail, context } => {
+            | Frame::Label { label, kind, stub, tail, entry, context } => {
                 let name = self.lo.sps_low.admin.def_name(&label).plain().to_owned();
-                let _symbol = child.build(self.lo, (Some(name), Some(label)));
-                if kind == sk::LabelKind::Closed && self.lo.native_frames {
-                    self.lo.arena.frame_entries.insert(child, crate::frames::Entry::Fresh);
+                if let Some(stub) = stub {
+                    self.lo.arena.insert_program(
+                        stub,
+                        Program::Terminator(Terminator::Jump(Jump(child))),
+                        entry,
+                    );
+                    let _body = child.build(self.lo, (Some(format!("{name}_body")), None));
+                    let _symbol = stub.build(self.lo, (Some(name), Some(label)));
+                    if kind == sk::LabelKind::Closed && self.lo.native_frames {
+                        self.lo.arena.frame_entries.insert(stub, crate::frames::Entry::Fresh);
+                    }
+                } else {
+                    let _symbol = child.build(self.lo, (Some(name), Some(label)));
+                    if kind == sk::LabelKind::Closed && self.lo.native_frames {
+                        self.lo.arena.frame_entries.insert(child, crate::frames::Entry::Fresh);
+                    }
+                    self.lo.labels.insert(label, (child, kind));
                 }
-                self.lo.labels.insert(label, (child, kind));
                 Step::TailCall(Work::Compu(tail, context))
             }
             | Frame::CompareTrue { operation, when_false, context } => {

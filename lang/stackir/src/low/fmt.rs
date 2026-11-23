@@ -104,10 +104,12 @@ impl<'a> Pretty<'a, Formatter<'a>> for CompuExt {
                 RcDoc::text(" ! "),
                 stack.pretty(f),
             ]),
-            | Self::LetLabel(LetLabel { label, kind, body, tail }) => RcDoc::concat([
-                RcDoc::text(match kind {
-                    | LabelKind::Local => "label ",
-                    | LabelKind::Closed => "closed label ",
+            | Self::LetLabel(LetLabel { label, kind, recursive, body, tail }) => RcDoc::concat([
+                RcDoc::text(match (kind, *recursive) {
+                    | (LabelKind::Local, false) => "label ",
+                    | (LabelKind::Local, true) => "rec label ",
+                    | (LabelKind::Closed, false) => "closed label ",
+                    | (LabelKind::Closed, true) => "closed rec label ",
                 }),
                 label.pretty(f),
                 RcDoc::text(" • ->"),

@@ -377,15 +377,20 @@ impl Lowering<'_, '_> {
     /// Lower the computation forms that SPSLow adds to the shared ones.
     fn compu_form(&mut self, form: sk::CompuExt, context: Context) -> Step<Self> {
         match form {
-            | sk::CompuExt::LetLabel(sk::LetLabel { label, kind, body, tail }) => {
+            | sk::CompuExt::LetLabel(sk::LetLabel { label, kind, recursive, body, tail }) => {
                 // A local label runs in the binding frame; a closed label starts a fresh one.
                 let entry = match kind {
                     | sk::LabelKind::Local => context.clone(),
                     | sk::LabelKind::Closed => Context::new(),
                 };
+                let stub = recursive.then(|| {
+                    let stub = self.lo.allocator.alloc();
+                    self.lo.labels.insert(label, (stub, kind));
+                    stub
+                });
                 Step::Call {
-                    input: Work::Compu(body, entry),
-                    frame: Frame::Label { label, kind, tail, context },
+                    input: Work::Compu(body, entry.clone()),
+                    frame: Frame::Label { label, kind, stub, tail, entry, context },
                 }
             }
             | sk::CompuExt::JumpLabel(sk::JumpLabel { label, stack }) => {

@@ -11,25 +11,34 @@ use crate::high::traverse::{EntityId, Node, Visitor};
 use zydeco_foundation::{context::CoContext, dense::SecondaryMap};
 
 /// The calls a subtree makes to procedures bound outside it, split by whether they stay in the
-/// subtree's frame.
+/// subtree's frame, plus whether the subtree introduces any continuation (`Kont`).
 #[derive(Default)]
 struct Calls {
     local: CoContext<high::DefId>,
     crossing: CoContext<high::DefId>,
+    has_kont: bool,
 }
 
 impl Calls {
     fn join(self, other: Self) -> Self {
-        Self { local: self.local + other.local, crossing: self.crossing + other.crossing }
+        Self {
+            local: self.local + other.local,
+            crossing: self.crossing + other.crossing,
+            has_kont: self.has_kont || other.has_kont,
+        }
     }
 
     /// The calls of a subtree that runs in a frame of its own all cross into it.
     fn enclosed(self) -> Self {
-        Self { local: CoContext::new(), crossing: self.local + self.crossing }
+        Self { local: CoContext::new(), crossing: self.local + self.crossing, has_kont: false }
     }
 
     fn without(self, procedure: &high::DefId) -> Self {
-        Self { local: self.local - procedure, crossing: self.crossing - procedure }
+        Self {
+            local: self.local - procedure,
+            crossing: self.crossing - procedure,
+            has_kont: self.has_kont,
+        }
     }
 
     fn reach(&self, procedure: &high::DefId) -> (bool, bool) {
@@ -70,7 +79,11 @@ impl Visitor<high::Sps> for Placement {
         let calls = match node {
             | Node::Pattern(..) => return,
             // Continuation, closure, and fixed-point bodies run in frames of their own.
-            | Node::Stack(_, high::Stack::Ext(high::StackExt::Kont(_)))
+            | Node::Stack(_, high::Stack::Ext(high::StackExt::Kont(_))) => {
+                let mut calls = self.children(node).enclosed();
+                calls.has_kont = true;
+                calls
+            }
             | Node::Value(_, Value::Ext(high::ValueExt::Closure(_))) => {
                 self.children(node).enclosed()
             }
@@ -88,21 +101,34 @@ impl Visitor<high::Sps> for Placement {
             | Node::Computation(
                 id,
                 Compu::Ext(high::CompuExt::LetProc(high::LetProc {
-                    procedure, body, tail, ..
+                    procedure,
+                    recursive,
+                    body,
+                    tail,
+                    ..
                 })),
             ) => {
                 let tail = self.take(*tail);
                 let body = self.take(*body);
-                let kind = match tail.reach(procedure) {
-                    | (_, true) => Some(low::LabelKind::Closed),
-                    | (true, false) => Some(low::LabelKind::Local),
-                    | (false, false) => None,
+                let (tail_local, tail_crossing) = tail.reach(procedure);
+                let (_, body_crossing) = body.reach(procedure);
+                // Keep non-tail-recursive loops (whose body pushes a `Kont`) on `Closed` so
+                // native frame lowering starts a fresh frame per activation instead of aliasing.
+                let kind = if !tail_local && !tail_crossing {
+                    None
+                } else if tail_crossing || (*recursive && (body_crossing || body.has_kont)) {
+                    Some(low::LabelKind::Closed)
+                } else {
+                    Some(low::LabelKind::Local)
                 };
                 self.kinds.insert_new(id, kind);
                 let tail = tail.without(procedure);
-                let body =
-                    if kind == Some(low::LabelKind::Closed) { body.enclosed() } else { body };
-                tail.join(body)
+                let body = if *recursive { body.without(procedure) } else { body };
+                match kind {
+                    | None => tail,
+                    | Some(low::LabelKind::Closed) => tail.join(body.enclosed()),
+                    | Some(low::LabelKind::Local) => tail.join(body),
+                }
             }
             | _ => self.children(node),
         };

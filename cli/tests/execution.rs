@@ -528,6 +528,71 @@ fn wasm_sps_tail_calls_run_100k_iterations_without_stack_overflow() {
     let output = fixture.command(&["run", "tail.zy", "-t", "wasm-sps"]).output().unwrap();
     assert_eq!(Fixture::stdout(&output, 0), "done\n");
     assert!(output.stderr.is_empty(), "{}", String::from_utf8_lossy(&output.stderr));
+
+    let compiled = zydeco_cli::CommandCompiler::default()
+        .lower(&fixture.directory.path().join("tail.zy"))
+        .unwrap()
+        .render_sps_low();
+    assert!(
+        compiled.contains("rec label "),
+        "tail loop should contify to a recursive label:\n{compiled}"
+    );
+    assert!(
+        compiled.contains("jump count"),
+        "tail loop should emit a self-jump instead of calling a closure:\n{compiled}"
+    );
+    // Only the exit `write_line` callback closure remains; the loop allocates no closure.
+    assert_eq!(
+        compiled.matches("pack-closure(").count(),
+        1,
+        "contified tail loop should allocate no closure package for recursion:\n{compiled}"
+    );
+}
+
+#[test]
+fn polymorphic_nullary_and_nested_constructors_execute_in_wasm_sps() {
+    let fixture = Fixture::new();
+    let builtin = Path::new(env!("CARGO_MANIFEST_DIR")).join("../lib/std/builtin.zy");
+    fixture.write(
+        "ctors.zy",
+        &format!(
+            r#"param (/VType; /Thk; /Ret; /OS; /Unit; /Int; /String; /args; /process; /system) : @(import({:?})) in
+let PolyOpt (A : VType) = data
+  | +None : Unit
+  | +Some : A
+end in
+let ! check_unit (o : PolyOpt Unit) (msg : String) (next : Thk OS) : OS =
+  match o
+  | +None() => ! system/stdio/write "N:" next
+  | +Some(_) => ! system/stdio/write msg next
+  end
+in
+let ! mk_none : Ret (PolyOpt Unit) = ret +None() in
+let ! mk_some_lit : Ret (PolyOpt Unit) = ret +Some(()) in
+let ! mk_some (u : Unit) : Ret (PolyOpt Unit) = ret +Some(u) in
+let ! mk_nested : Ret (PolyOpt (PolyOpt Int)) = ret +Some(+None()) in
+do u <- ! args/at (Ret Unit) 0 {{ ret () }} {{ fn _ => ret () }};
+do r_none <- ! mk_none;
+do r_lit <- ! mk_some_lit;
+do r_var <- ! mk_some u;
+do nested <- ! mk_nested;
+let ! finish : OS =
+  match nested
+  | +None() => ! process/exit 2
+  | +Some(+None()) => ! system/stdio/write_line ":ok" {{ ! process/exit 0 }}
+  | +Some(+Some(_)) => ! process/exit 3
+  end
+in
+! check_unit r_none "X" {{ ! check_unit r_lit "L:" {{ ! check_unit r_var "V" finish }} }}
+"#,
+            builtin.to_str().unwrap(),
+        ),
+    );
+    for target in ["interpreter", "wasm-sps"] {
+        let output = fixture.command(&["run", "ctors.zy", "-t", target]).output().unwrap();
+        assert_eq!(Fixture::stdout(&output, 0), "N:L:V:ok\n", "target {target}");
+        assert!(output.stderr.is_empty(), "{}", String::from_utf8_lossy(&output.stderr));
+    }
 }
 
 #[test]

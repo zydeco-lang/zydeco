@@ -66,6 +66,16 @@ impl SpsLowInnerArena {
             | ValuePattern::Alias(_) => RepType::Word,
         }
     }
+
+    /// Return the constructor tag index when `id` constructs a nullary value `Ctor(tag, Triv)`.
+    pub fn nullary_ctor_tag(&self, id: ValueId) -> Option<usize> {
+        match &self.values[id] {
+            | Value::Ctor(Ctor(tag, body)) if matches!(self.values[*body], Value::Triv(_)) => {
+                Some(tag.idx)
+            }
+            | _ => None,
+        }
+    }
 }
 
 impl Nodes for SpsLowInnerArena {

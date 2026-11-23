@@ -33,9 +33,9 @@ impl CompilerPass<FragmentProgram> for Localizer {
     fn run(&mut self, program: FragmentProgram) -> Result<Self::Output, Self::Error> {
         let scheme = program.scheme();
         let (mut arena, root) = program.into_program().into_parts();
-        let bindings = Escapes::analyze(&arena.inner, root);
-        let calls = Calls::collect(&arena.inner, root, &bindings);
-        for (binding, procedure) in bindings {
+        let eligible = Escapes::analyze(&arena.inner, root);
+        let calls = Calls::collect(&arena.inner, root, &eligible);
+        for (binding, procedure) in eligible.lets {
             let Computation::LetValue(Let { bindee, tail, .. }) = arena.inner.compus[&binding]
             else {
                 unreachable!("an eligible binding is a value let")
@@ -51,7 +51,20 @@ impl CompilerPass<FragmentProgram> for Localizer {
             }
             arena.inner.compus.replace_existing(
                 binding,
-                LetProc { procedure, stack: StackVar, body, tail }.into(),
+                LetProc { procedure, recursive: false, stack: StackVar, body, tail }.into(),
+            );
+        }
+        for (fix_id, procedure, recursive) in eligible.fixes {
+            let Computation::Ext(CompuExt::Fix(SFix { stack, body, .. })) =
+                arena.inner.compus[&fix_id]
+            else {
+                unreachable!("an eligible fix is an SFix")
+            };
+            let site = arena.admin.term_site(fix_id);
+            let tail = CallProc { procedure, stack }.build(&mut arena, site);
+            arena.inner.compus.replace_existing(
+                fix_id,
+                LetProc { procedure, recursive, stack: StackVar, body, tail }.into(),
             );
         }
         for Call { call, procedure, stack } in calls {
@@ -61,11 +74,16 @@ impl CompilerPass<FragmentProgram> for Localizer {
     }
 }
 
+struct Eligible {
+    lets: Vec<(CompuId, DefId)>,
+    fixes: Vec<(CompuId, DefId, bool)>,
+}
+
 /// Bottom-up escaping occurrences: the variables that occur in a node other than as the head of a
-/// call outside every closure and fixed-point body. A closure binding is eligible when its binder is
-/// called in its tail and escapes nowhere there. An eligible binding's closure body is no longer
-/// under a closure, so the binding contributes the body's escaping occurrences rather than all of
-/// its free variables, and the bindings around it are decided with that in mind.
+/// call outside every closure and fixed-point body. A closure binding or `SFix` is eligible when
+/// its binder escapes nowhere in its scope. An eligible binding's body is no longer under a
+/// closure, so the binding contributes the body's escaping occurrences rather than all of its free
+/// variables, and the bindings around it are decided with that in mind.
 struct Escapes<'a> {
     arena: &'a SpsInnerArena,
     variables: Variables,
@@ -74,12 +92,14 @@ struct Escapes<'a> {
     compu_summaries: SecondaryMap<CompuId, CoContext<DefId>>,
     /// The escaping occurrences of each closure's body, used if a binding localizes the closure.
     bodies: SecondaryMap<ValueId, CoContext<DefId>>,
-    /// Eligible bindings and their binders, innermost first.
-    eligible: Vec<(CompuId, DefId)>,
+    /// Eligible closure bindings and their binders, innermost first.
+    eligible_lets: Vec<(CompuId, DefId)>,
+    /// Eligible `SFix` nodes with their parameter and whether they are recursive.
+    eligible_fixes: Vec<(CompuId, DefId, bool)>,
 }
 
 impl<'a> Escapes<'a> {
-    fn analyze(arena: &'a SpsInnerArena, root: CompuId) -> Vec<(CompuId, DefId)> {
+    fn analyze(arena: &'a SpsInnerArena, root: CompuId) -> Eligible {
         let mut escapes = Self {
             arena,
             variables: Variables::default(),
@@ -87,10 +107,11 @@ impl<'a> Escapes<'a> {
             stack_summaries: SecondaryMap::new(),
             compu_summaries: SecondaryMap::new(),
             bodies: SecondaryMap::new(),
-            eligible: Vec::new(),
+            eligible_lets: Vec::new(),
+            eligible_fixes: Vec::new(),
         };
         Traversal { arena }.run(root.into(), &mut escapes);
-        escapes.eligible
+        Eligible { lets: escapes.eligible_lets, fixes: escapes.eligible_fixes }
     }
 
     fn take_value(&mut self, id: ValueId) -> CoContext<DefId> {
@@ -167,8 +188,15 @@ impl<'a> Escapes<'a> {
                 self.take_stack(*stack) + self.take_value(*value)
             }
             | Computation::Ext(CompuExt::Fix(SFix { param, stack, body })) => {
-                self.take_compu(*body);
-                self.take_stack(*stack) + (self.free(*body) - param)
+                let body_escapes = self.take_compu(*body);
+                let stack_escapes = self.take_stack(*stack);
+                if !body_escapes.iter().any(|escaping| escaping == param) {
+                    let recursive = self.free(*body).iter().any(|free| free == param);
+                    self.eligible_fixes.push((id, *param, recursive));
+                    stack_escapes + (body_escapes - param)
+                } else {
+                    stack_escapes + (self.free(*body) - param)
+                }
             }
             | Computation::ProductMatch(SProductMatch { scrut, binder, body }) => {
                 self.take_value(*scrut) + (self.take_compu(*body) - self.bound(*binder))
@@ -201,7 +229,7 @@ impl<'a> Escapes<'a> {
                 let rest = tail_escapes - self.bound(*binder);
                 match (eligible, body) {
                     | (Some(procedure), Some(body)) => {
-                        self.eligible.push((id, procedure));
+                        self.eligible_lets.push((id, procedure));
                         body + rest
                     }
                     | _ => bindee_escapes + rest,
@@ -263,27 +291,30 @@ struct Call {
     stack: StackId,
 }
 
-/// The calls of each localized binder within its binding's tail.
+/// The calls of each localized binder within its binding's tail or contified fixed-point body.
 struct Calls<'a> {
     arena: &'a SpsInnerArena,
-    bindings: SecondaryMap<CompuId, DefId>,
-    /// Localized binders in scope, each opened by the tail of its binding.
+    lets: SecondaryMap<CompuId, DefId>,
+    fixes: SecondaryMap<CompuId, DefId>,
+    /// Localized binders in scope, each opened by the tail or body it scopes over.
     scopes: Scopes<DefId>,
     calls: Vec<Call>,
 }
 
 impl<'a> Calls<'a> {
-    fn collect(
-        arena: &'a SpsInnerArena, root: CompuId, eligible: &[(CompuId, DefId)],
-    ) -> Vec<Call> {
-        if eligible.is_empty() {
+    fn collect(arena: &'a SpsInnerArena, root: CompuId, eligible: &Eligible) -> Vec<Call> {
+        if eligible.lets.is_empty() && eligible.fixes.is_empty() {
             return Vec::new();
         }
-        let mut bindings = SecondaryMap::new();
-        for &(compu, def) in eligible {
-            bindings.insert_new(compu, def);
+        let mut lets = SecondaryMap::new();
+        for &(compu, def) in &eligible.lets {
+            lets.insert_new(compu, def);
         }
-        let mut calls = Self { arena, bindings, scopes: Scopes::default(), calls: Vec::new() };
+        let mut fixes = SecondaryMap::new();
+        for &(compu, def, _) in &eligible.fixes {
+            fixes.insert_new(compu, def);
+        }
+        let mut calls = Self { arena, lets, fixes, scopes: Scopes::default(), calls: Vec::new() };
         Traversal { arena }.run(root.into(), &mut calls);
         calls.calls
     }
@@ -297,8 +328,13 @@ impl Visitor<Sps> for Calls<'_> {
         self.scopes.enter(node.id());
         match node {
             | Node::Computation(id, Computation::LetValue(Let { tail, .. })) => {
-                if let Some(procedure) = self.bindings.get(id) {
+                if let Some(procedure) = self.lets.get(id) {
                     self.scopes.open_at((*tail).into(), *procedure);
+                }
+            }
+            | Node::Computation(id, Computation::Ext(CompuExt::Fix(SFix { body, .. }))) => {
+                if let Some(procedure) = self.fixes.get(id) {
+                    self.scopes.open_at((*body).into(), *procedure);
                 }
             }
             | Node::Computation(

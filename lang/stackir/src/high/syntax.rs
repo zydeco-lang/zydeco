@@ -97,10 +97,12 @@ pub struct SFix {
 }
 
 /// A second-class procedure: `body` runs on the stack that each call supplies, bound to its own `•`.
-/// The procedure is in scope in `tail` only, where it can be called and nothing else.
+/// Non-recursive procedures are in scope in `tail` only; `recursive` procedures also permit
+/// self-calls within `body`.
 #[derive(Clone, Debug)]
 pub struct LetProc {
     pub procedure: DefId,
+    pub recursive: bool,
     pub stack: StackVar,
     pub body: CompuId,
     pub tail: CompuId,

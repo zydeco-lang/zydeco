@@ -37,13 +37,13 @@ impl MemoryCall {
         let ValuePattern::Var(loaded) = arena.vpats[&result] else {
             return None;
         };
-        if uses.get(loaded) != Some(&1) {
+        if uses.get(loaded).copied().unwrap_or(0) == 0 {
             return None;
         }
         let mut expressions =
             Expressions { nodes: vec![Expression::Loaded], ..Expressions::default() };
         let mut bindings = SecondaryMap::new();
-        bindings.insert_new(loaded, 0);
+        bindings.insert_new(loaded, (0, ty));
         let mut address_bindings = Vec::new();
         let mut cursor = next;
         loop {
@@ -63,11 +63,12 @@ impl MemoryCall {
                         cursor = binding.tail;
                         continue;
                     }
-                    if uses.get(def) != Some(&1) {
+                    if uses.get(def).copied().unwrap_or(0) == 0 {
                         return None;
                     }
-                    let result = expressions.value(arena, binding.bindee, Some(ty), &bindings)?;
-                    bindings.insert_new(def, result);
+                    let (result, _) =
+                        expressions.value(arena, binding.bindee, Some(ty), &bindings)?;
+                    bindings.insert_new(def, (result, ty));
                     cursor = binding.tail;
                 }
                 | Computation::Memory(MemoryStep::Store {
@@ -80,8 +81,10 @@ impl MemoryCall {
                     if !Self::independent_address(arena, *destination, &bindings) {
                         return None;
                     }
-                    let result = expressions.value(arena, *value, Some(ty), &bindings)?;
-                    if bindings.iter().any(|(def, _)| !expressions.substituted.contains(def)) {
+                    let (result, _) = expressions.value(arena, *value, Some(ty), &bindings)?;
+                    if bindings.iter().any(|(def, _)| {
+                        expressions.substituted_count(def) != uses.get(def).copied().unwrap_or(0)
+                    }) {
                         return None;
                     }
                     let (inputs, kernel) = expressions.finish_kernel(arena, ty, result)?;
@@ -100,7 +103,8 @@ impl MemoryCall {
     }
 
     fn independent_address(
-        arena: &SpsLowInnerArena, address: ValueId, bindings: &SecondaryMap<DefId, usize>,
+        arena: &SpsLowInnerArena, address: ValueId,
+        bindings: &SecondaryMap<DefId, (usize, ScalarType)>,
     ) -> bool {
         let mut address = address;
         for _ in 0..MAX_OPERATIONS {

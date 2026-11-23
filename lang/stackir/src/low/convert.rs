@@ -372,7 +372,13 @@ mod tests {
             let stack = self.build(high::StackVar);
             let body = self.build(high::SReturn { stack, value: read });
             let tail = tail(self, procedure);
-            let bound = self.build(high::LetProc { procedure, stack: high::StackVar, body, tail });
+            let bound = self.build(high::LetProc {
+                procedure,
+                recursive: false,
+                stack: high::StackVar,
+                body,
+                tail,
+            });
             let binder: high::VPatId = self.build(y);
             let bindee = self.build(high::Triv);
             self.build(high::Let { binder, bindee, tail: bound })
@@ -470,5 +476,54 @@ mod tests {
         });
         let program = fixture.convert(root);
         assert_eq!(labels(&program), (Vec::new(), Vec::new()));
+    }
+
+    #[test]
+    fn recursive_procedure_without_kont_is_local_and_with_kont_is_closed() {
+        for has_kont in [false, true] {
+            let mut fixture = Fixture::new();
+            let y = fixture.def("y");
+            let procedure = fixture.def("loop");
+            let read: high::ValueId = fixture.build(y);
+            let stack = fixture.build(high::StackVar);
+            let done = fixture.build(high::SReturn { stack, value: read });
+            let stack = fixture.build(high::StackVar);
+            let self_call = fixture.call(procedure, stack);
+            let body = if has_kont {
+                let binder = fixture.build(high::Hole);
+                let kont = fixture.build(high::Kont { binder, body: done });
+                fixture.call(procedure, kont)
+            } else {
+                let operands = [0, 1]
+                    .map(|v| fixture.build(high::Literal::Integer(high::IntegerLiteral::Int(v))));
+                let branch = fixture.build(high::CompareBranch {
+                    operation: high::ComparisonOp::Integer(
+                        high::IntegerType::Int,
+                        high::ComparisonPredicate::Lt,
+                    ),
+                    operands,
+                    when_true: done,
+                    when_false: self_call,
+                });
+                let ambient = fixture.build(high::StackVar);
+                fixture.build(high::Let { binder: high::StackVar, bindee: ambient, tail: branch })
+            };
+            let tail_stack = fixture.build(high::StackVar);
+            let tail = fixture.call(procedure, tail_stack);
+            let bound = fixture.build(high::LetProc {
+                procedure,
+                recursive: true,
+                stack: high::StackVar,
+                body,
+                tail,
+            });
+            let binder: high::VPatId = fixture.build(y);
+            let bindee = fixture.build(high::Triv);
+            let root = fixture.build(high::Let { binder, bindee, tail: bound });
+            let program = fixture.convert(root);
+            let (kinds, _) = labels(&program);
+            let expected = if has_kont { low::LabelKind::Closed } else { low::LabelKind::Local };
+            assert_eq!(kinds, vec![expected]);
+        }
     }
 }

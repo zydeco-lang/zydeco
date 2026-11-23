@@ -146,9 +146,18 @@ impl<'a> FragmentValidator<'a> {
                 .then_some(FragmentError::ProcedureAsValue { value, procedure: *def }),
             | Node::Computation(
                 _,
-                Computation::Ext(CompuExt::LetProc(LetProc { procedure, tail, .. })),
+                Computation::Ext(CompuExt::LetProc(LetProc {
+                    procedure,
+                    recursive,
+                    body,
+                    tail,
+                    ..
+                })),
             ) => {
                 self.scopes.open_at((*tail).into(), ProcedureScope::Bound(*procedure));
+                if *recursive {
+                    self.scopes.open_at((*body).into(), ProcedureScope::Bound(*procedure));
+                }
                 None
             }
             | Node::Computation(_, Computation::Ext(CompuExt::Fix(SFix { body, .. }))) => {
@@ -455,9 +464,13 @@ mod tests {
             SReturn { stack, value }.build(&mut self.arena, None)
         }
 
-        fn bind(&mut self, body: CompuId, tail: CompuId) -> CompuId {
-            LetProc { procedure: self.procedure, stack: StackVar, body, tail }
+        fn bind_with(&mut self, recursive: bool, body: CompuId, tail: CompuId) -> CompuId {
+            LetProc { procedure: self.procedure, recursive, stack: StackVar, body, tail }
                 .build(&mut self.arena, None)
+        }
+
+        fn bind(&mut self, body: CompuId, tail: CompuId) -> CompuId {
+            self.bind_with(false, body, tail)
         }
 
         fn check(self, root: CompuId, scheme: SpsScheme) -> Result<(), FragmentError> {
@@ -476,6 +489,15 @@ mod tests {
         let tail = procedures.call_with(kont);
         let body = procedures.returns_unit();
         let root = procedures.bind(body, tail);
+        assert_eq!(procedures.check(root, SpsScheme::BranchJoin), Ok(()));
+    }
+
+    #[test]
+    fn recursive_procedures_accept_self_calls_in_their_body() {
+        let mut procedures = Procedures::new();
+        let recursive = procedures.call();
+        let tail = procedures.call();
+        let root = procedures.bind_with(true, recursive, tail);
         assert_eq!(procedures.check(root, SpsScheme::BranchJoin), Ok(()));
     }
 

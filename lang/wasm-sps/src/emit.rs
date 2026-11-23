@@ -97,6 +97,7 @@ struct LocalPlan {
     patterns: HashMap<VPatId, u32>,
     scratch_stack: u32,
     scratch_word: u32,
+    scratch_payload: u32,
     result: u32,
     transfer_ptr: u32,
     scalar_base: u32,
@@ -145,6 +146,7 @@ impl LocalPlan {
 
         let scratch_stack = Self::take(&mut next, "SPS local count")?;
         let scratch_word = Self::take(&mut next, "SPS local count")?;
+        let scratch_payload = Self::take(&mut next, "SPS local count")?;
         let result = Self::take(&mut next, "SPS local count")?;
         let scalar_base = next;
         for _ in 0..collector.scalar_count {
@@ -161,6 +163,7 @@ impl LocalPlan {
             patterns,
             scratch_stack,
             scratch_word,
+            scratch_payload,
             result,
             transfer_ptr,
             scalar_base,
@@ -364,7 +367,9 @@ impl CaseNodeCollector<'_> {
                     work.push(*code);
                 }
                 | sps::Value::Ctor(sps::Ctor(_, body)) => {
-                    work.push(*body);
+                    if self.arena.inner.nullary_ctor_tag(id).is_none() {
+                        work.push(*body);
+                    }
                 }
                 | sps::Value::VCons(sps::VCons { items, .. }) => {
                     work.extend(items.iter().copied());
@@ -778,17 +783,33 @@ impl<'a> CaseEncoder<'a> {
                     | Computation::Ext(sps::CompuExt::LetLabel(sps::LetLabel {
                         label,
                         kind,
+                        recursive,
                         body,
                         tail,
                     })) => match kind {
                         // A local label's tail runs inside a `block`; a jump branches out of it into
                         // the label body that follows, keeping this function's locals as its frame.
+                        | sps::LabelKind::Local if !recursive => {
+                            self.function.instruction(&WasmInstruction::Block(BlockType::Empty));
+                            self.local_labels.insert(label, self.depth + 1);
+                            self.emit_nested(tail)?;
+                            self.function.instruction(&WasmInstruction::End);
+                            self.local_labels.remove(&label);
+                            id = body;
+                        }
+                        // A recursive local label enters a structured `loop`, so self-jumps
+                        // branch back to the loop header while keeping enclosing frame locals.
                         | sps::LabelKind::Local => {
                             self.function.instruction(&WasmInstruction::Block(BlockType::Empty));
                             self.local_labels.insert(label, self.depth + 1);
                             self.emit_nested(tail)?;
                             self.function.instruction(&WasmInstruction::End);
-                            id = body;
+                            self.function.instruction(&WasmInstruction::Loop(BlockType::Empty));
+                            self.local_labels.insert(label, self.depth + 1);
+                            self.emit_nested(body)?;
+                            self.function.instruction(&WasmInstruction::End);
+                            self.local_labels.remove(&label);
+                            break;
                         }
                         | sps::LabelKind::Closed => id = tail,
                     },
@@ -959,18 +980,38 @@ impl<'a> CaseEncoder<'a> {
             .iter()
             .all(|arm| matches!(self.arena.inner.vpats[&arm.binder], ValuePattern::Ctor(_)));
         if constructors {
+            // Immediate nullary constructors encode `RuntimeWord::index(tag)` with low bit 1;
+            // non-nullary constructors are 8-byte aligned heap pointers with low bit 0.
+            let tag_local = self.locals.scratch_word;
+            let payload_local = self.locals.scratch_payload;
+            self.function.instruction(&WasmInstruction::LocalGet(scrut_local));
+            self.function.instruction(&WasmInstruction::I64Const(1));
+            self.function.instruction(&WasmInstruction::I64And);
+            self.function.instruction(&WasmInstruction::I64Eqz);
+            self.function.instruction(&WasmInstruction::If(BlockType::Empty));
+            self.load_local_word(scrut_local, 0);
+            self.function.instruction(&WasmInstruction::LocalSet(tag_local));
+            self.load_local_word(scrut_local, 1);
+            self.function.instruction(&WasmInstruction::LocalSet(payload_local));
+            self.function.instruction(&WasmInstruction::Else);
+            self.function.instruction(&WasmInstruction::LocalGet(scrut_local));
+            self.function.instruction(&WasmInstruction::LocalSet(tag_local));
+            self.function.instruction(&WasmInstruction::I64Const(RuntimeWord::index(0)? as i64));
+            self.function.instruction(&WasmInstruction::LocalSet(payload_local));
+            self.function.instruction(&WasmInstruction::End);
+
             for sps::Matcher { binder, tail } in arms {
                 let ValuePattern::Ctor(sps::Ctor(ctor, body)) =
                     self.arena.inner.vpats[&binder].clone()
                 else {
                     unreachable!("constructor-arm check changed during emission")
                 };
-                self.load_local_word(scrut_local, 0);
+                self.function.instruction(&WasmInstruction::LocalGet(tag_local));
                 self.function
                     .instruction(&WasmInstruction::I64Const(RuntimeWord::index(ctor.idx)? as i64));
                 self.function.instruction(&WasmInstruction::I64Eq);
                 self.function.instruction(&WasmInstruction::If(BlockType::Empty));
-                self.load_local_word(scrut_local, 1);
+                self.function.instruction(&WasmInstruction::LocalGet(payload_local));
                 self.emit_pattern(body)?;
                 self.emit_nested(tail)?;
                 self.function.instruction(&WasmInstruction::End);
@@ -1020,12 +1061,19 @@ impl<'a> CaseEncoder<'a> {
                     self.function.call(self.plan.pair_function());
                 }
                 | sps::Value::Ctor(sps::Ctor(ctor, body)) => {
-                    self.function
-                        .instruction(&WasmInstruction::I64Const(
-                            RuntimeWord::index(ctor.idx)? as i64
-                        ));
-                    self.emit_value(body)?;
-                    self.function.call(self.plan.pair_function());
+                    if let Some(tag) = self.arena.inner.nullary_ctor_tag(id) {
+                        self.function
+                            .instruction(&WasmInstruction::I64Const(
+                                RuntimeWord::index(tag)? as i64
+                            ));
+                    } else {
+                        self.function
+                            .instruction(&WasmInstruction::I64Const(
+                                RuntimeWord::index(ctor.idx)? as i64
+                            ));
+                        self.emit_value(body)?;
+                        self.function.call(self.plan.pair_function());
+                    }
                 }
                 | sps::Value::Triv(_) => {
                     self.function
@@ -1164,16 +1212,30 @@ impl<'a> CaseEncoder<'a> {
                         .instruction(&WasmInstruction::LocalSet(self.locals.variable(def)?));
                 }
                 | ValuePattern::Ctor(sps::Ctor(ctor, body)) => {
-                    self.load_local_word(bindee, 0);
+                    let expected_tag = RuntimeWord::index(ctor.idx)? as i64;
+                    self.function.instruction(&WasmInstruction::LocalGet(bindee));
+                    self.function.instruction(&WasmInstruction::I64Const(1));
+                    self.function.instruction(&WasmInstruction::I64And);
+                    self.function.instruction(&WasmInstruction::I64Eqz);
                     self.function
-                        .instruction(&WasmInstruction::I64Const(
-                            RuntimeWord::index(ctor.idx)? as i64
-                        ));
+                        .instruction(&WasmInstruction::If(BlockType::Result(ValType::I64)));
+                    self.load_local_word(bindee, 0);
+                    self.function.instruction(&WasmInstruction::I64Const(expected_tag));
                     self.function.instruction(&WasmInstruction::I64Ne);
                     self.function.instruction(&WasmInstruction::If(BlockType::Empty));
                     self.function.instruction(&WasmInstruction::Unreachable);
                     self.function.instruction(&WasmInstruction::End);
                     self.load_local_word(bindee, 1);
+                    self.function.instruction(&WasmInstruction::Else);
+                    self.function.instruction(&WasmInstruction::LocalGet(bindee));
+                    self.function.instruction(&WasmInstruction::I64Const(expected_tag));
+                    self.function.instruction(&WasmInstruction::I64Ne);
+                    self.function.instruction(&WasmInstruction::If(BlockType::Empty));
+                    self.function.instruction(&WasmInstruction::Unreachable);
+                    self.function.instruction(&WasmInstruction::End);
+                    self.function
+                        .instruction(&WasmInstruction::I64Const(RuntimeWord::index(0)? as i64));
+                    self.function.instruction(&WasmInstruction::End);
                     self.emit_pattern(body)?;
                 }
                 | ValuePattern::Alias(sps::Alias(patterns)) => {
@@ -1437,7 +1499,8 @@ mod tests {
                 when_false: jumps[1],
             }
             .build(&mut fixture.arena, None);
-            let root = sps::LetLabel { label, kind, body, tail }.build(&mut fixture.arena, None);
+            let root = sps::LetLabel { label, kind, recursive: false, body, tail }
+                .build(&mut fixture.arena, None);
             let program =
                 SpsLowProgram::try_new(fixture.arena, root, SpsScheme::Duplicating).unwrap();
             let module = Emitter::new(&program).run().unwrap();
@@ -1506,5 +1569,78 @@ mod tests {
         let block_locals = local_counts[2];
         assert!(root_locals > 40, "expected large root local count, got {root_locals}");
         assert!(block_locals < 12, "expected tiny block local count (< 12), got {block_locals}");
+    }
+
+    #[test]
+    fn recursive_local_and_closed_labels_validate() {
+        for kind in [sps::LabelKind::Local, sps::LabelKind::Closed] {
+            let mut fixture = Fixture::new();
+            let label: DefId = fixture.arena.admin.fresh_def();
+            let done = fixture.hole();
+            let self_stack = sps::StackVar.build(&mut fixture.arena, None);
+            let self_jump =
+                sps::JumpLabel { label, stack: self_stack }.build(&mut fixture.arena, None);
+            let operands = [1, 2].map(|value| {
+                Literal::Integer(sps::IntegerLiteral::Int(value)).build(&mut fixture.arena, None)
+            });
+            let body = sps::CompareBranch {
+                operation: sps::ComparisonOp::Integer(
+                    sps::IntegerType::Int,
+                    sps::ComparisonPredicate::Lt,
+                ),
+                operands,
+                when_true: done,
+                when_false: self_jump,
+            }
+            .build(&mut fixture.arena, None);
+            let tail_stack = sps::StackVar.build(&mut fixture.arena, None);
+            let tail = sps::JumpLabel { label, stack: tail_stack }.build(&mut fixture.arena, None);
+            let root = sps::LetLabel { label, kind, recursive: true, body, tail }
+                .build(&mut fixture.arena, None);
+            let program =
+                SpsLowProgram::try_new(fixture.arena, root, SpsScheme::Duplicating).unwrap();
+            let module = Emitter::new(&program).run().unwrap();
+            Validator::new().validate_all(module.as_bytes()).unwrap();
+        }
+    }
+
+    #[test]
+    fn nullary_and_non_nullary_constructors_validate_without_nullary_allocation() {
+        let mut fixture = Fixture::new();
+        let triv = sps::Triv.build(&mut fixture.arena, None);
+        let nullary = sps::Ctor(sps::CtorIdx { idx: 0, name: "None".into() }, triv)
+            .build(&mut fixture.arena, None);
+        assert_eq!(fixture.arena.inner.nullary_ctor_tag(nullary), Some(0));
+
+        let lit = Literal::Integer(sps::IntegerLiteral::Int(42)).build(&mut fixture.arena, None);
+        let boxed = sps::Ctor(sps::CtorIdx { idx: 1, name: "Some".into() }, lit)
+            .build(&mut fixture.arena, None);
+        assert_eq!(fixture.arena.inner.nullary_ctor_tag(boxed), None);
+
+        let y: DefId = fixture.arena.admin.fresh_def();
+        let arm0 = sps::Matcher {
+            binder: sps::Ctor(
+                sps::CtorIdx { idx: 0, name: "None".into() },
+                sps::Hole.build(&mut fixture.arena, None),
+            )
+            .build(&mut fixture.arena, None),
+            tail: fixture.hole(),
+        };
+        let arm1 = sps::Matcher {
+            binder: sps::Ctor(
+                sps::CtorIdx { idx: 1, name: "Some".into() },
+                sps::Hole.build(&mut fixture.arena, None),
+            )
+            .build(&mut fixture.arena, None),
+            tail: fixture.hole(),
+        };
+        let branch = sps::SCoprodMatch { scrut: nullary, arms: vec![arm0, arm1] }
+            .build(&mut fixture.arena, None);
+        let y_pat = y.build(&mut fixture.arena, None);
+        let root = sps::LetValue { binder: y_pat, bindee: boxed, tail: branch }
+            .build(&mut fixture.arena, None);
+        let program = SpsLowProgram::try_new(fixture.arena, root, SpsScheme::Duplicating).unwrap();
+        let module = Emitter::new(&program).run().unwrap();
+        Validator::new().validate_all(module.as_bytes()).unwrap();
     }
 }

@@ -141,3 +141,174 @@ fn long_chains_split_at_the_region_bound() {
         );
     }
 }
+
+#[test]
+fn multi_use_binding_in_chain_fuses_with_one_box() {
+    // let y = 7 + 1 in let z = y * y in _ ! z
+    let mut fixture = Fixture::default();
+    let y = fixture.definition("y");
+    let z = fixture.definition("z");
+    let seven = fixture.literal(7);
+    let one = fixture.literal(1);
+    let first = Primitive {
+        operation: PrimitiveOp::Integer(IntegerType::Int64, IntegerArithmetic::Add),
+        operands: [seven, one],
+    }
+    .build(&mut fixture.arena, None);
+    let y_use_left = y.build(&mut fixture.arena, None);
+    let y_use_right = y.build(&mut fixture.arena, None);
+    let second = Primitive {
+        operation: PrimitiveOp::Integer(IntegerType::Int64, IntegerArithmetic::Mul),
+        operands: [y_use_left, y_use_right],
+    }
+    .build(&mut fixture.arena, None);
+    let z_use: ValueId = z.build(&mut fixture.arena, None);
+    let ambient = StackVar.build(&mut fixture.arena, None);
+    let stack = Cons(z_use, ambient).build(&mut fixture.arena, None);
+    let hole = SHole(stack).build(&mut fixture.arena, None);
+    let z_binder = z.build(&mut fixture.arena, None);
+    let inner =
+        LetValue { binder: z_binder, bindee: second, tail: hole }.build(&mut fixture.arena, None);
+    let y_binder = y.build(&mut fixture.arena, None);
+    let root =
+        LetValue { binder: y_binder, bindee: first, tail: inner }.build(&mut fixture.arena, None);
+    let program = SpsLowProgram::try_new(fixture.arena, root, SpsScheme::BranchJoin).unwrap();
+    let plans = ScalarPlans::new(&program, ScalarBoxing::Eliminate);
+    assert!(plans.elided(root));
+    let call = plans.call(second);
+    assert_eq!(call.program.allocation_count(), 1);
+    let inputs = call
+        .inputs
+        .iter()
+        .map(|id| {
+            let Value::Literal(literal) = &program.arena().inner.values[id] else { unreachable!() };
+            literal.clone()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        call.program.evaluate(&inputs).unwrap(),
+        Literal::Integer(IntegerLiteral::Int64(64))
+    );
+}
+
+#[test]
+fn multi_use_transitive_chain_elides_all_intermediate_boxes() {
+    // let y = 3 + 1 in let t = y + 2 in let r = t * y in _ ! r
+    let mut fixture = Fixture::default();
+    let y = fixture.definition("y");
+    let t = fixture.definition("t");
+    let r = fixture.definition("r");
+    let three = fixture.literal(3);
+    let one = fixture.literal(1);
+    let e1 = Primitive {
+        operation: PrimitiveOp::Integer(IntegerType::Int64, IntegerArithmetic::Add),
+        operands: [three, one],
+    }
+    .build(&mut fixture.arena, None);
+    let y_u1 = y.build(&mut fixture.arena, None);
+    let two = fixture.literal(2);
+    let e2 = Primitive {
+        operation: PrimitiveOp::Integer(IntegerType::Int64, IntegerArithmetic::Add),
+        operands: [y_u1, two],
+    }
+    .build(&mut fixture.arena, None);
+    let t_u1 = t.build(&mut fixture.arena, None);
+    let y_u2 = y.build(&mut fixture.arena, None);
+    let e3 = Primitive {
+        operation: PrimitiveOp::Integer(IntegerType::Int64, IntegerArithmetic::Mul),
+        operands: [t_u1, y_u2],
+    }
+    .build(&mut fixture.arena, None);
+    let r_u: ValueId = r.build(&mut fixture.arena, None);
+    let ambient = StackVar.build(&mut fixture.arena, None);
+    let stack = Cons(r_u, ambient).build(&mut fixture.arena, None);
+    let hole = SHole(stack).build(&mut fixture.arena, None);
+    let r_pat = r.build(&mut fixture.arena, None);
+    let c3 = LetValue { binder: r_pat, bindee: e3, tail: hole }.build(&mut fixture.arena, None);
+    let t_pat = t.build(&mut fixture.arena, None);
+    let c2 = LetValue { binder: t_pat, bindee: e2, tail: c3 }.build(&mut fixture.arena, None);
+    let y_pat = y.build(&mut fixture.arena, None);
+    let root = LetValue { binder: y_pat, bindee: e1, tail: c2 }.build(&mut fixture.arena, None);
+    let program = SpsLowProgram::try_new(fixture.arena, root, SpsScheme::BranchJoin).unwrap();
+    let plans = ScalarPlans::new(&program, ScalarBoxing::Eliminate);
+    assert!(plans.elided(root));
+    assert!(plans.elided(c2));
+    assert_eq!(plans.call(e3).program.allocation_count(), 1);
+}
+
+#[test]
+fn escaping_multi_use_binding_rolls_back_without_eliding() {
+    // let y = 7 + 1 in let z = y * y in _ ! (y, z)
+    let mut fixture = Fixture::default();
+    let y = fixture.definition("y");
+    let z = fixture.definition("z");
+    let seven = fixture.literal(7);
+    let one = fixture.literal(1);
+    let first = Primitive {
+        operation: PrimitiveOp::Integer(IntegerType::Int64, IntegerArithmetic::Add),
+        operands: [seven, one],
+    }
+    .build(&mut fixture.arena, None);
+    let y1 = y.build(&mut fixture.arena, None);
+    let y2 = y.build(&mut fixture.arena, None);
+    let second = Primitive {
+        operation: PrimitiveOp::Integer(IntegerType::Int64, IntegerArithmetic::Mul),
+        operands: [y1, y2],
+    }
+    .build(&mut fixture.arena, None);
+    let y3: ValueId = y.build(&mut fixture.arena, None);
+    let z1: ValueId = z.build(&mut fixture.arena, None);
+    let pair = VCons::new(vec![y3, z1], ProductLayout { arity: 2 }).build(&mut fixture.arena, None);
+    let ambient = StackVar.build(&mut fixture.arena, None);
+    let stack = Cons(pair, ambient).build(&mut fixture.arena, None);
+    let hole = SHole(stack).build(&mut fixture.arena, None);
+    let z_pat = z.build(&mut fixture.arena, None);
+    let inner =
+        LetValue { binder: z_pat, bindee: second, tail: hole }.build(&mut fixture.arena, None);
+    let y_pat = y.build(&mut fixture.arena, None);
+    let root =
+        LetValue { binder: y_pat, bindee: first, tail: inner }.build(&mut fixture.arena, None);
+    let program = SpsLowProgram::try_new(fixture.arena, root, SpsScheme::BranchJoin).unwrap();
+    let plans = ScalarPlans::new(&program, ScalarBoxing::Eliminate);
+    assert!(!plans.elided(root));
+}
+
+#[test]
+fn multi_use_memory_kernel_fuses_load_square_store_without_boxing() {
+    let mut fixture = Fixture::default();
+    let addr = fixture.definition("addr");
+    let x = fixture.definition("x");
+    let load_addr = addr.build(&mut fixture.arena, None);
+    let store_addr = addr.build(&mut fixture.arena, None);
+    let x1 = x.build(&mut fixture.arena, None);
+    let x2 = x.build(&mut fixture.arena, None);
+    let squared = Primitive {
+        operation: PrimitiveOp::Integer(IntegerType::Int64, IntegerArithmetic::Mul),
+        operands: [x1, x2],
+    }
+    .build(&mut fixture.arena, None);
+    let ambient = StackVar.build(&mut fixture.arena, None);
+    let done = SHole(ambient).build(&mut fixture.arena, None);
+    let store = MemoryStep::Store {
+        scalar: crate::syntax::memory::MemoryScalar::Integer(IntegerType::Int64),
+        address: store_addr,
+        value: squared,
+        next: done,
+    }
+    .build(&mut fixture.arena, None);
+    let x_pat = x.build(&mut fixture.arena, None);
+    let load = MemoryStep::Load {
+        scalar: crate::syntax::memory::MemoryScalar::Integer(IntegerType::Int64),
+        address: load_addr,
+        result: x_pat,
+        next: store,
+    }
+    .build(&mut fixture.arena, None);
+    let addr_pat = addr.build(&mut fixture.arena, None);
+    let addr_stack = StackVar.build(&mut fixture.arena, None);
+    let root = LetArg { binder: Cons(addr_pat, StackVar), bindee: addr_stack, tail: load }
+        .build(&mut fixture.arena, None);
+    let program = SpsLowProgram::try_new(fixture.arena, root, SpsScheme::BranchJoin).unwrap();
+    let plans = ScalarPlans::new(&program, ScalarBoxing::Eliminate);
+    assert!(plans.memory(load).is_some());
+}

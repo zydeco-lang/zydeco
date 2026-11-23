@@ -36,9 +36,14 @@ impl FreeVariables<Sps> for CompuExt {
                 facts.stack_summary(*stack)
                     + (facts.compu_summary(*body) - Context::singleton(*param))
             }
-            | Self::LetProc(LetProc { procedure, body, tail, .. }) => {
-                facts.compu_summary(*body)
-                    + (facts.compu_summary(*tail) - Context::singleton(*procedure))
+            | Self::LetProc(LetProc { procedure, recursive, body, tail, .. }) => {
+                if *recursive {
+                    (facts.compu_summary(*body) + facts.compu_summary(*tail))
+                        - Context::singleton(*procedure)
+                } else {
+                    facts.compu_summary(*body)
+                        + (facts.compu_summary(*tail) - Context::singleton(*procedure))
+                }
             }
             | Self::CallProc(CallProc { procedure, stack }) => {
                 CoContext::singleton(*procedure) + facts.stack_summary(*stack)

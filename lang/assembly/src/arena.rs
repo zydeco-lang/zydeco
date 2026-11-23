@@ -82,7 +82,12 @@ where
 {
     fn sym_label(&self, sym: &SymId) -> String {
         let this = self.as_ref();
-        format!("{}_{}", this.symbols[sym].name, sym.concise_inner().replace('#', "_"))
+        let sanitized: String = this.symbols[sym]
+            .name
+            .chars()
+            .map(|ch| if ch.is_ascii_alphanumeric() || ch == '_' { ch } else { '_' })
+            .collect();
+        format!("{sanitized}_{}", sym.concise_inner().replace('#', "_"))
     }
     fn prog_label(&self, prog: &ProgId) -> Option<String> {
         let this = self.as_ref();

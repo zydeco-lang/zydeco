@@ -144,12 +144,13 @@ pub enum LabelKind {
     Closed,
 }
 
-/// The label of a second-class procedure, in scope in `tail`. `body` runs on the stack a jump
-/// supplies, bound to its own `•`.
+/// The label of a second-class procedure, in scope in `tail` (and in `body` when `recursive` is
+/// set). `body` runs on the stack a jump supplies, bound to its own `•`.
 #[derive(Clone, Debug)]
 pub struct LetLabel {
     pub label: DefId,
     pub kind: LabelKind,
+    pub recursive: bool,
     pub body: CompuId,
     pub tail: CompuId,
 }

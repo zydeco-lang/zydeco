@@ -15,10 +15,17 @@ begin
     | +End() =>
       match remaining
       | +End() =>
-        ! numeric/float64/eq OS wide 5e18 {
-          do result <- ! int/sub length 5;
-          ! process/exit result
-        } { ! process/exit 1 }
+        do pair <- ret (
+          {
+            ! numeric/float64/eq OS wide 5e18 {
+              do result <- ! int/sub length 5;
+              ! process/exit result
+            } { ! process/exit 1 }
+          },
+          length,
+        );
+        let (check, _) = pair in
+        ! check
       | +Link(next) => ! walk again again next
       end
     | +Link(tail) => ! walk tail again remaining

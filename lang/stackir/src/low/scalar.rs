@@ -56,7 +56,8 @@ impl ScalarPlans {
         for (id, value) in arena.values.iter() {
             if matches!(value, Value::Primitive(_)) {
                 let mut expressions = Expressions::default();
-                if let Some(result) = expressions.value(arena, id, None, &SecondaryMap::new()) {
+                if let Some((result, _)) = expressions.value(arena, id, None, &SecondaryMap::new())
+                {
                     plans.calls.upsert(id, expressions.finish(result));
                 }
             }
@@ -96,38 +97,56 @@ impl ScalarPlans {
             while let Computation::LetValue(binding) = &arena.compus[&cursor] {
                 let mut expressions = Expressions::default();
                 let mut bindings = SecondaryMap::new();
-                let Some(mut result) = expressions.value(arena, binding.bindee, None, &bindings)
+                let Some((mut result, mut result_ty)) =
+                    expressions.value(arena, binding.bindee, None, &bindings)
                 else {
                     cursor = binding.tail;
                     continue;
                 };
-                let mut last = cursor;
-                let mut binding = binding.clone();
-                while let ValuePattern::Var(def) = arena.vpats[&binding.binder] {
-                    if uses.get(def) != Some(&1) {
+                let mut current_compu = cursor;
+                let mut current_binding = binding.clone();
+                let mut committed_expr = expressions.clone();
+                let mut committed_result = result;
+                let mut committed_bindee = current_binding.bindee;
+                let mut committed_next = current_binding.tail;
+                let mut committed_elisions = Vec::new();
+                let mut pending_elisions = Vec::new();
+                while let ValuePattern::Var(def) = arena.vpats[&current_binding.binder] {
+                    if uses.get(def).copied().unwrap_or(0) == 0 {
                         break;
                     }
-                    let Computation::LetValue(next) = &arena.compus[&binding.tail] else {
+                    let Computation::LetValue(next) = &arena.compus[&current_binding.tail] else {
                         break;
                     };
+                    bindings.upsert(def, (result, result_ty));
                     let mut candidate = expressions.clone();
-                    bindings.upsert(def, result);
-                    candidate.substituted.clear();
-                    let Some(next_result) = candidate.value(arena, next.bindee, None, &bindings)
+                    let Some((next_result, next_ty)) =
+                        candidate.value(arena, next.bindee, None, &bindings)
                     else {
                         break;
                     };
-                    if !candidate.substituted.contains(def) {
-                        break;
-                    }
-                    plans.elided.insert(last);
-                    last = binding.tail;
-                    binding = next.clone();
+                    pending_elisions.push((current_compu, def));
+                    current_compu = current_binding.tail;
+                    current_binding = next.clone();
                     expressions = candidate;
                     result = next_result;
+                    result_ty = next_ty;
+                    if pending_elisions
+                        .iter()
+                        .all(|&(_, bound)| expressions.substituted_count(bound) == uses[bound])
+                    {
+                        committed_elisions.extend(pending_elisions.drain(..).map(|(id, _)| id));
+                        committed_expr = expressions.clone();
+                        committed_result = result;
+                        committed_bindee = current_binding.bindee;
+                        committed_next = current_binding.tail;
+                    }
                 }
-                plans.calls.upsert(binding.bindee, expressions.finish(result));
-                cursor = binding.tail;
+                for elided in committed_elisions {
+                    plans.elided.insert(elided);
+                }
+                plans.calls.upsert(committed_bindee, committed_expr.finish(committed_result));
+                cursor = committed_next;
             }
         }
         plans
@@ -163,16 +182,20 @@ enum Expression {
 struct Expressions {
     nodes: Vec<Expression>,
     operations: usize,
-    substituted: IdBitSet<DefId>,
+    substituted: SecondaryMap<DefId, usize>,
 }
 
 impl Expressions {
+    fn substituted_count(&self, def: DefId) -> usize {
+        self.substituted.get(def).copied().unwrap_or(0)
+    }
+
     /// Recursive descent is bounded by MAX_OPERATIONS, independently of source depth.
     fn value(
         &mut self, arena: &SpsLowInnerArena, id: ValueId, expected: Option<ScalarType>,
-        bindings: &SecondaryMap<DefId, usize>,
-    ) -> Option<usize> {
-        let node = match &arena.values[&id] {
+        bindings: &SecondaryMap<DefId, (usize, ScalarType)>,
+    ) -> Option<(usize, ScalarType)> {
+        let (node, node_ty) = match &arena.values[&id] {
             | Value::Primitive(Primitive { operation, operands }) => {
                 let ty = operation.scalar_type();
                 if ty.representation() != ScalarRepresentation::OpaqueBox
@@ -182,30 +205,34 @@ impl Expressions {
                     return None;
                 }
                 self.operations += 1;
-                let second = self.value(arena, operands[1], Some(ty), bindings)?;
-                let first = self.value(arena, operands[0], Some(ty), bindings)?;
-                Expression::Arithmetic(*operation, [first, second])
+                let (second, _) = self.value(arena, operands[1], Some(ty), bindings)?;
+                let (first, _) = self.value(arena, operands[0], Some(ty), bindings)?;
+                (Expression::Arithmetic(*operation, [first, second]), ty)
             }
             | Value::Var(def) => {
                 let ty = expected?;
-                if let Some(&value) = bindings.get(*def) {
-                    self.substituted.insert(*def);
-                    return Some(value);
+                if let Some(&(value, bound_ty)) = bindings.get(*def) {
+                    if bound_ty != ty {
+                        return None;
+                    }
+                    let count = self.substituted_count(*def) + 1;
+                    self.substituted.upsert(*def, count);
+                    return Some((value, ty));
                 }
-                Expression::Input(id, ty)
+                (Expression::Input(id, ty), ty)
             }
             | Value::Literal(literal) => {
                 let ty = expected?;
                 if ScalarType::of_literal(literal) != Some(ty) {
                     return None;
                 }
-                Expression::Input(id, ty)
+                (Expression::Input(id, ty), ty)
             }
             | _ => return None,
         };
         let index = self.nodes.len();
         self.nodes.push(node);
-        Some(index)
+        Some((index, node_ty))
     }
 
     fn finish(self, result: usize) -> ScalarCall {

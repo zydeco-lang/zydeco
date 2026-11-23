@@ -12,6 +12,12 @@ pub(super) struct Captures {
 /// Each frame carries the source data its resumption needs, so completing a child never
 /// re-establishes the source node's variant. Frames that walk a source vector carry its id
 /// and the next position instead of the vector.
+pub(super) struct ProcedureSpec {
+    label: high::DefId,
+    kind: low::LabelKind,
+    recursive: bool,
+}
+
 pub(super) enum Work {
     Value(high::ValueId, RenameEnvId),
     /// Convert the items of a product value in order.
@@ -199,8 +205,7 @@ pub(super) enum Work {
     /// Convert a procedure's tail once its label body is complete.
     ProcedureTail {
         source: high::CompuId,
-        label: high::DefId,
-        kind: low::LabelKind,
+        spec: ProcedureSpec,
         /// A closed label's parameters, popped in order: each source variable and its binder.
         parameters: Vec<(high::DefId, high::DefId)>,
         tail: high::CompuId,
@@ -208,8 +213,7 @@ pub(super) enum Work {
     },
     FinishProcedure {
         source: high::CompuId,
-        label: high::DefId,
-        kind: low::LabelKind,
+        spec: ProcedureSpec,
         /// The number of variables a closed label's jumps push.
         pushed: usize,
     },
@@ -627,6 +631,7 @@ impl<'a> ConversionFolder<'a> {
             },
             | high::Computation::Ext(high::CompuExt::LetProc(high::LetProc {
                 procedure,
+                recursive,
                 body,
                 tail,
                 ..
@@ -639,7 +644,9 @@ impl<'a> ConversionFolder<'a> {
                 let (variables, parameters) = match kind {
                     | low::LabelKind::Local => (Vec::new(), Vec::new()),
                     | low::LabelKind::Closed => {
-                        let variables = self.conversion.sorted_free_vars(body, Context::new(), env);
+                        let excluded =
+                            if recursive { Context::singleton(procedure) } else { Context::new() };
+                        let variables = self.conversion.sorted_free_vars(body, excluded, env);
                         let parameters = variables
                             .iter()
                             .map(|variable| (*variable, self.conversion.alloc_like(*variable)))
@@ -648,14 +655,16 @@ impl<'a> ConversionFolder<'a> {
                     }
                 };
                 self.conversion.labels.insert_new(label, variables);
-                let body_env = self.conversion.extend_env(env, parameters.iter().copied());
+                let body_env = self.conversion.extend_env(
+                    env,
+                    parameters.iter().copied().chain(recursive.then_some((procedure, label))),
+                );
                 let tail_env = self.conversion.extend_env(env, [(procedure, label)]);
                 Step::Call {
                     input: Work::Computation(body, body_env),
                     frame: Work::ProcedureTail {
                         source,
-                        label,
-                        kind,
+                        spec: ProcedureSpec { label, kind, recursive },
                         parameters,
                         tail,
                         env: tail_env,
@@ -976,7 +985,7 @@ impl<'a> ConversionFolder<'a> {
     }
 
     fn resume_procedure_tail(
-        &mut self, source: high::CompuId, label: high::DefId, kind: low::LabelKind,
+        &mut self, source: high::CompuId, spec: ProcedureSpec,
         parameters: Vec<(high::DefId, high::DefId)>, tail: high::CompuId, env: RenameEnvId,
     ) -> Step<Self> {
         let body = self.computation();
@@ -992,17 +1001,19 @@ impl<'a> ConversionFolder<'a> {
         self.computations.push(body);
         Step::Call {
             input: Work::Computation(tail, env),
-            frame: Work::FinishProcedure { source, label, kind, pushed },
+            frame: Work::FinishProcedure { source, spec, pushed },
         }
     }
 
     fn resume_finish_procedure(
-        &mut self, source: high::CompuId, label: high::DefId, kind: low::LabelKind, pushed: usize,
+        &mut self, source: high::CompuId, spec: ProcedureSpec, pushed: usize,
     ) -> Step<Self> {
         let tail = self.computation();
         let body = self.computation();
         let site = self.conversion.source.admin.term_site(source);
-        let node = low::LetLabel { label, kind, body, tail }.build(self.conversion, site);
+        let ProcedureSpec { label, kind, recursive } = spec;
+        let node =
+            low::LetLabel { label, kind, recursive, body, tail }.build(self.conversion, site);
         // Jumps supply the procedure's stack under the variables a closed label pops.
         if let Some(protocol) = self.conversion.source.inner.compu_protocols.get(source) {
             let protocol = (0..pushed).fold(protocol.clone(), |rest, _| {
@@ -1145,11 +1156,11 @@ impl Folder for ConversionFolder<'_> {
             | Work::Fix { source, captures, recursive, label } => {
                 self.resume_fix(source, captures, recursive, label)
             }
-            | Work::ProcedureTail { source, label, kind, parameters, tail, env } => {
-                self.resume_procedure_tail(source, label, kind, parameters, tail, env)
+            | Work::ProcedureTail { source, spec, parameters, tail, env } => {
+                self.resume_procedure_tail(source, spec, parameters, tail, env)
             }
-            | Work::FinishProcedure { source, label, kind, pushed } => {
-                self.resume_finish_procedure(source, label, kind, pushed)
+            | Work::FinishProcedure { source, spec, pushed } => {
+                self.resume_finish_procedure(source, spec, pushed)
             }
             | Work::FinishCall { source, env, procedure } => {
                 self.resume_finish_call(source, env, procedure)

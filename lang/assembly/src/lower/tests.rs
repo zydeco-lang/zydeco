@@ -92,8 +92,8 @@ impl Fixture {
         let bindee = sk::StackVar.build(&mut fixture.arena, None);
         let guarded = sk::LetStack { binder: sk::StackVar, bindee, tail: branch }
             .build(&mut fixture.arena, None);
-        let tail =
-            sk::LetLabel { label, kind, body, tail: guarded }.build(&mut fixture.arena, None);
+        let tail = sk::LetLabel { label, kind, recursive: false, body, tail: guarded }
+            .build(&mut fixture.arena, None);
         let binder = x.build(&mut fixture.arena, None);
         let bindee = fixture.integer(7);
         let root = sk::LetValue { binder, bindee, tail }.build(&mut fixture.arena, None);

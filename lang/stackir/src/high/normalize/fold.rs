@@ -45,6 +45,14 @@ pub(super) enum ComputationParent {
     CoCase(Vec<Cons<DtorIdx, StackVar>>),
 }
 
+/// How a rebuilt branch rejoins its surrounding stack consumer.
+pub(super) enum BranchJoin {
+    None,
+    Stack(ScopedStack),
+    /// Preserve the `let • = • in <branch>` guard required by `SpsScheme::BranchJoin`.
+    Ambient,
+}
+
 pub(super) enum Work {
     Value(ValueId, EnvId, Demand),
     FinishValue {
@@ -109,12 +117,14 @@ pub(super) enum Work {
     ProcedureBody {
         source: CompuId,
         procedure: DefId,
+        recursive: bool,
         body: CompuId,
         env: EnvId,
     },
     FinishProcedure {
         source: CompuId,
         procedure: DefId,
+        recursive: bool,
     },
     ArgumentBody {
         source: CompuId,
@@ -146,7 +156,7 @@ pub(super) enum Work {
         compare: CompareBranch,
         position: usize,
         arms: Scope,
-        join: Option<ScopedStack>,
+        join: BranchJoin,
         site: Option<crate::ir::TermId>,
     },
     BranchArms {
@@ -154,7 +164,7 @@ pub(super) enum Work {
         position: usize,
         known: Rc<KnownValue>,
         arms: Scope,
-        join: Option<ScopedStack>,
+        join: BranchJoin,
         site: Option<crate::ir::TermId>,
     },
     BranchArm {
@@ -169,13 +179,13 @@ pub(super) enum Work {
         count: usize,
         tail: CompuId,
         env: EnvId,
-        join: Option<ScopedStack>,
+        join: BranchJoin,
         site: Option<crate::ir::TermId>,
     },
     BranchTail {
         count: usize,
         tail: CompuId,
-        join: Option<ScopedStack>,
+        join: BranchJoin,
         demands: Demands,
         site: Option<crate::ir::TermId>,
     },
@@ -511,13 +521,23 @@ impl<'a> NormalizationFolder<'a> {
                 input: Work::Stack(ScopedStack { node: stack, scope: scope.clone() }),
                 frame: Work::FixBody { source: id, param, body, scope },
             },
-            | Computation::Ext(CompuExt::LetProc(LetProc { procedure, body, tail, .. })) => {
+            | Computation::Ext(CompuExt::LetProc(LetProc {
+                procedure,
+                recursive,
+                body,
+                tail,
+                ..
+            })) => {
                 let env = scope.values;
-                let fact = self.norm.procedure_fact(procedure, body, env);
+                let fact = if recursive {
+                    Rc::default()
+                } else {
+                    self.norm.procedure_fact(procedure, body, env)
+                };
                 let values = self.norm.extend(env, [(procedure, fact)]);
                 Step::Call {
                     input: Work::Computation(tail, Scope { values, ..scope }),
-                    frame: Work::ProcedureBody { source: id, procedure, body, env },
+                    frame: Work::ProcedureBody { source: id, procedure, recursive, body, env },
                 }
             }
             | Computation::Ext(CompuExt::CallProc(CallProc { procedure, stack })) => {
@@ -633,7 +653,9 @@ impl<'a> NormalizationFolder<'a> {
                     scope,
                 ));
             }
-            let (arms, join) = self.unknown(guard, scope);
+            let (arms, join) = self
+                .try_commute_kont(branch, None, guard, &scope)
+                .unwrap_or_else(|| self.unknown(guard, scope));
             return Step::TailCall(Work::ComparisonChildren {
                 source: branch,
                 compare,
@@ -654,14 +676,34 @@ impl<'a> NormalizationFolder<'a> {
                 match self.norm.matches(arm.binder, &known) {
                     | Some(true) => {
                         let value = ScopedValue { node: scrut, env: scope.values };
-                        // A known tag does not expose a payload stored in a variable.
-                        // Keep its match and complete tag table instead of creating
-                        // a constructor pattern in an ordinary value binding.
                         if matches!(
                             self.norm.source.inner.vpats[&arm.binder],
                             ValuePattern::Ctor(_)
                         ) && self.norm.components(arm.binder, value).is_none()
                         {
+                            let ValuePattern::Ctor(Ctor(_, payload_pat)) =
+                                self.norm.source.inner.vpats[&arm.binder]
+                            else {
+                                unreachable!()
+                            };
+                            if let KnownValue::Constructor(_, payload_known) = known.as_ref()
+                                && self.norm.discardable_scoped(value)
+                                && self
+                                    .norm
+                                    .can_elide_pattern_binding(payload_pat, payload_known.as_ref())
+                            {
+                                let scope = self.selected(guard, scope);
+                                let values = self.norm.bind(
+                                    scope.values,
+                                    payload_pat,
+                                    payload_known.clone(),
+                                );
+                                return Step::TailCall(Work::Computation(
+                                    arm.tail,
+                                    Scope { values, ..scope },
+                                ));
+                            }
+                            // A known tag without alias-safe payload stays a match.
                             break;
                         }
                         let scope = self.selected(guard, scope);
@@ -678,8 +720,169 @@ impl<'a> NormalizationFolder<'a> {
                 }
             }
         }
-        let (arms, join) = self.unknown(guard, scope);
+        let (arms, join) = self
+            .try_commute_kont(branch, Some(known.clone()), guard, &scope)
+            .unwrap_or_else(|| self.unknown(guard, scope));
         Step::TailCall(Work::BranchArms { source: branch, position: 0, known, arms, join, site })
+    }
+
+    /// Commute an immediately enclosing single-case continuation (`kont b -> match b ...`) into
+    /// a branch whose every arm returns a direct constructor hitting a distinct arm of `match`.
+    /// Distinctness guarantees zero code duplication while eliminating intermediate constructor and
+    /// continuation allocations.
+    fn try_commute_kont(
+        &mut self, branch: CompuId, known: Option<Rc<KnownValue>>, guard: Option<StackId>,
+        scope: &Scope,
+    ) -> Option<(Scope, BranchJoin)> {
+        let (candidate, join, keep_inner_stack) = match guard {
+            | Some(bindee) => {
+                if !self.norm.movable_stack(bindee) {
+                    return None;
+                }
+                let resolved =
+                    self.norm.resolve_stack(ScopedStack { node: bindee, scope: scope.clone() });
+                let join = match resolved.scope.stack {
+                    | Some(outer) => {
+                        let outer_stack = self.norm.delayed_stacks[outer.0].clone();
+                        if self.norm.ambient(&outer_stack) {
+                            BranchJoin::Ambient
+                        } else {
+                            BranchJoin::Stack(outer_stack)
+                        }
+                    }
+                    | None => BranchJoin::Ambient,
+                };
+                (resolved, join, false)
+            }
+            | None => {
+                let delayed_id = scope.stack?;
+                let resolved =
+                    self.norm.resolve_stack(self.norm.delayed_stacks[delayed_id.0].clone());
+                if !self.norm.scheme.names_frames() {
+                    (resolved, BranchJoin::None, true)
+                } else {
+                    let join = match resolved.scope.stack {
+                        | Some(outer) => {
+                            let outer_stack = self.norm.delayed_stacks[outer.0].clone();
+                            if self.norm.ambient(&outer_stack) {
+                                BranchJoin::None
+                            } else {
+                                BranchJoin::Stack(outer_stack)
+                            }
+                        }
+                        | None => BranchJoin::None,
+                    };
+                    (resolved, join, false)
+                }
+            }
+        };
+
+        let Stack::Ext(StackExt::Kont(Kont { binder: kont_binder, body: mut kont_body })) =
+            self.norm.source.inner.stacks[&candidate.node]
+        else {
+            return None;
+        };
+        let ValuePattern::Var(kont_var) = self.norm.source.inner.vpats[&kont_binder] else {
+            return None;
+        };
+        while let Computation::LetStack(Let { bindee, tail, .. }) =
+            self.norm.source.inner.compus[&kont_body]
+        {
+            if !self.norm.movable_stack(bindee) {
+                return None;
+            }
+            kont_body = tail;
+        }
+        let Computation::CoprodMatch(SCoprodMatch { scrut: kont_scrut, arms: kont_arms }) =
+            self.norm.source.inner.compus[&kont_body].clone()
+        else {
+            return None;
+        };
+        if !matches!(self.norm.source.inner.values[&kont_scrut], Value::Var(v) if v == kont_var)
+            || kont_arms.is_empty()
+        {
+            return None;
+        }
+
+        let inner_arms = self.commutable_branch_arms(branch)?;
+
+        let mut hit = vec![false; kont_arms.len()];
+        for (binder, ret_value) in inner_arms {
+            let arm_env = match (binder, &known) {
+                | (Some(binder), Some(known)) => {
+                    self.norm.bind(scope.values, binder, known.clone())
+                }
+                | _ => scope.values,
+            };
+            let ret_known = self.norm.shared(ret_value, arm_env);
+            let mut matched_idx = None;
+            for (idx, kont_arm) in kont_arms.iter().enumerate() {
+                match self.norm.matches(kont_arm.binder, &ret_known) {
+                    | Some(true) => {
+                        matched_idx = Some(idx);
+                        break;
+                    }
+                    | Some(false) => {}
+                    | None => return None,
+                }
+            }
+            let idx = matched_idx?;
+            if hit[idx] {
+                return None;
+            }
+            let kont_binder = kont_arms[idx].binder;
+            let scoped_ret = ScopedValue { node: ret_value, env: arm_env };
+            if matches!(self.norm.source.inner.vpats[&kont_binder], ValuePattern::Ctor(_))
+                && self.norm.components(kont_binder, scoped_ret).is_none()
+            {
+                let ValuePattern::Ctor(Ctor(_, payload_pat)) =
+                    self.norm.source.inner.vpats[&kont_binder]
+                else {
+                    unreachable!()
+                };
+                let KnownValue::Constructor(_, payload_known) = ret_known.as_ref() else {
+                    return None;
+                };
+                if !self.norm.discardable_scoped(scoped_ret)
+                    || !self.norm.can_elide_pattern_binding(payload_pat, payload_known.as_ref())
+                {
+                    return None;
+                }
+            }
+            hit[idx] = true;
+        }
+
+        let kont_stack = if keep_inner_stack { candidate.scope.stack } else { None };
+        let delayed_kont = self.norm.delay_stack(ScopedStack {
+            node: candidate.node,
+            scope: Scope { values: candidate.scope.values, stack: kont_stack },
+        });
+        Some((Scope { values: scope.values, stack: Some(delayed_kont) }, join))
+    }
+
+    fn commutable_branch_arms(&self, branch: CompuId) -> Option<Vec<(Option<VPatId>, ValueId)>> {
+        let returned_arm = |binder, tail| {
+            let Computation::Ext(CompuExt::Ret(SReturn { stack, value })) =
+                self.norm.source.inner.compus[&tail]
+            else {
+                return None;
+            };
+            matches!(self.norm.source.inner.stacks[&stack], Stack::Var(StackVar))
+                .then_some((binder, value))
+        };
+        match &self.norm.source.inner.compus[&branch] {
+            | Computation::Compare(CompareBranch { when_true, when_false, .. }) => {
+                [returned_arm(None, *when_true), returned_arm(None, *when_false)]
+                    .into_iter()
+                    .collect()
+            }
+            | Computation::CoprodMatch(SCoprodMatch { arms, .. })
+                if !arms.is_empty() && arms.len() <= 4 =>
+            {
+                arms.iter().map(|arm| returned_arm(Some(arm.binder), arm.tail)).collect()
+            }
+            | _ => None,
+        }
     }
 
     /// Normalize a full-scheme stack let-binding, which names one frame. A movable frame is
@@ -714,15 +917,21 @@ impl<'a> NormalizationFolder<'a> {
     /// Finish a rebuilt branch. A guarded branch rebuilds its guard's stack and names it again;
     /// a bare branch is complete.
     fn join_branch(
-        &mut self, branch: CompuId, demands: Demands, join: Option<ScopedStack>,
+        &mut self, branch: CompuId, demands: Demands, join: BranchJoin,
         site: Option<crate::ir::TermId>,
     ) -> Step<Self> {
         match join {
-            | Some(bindee) => Step::Call {
+            | BranchJoin::Stack(bindee) => Step::Call {
                 input: Work::Stack(bindee),
                 frame: Work::BranchStack { tail: branch, demands, site },
             },
-            | None => {
+            | BranchJoin::Ambient => {
+                let bindee = StackVar.build(self.norm, site);
+                let node = Let { binder: StackVar, bindee, tail: branch }.build(self.norm, site);
+                self.computations.push(Residual { node, demands });
+                Step::Return(())
+            }
+            | BranchJoin::None => {
                 self.computations.push(Residual { node: branch, demands });
                 Step::Return(())
             }
@@ -732,20 +941,21 @@ impl<'a> NormalizationFolder<'a> {
     /// The scope unknown arms run in, and the stack a rebuilt branch names above it. The arms of
     /// a guarded branch consume the guard's `•`. The full scheme names a bare branch's delayed
     /// consumer above it, while the duplicating scheme lets every arm rebuild that consumer.
-    fn unknown(&self, guard: Option<StackId>, scope: Scope) -> (Scope, Option<ScopedStack>) {
+    fn unknown(&self, guard: Option<StackId>, scope: Scope) -> (Scope, BranchJoin) {
         match guard {
             | Some(bindee) => (
                 Scope { values: scope.values, stack: None },
-                Some(ScopedStack { node: bindee, scope }),
+                BranchJoin::Stack(ScopedStack { node: bindee, scope }),
             ),
             | None if self.norm.scheme.names_frames() => {
                 let join = scope
                     .stack
                     .map(|id| self.norm.delayed_stacks[id.0].clone())
-                    .filter(|stack| !self.norm.ambient(stack));
+                    .filter(|stack| !self.norm.ambient(stack))
+                    .map_or(BranchJoin::None, BranchJoin::Stack);
                 (Scope { values: scope.values, stack: None }, join)
             }
-            | None => (scope, None),
+            | None => (scope, BranchJoin::None),
         }
     }
 
@@ -1035,26 +1245,38 @@ impl<'a> NormalizationFolder<'a> {
     }
 
     fn resume_procedure_body(
-        &mut self, source: CompuId, procedure: DefId, body: CompuId, env: EnvId,
+        &mut self, source: CompuId, procedure: DefId, recursive: bool, body: CompuId, env: EnvId,
     ) -> Step<Self> {
         // The tail is complete; a procedure that no rebuilt call reaches is dead.
         let called = self.computations.last().is_some_and(|tail| tail.demands.contains(&procedure));
         if !called {
             return Step::Return(());
         }
+        let values =
+            if recursive { self.norm.extend(env, [(procedure, Rc::default())]) } else { env };
         Step::Call {
-            input: Work::Computation(body, Scope { values: env, stack: None }),
-            frame: Work::FinishProcedure { source, procedure },
+            input: Work::Computation(body, Scope { values, stack: None }),
+            frame: Work::FinishProcedure { source, procedure, recursive },
         }
     }
 
-    fn resume_finish_procedure(&mut self, source: CompuId, procedure: DefId) -> Step<Self> {
-        let body = self.computation();
+    fn resume_finish_procedure(
+        &mut self, source: CompuId, procedure: DefId, recursive: bool,
+    ) -> Step<Self> {
+        let mut body = self.computation();
+        let still_recursive = recursive && body.demands.contains(&procedure);
+        body.demands.remove(&procedure);
         let mut tail = self.computation();
         tail.demands.remove(&procedure);
         self.finish_computation(
             source,
-            LetProc { procedure, stack: StackVar, body: body.node, tail: tail.node },
+            LetProc {
+                procedure,
+                recursive: still_recursive,
+                stack: StackVar,
+                body: body.node,
+                tail: tail.node,
+            },
             Vec::new(),
             tail.demands.join(body.demands),
         );
@@ -1159,7 +1381,7 @@ impl<'a> NormalizationFolder<'a> {
 
     fn resume_comparison_children(
         &mut self, source: CompuId, compare: CompareBranch, position: usize, arms: Scope,
-        join: Option<ScopedStack>, site: Option<crate::ir::TermId>,
+        join: BranchJoin, site: Option<crate::ir::TermId>,
     ) -> Step<Self> {
         let input = match position {
             | 0 => Some(Work::Computation(compare.when_true, arms.clone())),
@@ -1199,7 +1421,7 @@ impl<'a> NormalizationFolder<'a> {
 
     fn resume_branch_arms(
         &mut self, source: CompuId, position: usize, known: Rc<KnownValue>, scope: Scope,
-        join: Option<ScopedStack>, site: Option<crate::ir::TermId>,
+        join: BranchJoin, site: Option<crate::ir::TermId>,
     ) -> Step<Self> {
         let Computation::CoprodMatch(SCoprodMatch { scrut, arms }) =
             &self.norm.source.inner.compus[&source]
@@ -1256,8 +1478,8 @@ impl<'a> NormalizationFolder<'a> {
     }
 
     fn resume_branch_scrutinee(
-        &mut self, scrut: ValueId, count: usize, tail: CompuId, env: EnvId,
-        join: Option<ScopedStack>, site: Option<crate::ir::TermId>,
+        &mut self, scrut: ValueId, count: usize, tail: CompuId, env: EnvId, join: BranchJoin,
+        site: Option<crate::ir::TermId>,
     ) -> Step<Self> {
         let first = self.arms.len() - count;
         let (demands, demand) = self.arms[first..].iter_mut().fold(
@@ -1274,7 +1496,7 @@ impl<'a> NormalizationFolder<'a> {
     }
 
     fn resume_branch_tail(
-        &mut self, count: usize, tail: CompuId, join: Option<ScopedStack>, demands: Demands,
+        &mut self, count: usize, tail: CompuId, join: BranchJoin, demands: Demands,
         site: Option<crate::ir::TermId>,
     ) -> Step<Self> {
         let scrut = self.value();
@@ -1402,11 +1624,11 @@ impl Folder for NormalizationFolder<'_> {
                 self.resume_fix_body(source, param, body, scope)
             }
             | Work::FinishFix { source, param } => self.resume_finish_fix(source, param),
-            | Work::ProcedureBody { source, procedure, body, env } => {
-                self.resume_procedure_body(source, procedure, body, env)
+            | Work::ProcedureBody { source, procedure, recursive, body, env } => {
+                self.resume_procedure_body(source, procedure, recursive, body, env)
             }
-            | Work::FinishProcedure { source, procedure } => {
-                self.resume_finish_procedure(source, procedure)
+            | Work::FinishProcedure { source, procedure, recursive } => {
+                self.resume_finish_procedure(source, procedure, recursive)
             }
             | Work::ArgumentBody { source, binder, stack } => {
                 self.resume_argument_body(source, binder, stack)

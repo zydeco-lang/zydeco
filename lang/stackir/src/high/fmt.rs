@@ -107,22 +107,24 @@ impl<'a> Pretty<'a, Formatter<'a>> for CompuExt {
                 RcDoc::space(),
                 value.pretty(f),
             ]),
-            | Self::LetProc(LetProc { procedure, stack, body, tail }) => RcDoc::concat([
-                RcDoc::text("letproc"),
-                RcDoc::space(),
-                procedure.pretty(f),
-                RcDoc::space(),
-                stack.pretty(f),
-                RcDoc::space(),
-                RcDoc::text("="),
+            | Self::LetProc(LetProc { procedure, recursive, stack, body, tail }) => {
                 RcDoc::concat([
-                    RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent),
-                    RcDoc::line(),
-                    RcDoc::text("in"),
+                    RcDoc::text(if *recursive { "letproc rec" } else { "letproc" }),
+                    RcDoc::space(),
+                    procedure.pretty(f),
+                    RcDoc::space(),
+                    stack.pretty(f),
+                    RcDoc::space(),
+                    RcDoc::text("="),
+                    RcDoc::concat([
+                        RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent),
+                        RcDoc::line(),
+                        RcDoc::text("in"),
+                    ])
+                    .group(),
+                    RcDoc::concat([RcDoc::line(), tail.pretty(f)]).group(),
                 ])
-                .group(),
-                RcDoc::concat([RcDoc::line(), tail.pretty(f)]).group(),
-            ]),
+            }
             | Self::CallProc(CallProc { procedure, stack }) => RcDoc::concat([
                 procedure.pretty(f),
                 RcDoc::space(),

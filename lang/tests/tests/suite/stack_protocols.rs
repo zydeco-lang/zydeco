@@ -79,12 +79,25 @@ impl Fixture {
             })
     }
 
+    fn callable_protocols(arena: &SpsLowInnerArena) -> impl Iterator<Item = &StackProtocol> {
+        arena
+            .entry_protocols
+            .iter()
+            .filter_map(|(_, entry)| match entry {
+                | EntryProtocol::Closure(protocol) => Some(protocol),
+                | EntryProtocol::Continuation(_) => None,
+            })
+            .chain(arena.label_protocols.iter().map(|(_, protocol)| protocol))
+    }
+
     fn item_jump(arena: &SpsLowInnerArena) -> (CompuId, StackId) {
         arena
             .compus
             .iter()
             .find_map(|(id, computation)| {
-                let Computation::Ext(CompuExt::Jump(Jump { stack, .. })) = computation else {
+                let (Computation::Ext(CompuExt::Jump(Jump { stack, .. }))
+                | Computation::Ext(CompuExt::JumpLabel(JumpLabel { stack, .. }))) = computation
+                else {
                     return None;
                 };
                 let mut stack = *stack;
@@ -118,8 +131,8 @@ fn instantiated_recursive_interfaces_survive_entries_and_returned_thunks() {
         [(Fixture::integer(), integer), (ValueProtocol::Primitive(PrimitiveType::Char), character)]
     {
         assert!(
-            arena.entry_protocols.iter().any(|(_, entry)| {
-                let EntryProtocol::Closure(StackProtocol::Argument(found, rest)) = entry else {
+            Fixture::callable_protocols(arena).any(|entry| {
+                let StackProtocol::Argument(found, rest) = entry else {
                     return false;
                 };
                 **found == input
@@ -195,8 +208,8 @@ fn parameterized_and_growing_protocols_execute_on_every_backend() {
 fn erased_polymorphic_calls_check_repeated_value_parameters_together() {
     let program = Fixture::source("symbolic-protocols.zy");
     assert!(
-        program.arena().inner.entry_protocols.iter().any(|(_, entry)| {
-            let EntryProtocol::Closure(StackProtocol::Forall(a, body)) = entry else {
+        Fixture::callable_protocols(&program.arena().inner).any(|entry| {
+            let StackProtocol::Forall(a, body) = entry else {
                 return false;
             };
             let StackProtocol::Forall(r, body) = &**body else { return false };
@@ -326,7 +339,13 @@ fn source_protocols_survive_normalization_and_closure_conversion() {
             Box::new(stream),
         )),
     ] {
-        assert!(entries.iter().any(|(_, entry)| entry == &required), "missing {required}");
+        let found = match &required {
+            | EntryProtocol::Closure(stack) => {
+                Fixture::callable_protocols(&program.arena().inner).any(|entry| entry == stack)
+            }
+            | EntryProtocol::Continuation(_) => entries.iter().any(|(_, entry)| entry == &required),
+        };
+        assert!(found, "missing {required}");
     }
 }
 

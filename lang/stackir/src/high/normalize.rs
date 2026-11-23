@@ -514,6 +514,40 @@ impl Normalization {
         stack
     }
 
+    /// Whether binding `pat` directly to `known` keeps every referenced variable as an alias,
+    /// unit value, or single-use literal without rebuilding the matched value node.
+    fn can_elide_pattern_binding(&self, pat: VPatId, known: &KnownValue) -> bool {
+        match &self.source.inner.vpats[&pat] {
+            | ValuePattern::Triv(_) | ValuePattern::Hole(_) => true,
+            | ValuePattern::Var(def) => {
+                let uses = self.occurrences.get(def).copied().unwrap_or(0);
+                uses == 0
+                    || matches!(known, KnownValue::Alias(_) | KnownValue::Triv)
+                    || (uses <= 1 && matches!(known, KnownValue::Literal(_)))
+            }
+            | ValuePattern::Alias(Alias(patterns)) => {
+                patterns.iter().all(|&item| self.can_elide_pattern_binding(item, known))
+            }
+            | ValuePattern::VCons(VCons { items, layout }) => {
+                let KnownValue::Product(fields) = known else {
+                    return false;
+                };
+                if fields.len() != layout.arity {
+                    return false;
+                }
+                items.iter().enumerate().all(|(position, &item)| {
+                    if position + 1 == items.len() && items.len() < layout.arity {
+                        let tail = KnownValue::Product(fields[position..].to_vec());
+                        self.can_elide_pattern_binding(item, &tail)
+                    } else {
+                        self.can_elide_pattern_binding(item, fields[position].as_ref())
+                    }
+                })
+            }
+            | ValuePattern::Ctor(_) => false,
+        }
+    }
+
     /// A decision is useful only when no earlier arm could match instead.
     fn matches(&self, binder: VPatId, known: &KnownValue) -> Option<bool> {
         Explicit::run(
@@ -1544,7 +1578,7 @@ mod tests {
             let body =
                 self.build(Let { binder: Cons(binder, StackVar), bindee: ambient, tail: body });
             let tail = tail(self, procedure);
-            self.build(LetProc { procedure, stack: StackVar, body, tail })
+            self.build(LetProc { procedure, recursive: false, stack: StackVar, body, tail })
         }
 
         /// `p ! arg(()) :: stack`
@@ -1693,5 +1727,163 @@ mod tests {
         let fragment = FragmentProgram::try_new(normalized, SpsScheme::BranchJoin).unwrap();
         let localized = Localizer.run(fragment).unwrap().into_program();
         assert_eq!(procedure_forms(&localized), (1, 2));
+    }
+
+    #[test]
+    fn coprod_match_folds_known_constructor_alias_without_duplicating_literals() {
+        // Known `+Some(y)` matches and folds `+Some(z) => ...` when `y` is an unknown alias:
+        // let x = +Some(y) in match x | +None() => () | +Some(z) => • @ z
+        let mut fixture = Fixture::default();
+        let y = fixture.def("y");
+        let z = fixture.def("z");
+        let some = Fixture::ctor(1);
+        let none = Fixture::ctor(0);
+
+        let y_val: ValueId = fixture.build(y);
+        let packed: ValueId = fixture.build(Ctor(some.clone(), y_val));
+        let x = fixture.def("x");
+        let x_pat: VPatId = fixture.build(x);
+        let x_val: ValueId = fixture.build(x);
+
+        let none_triv: VPatId = fixture.build(Triv);
+        let none_pat: VPatId = fixture.build(Ctor(none, none_triv));
+        let unit: ValueId = fixture.build(Triv);
+        let none_tail = fixture.ret(unit);
+        let z_pat: VPatId = fixture.build(z);
+        let some_pat: VPatId = fixture.build(Ctor(some, z_pat));
+        let z_val: ValueId = fixture.build(z);
+        let some_tail = fixture.ret(z_val);
+        let match_x = fixture.build(SCoprodMatch {
+            scrut: x_val,
+            arms: vec![
+                Matcher { binder: none_pat, tail: none_tail },
+                Matcher { binder: some_pat, tail: some_tail },
+            ],
+        });
+        let ambient: StackId = fixture.build(StackVar);
+        let guarded = fixture.build(Let { binder: StackVar, bindee: ambient, tail: match_x });
+        let bind_x: CompuId = fixture.build(Let { binder: x_pat, bindee: packed, tail: guarded });
+        let y_pat: VPatId = fixture.build(y);
+        let ambient_y: StackId = fixture.build(StackVar);
+        let root: CompuId =
+            fixture.build(Let { binder: Cons(y_pat, StackVar), bindee: ambient_y, tail: bind_x });
+
+        let normalized = fixture.normalize(root);
+        let inner = &normalized.arena().inner;
+        assert!(
+            !inner.compus.iter().any(|(_, c)| matches!(c, Computation::CoprodMatch(_))),
+            "match on known constructor alias `+Some(y)` must fold"
+        );
+        assert!(
+            !inner.values.iter().any(|(_, v)| matches!(v, Value::Ctor(_))),
+            "dead `+Some(y)` allocation must be pruned"
+        );
+
+        // Negative case: if the payload literal in `+Some(99)` is bound to `z` used twice,
+        // the match stays instead of duplicating the literal across uses.
+        let mut fixture = Fixture::default();
+        let z = fixture.def("z");
+        let some = Fixture::ctor(1);
+        let lit: ValueId = fixture.build(Literal::Integer(IntegerLiteral::Int(99)));
+        let packed: ValueId = fixture.build(Ctor(some.clone(), lit));
+        let x = fixture.def("x");
+        let x_pat: VPatId = fixture.build(x);
+        let x_val: ValueId = fixture.build(x);
+        let z_pat: VPatId = fixture.build(z);
+        let some_pat: VPatId = fixture.build(Ctor(some, z_pat));
+        let z1: ValueId = fixture.build(z);
+        let z2: ValueId = fixture.build(z);
+        let pair: ValueId = fixture.build(VCons::new(vec![z1, z2], ProductLayout { arity: 2 }));
+        let some_tail = fixture.ret(pair);
+        let match_x = fixture.build(SCoprodMatch {
+            scrut: x_val,
+            arms: vec![Matcher { binder: some_pat, tail: some_tail }],
+        });
+        let ambient: StackId = fixture.build(StackVar);
+        let guarded = fixture.build(Let { binder: StackVar, bindee: ambient, tail: match_x });
+        let root: CompuId = fixture.build(Let { binder: x_pat, bindee: packed, tail: guarded });
+
+        let normalized = fixture.normalize(root);
+        let inner = &normalized.arena().inner;
+        assert!(
+            inner.compus.iter().any(|(_, c)| matches!(c, Computation::CoprodMatch(_))),
+            "multi-use literal binding must preserve match instead of duplicating literal"
+        );
+    }
+
+    #[test]
+    fn compare_commutes_distinct_constructor_continuation_without_duplication() {
+        for duplicate in [false, true] {
+            let mut fixture = Fixture::default();
+            let a = fixture.def("a");
+            let b = fixture.def("b");
+            let c_true = Fixture::ctor(1);
+            let c_false = Fixture::ctor(0);
+
+            let m1 = fixture.external(BuiltinValueRole::WriteLine);
+            let m2 = fixture.external(BuiltinValueRole::WriteStr);
+            let t1: VPatId = fixture.build(Triv);
+            let t2: VPatId = fixture.build(Triv);
+            let arm1 = Matcher { binder: fixture.build(Ctor(c_true.clone(), t1)), tail: m1 };
+            let arm2 = Matcher { binder: fixture.build(Ctor(c_false.clone(), t2)), tail: m2 };
+            let b_val: ValueId = fixture.build(b);
+            let inner_match = fixture.build(SCoprodMatch { scrut: b_val, arms: vec![arm1, arm2] });
+            let guard: StackId = fixture.build(StackVar);
+            let guarded_match: CompuId =
+                fixture.build(Let { binder: StackVar, bindee: guard, tail: inner_match });
+            let b_pat: VPatId = fixture.build(b);
+            let kont: StackId = fixture.build(Kont { binder: b_pat, body: guarded_match });
+
+            let v_t: ValueId = fixture.build(Triv);
+            let v_f: ValueId = fixture.build(Triv);
+            let true_ctor: ValueId = fixture.build(Ctor(c_true.clone(), v_t));
+            let false_ctor: ValueId =
+                fixture.build(Ctor(if duplicate { c_true } else { c_false }, v_f));
+            let when_true = fixture.ret(true_ctor);
+            let when_false = fixture.ret(false_ctor);
+            let a_val: ValueId = fixture.build(a);
+            let one: ValueId = fixture.build(Literal::Integer(IntegerLiteral::Int(1)));
+            let compare = fixture.build(CompareBranch {
+                operation: ComparisonOp::Integer(IntegerType::Int, ComparisonPredicate::Lt),
+                operands: [a_val, one],
+                when_true,
+                when_false,
+            });
+            let let_kont: CompuId =
+                fixture.build(Let { binder: StackVar, bindee: kont, tail: compare });
+            let a_pat: VPatId = fixture.build(a);
+            let ambient: StackId = fixture.build(StackVar);
+            let root: CompuId = fixture.build(Let {
+                binder: Cons(a_pat, StackVar),
+                bindee: ambient,
+                tail: let_kont,
+            });
+
+            let normalized = fixture.normalize(root);
+            let inner = &normalized.arena().inner;
+            let write_lines = inner
+                .compus
+                .iter()
+                .filter(|(_, c)| {
+                    matches!(
+                        c,
+                        Computation::ExternCall(ExternCall {
+                            function: ExternalFunction::Host(BuiltinValueRole::WriteLine),
+                            ..
+                        })
+                    )
+                })
+                .count();
+            assert_eq!(write_lines, 1, "continuation arm must never be duplicated");
+            let has_match =
+                inner.compus.iter().any(|(_, c)| matches!(c, Computation::CoprodMatch(_)));
+            let has_kont =
+                inner.stacks.iter().any(|(_, s)| matches!(s, Stack::Ext(StackExt::Kont(_))));
+            if duplicate {
+                assert!(has_match && has_kont, "non-distinct hits must not commute");
+            } else {
+                assert!(!has_match && !has_kont, "distinct hits must commute away kont & match");
+            }
+        }
     }
 }

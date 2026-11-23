@@ -285,6 +285,7 @@ impl<'a> SpsLowValidator<'a> {
                     | Computation::Ext(CompuExt::LetLabel(LetLabel {
                         label,
                         kind,
+                        recursive,
                         body,
                         tail,
                     })) => {
@@ -295,6 +296,9 @@ impl<'a> SpsLowValidator<'a> {
                             self.closed_labels.push((*label, *body));
                         }
                         self.scopes.open_at((*tail).into(), LabelScope::Bound(*label, *kind));
+                        if *recursive {
+                            self.scopes.open_at((*body).into(), LabelScope::Bound(*label, *kind));
+                        }
                     }
                     | Computation::Ext(CompuExt::JumpLabel(JumpLabel { label, .. })) => {
                         self.resolve(id, *label)?;
@@ -682,7 +686,13 @@ mod tests {
         }
 
         fn bind(&mut self, kind: LabelKind, body: CompuId, tail: CompuId) -> CompuId {
-            LetLabel { label: self.label, kind, body, tail }.build(&mut self.arena, None)
+            self.bind_recursive(kind, false, body, tail)
+        }
+
+        fn bind_recursive(
+            &mut self, kind: LabelKind, recursive: bool, body: CompuId, tail: CompuId,
+        ) -> CompuId {
+            LetLabel { label: self.label, kind, recursive, body, tail }.build(&mut self.arena, None)
         }
 
         /// `let _ = block[k](entry) • -> body in tail`, a block nested in the label's scope.
@@ -775,6 +785,22 @@ mod tests {
         assert_eq!(
             labels.check(root),
             Err(SpsLowValidationError::ImplicitLabelCapture { label, captures: vec![x] })
+        );
+
+        let mut labels = Labels::new();
+        let body = labels.jump();
+        let tail = labels.jump();
+        let root = labels.bind_recursive(LabelKind::Local, true, body, tail);
+        assert_eq!(labels.check(root), Ok(()));
+
+        let mut labels = Labels::new();
+        let body = labels.jump();
+        let tail = labels.jump();
+        let root = labels.bind(LabelKind::Local, body, tail);
+        let label = labels.label;
+        assert_eq!(
+            labels.check(root),
+            Err(SpsLowValidationError::UnboundLabel { compu: body, label })
         );
 
         let mut labels = Labels::new();
