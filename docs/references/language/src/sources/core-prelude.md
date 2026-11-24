@@ -72,6 +72,8 @@ Replacing `left/exit` with `right/exit` is rejected: opening the same contract t
 Reusing an already retained opening preserves identity without a second opening or a fresh witness.
 Forward the provider and dependent operations together across composition boundaries,
 following the [shared-opening rules](../polymorphism-and-packed-values.md#module-interfaces-and-shared-openings).
+`std/builtin/system` exposes the same `@[builtin(os)]` role for system-only programs,
+whereas `std/builtin/memory` carries no `OS` witness.
 Builtin's abstract `SystemOS` witness, role, and manifest `OS` export remain unchanged;
 there is no canonical `intrinsic(os)`.
 

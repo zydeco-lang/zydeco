@@ -177,7 +177,8 @@ with the host architecture (`cc consumer.c -Ibuild -Lbuild -lexample.arithmetic 
 For a Zydeco consumer, save this as `consumer.zy` in the repository root:
 
 ```zydeco
-param (/Ret; /Int; /OS; /numeric; /process) : @(import("lib/std/builtin.zy")) in
+param (/Ret; /Int; /OS; /process) : @(import("lib/std/builtin.zy")) in
+let (/numeric) = @(import("lib/std/primitive/package.zy")) in
 let api = @(import("build/example.arithmetic.imports.zy")) in
 do sum <- ! api/add 19 23;
 ! numeric/int/eq OS sum 42 { ! process/exit 0 } { ! process/exit 1 }
@@ -203,7 +204,7 @@ Save this producer as `math.zy` in the repository root:
 
 ```zydeco
 @[package(library(zydeco), name(example/math))]
-param val (/Thk; /Ret; /Int; /numeric) : @(import("lib/std/builtin.zy")) in
+let (/numeric) = @(import("lib/std/primitive/package.zy")) in
 (#make_adder = ({ fn (delta : Int) =>
   ret { fn (value : Int) => ! numeric/int/add delta value }
 } : Thk (Int -> Ret (Thk (Int -> Ret Int)))))
@@ -222,7 +223,8 @@ Distribute the bundle with its dependencies.
 Save this consumer as `client.zy` in the repository root:
 
 ```zydeco
-param (/Ret; /Int; /OS; /numeric; /process) : @(import("lib/std/builtin.zy")) in
+param (/Ret; /Int; /OS; /process) : @(import("lib/std/builtin.zy")) in
+let (/numeric) = @(import("lib/std/primitive/package.zy")) in
 let initialize = @(import("unit-build/example.math.imports.zy")) in
 do math <- ! initialize;
 do add_seven <- ! math/make_adder 7;

@@ -9,12 +9,13 @@ The directories under `lib/std/` have these responsibilities:
 
 | Directory | Responsibility |
 | --- | --- |
-| `data/` | Value representations and their operations, including `Bool`, `Option`, `Either`, and `List` |
+| `primitive/` | Provider-independent pure operations (`numeric` and `text`) built over `@(intrinsic(...))` |
+| `data/` | Concrete value representations and operations, including `Bool`, `Option`, `Either`, and `List` |
 | `algebra/` | General-purpose algebraic dictionaries, currently `Monoid` |
-| `effect/` | Effect interfaces, carriers, transformers, handlers, and shared relative-monad machinery |
-| `numeric/` | Numeric operations and their domain-specific dictionaries |
-| `text/` | Text and byte-sequence operations |
-| `system/`, `memory/` | Concrete runtime capabilities and their library interfaces |
+| `effect/` | Concrete effect interfaces, carriers, transformers, handlers, and relative-monad machinery |
+| `numeric/` | Concrete width modules and capability dictionaries, plus byte codecs (`codecs.zy`) |
+| `text/` | Concrete text utilities (`package.zy`, `bytes-ops.zy`) and the `Bytes` capability module (`bytes.zy`) |
+| `system/`, `memory/` | Concrete runtime capabilities and capability-parameterized interfaces (`builtin/{memory,system}.zy`) |
 
 `Algebra M R` belongs to `effect/`: it describes an algebra for a particular relative monad,
 whereas `Monoid W` describes an operation and identity on a value type independently of a monad.
@@ -34,7 +35,11 @@ as with the numeric dictionaries shared by both numeric builders.
 Each effect's operation interface, concrete carrier, and transformer stay in the same module.
 The Writer effect is distinct from the host stream `Writer` capability.
 
-The root `builtin.zy` remains the host contract, and `std.zy` remains the assembled public value.
+The root `builtin.zy` bridges the split `builtin/memory.zy` (`Addr`, `memory`,
+`scalar`) and `builtin/system.zy` (`Reader`, `Writer`, `OS`, I/O, streams, arguments,
+random, process) contracts for complete executables, and `std.zy` remains the assembled public value.
+Pure modules (`primitive/`, `data/`, `numeric/package.zy`, `text/package.zy`,
+`effect/`) require no `Builtin` parameter and share their `def` identities through package merging.
 The `algebra/` and `effect/` modules are imported explicitly rather than added to that aggregate.
 Directory ownership does not assign [source-package names](../../language/src/sources/packages.md#source-packages).
 The [library guide](../../../../lib/std/README.md#source-layout) inventories the entry points and imports.

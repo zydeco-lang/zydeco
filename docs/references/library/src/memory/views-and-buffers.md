@@ -35,8 +35,8 @@ Different handle types can be paired with their matching operations in an existe
 Neither form inserts a view dictionary into each handle.
 
 ```zydeco
-param (/VType; /CType; /Thk; /Ret; /Int; builtin) : @(import("../../lib/std/builtin.zy")) in
-let (/views) = builtin |> (@(import("../../lib/std/memory/package.zy"))) in
+param (/Addr = _; memory_builtin) : @(import("../../lib/std/builtin/memory.zy")) in
+let (/views) = memory_builtin |> (@(import("../../lib/std/memory/package.zy"))) in
 let (/Cps; /View; /identity; /as_cps) = views in
 let run : Thk (Int -> Ret Int) = {
   fn value => ! ((as_cps Int Int (identity Int)) value) (Ret Int) { fn result => ret result }

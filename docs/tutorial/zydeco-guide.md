@@ -321,12 +321,13 @@ They undergo [static elimination](../references/language/src/static-elimination.
 a runtime-selectable callable should have an explicit thunked computation type.
 
 `match` may produce a value when its arms produce values of the same type.
-The total integer intrinsics `int_add`, `int_sub`, `int_and`, and `int_compare` support static calculations:
+The total integer intrinsics `val/int/add`, `val/int/sub`, `val/int/and`,
+and `val/int/compare` support static calculations:
 
 ```zydeco
 let Int = @(intrinsic(int)) in
-let add = @(intrinsic(int_add)) in
-let compare = @(intrinsic(int_compare)) in
+let add = @(intrinsic(val/int/add)) in
+let compare = @(intrinsic(val/int/compare)) in
 let val maximum (left : Int) (right : Int) : Int =
   match compare left right | -1 => right | _ => left end
 in
@@ -393,21 +394,24 @@ Open it once and retain the value to pass the same capabilities into library bui
 | Group | Contents |
 | --- | --- |
 | Manifest prefix | `VType`, `CType`, `Thk`, `Ret`, `Unit`, fixed-width integer and floating-point types, `Char`, `String` |
-| `numeric` | Operations grouped by numeric type, such as `numeric/int` |
-| `text` | `char` and `string` operations |
-| `system` | Public `Addr`, `Reader`, `Writer`, and `OS` names; `memory`, `io`, `fs`, `stdio`, `args`, `random`, and `process` operations |
+| `memory_ops` | Raw `memory` operations and little-endian `scalar` `store_le`/`load_le` over `Addr` |
+| `system` | Public `Addr`, `Reader`, `Writer`, and `OS` names; `io`, `fs`, `stdio`, `args`, `random`, and `process` operations |
 
-Recursive field selection reaches these public names from the whole packed value:
+Pure arithmetic, conversions, and UTF-8 `char`/`string` operations live separately
+in the concrete [primitive operations package](../../lib/std/primitive/package.zy) (`std/primitive/ops`),
+requiring no host capability:
 
 ```zydeco
-param (/numeric) : @(import("../../lib/std/builtin.zy")) in
+let (/numeric) = @(import("../../lib/std/primitive/package.zy")) in
 do answer <- ! numeric/int/add 20 22;
 ret answer
 ```
 
-The numeric groups provide returning arithmetic and continuation-based comparisons.
-The larger [standard facade](../../lib/std/std.zy) adds ordinary data types,
-numeric capabilities, and source-level text and system helpers.
+Narrower capability contracts ([memory Builtin](../../lib/std/builtin/memory.zy)
+and [system Builtin](../../lib/std/builtin/system.zy)) allow library code
+to request only unmanaged memory or only host system operations.
+The larger [standard facade](../../lib/std/std.zy) adds `bytes`, `codecs`, `buffer`,
+and higher-level `system` helpers on top of concrete data, numeric, and text modules.
 It is a value-function builder applied to an existing Builtin packed value.
 
 The standard library supplies immutable `Bytes`;

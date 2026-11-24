@@ -33,9 +33,11 @@ The Builtin contract exposes these surface names:
 | Text | `Char`, `String` |
 | Capabilities | `Addr`, `Reader`, `Writer`, `OS` |
 
-Host operations live in the same contract under the `numeric`, `text`, and `system` groups,
-and the search descends through them: `param (/stdio; /process) : @(import(/std/builtin)) in` selects two operations
-from the `system` group without naming it.
+Runtime host operations live under `memory_ops` (`memory` and `scalar`) and `system` (`io`,
+`fs`, `stdio`, `args`, `random`, and `process`), and field search descends through them:
+`param (/stdio; /process) : @(import(/std/builtin)) in` selects two groups from `system` without naming it.
+Pure computational primitive operations (`numeric` and `text`) live separately
+in [`primitive/package.zy`](primitive/package.zy) (`std/primitive/ops`).
 The [integer example](../tests/std/minimal.zy) takes `Int` and `Ret` from the core prelude,
 then uses the assembled standard-library value for arithmetic.
 
@@ -51,34 +53,38 @@ whose sealed type its final `pack` introduction synthesizes.
 Types and the definitions that use them live in the same source package.
 The [organization rule](../../docs/references/library/src/organization.md) distinguishes manifest structural interfaces
 from abstract representation witnesses.
-A module with a reusable input or output contract exports that contract together with its `make` value function.
-For example, `data/package.zy` exports `DataPackage`, `BoolModule`, and `make`:
+A module with a reusable capability input or output contract exports that contract together
+with its `make` value function.
+For example, `text/bytes.zy` exports `BytesPackage` and `make`,
+and takes a [memory Builtin](builtin/memory.zy) (`std/builtin/memory`) value containing only `Addr` and `memory_ops`:
 
 ```zydeco
-param val (/OS = _; builtin) : @(import("builtin.zy")) in
-let (/DataPackage; /make = make_data) = @(import("data/package.zy")) in
-(make_data builtin : DataPackage)
+param val (/Addr; memory_builtin) : @(import("builtin/memory.zy")) in
+let (/BytesPackage; /make = make_bytes) = @(import("text/bytes.zy")) in
+(make_bytes memory_builtin : BytesPackage Addr)
 ```
 
-The wildcard selection opens Builtin without introducing a local capability name;
-the whole-value alias retains the opening for the factory.
-The outer package makes the contract available before the factory is applied.
-Its `make` field assembles the data types and operations; the result retains its abstract `List` witness.
-`text/bytes.zy` and the memory modules use the same pattern for their independently reusable contracts.
+The whole-value alias retains the `Addr` opening for the factory, which builds `Bytes`
+and its operations without requiring any `OS` witness or stream capabilities.
+The pure topic packages—`data/package.zy`, `numeric/package.zy`, `text/package.zy`, `effect/nondet.zy`,
+`memory/storage.zy`, and `memory/dynamic-size.zy`—need no factory parameters and are imported directly with `let`.
 Explicit signatures remain local to their implementations wherever they prescribe abstraction;
 colocation does not replace those signatures with inferred interfaces.
 
-The `text`, `system`, and `numeric` topic entries remain value-function factories,
+`text/bytes.zy`, `numeric/codecs.zy`, `memory/*`, and `system/package.zy` keep explicit capability parameters,
 and `std.zy` opens and applies the necessary factories to assemble its public packed value.
 Shared representation packages such as `data/either.zy` expose manifest type fields with a `()` payload.
 The host-independent `effect/monad.zy` and `algebra/monoid.zy` use that same type-only packaging convention.
 
-This separation keeps algebraic data in the language.
-The interpreter and native runtime only need to agree on the small Builtin ABI,
-while the files under `data/` and the derived operations in the topic packages remain ordinary Zydeco code.
+This separation keeps algebraic data, numeric modules, and pure text utilities in concrete library terms.
+The interpreter and native runtime only need to agree on intrinsic primitive operations
+and the capability contracts ([`builtin.zy`](builtin.zy), [`builtin/memory.zy`](builtin/memory.zy),
+and [`builtin/system.zy`](builtin/system.zy)), while pure library modules under `data/`,
+`numeric/`, `text/`, and `effect/` remain ordinary Zydeco code.
 
 `system/arguments.zy` builds a lazy `fold` from the Builtin `args/at` lookup.
-Apply it to the Builtin packed value directly when a list is unnecessary; `process/arg_list` uses the same builder.
+Apply it to the `args` field from Builtin or `std/builtin/system` directly when a list is unnecessary;
+`process/arg_list` uses the same builder.
 Callers of the former Builtin `args/fold` should instantiate this builder and call its `fold` field.
 Tails are ordinary reusable computations, and host runtimes need no special closure implementation.
 [Argument semantics](../../docs/references/language/src/primitives-and-capabilities.md) specify lookup failures
@@ -91,8 +97,10 @@ See [explicit storage](#explicit-storage).
 ## Source packages and tests
 
 [`std.zy`](std.zy) declares the whole-file package `std`.
-The primitive leaf and closed default view are `std/primitive` and `std/prelude`.
-Builtin is `std/builtin`; topic entries are `std/data`, `std/text`, `std/numeric`, `std/system`, and `std/memory`.
+The primitive type leaf, pure primitive operations, and closed default view are `std/primitive`,
+`std/primitive/ops`, and `std/prelude`.
+Builtin contracts are `std/builtin`, `std/builtin/memory`, and `std/builtin/system`;
+topic entries are `std/data`, `std/text`, `std/numeric`, `std/system`, and `std/memory`.
 These names identify source terms; fields and factory applications remain ordinary language structure.
 The [source-package rules](../../docs/references/language/src/sources/packages.md#source-packages) govern selection
 and relationships.
@@ -130,26 +138,27 @@ general-purpose dictionaries, effects, and runtime capabilities.
 The current files are:
 
 ```text
-builtin.zy                 complete host ABI: surface kinds and types, operation groups
+builtin.zy                 complete host ABI bridging memory and system capabilities
+builtin/memory.zy          isolated unmanaged-memory capability (Addr, memory, scalar)
+builtin/memory/*.zy        raw memory operations and little-endian scalar accesses
+builtin/system.zy          isolated system capability (Reader, Writer, OS, fs, stdio, args, random, process)
+builtin/system/*.zy        I/O, filesystem, streams, arguments, randomness, process
 primitive.zy               provider-independent canonical kinds and types
+primitive/package.zy       concrete std/primitive/ops pure numeric, char, and string operations
 prelude.zy                 closed core vocabulary used by the implicit default
 std.zy                     wiring for the public packed value
 
-builtin/numeric/*.zy       primitive numeric operations
-builtin/text/*.zy          Char and String host operations
-builtin/system/*.zy        I/O, filesystem, streams, arguments, randomness, process
-
-data/package.zy            DataPackage and BoolModule contracts, plus the data factory
-                           Bool, Option, Either, List, and every derived operation
+data/package.zy            concrete Bool, Option, Either, List, and derived operations
 data/either.zy             shared binary sum for data, effects, I/O, and memory APIs
 
 numeric/{integer,float}.zy module contracts and explicitly polymorphic make builders
 numeric/dictionary.zy      shared numeric capability constructors, with a unit payload
-numeric/package.zy         the twelve numeric modules and their capability dictionaries
+numeric/package.zy         concrete twelve numeric modules and their capability dictionaries
 numeric/codecs.zy          source byte codecs over scalar memory leaves
 
 text/bytes.zy              BytesPackage contract and abstract immutable byte-sequence factory
-text/package.zy            text conveniences and byte collection operations
+text/bytes-ops.zy          byte collection and option conveniences over BytesPackage
+text/package.zy            concrete Char and String convenience operations
 
 memory/package.zy          manual-memory interface and shared pointer/state witnesses
 memory/types.zy            erased Ptr<L,S> abstraction and state markers
@@ -172,7 +181,7 @@ effect/monad.zy            Top, Monad, Algebra, MonadInstance, and WithMonad; no
 effect/{ret,reader,writer,option}.zy  provider-independent carriers and derived transformers
 effect/transformer*.zy              shared transformer interfaces and derivation adapters
 effect/{state,exception,state-exn}.zy  provider-independent state, exceptions, and their combination
-effect/nondet.zy           MonadNonDet interface and make factory for ordered search and observers
+effect/nondet.zy           concrete MonadNonDet interface, ordered search instances, and observers
 ```
 
 The public `Either` type and `either` operation bundle follow the
@@ -203,17 +212,27 @@ No compatibility forwarding files remain at the old flat paths.
 
 ## Builtin interface
 
-The launcher supplies one packed value implementing the [Builtin contract](builtin.zy).
-The signature begins with manifest fields for the CBPV kinds, constructors, and fixed-representation types,
-followed by abstract witnesses for runtime-owned capabilities.
-Its value payload groups the runtime operations:
+The launcher supplies one packed value implementing the [Builtin contract](builtin.zy) (for full executables),
+or [std/builtin/system](builtin/system.zy) for programs that need system/I/O operations without unmanaged memory.
+Library components that allocate or access raw memory
+without invoking `OS` accept [std/builtin/memory](builtin/memory.zy).
+The complete Builtin signature begins with manifest fields for the CBPV kinds, constructors,
+and fixed-representation types, followed by abstract witnesses for runtime-owned capabilities.
+Its value payload groups only host capabilities:
 
 - Surface: `VType`, `CType`, `Thk`, `Ret`, `Unit`, the twelve numeric types, `Char`,
   `String`, then abstract `Addr`, `Reader`, `Writer`, and `OS`.
-- `numeric`: typed arithmetic, branch comparisons, rendering, and checked scalar loads/stores.
-- `text`: operations crossing `Char`, `String`, and `Int`.
-- `system`: the re-exposed capabilities plus checked memory, I/O, filesystem, standard stream, argument,
-  randomness, and process operations.
+- `memory_ops`: checked `memory` operations (`allocate`, `null`, `offset`, `copy`,
+  `fill`, `free`) and raw `scalar` `store_le`/`load_le` accesses over `Addr`.
+- `system`: the re-exposed capabilities (`Addr`, `Reader`, `Writer`, `OS`) plus `io`, `fs`, `stdio`, `args`,
+  `random`, and `process` operations.
+
+Because `Builtin` discloses `#Addr` inside `#system`
+and exports `#memory_ops` using the same underlying `SystemAddr` witness,
+a consumer holding an opened `Builtin` bridges directly to `MemoryBuiltin`
+with `let memory_builtin : @(import("builtin/memory.zy")) = (= Addr, memory_ops) in`.
+Pure arithmetic, conversions, character helpers, and string operations instead live
+in [primitive/package.zy](primitive/package.zy) (`numeric` and `text`), built directly over `@(intrinsic(...))`.
 
 Each public name is unique across the complete packed value, so one field search reaches kinds, types,
 operations, and capabilities alike, and every selection shares the contract's identities.
@@ -369,7 +388,8 @@ the exact constructors and runners.
 For example, StateT over Writer keeps state operations and base output at one transformed carrier:
 
 ```zydeco
-param (/string) : @(import("builtin.zy")) in
+let (/text) = @(import("primitive/package.zy")) in
+let (/string) = text in
 let writer = @(import("effect/writer.zy")) in
 let state = @(import("effect/state.zy")) in
 let (W, w) = writer/instance String (#empty = "", #append = string/append) in
@@ -406,15 +426,12 @@ implementation contract.
 
 ### Ordered depth-first search
 
-Open `make` from [NonDet](effect/nondet.zy), then apply it to Builtin and the shared data package.
-This keeps `choose` inputs and list observations at the same `List` witness as the caller's other operations:
+Import `List` from [data/package.zy](data/package.zy) and `nondet` directly from [NonDet](effect/nondet.zy).
+Package merging shares the same `List` identity for `choose` inputs and list observations across consumers:
 
 ```zydeco
-param (/OS = _; builtin) : @(import("builtin.zy")) in
-let (/make = make_data) = @(import("data/package.zy")) in
-let (/make = make_nondet) = @(import("effect/nondet.zy")) in
-let (/list; data_package) = make_data builtin in
-let nondet = make_nondet builtin data_package in
+let (/list) = @(import("data/package.zy")) in
+let nondet = @(import("effect/nondet.zy")) in
 let (N, n) = nondet/instance in
 do answers <- ! nondet/observe_many Int 2 {
   ! n/nondet .choice Int { ! n/monad .return Int 3 } { ! n/monad .return Int 1 }
@@ -477,8 +494,9 @@ owns memory state, layout laws, unsafe obligations, and retention.
 The library introduces no lifetimes or borrow checker.
 
 ```zydeco
-param (/process; builtin) : @(import("builtin.zy")) in
-let (/Uninit; /Init; /Ptr; /fixed; /allocation; /codecs) = builtin |> (@(import("memory/package.zy"))) in
+param (/Addr; /memory_ops; /process) : @(import("builtin.zy")) in
+let memory_builtin : @(import("builtin/memory.zy")) = (= Addr, memory_ops) in
+let (/Uninit; /Init; /Ptr; /fixed; /allocation; /codecs) = memory_builtin |> (@(import("memory/package.zy"))) in
 let (= Plan, = Layout, layouts) = fixed in
 let (/Alloc; /heap) = allocation in
 let (/Fault) = @(import("memory/fault.zy")) in
@@ -610,7 +628,8 @@ The exact spelling follows the shared [numeric representation rules](../../DESIG
 Division by zero, infinities, signed zero, and NaN follow IEEE-754 behavior.
 In particular, every ordered comparison with NaN is false, while `float32/ne` and `float64/ne` report true.
 
-The exact host-facing operations live directly in the Builtin contract's `numeric` group, one module per width.
+The exact host-facing primitive operations live in [primitive/package.zy](primitive/package.zy) (`numeric`),
+one module per width.
 Their comparisons select one of two computation continuations directly,
 avoiding a dependency on the library's `Bool` representation.
 The width-specific modules in the public packed value reify those branches as `Bool` and add derived helpers.
@@ -618,15 +637,16 @@ The width-specific modules in the public packed value reify those branches as `B
 ## Numeric capabilities and explicit instances
 
 Generic numeric functions receive the operations they need as ordinary arguments.
-The public packed value exposes five capability type constructors; their linked definitions give the exact field types:
+`numeric/dictionary.zy` and the public packed value expose five capability type constructors over canonical `Bool`;
+their linked definitions give the exact field types:
 
 | Interface | Fields |
 | --- | --- |
 | [Additive A](numeric/dictionary.zy) | `zero`, `add`, `sub`, `negate` |
 | [Multiplicative A](numeric/dictionary.zy) | `one`, `mul` |
-| [PartialEquality Bool A](numeric/dictionary.zy) | `eq`, `ne`, returning the supplied `Bool` |
-| [PartialOrder Bool A](numeric/dictionary.zy) | `equality`, `lt`, `le`, `gt`, `ge` |
-| [Numeric Bool A](numeric/dictionary.zy) | `additive`, `multiplicative`, `order` |
+| [PartialEquality A](numeric/dictionary.zy) | `eq`, `ne`, returning `Bool` |
+| [PartialOrder A](numeric/dictionary.zy) | `equality`, `lt`, `le`, `gt`, `ge` |
+| [Numeric A](numeric/dictionary.zy) | `additive`, `multiplicative`, `order` |
 
 Larger dictionaries contain smaller ones as named fields.
 This preserves paths such as `dictionary/additive/add` and `dictionary/order/equality/eq`,
@@ -636,9 +656,7 @@ from `int8_dictionary` through `float64_dictionary`.
 Generic code explicitly selects and passes one:
 
 ```zydeco
-param (/OS = _; builtin) : @(import("builtin.zy")) in
-let make_std = @(import("std.zy")) in
-let (/Additive; /dictionaries) = builtin |> make_std in
+let (/Additive; /dictionaries) = @(import("numeric/package.zy")) in
 let ! twice (A : VType) (operations : Additive A) (value : A) : Ret A =
   ! operations/add value value
 in
@@ -656,15 +674,13 @@ The following complete example names the disclosed type `Int`, renames it to `Ca
 and checks that the operations use that same carrier:
 
 ```zydeco
-param (/OS = _; builtin) : @(import("builtin.zy")) in
-let make_std = @(import("std.zy")) in
-let (/Bool; /Numeric; /dictionaries) = builtin |> make_std in
+let (/Numeric; /dictionaries) = @(import("numeric/package.zy")) in
 let int_instance =
   pack (= Int as Int)
   where #operations = dictionaries/int_dictionary end
 in
 let (/Int = Carrier; /operations) = int_instance in
-let _ : Numeric Bool Carrier = operations in
+let _ : Numeric Carrier = operations in
 ! operations/additive/add (21 : Carrier) 21
 ```
 

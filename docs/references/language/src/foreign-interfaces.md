@@ -5,7 +5,7 @@
 A foreign implementation is an annotated hole:
 
 ```zydeco
-param val (/Thk; /Ret; /Addr; /Int; /UInt32) : @(import("../../lib/std/builtin.zy")) in
+param val (/Addr) : @(import("../../lib/std/builtin/memory.zy")) in
 (@(ffi(c, library("xxhash"), symbol("XXH64"))) : Thk (Addr -> Int -> UInt64 -> Ret UInt64))
 ```
 
@@ -89,7 +89,7 @@ A compiled library declares a source implementation and its complete public C in
     export(field(add), symbol("example_add")),
     export(field(identity), symbol("example_identity"))),
   name(example/arithmetic))]
-param val (/Thk; /Ret; /Int; /numeric) : @(import("../../lib/std/builtin.zy")) in
+let (/numeric) = @(import("../../lib/std/primitive/package.zy")) in
 (
   #add = ({ fn x y => ! numeric/int/add x y } : Thk (Int -> Int -> Ret Int)),
   #identity = ({ fn x => ret x } : Thk (Int -> Ret Int))

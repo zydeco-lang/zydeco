@@ -79,15 +79,15 @@ Writer supplies its source with an empty value and an append operation;
 the module adapts the existing `Ret`-returning append by running it and returning its answer through the base monad.
 This retains the [Writer output contract](#writer-output-contract),
 rather than accepting arbitrary effectful base-monad append operations.
-NonDet keeps its shared data package and list observations outside the translated search core,
-preserving the caller's existing `List` witness.
+NonDet imports the concrete data and primitive packages directly through `let`,
+preserving one shared `List` identity across consumers without requiring a `DataPackage` parameter.
 
 ## Elementary Effect Instances
 
 The [effect library](../../../../../lib/std/effect) exports elementary effects independently of OS capabilities.
 `ret.zy`, `reader.zy`, `writer.zy`, `option.zy`, `state.zy`, `exception.zy`,
-and `state-exn.zy` are provider-independent concrete packages requiring no `Builtin` argument
-(whereas [`nondet.zy`](../../../../../lib/std/effect/nondet.zy) still accepts `Builtin` and `DataPackage`).
+`state-exn.zy`, and [`nondet.zy`](../../../../../lib/std/effect/nondet.zy) are provider-independent
+concrete packages requiring no `Builtin` argument.
 Except for the bootstrap `Ret` instance, each concrete instance specializes its derived transformer
 to the reusable `Monad Ret` dictionary.
 `Ret` is the ambient computation carrier, not a separate pure identity effect.

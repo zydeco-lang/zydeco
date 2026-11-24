@@ -2,20 +2,31 @@
 
 ## Builtin Contract and Capabilities
 
-[Builtin](../../../../lib/std/builtin.zy) exposes canonical kinds and fixed-representation types as manifest fields.
-Repeating an intrinsic splice denotes the same canonical kind or type across independently checked sources.
-`Addr`, `Reader`, `Writer`, and `OS` are abstract provider capabilities sharing one opening.
+[Builtin](../../../../lib/std/builtin.zy) exposes canonical kinds and fixed-representation types
+as manifest fields together with runtime capability witnesses and host operation groups.
+Repeating an intrinsic splice denotes the same canonical kind, type,
+or pure primitive operation across independently checked sources.
+`Addr`, `Reader`, `Writer`, and `OS` are abstract provider capabilities sharing one opening in `Builtin`.
 `Addr` is an unmanaged data address
 of kind `VType` supporting [manual memory](../../library/src/memory/manual-memory.md#manual-memory);
 typed pointers, layouts, initialization states, views, and byte buffers are ordinary library types specified
 in the [standard library reference](../../library/src/introduction.md).
 
-Pure libraries can name canonical carriers without requiring a numeric or resource provider merely to name a type.
-Resource operations instead share their provider's abstract opening,
-so a composition root must forward the capability and its operations together.
-The `numeric`, `text`, and `system` groups contain host operations.
-The [standard library](../../../../lib/std/README.md) assembles ordinary module factories and defines `Bool`, `Option`,
-`Either`, `List`, and abstract `Bytes`; host operations select continuations instead of constructing those types.
+Two narrowed provider contracts separate runtime capabilities by effect domain:
+[memory Builtin](../../../../lib/std/builtin/memory.zy) exposes only abstract `Addr`
+and `memory_ops` (`memory` plus `scalar` `store_le`/`load_le`) without an `OS` witness,
+while [system Builtin](../../../../lib/std/builtin/system.zy) exposes `Reader`, `Writer`, `OS`, and host I/O,
+filesystem, standard stream, argument, randomness, and process operations without memory capabilities.
+Pure computational operations on canonical primitive values live outside `Builtin`:
+compiler primitive intrinsics (`@(intrinsic(int/add))` through `@(intrinsic(string/append))`) are grouped
+by [std/primitive/ops](../../../../lib/std/primitive/package.zy) (`numeric` and `text`) with no provider dependency,
+while `memory_ops` and `system` remain capability-bearing groups.
+Opening a composite `Builtin` value supplies `Addr` and `memory_ops`,
+which construct a matching `std/builtin/memory` value `(= Addr, memory_ops)`
+while forwarding the provider's `OS` capabilities.
+The [standard library](../../../../lib/std/README.md) defines `Bool`, `Option`, `Either`, `List`, numeric modules,
+pure text operations, and abstract `Bytes`; host and intrinsic operations select continuations instead
+of constructing those types.
 
 ## Primitive Value Families
 
@@ -46,7 +57,7 @@ Existing numeric values have no implicit cross-width conversion.
 The reverse operations `int64/to_int` and `uint64/to_uint` accept a result protocol,
 a value, a failure thunk, and a success thunk receiving the machine integer.
 They select success exactly when the mathematical value fits the destination range; they never truncate.
-These operations are available in both the Builtin numeric modules and std.
+These operations are available in both [std/primitive/ops](../../../../lib/std/primitive/package.zy) and std.
 Integer division or remainder by zero terminates unsuccessfully; signed minimum divided
 by `-1` wraps, with remainder zero.
 Integer parsing rejects values outside the `Int` range through its failure continuation;
@@ -61,11 +72,13 @@ the public library reifies these as `Option` or `Either`.
 The source-defined `Bytes` abstraction, its immutable retention contract, and `Buffer` builders are specified
 in [Memory Views, Bytes, and Buffers](../../library/src/memory/views-and-buffers.md#immutable-owners-and-source-bytes).
 
-Every scalar Builtin module provides raw `store_le` and `load_le` operations over `Addr`.
+Every width module under Builtin's `scalar` group (`memory_ops/scalar`) provides raw `store_le`
+and `load_le` operations over `Addr`.
 Callers establish writable or initialized readable extents; source byte codecs validate their own lengths.
 They preserve exact little-endian bits; float loads and stores preserve NaN payloads without arithmetic.
-The [source codecs](../../../../lib/std/numeric/codecs.zy) provide `to_le_bytes` and `from_le_bytes`,
-and std includes them in its numeric modules; decoders require the exact scalar width.
+The [source codecs](../../../../lib/std/numeric/codecs.zy) take [memory Builtin](../../../../lib/std/builtin/memory.zy)
+and `BytesPackage Addr` to provide `to_le_bytes` and `from_le_bytes`, and std includes them in its numeric modules;
+decoders require the exact scalar width.
 
 ## Streams and Process Arguments
 

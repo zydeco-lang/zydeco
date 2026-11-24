@@ -91,9 +91,8 @@ according to the result judgment, instead of naming a wrapper function and retur
 For a type family:
 
 ```zydeco
-param Bool : VType in
 exists (= Int as @(intrinsic(int))) .
-  Numeric Bool Int
+  Numeric Int
 ```
 
 The importing file binds the result under whatever name it chooses, so a wrapper name
@@ -312,11 +311,15 @@ while the preceding projections introduce only the requested local names.
 Omit that alias when the consumer does not forward the packed value.
 This projection-pattern idiom serves the role of a module `use` without adding a separate binding form.
 
-The canonical Builtin contract is the single source of `@[builtin(...)]` host-capability metadata.
+The Builtin contracts ([`builtin.zy`](../lib/std/builtin.zy), [`builtin/memory.zy`](../lib/std/builtin/memory.zy),
+and [`builtin/system.zy`](../lib/std/builtin/system.zy)) are the single source
+of `@[builtin(...)]` host-capability metadata.
 Compiler intrinsics, in contrast, are canonical importable terms in their own right:
-a source splices `@(intrinsic(int))` directly where the term is needed, while host operations are acquired
-by importing the Builtin contract and selecting the required fields from the supplied value,
-which keeps the names subject to ordinary language-level resolution without repeating the complete host interface.
+a source splices `@(intrinsic(int))` or `@(intrinsic(int/add))` directly where the term is needed
+(with pure primitive operations grouped concretely in [`primitive/package.zy`](../lib/std/primitive/package.zy)),
+while host capabilities and resource operations are acquired by importing the appropriate Builtin contract
+and selecting the required fields from the supplied value, which keeps the names subject
+to ordinary language-level resolution without repeating the complete host interface.
 
 Within that signature, fixed representations use canonical primitive intrinsics such as `@(intrinsic(int))`
 and are re-exported through manifest components whose fields carry the public type names.
@@ -366,7 +369,8 @@ A contiguous block attaches to the following term when it appears immediately ab
 def map = _ in map
 ```
 
-The [documentation reference](references/language/src/meta-annotations.md#attaching-documentation) explains attachment and text preservation.
+The [documentation reference](references/language/src/meta-annotations.md#attaching-documentation) explains attachment
+and text preservation.
 Use the supported `@[doc]` form; section options have no implemented presentation contract.
 
 `--` introduces a local implementation note.

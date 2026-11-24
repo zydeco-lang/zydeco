@@ -2,7 +2,7 @@
 
 ## Primitive Calls
 
-Integer and float arithmetic builtins construct intrinsic closures directly in `ExternalFunction::make_function`:
+Integer and float arithmetic intrinsics construct primitive closures directly through `ExternalFunction::make_function`:
 
 ```text
 closure • => let arg(x) :: • = • in let arg(y) :: • = • in • @ PrimitiveOp(x, y)
@@ -43,7 +43,7 @@ The ownership checks require distinct lexical occurrences for operands and succe
 and low protocol checking verifies known operand types and both successors against that same stack.
 The stack may include arguments or codata observations as well as a return continuation.
 
-Builtin materialization gives every numeric comparison an intrinsic body,
+Intrinsic materialization gives every numeric comparison a direct inline body,
 including when normalization is disabled or the function escapes.
 The body consumes two scalar arguments and two thunks, then forces the selected thunk.
 Compiler provenance lets normalization expose this fixed body through aliases and field projections at several sites.
@@ -103,7 +103,7 @@ in native code and the Wasm backend.
 
 ## Ordered Scalar Memory Accesses
 
-Builtin lowering materializes integer and float `load_le`/`store_le` and unmanaged address-slot operations
+Builtin lowering materializes `ScalarMemoryOp` `load_le`/`store_le` and unmanaged address-slot operations
 as ordered `MemoryStep` computations, including when optional normalization is disabled.
 A load binds one result before its successor; a store has only a successor.
 The shared [access domain](../../../../../lang/syntax/src/memory.rs) identifies the scalar role
@@ -168,7 +168,7 @@ That fixture establishes decision depth, not depth-independent destruction of pr
 Owned fact construction
 and demand operations remain [separate work](../../../../proposals/traversals.md#normalization-fact-ownership).
 
-Integer literal match plans use the `BuiltinValueRole::Integer(t, Eq)` intrinsic body
+Integer literal match plans use the `IntrinsicOp::Integer(t, IntegerIntrinsicOp::Eq)` inline body
 and its scalar comparison with success and failure continuations.
 There is no structural literal-pattern node in SPS.
 Structural aliases survive SPS and SPSLow; assembly saves and reloads their bindee, while direct SPS Wasm uses a local.

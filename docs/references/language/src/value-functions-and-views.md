@@ -28,15 +28,15 @@ where `Int` denotes `@(intrinsic(int))`:
 
 | Intrinsic | Result |
 | --- | --- |
-| `int_add` | Addition wrapping within the `Int` payload |
-| `int_sub` | Subtraction wrapping within the `Int` payload |
-| `int_and` | Bitwise conjunction |
-| `int_compare` | Signed comparison: −1, 0, or 1 |
+| `val/int/add` | Addition wrapping within the `Int` payload |
+| `val/int/sub` | Subtraction wrapping within the `Int` payload |
+| `val/int/and` | Bitwise conjunction |
+| `val/int/compare` | Signed comparison: −1, 0, or 1 |
 
 ```zydeco
 let Int = @(intrinsic(int)) in
-let add = @(intrinsic(int_add)) in
-let compare = @(intrinsic(int_compare)) in
+let add = @(intrinsic(val/int/add)) in
+let compare = @(intrinsic(val/int/compare)) in
 let val maximum (left : Int) (right : Int) : Int =
   match compare left right | -1 => right | _ => left end
 in

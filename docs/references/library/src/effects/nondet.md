@@ -8,10 +8,11 @@ They provide neither fair interleaving nor implicit pruning or deduplication.
 
 ## Carrier and Search Operations
 
-The module exports a `make` value-function factory taking Builtin
-and then the caller's shared [`DataPackage`](../../../../../lib/std/data/package.zy).
-Its list inputs and observations use that package's `List` witness and operations;
-the factory does not create a separate list type.
+The module is a concrete package with no `Builtin` or factory parameters.
+It imports [data/package.zy](../../../../../lib/std/data/package.zy) directly via `let`, so its `choose` inputs
+and list observations share the canonical `List` identity across consumers through package merging.
+Its type exports and search operations (`instance`, `transformer`, `transformer_instance`, `choose`,
+`guard`, and observers) are available immediately upon `@(import(...))`.
 The carriers are:
 
 ```text

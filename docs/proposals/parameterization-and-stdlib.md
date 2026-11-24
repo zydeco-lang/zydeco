@@ -119,44 +119,51 @@ Removed parameters that were already unused without altering the compiler or boo
    and [`numeric/float.zy`](../../lib/std/numeric/float.zy),
    and updated [`numeric/package.zy`](../../lib/std/numeric/package.zy).
 
-### Phase 1B: Pure Primitive Operations as Canonical Intrinsics (Compiler + Stdlib)
+### Phase 1B: Pure Primitive Operations as Canonical Intrinsics (Completed)
 
-Move pure computational operations on canonical primitive types out of `Builtin`
+Moved pure computational operations on canonical primitive types out of `Builtin`
 into canonical `@(intrinsic(...))` terms, matching how canonical kinds and types moved
 in [core prelude](../references/language/src/sources/core-prelude.md).
-Expose them through a pure primitive-operations package (extending [`primitive.zy`](../../lib/std/primitive.zy)
-or adding a sibling leaf) while keeping [`builtin.zy`](../../lib/std/builtin.zy) strictly for runtime capabilities:
-`Addr`, `Reader`, `Writer`, `OS`, `memory` (including `store_le`/`load_le`), `io`, `fs`,
-`stdio`, `args`, `random`, and `process`.
+Exposed them through [`std/primitive/ops`](../../lib/std/primitive/package.zy)
+while narrowing [`builtin.zy`](../../lib/std/builtin.zy) strictly to runtime capabilities bridged
+across [`builtin/memory.zy`](../../lib/std/builtin/memory.zy) (`Addr`, `memory`,
+`scalar` `store_le`/`load_le`) and [`builtin/system.zy`](../../lib/std/builtin/system.zy) (`Reader`,
+`Writer`, `OS`, `io`, `fs`, `stdio`, `args`, `random`, and `process`).
 
-Target outcome in `lib/std/`:
+Delivered outcomes across three commits:
 
-- Reunite `data/` types and operations into concrete `let`-importable packages (`def List` sharing identity
-  via package merging), retiring `DataPackage` and `make_data`.
-- Convert [`effect/nondet.zy`](../../lib/std/effect/nondet.zy),
-  [`numeric/package.zy`](../../lib/std/numeric/package.zy) (minus byte codecs),
-  and the `char`/`string` modules of `text/` into concrete `let`-importable packages.
-- Keep `numeric/integer.zy` and `numeric/float.zy` as genuinely parameterized internal templates,
-  and keep `text/bytes.zy`, `memory/*`, `numeric/codecs.zy`, and `system/*` capability-parameterized.
+- **Intrinsic pure operations (`7572baa9`)**: Renamed the four total value integer intrinsics
+  to `val/int/{add,sub,and,compare}` and added computation-level `@(intrinsic(<ty>/<op>))` intrinsics for integer,
+  float, character, and string operations behind [`primitive/package.zy`](../../lib/std/primitive/package.zy).
+- **Concrete pure stdlib packages (`e690c750`)**: Reunited `data/package.zy`
+  as a concrete 0-parameter package with shared `def List` (retiring `DataPackage`, `BoolModule`,
+  and `make_data`), dropped `(Bool : VType)` from `PartialEquality`, `PartialOrder`,
+  and `Numeric` in [`numeric/dictionary.zy`](../../lib/std/numeric/dictionary.zy),
+  converted [`effect/nondet.zy`](../../lib/std/effect/nondet.zy),
+  [`numeric/package.zy`](../../lib/std/numeric/package.zy), [`text/package.zy`](../../lib/std/text/package.zy),
+  [`memory/dynamic-size.zy`](../../lib/std/memory/dynamic-size.zy),
+  and [`memory/storage.zy`](../../lib/std/memory/storage.zy) into concrete `let`-importable packages,
+  and split byte-sequence operations into [`text/bytes-ops.zy`](../../lib/std/text/bytes-ops.zy).
+  Kept `numeric/integer.zy` and `numeric/float.zy` as genuinely parameterized internal templates.
+- **Capability split and Builtin cleanup (`55ed1c05`)**: Removed pure numeric, conversion, character,
+  and string roles directly from `BuiltinValueRole` (replacing inline integer/float arithmetic roles
+  with `ScalarMemoryOp`) and `lib/std/builtin.zy`, split unmanaged memory (`std/builtin/memory`)
+  from OS/IO capabilities (`std/builtin/system`) while bridging them in [`builtin.zy`](../../lib/std/builtin.zy),
+  and migrated `text/bytes.zy`, `numeric/codecs.zy`, `memory/*`, `lib/ffi/*`,
+  and tests to the narrower capability contracts.
 
-#### Open Design Decisions Before Starting Phase 1B
+#### Settled Phase 1B Decisions
 
-1. **Intrinsic naming collision**: `@(intrinsic(int_add))`, `@(intrinsic(int_sub))`,
-   `@(intrinsic(int_and))`, and `@(intrinsic(int_compare))` already denote `ValueIntOp` total value functions
-   (`val pi (left : Int) (right : Int) . Int` in [`lang/abi/src/builtin.rs`](../../lang/abi/src/builtin.rs)),
-   whereas runtime arithmetic operations are suspended computations (`Thk (Int -> Int -> Ret Int)`).
-   Decide how to name, namespace, or unify total value intrinsics vs.
-   computation-level primitive intrinsics.
-2. **Builtin contract migration**: Decide whether pure computational roles are removed from `BuiltinValueRole`
-   and `builtin.zy` outright—updating `lang/abi`, `lang/ir`, `lang/dynamics`, `lang/stackir`, `lang/cranelift`,
-   `lang/wasm-sps`, and `lib/tests/builtin/*`—or retained through a deprecation window.
-3. **Unified `data/` and dictionary signatures**: Decide whether `List` becomes a single `def List` sharing identity
-   by package merging (matching `Bool`, `Option`, `Either` outside the bootstrap prelude
-   in [`lang/session/src/source/prelude.rs`](../../lang/session/src/source/prelude.rs))
-   and whether `numeric/dictionary.zy` drops its `Bool` parameter in favor of canonical `Bool`.
-4. **Capability split inside `Builtin`**: Decide whether memory capabilities (`Addr`, `memory`,
-   `store_le`/`load_le`) should be separable from OS/IO capabilities (`OS`, `Reader`, `Writer`, `io`, `fs`,
-   `stdio`, `args`, `random`, `process`) so pure memory modules need not carry `OS` in their parameter contracts.
+1. **Intrinsic naming**: Total value integer operators moved to `@(intrinsic(val/int/{add,sub,and,compare}))`,
+   while pure computation-level primitives use `@(intrinsic(<ty>/<op>))` (for example `@(intrinsic(int/add))`
+   and `@(intrinsic(string/append))`).
+2. **Direct Builtin cleanup**: Pure primitive roles were removed directly from `BuiltinValueRole` and `builtin.zy`
+   without a deprecation window.
+3. **Unified `data/` and dictionaries**: `List` is a single `def List` unified by package merging,
+   and `PartialEquality`/`PartialOrder`/`Numeric` drop `(Bool : VType)` in favor of canonical `Bool`.
+4. **Capability split inside `Builtin`**: Memory capabilities (`Addr`, `memory`, `scalar` `load_le`/`store_le`) moved
+   into [`std/builtin/memory`](../../lib/std/builtin/memory.zy) (zero `OS` witness) and OS/IO capabilities
+   into [`std/builtin/system`](../../lib/std/builtin/system.zy), bridged inside `builtin.zy` via `(= Addr, memory_ops)`.
 
 ### Phase 2: Diamond Wiring for Capability and Invariant Modules (Open Language Design)
 
@@ -217,13 +224,18 @@ Once Phase 1A and Phase 1B (and ideally Phase 2) land, the choice between `let` 
     on `builtin.zy`.
   - Paired tests verify direct import of pure effect modules succeeds while applying them to `builtin` is rejected.
   - `zydeco check -p /std`, numeric tests, effect tests, and `cargo xtask docs check` pass.
-- **Phase 1B**:
-  - Pure `data/` modules, `effect/nondet.zy`, `numeric/package.zy` (excluding byte codecs),
-    and `text/{char,string}` check without importing `builtin.zy`.
-  - Paired tests establish identity sharing of `List` across independent `let` imports
-    and preserve `tyck.static-elimination` boundaries between static value intrinsics
-    and runtime computation intrinsics.
-  - All `std`, `builtin`, `effects`, `nondet`, and backend execution tests pass.
+- **Phase 1B (completed)**:
+  - Pure `data/` modules, `effect/nondet.zy`, `numeric/package.zy` (excluding byte codecs), `text/package.zy`,
+    `memory/dynamic-size.zy`, and `memory/storage.zy` check without importing `builtin.zy`, `builtin/memory.zy`,
+    or `builtin/system.zy`.
+  - Paired tests establish identity sharing of `List`
+    across independent `let` imports (`list_identity_is_shared_across_data_std_and_nondet`),
+    capability isolation (`memory_capability_packages_have_no_os_dependency`,
+    `memory_only_builtin_executable_is_rejected_without_os_witness`,
+    `system_only_builtin_executable_runs_without_memory_capability`),
+    `Builtin` bridging (`memory_and_system_capabilities_bridge_through_builtin_and_share_bytes`),
+    and `tyck.static-elimination` boundaries between static value intrinsics and runtime computation intrinsics.
+  - All compiler crates, Cranelift, CLI, `std`, `builtin`, `effects`, and directive execution tests pass.
 - **Phase 2**:
   - Two independent local applications of an applicative factory (or package-slot substitution)
     to the same capability path unify their sealed types, while applications

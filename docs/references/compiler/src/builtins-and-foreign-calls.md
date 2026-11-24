@@ -1,13 +1,21 @@
 # C14. Builtin Contracts, Primitive Operations, and Foreign Calls
 
 The [ABI crate](../../../../lang/abi/src/lib.rs) (`zydeco-abi`, re-exported
-by `zydeco-syntax`) owns the canonical `#![no_std]` builtin role catalog, host-call modes (`Returning` vs `Control`),
+by `zydeco-syntax`) owns the canonical `#![no_std]` builtin capability-role catalog,
+the `@(intrinsic(...))` primitive-operation catalog, host-call modes (`Returning` vs `Control`),
 spare-box policies, C FFI/unit boundary descriptors, `RuntimeFailure` codes, and `HostIoErrorKind`.
-[Static Builtin validation](../../../../lang/statics/src/builtin.rs) checks the authored
-[Builtin signature](../../../../lib/std/builtin.zy) against those roles.
-Interpreter linking and [SPS Builtin lowering](../../../../lang/stackir/src/builtin.rs)
-materialize the validated structural plan.
-Host calls retain `BuiltinValueRole` through dynamic and Stack IR syntax.
+[Static Builtin validation](../../../../lang/statics/src/builtin.rs) checks the
+authored [Builtin signature](../../../../lib/std/builtin.zy)
+and capability contracts ([memory](../../../../lib/std/builtin/memory.zy)
+and [system](../../../../lib/std/builtin/system.zy)) against those roles.
+Pure numeric, conversion, character, and string operations live
+in the intrinsic operation catalog ([std/primitive/ops](../../../../lib/std/primitive/package.zy)) rather
+than `BuiltinValueRole`, while raw `memory` and `scalar` (`ScalarMemoryOp`:
+`store_le`/`load_le`) remain in `BuiltinValueRole`.
+Interpreter linking and [SPS Builtin lowering](../../../../lang/stackir/src/builtin.rs) materialize the validated
+structural plan, while intrinsic primitive splices lower directly to `HostOp::Intrinsic`.
+Host calls retain `HostOp` (`Builtin(BuiltinValueRole)` or `Intrinsic(IntrinsicValueOp)`)
+through dynamic and Stack IR syntax.
 The role supplies arity and calling mode; emission derives the external symbol at the target ABI boundary.
 
 Canonical representation types have shared intrinsic identities;
