@@ -14,8 +14,8 @@ Variable names start with an ASCII letter, or with `_` followed by at least one 
 Subsequent characters are ASCII letters, digits, `_`, apostrophe, `?`, `+`, `*`, `-`, `=`, or `~`.
 `_` alone is a hole.
 A constructor starts with `+` and an uppercase letter; a destructor starts with `.` and a lowercase letter.
-`#field` marks a field name wherever it could be confused with a binder.
-Keywords are reserved.
+`#field` marks a field name wherever it could be confused with a binder. Keywords (including `seal`
+for [applicative sealing](polymorphism-and-packed-values.md#applicative-sealing)) are reserved.
 
 Integer tokens are optionally signed decimal digits.
 Floats require a fractional part with digits on both sides of the decimal point,
@@ -42,7 +42,7 @@ The main precedence levels, from tightest to loosest, are:
 | `A -> B -> C` | Right |
 | `v \|> f` | Left |
 | `f <\| v` | Right; the right operand is a full term |
-| `pi`, `val pi`, `forall`, `sigma`, `exists` | Binder bodies extend rightward |
+| `pi`, `val pi`, `forall`, `sigma`, `exists`, `seal` | Binder bodies extend rightward (`seal term : Sig`) |
 | Abstractions, bindings, metadata | Extend over their following term |
 
 Thus `!p/action x` means `(! (p/action)) x`.

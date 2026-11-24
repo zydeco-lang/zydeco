@@ -47,32 +47,36 @@ Runtime operations have two boundaries.
 [`builtin.zy`](builtin.zy) is the typed contract between Zydeco programs and the host runtime.
 Its operations expose representation-independent observations and effects,
 but never construct library-defined `Bool`, `Option`, `Either`, `List`, or `Bytes` values.
-[`std.zy`](std.zy) applies the factories supplied by topic packages and assembles the public packed value,
-whose sealed type its final `pack` introduction synthesizes.
+[`std.zy`](std.zy) opens `Builtin` once, instantiates the capability-parameterized topic modules,
+and re-exports their sealed types as manifest existential witnesses (`= Bytes as Bytes`,
+`= Buffer as Buffer`, `= Path as Path`, `= IoErrorKind as IoErrorKind`, `= IoError as IoError`).
 
 Types and the definitions that use them live in the same source package.
 The [organization rule](../../docs/references/library/src/organization.md) distinguishes manifest structural interfaces
 from abstract representation witnesses.
-A module with a reusable capability input or output contract exports that contract together
-with its `make` value function.
-For example, `text/bytes.zy` exports `BytesPackage` and `make`,
-and takes a [memory Builtin](builtin/memory.zy) (`std/builtin/memory`) value containing only `Addr` and `memory_ops`:
+Modules that define sealed abstract types use applicative sealing (`seal term : Sig`) directly over a local signature
+so independent callers that pass the same static capability witness share one canonical abstract type
+without forwarding intermediate type or operation packages:
 
 ```zydeco
 param val (/Addr; memory_builtin) : @(import("builtin/memory.zy")) in
-let (/BytesPackage; /make = make_bytes) = @(import("text/bytes.zy")) in
-(make_bytes memory_builtin : BytesPackage Addr)
+let (/Bytes; /bytes) = memory_builtin |> (@(import("text/bytes.zy"))) in
+bytes/empty
 ```
 
-The whole-value alias retains the `Addr` opening for the factory, which builds `Bytes`
-and its operations without requiring any `OS` witness or stream capabilities.
-The pure topic packages—`data/package.zy`, `numeric/package.zy`, `text/package.zy`, `effect/nondet.zy`,
-`memory/storage.zy`, and `memory/dynamic-size.zy`—need no factory parameters and are imported directly with `let`.
+The whole-value alias forwards the `Addr` opening to `text/bytes.zy`, which seals `Bytes`
+as a type family indexed by `Addr` without requiring any `OS` witness or stream capabilities.
+The pure and zero-parameter modules—`data/package.zy`, `numeric/package.zy`, `text/package.zy`, `effect/nondet.zy`,
+`memory/storage.zy`, and `memory/dynamic-size.zy`—need no factory parameters and are imported directly with `let`;
+`memory/storage.zy` uses zero-parameter applicative sealing for `Storage` and `DynamicStorage`,
+while keeping fresh layout witness creation (`constant/create`, `runtime/create`) generative under nested `exists`.
 Explicit signatures remain local to their implementations wherever they prescribe abstraction;
 colocation does not replace those signatures with inferred interfaces.
 
-`text/bytes.zy`, `numeric/codecs.zy`, `memory/*`, and `system/package.zy` keep explicit capability parameters,
-and `std.zy` opens and applies the necessary factories to assemble its public packed value.
+`text/bytes.zy`, `text/bytes-ops.zy`, `numeric/codecs.zy`, `memory/*`,
+and `system/package.zy` take only their capability roots (`MemoryBuiltin` / `Addr` or `Builtin`,
+plus genuine template parameters such as `Geometry` in `memory/array-core.zy`),
+and `std.zy` instantiates them once to assemble its public packed value.
 Shared representation packages such as `data/either.zy` expose manifest type fields with a `()` payload.
 The host-independent `effect/monad.zy` and `algebra/monoid.zy` use that same type-only packaging convention.
 
@@ -156,24 +160,24 @@ numeric/dictionary.zy      shared numeric capability constructors, with a unit p
 numeric/package.zy         concrete twelve numeric modules and their capability dictionaries
 numeric/codecs.zy          source byte codecs over scalar memory leaves
 
-text/bytes.zy              BytesPackage contract and abstract immutable byte-sequence factory
-text/bytes-ops.zy          byte collection and option conveniences over BytesPackage
+text/bytes.zy              applicatively sealed immutable Bytes abstraction parameterized by MemoryBuiltin
+text/bytes-ops.zy          byte collection and option conveniences over MemoryBuiltin
 text/package.zy            concrete Char and String convenience operations
 
-memory/package.zy          manual-memory interface and shared pointer/state witnesses
-memory/types.zy            erased Ptr<L,S> abstraction and state markers
-memory/storage.zy          sealed fixed/runtime geometry
-memory/codecs.zy           fixed/runtime scalar codecs and the Representation constructor
-memory/layout.zy           static layout plans and typed destination operations
-memory/dynamic-layout.zy   explicitly dynamic placement and realization
+memory/package.zy          manual-memory interface re-exporting sealed pointer, state, storage, and slice types
+memory/types.zy            applicatively sealed Ptr<L,S>, Uninit, Init, and Fields indexed by Addr
+memory/storage.zy          zero-parameter applicatively sealed fixed/runtime geometry and generative layout creation
+memory/codecs.zy           fixed/runtime scalar codecs and the Representation constructor over MemoryBuiltin
+memory/layout.zy           applicatively sealed Plan and Layout over MemoryBuiltin
+memory/dynamic-layout.zy   applicatively sealed dynamic Layout over MemoryBuiltin
 memory/size.zy             checked static size and alignment calculations
 memory/shape.zy            inspectable scalar widths and product placement
-memory/buffer.zy           incremental byte construction, snapshots, retention, release
-memory/allocation.zy       explicit allocator services
-memory/slice.zy            counted typed pointers and checked index arithmetic
+memory/buffer.zy           applicatively sealed Buffer builder for incremental byte construction over MemoryBuiltin
+memory/allocation.zy       explicit allocator services over MemoryBuiltin
+memory/slice.zy            applicatively sealed Slice over MemoryBuiltin and checked index arithmetic
 memory/native.zy           raw memory adapter and source fault values
 
-system/package.zy          system data types and capability-preserving assembly
+system/package.zy          zero-parameter sealed system data types and capability-preserving assembly over Builtin
 
 algebra/monoid.zy          general-purpose monoid dictionary
 
@@ -204,7 +208,7 @@ Computation callbacks are passed as thunks and run only for the matching branch:
 | `unwrap_or L R value fallback` | Return the right payload, or the fallback for a left value |
 | `is_left L R value`, `is_right L R value` | Return the corresponding branch test as `Ret Bool` |
 
-Topic implementations are independently checkable source terms; open `make` from entries that also export contracts.
+Topic implementations are independently checkable source terms that take their needed capabilities directly.
 Import `algebra/monoid.zy` and the `effect/` modules directly; `std.zy` does not assemble them.
 The public packed value keeps one opening for `Reader`, `Writer`, and `OS`;
 splitting that opening would give related I/O operations incompatible abstract types.
@@ -261,8 +265,9 @@ do value <- ! bytes/empty;
 
 Here `Reader` and primitive `io` come from one Builtin opening; `builtin` forwards that packed value.
 `Bytes`, convenient `bytes`, and `fs` share the std opening.
-For low-level memory composition, open `make` from `text/bytes.zy`, instantiate it once,
-and pass that packed value to dependent builders.
+For low-level memory composition, every dependent module instantiates `text/bytes.zy`, `memory/types.zy`,
+`memory/storage.zy`, or `memory/field.zy` directly against its shared `Builtin` or `MemoryBuiltin` opening,
+and applicative sealing keeps their sealed types unified across modules.
 Slash selection follows the [language rules](../../docs/references/language/src/polymorphism-and-packed-values.md),
 including nested products and ambiguity.
 A view such as `make_std ~> (/bytes; /fs)` combines application and opening.
@@ -725,10 +730,11 @@ The [stream guide](#streams-and-files) gives the operations and lifecycle contra
 [stream ideas](../../docs/ideas/README.md#growable-byte-builders-and-incremental-streams)
 retain the extension questions.
 
-The topic files are independently importable terms exposing their factories directly or through `make`.
-`std.zy` is the composition root used by most programs; its public packed value carries the library-defined types
-and modules, while the Builtin contract remains the home of every host type and capability.
-Its public record nests one sub-record per topic, and its sealed type is synthesized from the final `pack` introduction,
+The topic files are independently importable terms parameterized only by the capabilities they use.
+`std.zy` is the composition root used by most programs;
+its public packed value re-exports the sealed library types manifestly and bundles topic modules,
+while the Builtin contract remains the home of every host type and capability.
+Its public record nests one sub-record per topic, with manifest equations for the sealed library types,
 so no restated contract sits between the implementation and its consumers.
 Consumers still select individual modules and types directly,
 such as `let make_std ~> (/option; /process) = builtin in`, because slash projection searches the nested structure.

@@ -165,7 +165,25 @@ Delivered outcomes across three commits:
    into [`std/builtin/memory`](../../lib/std/builtin/memory.zy) (zero `OS` witness) and OS/IO capabilities
    into [`std/builtin/system`](../../lib/std/builtin/system.zy), bridged inside `builtin.zy` via `(= Addr, memory_ops)`.
 
-### Phase 2: Diamond Wiring for Capability and Invariant Modules (Open Language Design)
+### Phase 2: Diamond Wiring for Capability and Invariant Modules (Completed)
+
+Implemented **Option A** via signature-driven
+[applicative sealing](../references/language/src/polymorphism-and-packed-values.md#applicative-sealing)
+(`seal term : Sig`, precedence level 9
+in [lexical syntax](../references/language/src/lexical-and-syntax.md#precedence-and-grouping))
+and collapsed the remaining standard-library capability and contract diamonds in line
+with [library organization](../references/library/src/organization.md#module-layout-and-boundaries):
+
+- **Zero-parameter & capability-indexed sealed foundations**: `memory/storage.zy`, `memory/types.zy`,
+  `memory/field.zy`, `memory/slice.zy`, `memory/buffer.zy`, `memory/layout.zy`, `memory/dynamic-layout.zy`,
+  `text/bytes.zy`, and `system/package.zy` use local existential signatures and `seal`
+  so equal capability openings (`Builtin` / `MemoryBuiltin` / `Addr`) unify automatically
+  across independent imports and separate compilation units while distinct `Addr` openings stay isolated.
+- **Retired intermediate contract waterfalls**: removed `StoragePackage`, `Types`, `FieldOperations`, `BytesPackage`,
+  and intermediate `make` package-forwarding funnels across `lib/std/`, `lib/ffi/xxhash.zy`, and tests;
+  `memory/package.zy` and `std.zy` re-export sealed library types as manifest existential witnesses (`(= X as X)`),
+  and genuinely generative existentials (`constant/create`, `runtime/create`, `record/product`, `arrays/make`,
+  `layout/realize`, `view/unsafe/header`, and `Builtin` openings) remain generative under nested `exists`.
 
 After Phase 1B, capability-bearing and invariant-sealing modules (`text/bytes.zy`, `memory/*`,
 `system/*`) still form diamond dependency graphs whose nodes seal abstract types.
@@ -236,8 +254,9 @@ Once Phase 1A and Phase 1B (and ideally Phase 2) land, the choice between `let` 
     `Builtin` bridging (`memory_and_system_capabilities_bridge_through_builtin_and_share_bytes`),
     and `tyck.static-elimination` boundaries between static value intrinsics and runtime computation intrinsics.
   - All compiler crates, Cranelift, CLI, `std`, `builtin`, `effects`, and directive execution tests pass.
-- **Phase 2**:
-  - Two independent local applications of an applicative factory (or package-slot substitution)
-    to the same capability path unify their sealed types, while applications
-    to distinct capability openings remain rejected with `tyck.type-mismatch`.
-  - Per-instance generative seals (`storage/constant/create`) continue to reject cross-opening unification.
+- **Phase 2 (Completed)**:
+  - Verified across `std::applicative_sealing_unifies_stdlib_diamonds_and_preserves_isolation_and_generativity`,
+    `seal::*`, and `separate::tests::sealed_diamond_preserves_applicative_identity_and_opacity`:
+    equal capability openings unify their sealed types, distinct `Addr` openings stay rejected
+    with `tyck.type-mismatch`, and per-instance generative seals (`storage/constant/create`,
+    nested `exists`) continue to reject cross-opening unification.

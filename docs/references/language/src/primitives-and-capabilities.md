@@ -77,7 +77,8 @@ and `load_le` operations over `Addr`.
 Callers establish writable or initialized readable extents; source byte codecs validate their own lengths.
 They preserve exact little-endian bits; float loads and stores preserve NaN payloads without arithmetic.
 The [source codecs](../../../../lib/std/numeric/codecs.zy) take [memory Builtin](../../../../lib/std/builtin/memory.zy)
-and `BytesPackage Addr` to provide `to_le_bytes` and `from_le_bytes`, and std includes them in its numeric modules;
+directly (instantiating [source bytes](../../../../lib/std/text/bytes.zy) against that shared `Addr` witness)
+to provide `to_le_bytes` and `from_le_bytes`, and std includes them in its numeric modules;
 decoders require the exact scalar width.
 
 ## Streams and Process Arguments

@@ -119,10 +119,47 @@ when the packed values have identical field names or layouts.
 This relationship uses existential elimination and ordinary bindings; it introduces no separate module object.
 
 An inferred `pack` interface is useful when its witnesses and payload already express the intended contract.
-An explicit annotation, including a [source companion](sources.md#source-boundaries),
-prescribes the interface when details must be hidden.
-`typeof` can reuse an inferred contract but couples it to the inspected implementation.
-No companion is required merely because a term is used as a module.
+
+## Applicative Sealing
+
+Generative `exists` introductions bind fresh opaque witnesses at every evaluation or opening,
+which prevents independent callers of a pure module constructor from sharing types
+across a diamond import graph even when they supply the same static arguments.
+Zydeco provides signature-driven applicative sealing `seal term : Sig` to separate cross-module canonical abstraction
+from per-call generativity.
+
+Checking `seal term : Sig` first checks `Sig` at kind `VType`, requires `Sig`
+to expose a non-empty leading existential prefix containing at least one abstract `exists` binder, and checks `term`
+against `Sig` using the static witnesses visible from `term` and enclosing value-function / universal / package binders.
+If those static witnesses are missing—for example when `term` is a dynamically chosen runtime package
+without manifest witnesses—checking fails with `PackageWitnessesUnavailable`;
+if `Sig` has no leading abstract type witness, checking fails with `TypeExpected`;
+if a sealed representation captures a local existential skolem without naming it as a witness parameter,
+scope checking fails with `EscapingExistential`.
+
+For each leading abstract type binder in `Sig`, `seal` allocates a canonical higher-kinded opaque type family indexed
+by the enclosing value-function and local existential/type-abstraction witnesses that appear in scope,
+records the hidden representation in `opaque_representations` without exposing it during unification
+or type checking, and returns a manifest existential type equating each sealed binder
+to that canonical family applied to the current witnesses.
+Two consequences govern modularity:
+
+- **Witness-indexed unification**: instantiating an applicatively sealed module twice
+  with identical static type and opened-capability arguments yields equal abstract types
+  across separate compilation units and diamond imports, while distinct type arguments
+  or distinct opened capability witnesses (such as two distinct `Addr` openings) yield incompatible abstract types.
+- **Nested generativity and representation erasure**: only the outer leading existential binders
+  of `Sig` are skolemized by `seal`; any nested `exists` inside fields, thunks,
+  or function codomains keeps its generative `exists`/`pack` semantics.
+  During demand-driven elaboration, `seal` acts transparently over its value and unfolds `opaque_representations`
+  before emitting residual core types, so runtime code incurs zero extra boxing while static-only representations (such
+  as `val pi` functions behind a sealed type) still fail runtime-representation checks with `StaticElimination`.
+- **Execution staging**: like other static existential sealing forms,
+  `seal` is disallowed inside `@[cbv]` value blocks (`Expressivity`).
+  An explicit annotation, including a [source companion](sources.md#source-boundaries),
+  prescribes the interface when details must be hidden.
+  `typeof` can reuse an inferred contract but couples it to the inspected implementation.
+  No companion is required merely because a term is used as a module.
 
 [Value functions](value-functions-and-views.md) compose modules statically.
 A provider selected at runtime instead uses an ordinary thunk or codata protocol;

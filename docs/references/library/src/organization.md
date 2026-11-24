@@ -44,6 +44,14 @@ The `algebra/` and `effect/` modules are imported explicitly rather than added t
 Directory ownership does not assign [source-package names](../../language/src/sources/packages.md#source-packages).
 The [library guide](../../../../lib/std/README.md#source-layout) inventories the entry points and imports.
 
+Modules that hide representations while sharing abstract types across independent callers (`memory/storage.zy`,
+`memory/types.zy`, `memory/field.zy`, `memory/slice.zy`, `memory/buffer.zy`, `memory/layout.zy`,
+`memory/dynamic-layout.zy`, `text/bytes.zy`, and `system/package.zy`) bind private local signatures and seal
+with [applicative sealing](../../language/src/polymorphism-and-packed-values.md#applicative-sealing).
+As a result, dependent modules accept only their capability root (`MemoryBuiltin` / `Addr` or `Builtin`) instead
+of forwarding intermediate contract packages, while `std/memory` and `std` re-export the resulting sealed types
+as manifest witnesses (`(= Type as Type)`).
+
 ## Either Values
 
 The data library's shared [`Either L R`](../../../../lib/std/data/either.zy) represents a
