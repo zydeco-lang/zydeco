@@ -2,10 +2,13 @@
 -- backends: all
 @[package(test(of(/std)))]
 begin
-  param (/numeric; /process; builtin) : @(import(
+  let (/numeric) = @(import(/std/primitive/ops)) in
+  param (/Addr; /memory_ops; /process; builtin) : @(import(
     /std/builtin
   )) in
-  let (/storage; /codecs; /Uninit; /Init; /Ptr; /fixed; /allocation) = builtin |> (
+  let memory_builtin : @(import(/std/builtin/memory)) = (= Addr, memory_ops) in
+  let memory_builtin : @(import(/std/builtin/memory)) = (= Addr, memory_ops) in
+  let (/storage; /codecs; /Uninit; /Init; /Ptr; /fixed; /allocation) = memory_builtin |> (
     @(import(/std/memory))
   ) in
   let (= Plan, = Layout, layouts) = fixed in
@@ -13,7 +16,7 @@ begin
   let (/Fault) = @(import("../../../std/memory/fault.zy")) in
   let fail = { ! process/exit 1 } in
   let no = { fn (_ : Fault) => ! fail } in
-  let make_worker = builtin |> (@(import("../support/worker.zy"))) in
+  let make_worker = @(import("../support/worker.zy")) in
   match layouts/product UInt8 UInt32 layouts/uint8 layouts/uint32
   | +Left(_) => ! fail
   | +Right(plan) =>

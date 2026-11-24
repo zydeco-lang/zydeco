@@ -1,8 +1,12 @@
-param (/Addr; /numeric; /process; builtin) : @(import("../../std/builtin.zy")) in
+param (/Addr; /process; /memory_ops; builtin) : @(import("../../std/builtin.zy")) in
+let (/numeric) = @(import("../../std/primitive/package.zy")) in
+let memory_builtin : @(import("../../std/builtin/memory.zy")) = (= Addr, memory_ops) in
 begin
-  let (/storage; /codecs; /Uninit; /Init; /Ptr; /fixed; /allocation; /pointer; /raw) = builtin |> (
-    @(import("../../std/memory/package.zy"))
-  ) in
+  let (/storage; /codecs; /Uninit; /Init; /Ptr; /fixed; /allocation; /pointer; /raw) =
+    memory_builtin |> (
+      @(import("../../std/memory/package.zy"))
+    )
+  in
   let (= Plan, = Layout, layouts) = fixed in
   let (/Alloc; /heap) = allocation in
   let (/Fault) = @(import("../../std/memory/fault.zy")) in

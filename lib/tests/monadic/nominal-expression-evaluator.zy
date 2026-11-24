@@ -1,7 +1,8 @@
 -- A nominal expression type and evaluator translated under State and Exception.
-param (/numeric; /process) : @(import(
+param (/process) : @(import(
   "../../std/builtin.zy"
 )) in
+let (/numeric) = @(import("../../std/primitive/package.zy")) in
 let basis = @(import("../../std/effect/monad.zy")) in
 let (/Monad; /Algebra; /WithMonad) = basis in
 let state = @(import("../../std/effect/state.zy")) in

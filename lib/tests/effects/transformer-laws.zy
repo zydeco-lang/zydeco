@@ -1,12 +1,14 @@
 -- Derived State and Exception satisfy the same ambient-effect and lift laws as the earlier transformers.
-param (/numeric; /string; builtin) : @(import(
+let (/numeric; /text) = @(import("../../std/primitive/package.zy")) in
+let (/string) = text in
+param (/OS = _; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
 let state = @(import("../../std/effect/state.zy")) in
 let exception = @(import("../../std/effect/exception.zy")) in
 let (/Monoid; writer) = @(import("../../std/effect/writer.zy")) in
 let (/with_trace) = builtin |> (@(import("effect-test-basis.zy"))) in
-let (/laws; /lift_laws) = builtin |> (@(import("effect-law-suite.zy"))) in
+let (/laws; /lift_laws) = @(import("effect-law-suite.zy")) in
 let output : Monoid String = (#empty = "", #append = string/append) in
 let (W, w) = writer/instance String output in
 let (S, s) = state/instance Int in

@@ -65,9 +65,10 @@ begin
   in
   let make =
     -- Field witnesses describe layout relationships, never allocation identity or ownership.
+    let (/numeric) = @(import("../primitive/package.zy")) in
     begin
-      param val (/Addr; /numeric; /memory; builtin) : @(import(
-        "../builtin.zy"
+      param val (/Addr; /memory; builtin) : @(import(
+        "../builtin/memory.zy"
       )) that
       param val (/Uninit; /Init; /Ptr; /unsafe; types) : Types Addr in
       let Field (P : VType) (C : VType) = val pi (_ : Unit) . Int in

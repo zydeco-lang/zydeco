@@ -1,5 +1,5 @@
 let (/BytesPackage) = @(import("../std/text/bytes.zy")) in
-param val (/Addr; builtin) : @(import("../std/builtin.zy")) in
+param val (/Addr; builtin) : @(import("../std/builtin/memory.zy")) in
 begin
   param val (/Bytes; /bytes) : BytesPackage Addr in
   let Window = Addr in

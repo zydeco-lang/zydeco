@@ -1,11 +1,13 @@
 -- These dictionaries typecheck, but the observation-based law suite must reject them.
-param (/numeric; /string; builtin) : @(import(
+let (/numeric; /text) = @(import("../../std/primitive/package.zy")) in
+let (/string) = text in
+param (/OS = _; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
 let (/Monad) = @(import("../../std/effect/monad.zy")) in
 let (/Monoid; writer) = @(import("../../std/effect/writer.zy")) in
 let (/with_trace) = builtin |> (@(import("effect-test-basis.zy"))) in
-let (/laws) = builtin |> (@(import("effect-law-suite.zy"))) in
+let (/laws) = @(import("effect-law-suite.zy")) in
 -- Duplicating either argument is observable even when its returned answers agree.
 let duplicate_source : Thk (Monad Ret) = {
   comatch

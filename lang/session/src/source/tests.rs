@@ -370,19 +370,14 @@ fn builtin_add_exit_source() -> &'static str {
 begin
   let Int = @(intrinsic(int)) that
   param (
-    (/OS; /int; /process) :
+    (/OS; /process) :
     exists
       @[builtin(os)] (OS : @(intrinsic(ctype)))
     .
-      (#int ::
-        (@[builtin(int_add)] (#add ::
-          (@(intrinsic(thk))) (Int -> Int -> (@(intrinsic(ret))) Int))) *
-        (@[builtin(int_sub)] (#sub ::
-          (@(intrinsic(thk))) (Int -> Int -> (@(intrinsic(ret))) Int)))) *
       (#process ::
         @[builtin(exit)] (#exit :: (@(intrinsic(thk))) (Int -> OS)))
   ) in
-    do sum <- ! int/add 1 2;
+    do sum <- ! (@(intrinsic(int/add))) 1 2;
     ! process/exit sum
 end
 "#
@@ -786,7 +781,7 @@ fn textual_program_ascribes_an_implementation_with_its_signature() {
 #[test]
 fn builtin_operation_roles_remain_specializable_through_name_resolution() {
     let fixture = SourceFixture::new();
-    let root = fixture.write("main.zy", "@(builtin(int_add))");
+    let root = fixture.write("main.zy", "@(builtin(memory_offset))");
 
     let (_, resolved) = resolve_root_unit(root);
     let zydeco_surface::scoped::syntax::Term::Meta(term) =
@@ -799,10 +794,7 @@ fn builtin_operation_roles_remain_specializable_through_name_resolution() {
     assert_eq!(
         *meta,
         zydeco_surface::scoped::syntax::ResolvedMeta::Builtin(zydeco_syntax::BuiltinRole::Value(
-            zydeco_syntax::BuiltinValueRole::Integer(
-                zydeco_syntax::IntegerType::Int,
-                zydeco_syntax::IntegerOperation::Add,
-            ),
+            zydeco_syntax::BuiltinValueRole::MemoryOffset,
         ))
     );
     assert!(matches!(resolved.arena.terms[payload], zydeco_surface::scoped::syntax::Term::Hole(_)));
@@ -1507,8 +1499,8 @@ param (
   exists
     @[builtin(os)] (OS : @(intrinsic(ctype)))
   .
-    ((@[builtin(int_add)] (#first :: @(intrinsic(unit)))) *
-     (@[builtin(int_add)] (#second :: @(intrinsic(unit)))))
+    ((@[builtin(memory_offset)] (#first :: @(intrinsic(unit)))) *
+     (@[builtin(memory_offset)] (#second :: @(intrinsic(unit)))))
 ) in
   ret ()
 "#,
@@ -1544,7 +1536,8 @@ fn builtin_host_type_roles_require_abstract_entries_of_the_right_kind() {
 #[test]
 fn a_builtin_operation_role_attaches_to_its_named_classifier() {
     let fixture = SourceFixture::new();
-    let root = fixture.write("main.zy", "@[builtin(int_add)] (#add :: @(intrinsic(unit)))");
+    let root =
+        fixture.write("main.zy", "@[builtin(memory_offset)] (#offset :: @(intrinsic(unit)))");
     let checked = TestPipeline::check(root).unwrap();
     let zydeco_statics::syntax::TermAnnId::Type(entry, _) = checked.root else {
         panic!("a named classifier must check as a type")
@@ -1552,17 +1545,14 @@ fn a_builtin_operation_role_attaches_to_its_named_classifier() {
 
     assert_eq!(
         checked.statics.builtin_roles.value(entry),
-        Some(zydeco_syntax::BuiltinValueRole::Integer(
-            zydeco_syntax::IntegerType::Int,
-            zydeco_syntax::IntegerOperation::Add,
-        ))
+        Some(zydeco_syntax::BuiltinValueRole::MemoryOffset)
     );
 }
 
 #[test]
 fn a_builtin_operation_role_rejects_an_unnamed_classifier() {
     let fixture = SourceFixture::new();
-    let root = fixture.write("main.zy", "@[builtin(int_add)] @(intrinsic(unit))");
+    let root = fixture.write("main.zy", "@[builtin(memory_offset)] @(intrinsic(unit))");
     let analysis = CompilerSession::default().analyze(root).unwrap();
 
     assert!(analysis.outcome().diagnostics().is_some());
@@ -1636,15 +1626,16 @@ begin
   let Ret = @(intrinsic(ret)) that
   let Int = @(intrinsic(int)) that
   param (
-    (/OS; /int; /process) :
+    (/Addr; /OS; /memory; /process) :
     exists
+      @[builtin(addr)] (Addr : @(intrinsic(vtype)))
       @[builtin(os)] (OS : @(intrinsic(ctype)))
     .
-      (#int :: @[builtin(int_add)] (#add :: Thk (Int -> Int -> Ret Int))) *
+      (#memory :: @[builtin(memory_offset)] (#offset :: Thk (Addr -> Int -> Ret Addr))) *
       (#process :: @[builtin(exit)] (#exit :: Thk (Int -> OS)))
   ) in
-    do sum <- ! int/add 1 2;
-    ! process/exit sum
+    let _ = memory/offset in
+    ! process/exit 0
 end
 "#,
     );

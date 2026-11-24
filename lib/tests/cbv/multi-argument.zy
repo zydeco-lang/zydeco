@@ -5,7 +5,9 @@
 -- the shape a call-by-push-value library has, so functions cross the boundary of
 -- a block in either direction with no adapter.
 begin
-  param (/Thk; /Ret; /Int; /Unit; /OS; /int; /process) : @(import("../../std/builtin.zy")) that
+  param (/Thk; /Ret; /Int; /Unit; /OS; /process) : @(import("../../std/builtin.zy")) that
+  let (/numeric = _prim_numeric) = @(import("../../std/primitive/package.zy")) that
+  let (/int) = _prim_numeric that
   def ! require (want : Int) (got : Int) (k : Thk OS) : OS =
     ! int/eq OS want got k { ! process/exit 1 }
   that

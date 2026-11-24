@@ -1,4 +1,6 @@
-param (/numeric; /string; builtin) : @(import(
+let (/numeric; /text) = @(import("../../std/primitive/package.zy")) in
+let (/string) = text in
+param (/OS = _; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
 let (/instance = ret_instance) = @(import("../../std/effect/ret.zy")) in
@@ -6,7 +8,7 @@ let reader = @(import("../../std/effect/reader.zy")) in
 let (/Monoid; writer) = @(import("../../std/effect/writer.zy")) in
 let (/Option; optional) = @(import("../../std/effect/option.zy")) in
 let (/with_trace) = builtin |> (@(import("effect-test-basis.zy"))) in
-let (/laws; /lift_laws) = builtin |> (@(import("effect-law-suite.zy"))) in
+let (/laws; /lift_laws) = @(import("effect-law-suite.zy")) in
 let (R, r) = reader/instance Int in
 let output : Monoid String = (#empty = "", #append = string/append) in
 let (W, w) = writer/instance String output in

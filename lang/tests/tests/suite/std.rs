@@ -92,7 +92,7 @@ impl RepresentationCase {
         format!(
             r#"
 let (/BytesPackage; /make = make_bytes) = @(import("{library}/text/bytes.zy")) in
-let byte_package : BytesPackage Addr = make_bytes builtin in
+let byte_package : BytesPackage Addr = make_bytes memory_builtin in
 let (/Bytes; /bytes) = byte_package in
 let (/Types; /make = make_types) = @(import("{library}/memory/types.zy")) in
 let type_package : Types Addr = make_types Addr in
@@ -100,7 +100,7 @@ let (/Uninit; /Init; /Ptr; types) = type_package in
 let (/StoragePackage; /storage = storage_package) = @(import("{library}/memory/storage.zy")) in
 let (/Storage; /DynamicStorage; /SizeAlign) = storage_package in
 let (/FieldOperations; /make = make_fields) = @(import("{library}/memory/field.zy")) in
-let (= Field, = DynamicField, field_operations) = make_fields builtin types in
+let (= Field, = DynamicField, field_operations) = make_fields memory_builtin types in
 let _ : FieldOperations Uninit Init Ptr Field DynamicField = field_operations in
 {body}
 "#,
@@ -220,4 +220,49 @@ fn retired_data_factories_and_bool_indexed_numeric_dictionaries_are_rejected() {
         let source = body.replace("{library}", &library.display().to_string());
         SourceCase::assert_rejected(SourceCase::check(&source), TyckDiagnosticCode::KindMismatch);
     }
+}
+
+#[test]
+fn memory_capability_packages_have_no_os_dependency() {
+    let lib =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lib").canonicalize().unwrap();
+    let session = zydeco_session::CompilerSession::default();
+    for rel in
+        ["std/memory/package.zy", "std/text/bytes.zy", "std/numeric/codecs.zy", "ffi/xxhash.zy"]
+    {
+        let path = lib.join(rel);
+        let analysis = session.analyze(&path).unwrap();
+        assert!(analysis.outcome().root().is_some(), "{rel}: {:?}", analysis.outcome());
+        assert!(
+            analysis.graph().source_inputs().any(|s| s.path.ends_with("builtin/memory.zy")),
+            "{rel} should depend on std/builtin/memory.zy"
+        );
+        assert!(
+            !analysis.graph().source_inputs().any(
+                |s| s.path.ends_with("std/builtin.zy") || s.path.ends_with("builtin/system.zy")
+            ),
+            "{rel} must not depend on OS builtin packages"
+        );
+    }
+}
+
+#[test]
+fn memory_and_system_capabilities_bridge_through_builtin_and_share_bytes() {
+    let library = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lib/std");
+    let source = format!(
+        r#"
+let (/BytesPackage; /make = make_bytes) = @(import("{library}/text/bytes.zy")) in
+let (/Bytes; /bytes; byte_package) : BytesPackage Addr = make_bytes memory_builtin in
+let (/Path; /IoError; /fs; /process = sys_proc) =
+  (builtin |> (@(import("{library}/system/package.zy")))) byte_package in
+do chunk <- ! bytes/from_string "bridge";
+let _ : Thk (Path -> Bytes -> Thk (Either IoError Unit -> OS) -> OS) = fs/write_bytes in
+do len <- ! bytes/length chunk;
+! int/eq OS len 6 {{ ! sys_proc/exit 0 }} {{ ! sys_proc/exit 1 }}
+"#,
+        library = library.display(),
+    );
+    SourceCase::assert_accepted(SourceCase::check_invariants(&source));
+    SourceCase::assert_accepted(SourceCase::lower(&source));
+    SourceCase::assert_accepted(SourceCase::run(&source));
 }

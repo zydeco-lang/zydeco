@@ -6,9 +6,11 @@
 -- a counterfactual that must flip the answer.
 begin
   let (/Monad; /Algebra) = @(import("../../std/effect/monad.zy")) that
-  param (/VType; /CType; /Thk; /Ret; /Unit; /OS; /Int; /int; /process) : @(import(
+  param (/VType; /CType; /Thk; /Ret; /Unit; /OS; /Int; /process) : @(import(
     "../../std/builtin.zy"
   )) that
+  let (/numeric = _prim_numeric) = @(import("../../std/primitive/package.zy")) that
+  let (/int) = _prim_numeric that
   let (/State; /instance; /run_state) = @(import("../../std/effect/state.zy")) in
   let (_, state_instance) = instance Int in
   begin

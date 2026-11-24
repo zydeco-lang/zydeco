@@ -284,15 +284,12 @@ fn deeply_nested_builtin_products_lower_on_a_small_stack() {
 
 #[test]
 fn builtin_folder_preserves_product_order_and_materialization() {
-    use zydeco_syntax::{BuiltinValueRole, IntegerOperation, IntegerType};
+    use zydeco_syntax::BuiltinValueRole;
     let core = Fixture::dummy_program();
     let mut lowerer = Lowerer::new(&core, SpsScheme::BranchJoin);
     let input = BuiltinPackageValue::Product(vec![
         BuiltinPackageValue::Unit,
-        BuiltinPackageValue::Operation(BuiltinValueRole::Integer(
-            IntegerType::Int,
-            IntegerOperation::Eq,
-        )),
+        BuiltinPackageValue::Operation(BuiltinValueRole::MemoryOffset),
         BuiltinPackageValue::Product(vec![BuiltinPackageValue::Unit, BuiltinPackageValue::Unit]),
     ]);
     let value = Explicit::run(&mut BuiltinPackageFolder { lowerer: &mut lowerer }, input);

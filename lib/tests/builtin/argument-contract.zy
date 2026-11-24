@@ -1,7 +1,10 @@
-param (/numeric; /args; /process; /int; /string; builtin) : @(import("../../std/builtin.zy")) in
+let (/numeric; /text) = @(import("../../std/primitive/package.zy")) in
+let (/int) = numeric in
+let (/string) = text in
+param (/args; /process; builtin) : @(import("../../std/builtin.zy")) in
 begin
   let make_arguments = @(import("../../std/system/arguments.zy")) in
-  let arguments = builtin |> make_arguments in
+  let arguments = args |> make_arguments in
   let fail = { ! process/exit 1 } in
   def fix churn (remaining : Int) : Ret Unit =
     ! int/eq (Ret Unit) remaining 0 { ret () } {

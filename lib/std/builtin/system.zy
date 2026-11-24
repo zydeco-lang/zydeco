@@ -1,0 +1,16 @@
+@[prelude(none)]
+@[package(library, name(std/builtin/system))]
+exists
+  @[builtin(reader)] (= Reader : @(intrinsic(vtype)))
+  @[builtin(writer)] (= Writer : @(intrinsic(vtype)))
+  @[builtin(os)] (= OS : @(intrinsic(ctype)))
+.
+  begin
+    let BuiltinUnit = @(intrinsic(unit)) that
+      (#fs :: (@(import("system/fs.zy"))) Reader Writer OS)
+    * (#stdio :: (@(import("system/stdio.zy"))) Reader Writer OS)
+    * (#args :: @(import("system/args.zy")))
+    * (#random :: (@(import("system/random.zy"))) OS)
+    * (#process :: (@(import("system/process.zy"))) OS)
+    * BuiltinUnit
+  end

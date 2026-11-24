@@ -1,11 +1,13 @@
-param (/Addr; /Int; /Int64; /OS; /Thk; /numeric; /system; /process; builtin) : @(import(
+let (/numeric) = @(import("../../../lib/std/primitive/package.zy")) in
+param (/Addr; /Int; /Int64; /OS; /Thk; /memory_ops; /process; builtin) : @(import(
   "../../../lib/std/builtin.zy"
 )) in
+let (/memory; /scalar) = memory_ops in
 let (/Fault) = @(import("../../../lib/std/memory/fault.zy")) in
 let fix update (base : Addr) (index : Int) (no : Thk (Fault -> OS)) (done : Thk OS) : OS =
-  ! numeric/int/load_le OS base {
+  ! scalar/int/load_le OS base {
     fn count =>
-      do payload <- ! system/memory/offset base 16;
+      do payload <- ! memory/offset base 16;
       ! numeric/int/lt OS count 0 { ! no +Bounds() } {
         ! numeric/int/gt OS count 4 { ! no +Bounds() } {
           ! numeric/int/lt OS index 0 { ! no +Bounds() } {
@@ -13,11 +15,11 @@ let fix update (base : Addr) (index : Int) (no : Thk (Fault -> OS)) (done : Thk 
               do maximum <- ! numeric/int/div 4611686018427387903 8;
               ! numeric/int/gt OS index maximum { ! no +Overflow() } {
                 do displacement <- ! numeric/int/mul index 8;
-                do slot <- ! system/memory/offset payload displacement;
-                ! numeric/int64/load_le OS slot {
+                do slot <- ! memory/offset payload displacement;
+                ! scalar/int64/load_le OS slot {
                   fn value =>
                     do updated <- ! numeric/int64/add value (1 : Int64);
-                    ! numeric/int64/store_le OS slot updated done
+                    ! scalar/int64/store_le OS slot updated done
                 }
               }
             } { ! no +Bounds() }

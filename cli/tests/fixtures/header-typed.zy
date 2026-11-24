@@ -1,7 +1,10 @@
-param (/VType; /CType; /Addr; /Int; /Int64; /OS; /Thk; /Ret; /numeric; /process; builtin) :
+let MemoryBuiltin = @(import("../../../lib/std/builtin/memory.zy")) in
+let (/numeric) = @(import("../../../lib/std/primitive/package.zy")) in
+param (/VType; /CType; /Addr; /Int; /Int64; /OS; /Thk; /Ret; /memory_ops; /process; builtin) :
 @(import("../../../lib/std/builtin.zy")) in
+let memory_builtin : MemoryBuiltin = (= Addr, memory_ops) in
 let (/Ptr; /Init; /fixed; /arrays; /records; /headers; /views; /codecs) =
-  builtin |> (@(import("../../../lib/std/memory/package.zy")))
+  memory_builtin |> (@(import("../../../lib/std/memory/package.zy")))
 in
 let (= Plan, = Layout, layout) = fixed in
 let (/Fault) = @(import("../../../lib/std/memory/fault.zy")) in

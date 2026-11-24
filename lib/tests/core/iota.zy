@@ -1,6 +1,7 @@
-param val (/stdio; /process; /numeric; builtin) : @(import(
+param val (/stdio; /process; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
+let (/numeric) = @(import("../../std/primitive/package.zy")) in
 begin
   let int = numeric/int that
   let U = Thk that

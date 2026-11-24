@@ -1,6 +1,7 @@
-param (/stdio; /process; /text; builtin) : @(import(
+param (/stdio; /process; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
+let (/text) = @(import("../../std/primitive/package.zy")) in
 begin
   let string = text/string that
   def Bool =

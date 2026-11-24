@@ -1,9 +1,10 @@
-param (/process; /numeric; /text; builtin) : @(import(
+let (/numeric; /text) = @(import("../../std/primitive/package.zy")) in
+param (/process; /args) : @(import(
   "../../std/builtin.zy"
 )) in
 begin
   let make_arguments = @(import("../../std/system/arguments.zy")) in
-  let arguments = builtin |> make_arguments in
+  let arguments = args |> make_arguments in
   let int = numeric/int that
   let char = text/char that
   let string = text/string that

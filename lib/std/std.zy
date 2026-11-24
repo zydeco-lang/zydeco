@@ -15,13 +15,15 @@ let make_bytes_ops = @(import("text/bytes-ops.zy")) in
 let (/Additive; /Multiplicative; /PartialEquality; /PartialOrder; /Numeric) = @(import(
   "numeric/dictionary.zy"
 )) in
+let MemoryBuiltin = @(import("builtin/memory.zy")) in
 begin
-  param val (/Addr; /OS = _; builtin) : @(import("builtin.zy")) that
+  param val (/Addr; /memory_ops; /OS = _; builtin) : @(import("builtin.zy")) that
   let make_system = @(import("system/package.zy")) that
 
-  let (/Bytes; byte_package) = builtin |> make_bytes in
-  let codecs = (builtin |> (@(import("numeric/codecs.zy")))) byte_package in
-  let (= Buffer, buffer) = (builtin |> (@(import("memory/buffer.zy")))) byte_package in
+  let memory_builtin : MemoryBuiltin = (= Addr, memory_ops) in
+  let (/Bytes; byte_package) = memory_builtin |> make_bytes in
+  let codecs = (memory_builtin |> (@(import("numeric/codecs.zy")))) byte_package in
+  let (= Buffer, buffer) = (memory_builtin |> (@(import("memory/buffer.zy")))) byte_package in
   let bytes = make_bytes_ops Addr byte_package in
   let (/Path; /IoErrorKind; /IoError; /io; /fs; /stdio; /process; system) =
     (builtin |> make_system) byte_package

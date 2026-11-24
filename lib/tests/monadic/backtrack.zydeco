@@ -1,7 +1,8 @@
 -- Ordered depth-first search through the standard NonDet library.
-param (/numeric; /stdio; /process; builtin) : @(import(
+param (/stdio; /process; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
+let (/numeric) = @(import("../../std/primitive/package.zy")) in
 let (/List; /list; /bool) = @(import("../../std/data/package.zy")) in
 let (/Monad; /Algebra) = @(import("../../std/effect/monad.zy")) in
 let (/instance = ret_instance) = @(import("../../std/effect/ret.zy")) in

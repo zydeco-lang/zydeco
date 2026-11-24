@@ -1,8 +1,12 @@
 -- stage: run
 -- backends: all
 @[package(test(of(/std)))]
-param (/Addr; /numeric; /process; builtin) : @(import(/std/builtin)) in
+let (/numeric) = @(import(/std/primitive/ops)) in
+param (/Addr; /memory_ops; /process) : @(import(/std/builtin)) in
+let memory_builtin : @(import(/std/builtin/memory)) = (= Addr, memory_ops) in
 begin
+  let (/scalar) = memory_ops in
+  let memory_builtin : @(import(/std/builtin/memory)) = (= Addr, memory_ops) in
   let (/storage; /codecs;
     /Uninit;
     /Init;
@@ -19,7 +23,7 @@ begin
     /raw
   )
   =
-    builtin |> (@(import(/std/memory)))
+    memory_builtin |> (@(import(/std/memory)))
   in
   let (= Plan, = Layout, layout) = fixed in
   let (/initialized) = fields in
@@ -56,7 +60,7 @@ begin
               -- Padding remains untouched by direct field initialization.
               let base = pointer/unsafe/address L Init live in
               do gap <- ! raw/unsafe/offset base 8;
-              ! numeric/uint/load_le OS gap {
+              ! scalar/uint/load_le OS gap {
                 fn padding =>
                   ! numeric/uint/eq OS padding 6148914691236517205 {
                     ! (codecs/unsafe/take L (Int * UInt32) object/codec live) OS {

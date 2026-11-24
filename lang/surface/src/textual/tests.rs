@@ -10,10 +10,10 @@ use crate::{
     textual::syntax::{
         Alias, Ann, Appli, BindingFlavor, Block, BuiltinRole, BuiltinValueRole, ContextBind, Ctor,
         DefinitionMode, Dtor, EntityId, ExistentialParameter, Exists, Force, Hole, IntegerLiteral,
-        IntegerOperation, IntegerType, IntrinsicRole, Label, Literal, ManifestPattern, Meta,
-        MetaNode, MetaTerm, Named, Pack, Param, ParameterFlavor, Paren, Parser, PatId, Pattern,
-        Pipeline, PipelineDirection, Placement, Prod, Proj, ProjectionPattern, Return, SourceUnit,
-        Term, TermId, ViewPattern,
+        IntegerType, IntrinsicRole, Label, Literal, ManifestPattern, Meta, MetaNode, MetaTerm,
+        Named, Pack, Param, ParameterFlavor, Paren, Parser, PatId, Pattern, Pipeline,
+        PipelineDirection, Placement, Prod, Proj, ProjectionPattern, Return, SourceUnit, Term,
+        TermId, ViewPattern,
     },
 };
 use std::{collections::HashMap, ops::Range};
@@ -733,17 +733,14 @@ fn source_unit_rejects_import_on_a_non_hole_term() {
 
 #[test]
 fn source_unit_decodes_builtin_operation_roles_on_terms() {
-    let source = "@[builtin(int_add)] _";
+    let source = "@[builtin(memory_offset)] _";
     let mut parser = Parser::new();
     let unit = StrictParser::source(source, &mut parser).unwrap();
 
     let builtins = unit.builtins(&parser.arena, &parser.spans).unwrap();
     let [site] = builtins.as_slice() else { panic!("expected one Builtin role") };
 
-    assert_eq!(
-        site.directive.role,
-        BuiltinRole::Value(BuiltinValueRole::Integer(IntegerType::Int, IntegerOperation::Add,))
-    );
+    assert_eq!(site.directive.role, BuiltinRole::Value(BuiltinValueRole::MemoryOffset));
     let BuiltinLocation::Term { payload, .. } = site.location else {
         panic!("expected a term annotation")
     };
@@ -889,6 +886,8 @@ fn source_unit_rejects_malformed_builtin_roles() {
         ("@[builtin(vtype)] _", ExpectedBuiltinError::UnknownRole),
         ("@[builtin(thk)] _", ExpectedBuiltinError::UnknownRole),
         ("@[builtin(monad)] _", ExpectedBuiltinError::UnknownRole),
+        ("@[builtin(int_add)] _", ExpectedBuiltinError::UnknownRole),
+        ("@[builtin(str_append)] _", ExpectedBuiltinError::UnknownRole),
     ];
 
     cases.into_iter().for_each(|(source, expected)| {

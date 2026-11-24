@@ -75,12 +75,10 @@ mod tests {
 
         fn literal(op: HostOp, value: u8) -> Literal {
             match op {
-                | HostOp::Intrinsic(IntrinsicOp::Integer(integer, _))
-                | HostOp::Builtin(BuiltinValueRole::Integer(integer, _)) => {
+                | HostOp::Intrinsic(IntrinsicOp::Integer(integer, _)) => {
                     IntegerLiteral::new(value.into()).with_type(integer).unwrap().into()
                 }
-                | HostOp::Intrinsic(IntrinsicOp::Float(float, _))
-                | HostOp::Builtin(BuiltinValueRole::Float(float, _)) => {
+                | HostOp::Intrinsic(IntrinsicOp::Float(float, _)) => {
                     FloatLiteral::from(f64::from(value)).with_type(float).unwrap().into()
                 }
                 | _ => unreachable!("arithmetic fixtures use numeric ops"),

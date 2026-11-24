@@ -23,7 +23,7 @@ begin
     -- Logical conversion is independent of allocation geometry and provider selection.
     begin
       param val (/Addr; /memory; builtin) : @(import(
-        "../builtin.zy"
+        "../builtin/memory.zy"
       )) that
       param val (/Uninit; /Init; /Ptr; /unsafe; types) : Types Addr in
       let Codec = Codec Uninit Init Ptr in

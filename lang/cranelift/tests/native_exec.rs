@@ -25,6 +25,10 @@ fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap()
 }
 
+fn primitive_path() -> String {
+    repo_root().join("lib/std/primitive/package.zy").to_str().unwrap().to_owned()
+}
+
 fn builtin_path() -> String {
     repo_root().join("lib/std/builtin.zy").to_str().unwrap().to_owned()
 }
@@ -190,9 +194,11 @@ fn assert_run_ok(output: &Output) {
 #[test]
 fn local_letlabel_contification_loop_sums_100k() {
     let builtin = builtin_path();
+    let primitive = primitive_path();
     let source = format!(
         r#"
-param (/OS; /Unit; /Int; /Int64; /numeric; /process; /system) : @(import({builtin:?})) in
+let (/numeric) = @(import({primitive:?})) in
+param (/OS; /Unit; /Int; /Int64; /process; /system) : @(import({builtin:?})) in
 let fix loop (i : Int) (acc : Int64) : OS =
   ! numeric/int/gt OS i 100000
     {{
@@ -219,9 +225,11 @@ do zero64 <- ! numeric/int64/from_int 0;
 #[test]
 fn cheney_gc_preserves_products_boxed_scalars_closures_and_strings() {
     let builtin = builtin_path();
+    let primitive = primitive_path();
     let source = format!(
         r#"
-param (/OS; /Unit; /Int; /Int64; /Float64; /String; /Thk; /Ret; /numeric; /text; /process; /system) : @(import({builtin:?})) in
+let (/numeric; /text) = @(import({primitive:?})) in
+param (/OS; /Unit; /Int; /Int64; /Float64; /String; /Thk; /Ret; /process; /system) : @(import({builtin:?})) in
 do keep_i64 <- ! numeric/int64/from_int 1234567;
 let keep_f64 = (3.25 : Float64) in
 let make_fn = {{ fn (base : Int64) =>
@@ -272,9 +280,11 @@ do s7 <- ! text/string/append s6 s0;
 #[test]
 fn nullary_and_payload_constructors_and_cocase_dispatch() {
     let builtin = builtin_path();
+    let primitive = primitive_path();
     let source = format!(
         r#"
-param (/OS; /Unit; /Int; /Ret; /Thk; /VType; /CType; /numeric; /process) : @(import({builtin:?})) in
+let (/numeric) = @(import({primitive:?})) in
+param (/OS; /Unit; /Int; /Ret; /Thk; /VType; /CType; /process) : @(import({builtin:?})) in
 begin
   def List (A : VType) : VType =
     data
@@ -317,9 +327,12 @@ end
 #[test]
 fn fixed_width_ints_edge_div_rem_nan_and_memory_kernel() {
     let builtin = builtin_path();
+    let primitive = primitive_path();
     let source = format!(
         r#"
-param (/OS; /Unit; /String; /Int; /Int8; /Int16; /Int32; /Int64; /UInt8; /UInt16; /UInt32; /UInt64; /UInt; /Float32; /Float64; /numeric; /system; /process) : @(import({builtin:?})) in
+let (/numeric) = @(import({primitive:?})) in
+param (/OS; /Unit; /String; /Int; /Int8; /Int16; /Int32; /Int64; /UInt8; /UInt16; /UInt32; /UInt64; /UInt; /Float32; /Float64; /memory_ops; /process) : @(import({builtin:?})) in
+let (/memory; /scalar) = memory_ops in
 let fail = {{ fn (_ : Int) => ! process/exit 91 }} in
 do wrap8 <- ! numeric/int8/add (127 : Int8) (1 : Int8);
 ! numeric/int8/eq OS wrap8 (-128 : Int8) {{
@@ -330,21 +343,21 @@ do wrap8 <- ! numeric/int8/add (127 : Int8) (1 : Int8);
       do nan <- ! numeric/float32/div (0.0 : Float32) (0.0 : Float32);
       ! numeric/float32/lt OS nan (1.0 : Float32) {{ ! process/exit 92 }} {{
         ! numeric/float32/eq OS nan nan {{ ! process/exit 93 }} {{
-          ! system/memory/allocate OS 16 8 fail {{ fn base =>
-            ! numeric/int64/store_le OS base (100 : Int64) {{
+          ! memory/allocate OS 16 8 fail {{ fn base =>
+            ! scalar/int64/store_le OS base (100 : Int64) {{
               let fix kernel (n : Int) : OS =
                 ! numeric/int/eq OS n 0
                   {{
-                    ! numeric/int64/load_le OS base {{ fn loaded =>
-                      ! system/memory/free OS base 16 8 fail {{
+                    ! scalar/int64/load_le OS base {{ fn loaded =>
+                      ! memory/free OS base 16 8 fail {{
                         ! numeric/int64/eq OS loaded (150 : Int64) {{ ! process/exit 0 }} {{ ! process/exit 94 }}
                       }}
                     }}
                   }}
                   {{
-                    ! numeric/int64/load_le OS base {{ fn cur =>
+                    ! scalar/int64/load_le OS base {{ fn cur =>
                       do sum <- ! numeric/int64/add cur (5 : Int64);
-                      ! numeric/int64/store_le OS base sum {{
+                      ! scalar/int64/store_le OS base sum {{
                         do next <- ! numeric/int/sub n 1;
                         ! kernel next
                       }}
@@ -409,7 +422,7 @@ int main(int argc, char **argv) {
 
 #[test]
 fn c_export_library_round_trips_ints_reuses_instance_and_rejects_reentrancy() {
-    let builtin = builtin_path();
+    let primitive = primitive_path();
     let lib_src = format!(
         r#"
 @[package(library(c,
@@ -426,7 +439,7 @@ fn c_export_library_round_trips_ints_reuses_instance_and_rejects_reentrancy() {
   export(field(wide), symbol("zy_wide")),
   export(field(reenter), symbol("zy_reenter"))
 ), name(example/cexp))]
-param val (/Thk; /Ret; /Unit; /Int; /Int8; /Int16; /Int32; /Int64; /UInt; /UInt8; /UInt16; /UInt32; /UInt64; /numeric) : @(import({builtin:?})) in
+let (/numeric) = @(import({primitive:?})) in
 (
   #Int8 = ({{ fn x => ret x }} : Thk (Int8 -> Ret Int8)),
   #Int16 = ({{ fn x => ret x }} : Thk (Int16 -> Ret Int16)),
@@ -493,10 +506,11 @@ param val (/Thk; /Ret; /Unit; /Int; /Int8; /Int16; /Int32; /Int64; /UInt; /UInt8
 #[test]
 fn native_unit_object_export_and_closure_call() {
     let builtin = builtin_path();
+    let primitive = primitive_path();
     let unit_src = format!(
         r#"
 @[package(library(zydeco), name(example/producer))]
-param val (/Thk; /Ret; /Unit; /Int; /Int64; /numeric) : @(import({builtin:?})) in
+let (/numeric) = @(import({primitive:?})) in
 (
   #make_adder = ({{ fn (delta : Int64) =>
     ret {{ fn (value : Int64) =>
@@ -514,7 +528,8 @@ param val (/Thk; /Ret; /Unit; /Int; /Int64; /numeric) : @(import({builtin:?})) i
     );
     let client_src = format!(
         r#"
-param (/OS; /Unit; /Int64; /Thk; /Ret; /numeric; /process; /system) : @(import({builtin:?})) in
+let (/numeric) = @(import({primitive:?})) in
+param (/OS; /Unit; /Int64; /Thk; /Ret; /process; /system) : @(import({builtin:?})) in
 let init = (@(ffi(zydeco, library("example.producer"), symbol("zydeco_unit_example_producer_init")))
     : Thk (Ret (
         (#make_adder :: Thk (Int64 -> Ret (Thk (Int64 -> Ret Int64))))
@@ -539,9 +554,11 @@ do s <- ! numeric/int64/to_string res;
 #[test]
 fn unboxed_projected_product_variables_and_indirect_closures_execute_across_policies() {
     let builtin = builtin_path();
+    let primitive = primitive_path();
     let source = format!(
         r#"
-param (/CType; /OS; /Ret; /Thk; /Int; /numeric; /process) : @(import({builtin:?})) in
+let (/numeric) = @(import({primitive:?})) in
+param (/CType; /OS; /Ret; /Thk; /Int; /process) : @(import({builtin:?})) in
 let Compare = Thk (forall (R : CType) . Int -> Int -> Thk R -> Thk R -> R) in
 let p = (19, 23) in
 let (a, b) = p in

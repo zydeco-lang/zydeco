@@ -4,9 +4,10 @@ let (/Types) = @(import("types.zy")) in
 let (/StoragePackage) = @(import("storage.zy")) in
 let (/Codec; /DynamicCodec) = @(import("codecs.zy")) in
 let (/Fault) = @(import("fault.zy")) in
+let (/numeric) = @(import("../primitive/package.zy")) in
 begin
-  param val (/Addr; /numeric; /memory; builtin) : @(import(
-    "../builtin.zy"
+  param val (/Addr; /memory; builtin) : @(import(
+    "../builtin/memory.zy"
   )) in
   param val (/Uninit; /Init; /Ptr; /unsafe; types) : Types Addr in
   param val (/Storage; /DynamicStorage; /constant; /runtime) : StoragePackage in

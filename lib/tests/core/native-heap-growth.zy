@@ -1,5 +1,6 @@
 -- Builds > 2 MiB of simultaneously live linked nodes to exercise geometric GC growth.
-param (/numeric; /process; builtin) : @(import("../../std/builtin.zy")) in
+param (/process; builtin) : @(import("../../std/builtin.zy")) in
+let (/numeric) = @(import("../../std/primitive/package.zy")) in
 begin
   let make_std = @(import("../../std/std.zy")) that
   let (/bool; /int) = builtin |> make_std in

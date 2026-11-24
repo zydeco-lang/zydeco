@@ -2,10 +2,12 @@
 -- backends: all
 @[package(test(of(/std)))]
 let (/make = make_bytes) = @(import("../../std/text/bytes.zy")) in
-param (/numeric; /process; builtin) : @(import(/std/builtin)) in
+param (/process; /Addr; /memory_ops; builtin) : @(import(/std/builtin)) in
+let (/numeric) = @(import(/std/primitive/ops)) in
+let memory_builtin : @(import(/std/builtin/memory)) = (= Addr, memory_ops) in
 begin
-  let (/Bytes; /bytes) = builtin |> make_bytes in
-  let (/storage; /codecs; /allocation; /dynamic) = builtin |> (@(import(/std/memory))) in
+  let (/Bytes; /bytes) = memory_builtin |> make_bytes in
+  let (/storage; /codecs; /allocation; /dynamic) = memory_builtin |> (@(import(/std/memory))) in
   let (= Layout, = Representation, memory) = dynamic in
   let fail = { ! process/exit 1 } in
   let ! rejected (A : VType) (layout : Layout A) (next : Thk OS) : OS =

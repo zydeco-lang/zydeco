@@ -344,7 +344,7 @@ impl<'prog, 'rt> Runtime<'prog, 'rt> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zydeco_ir::{CoreArena, ProductLayout, VCons as IrVCons};
+    use zydeco_ir::CoreArena;
 
     #[test]
     fn computation_and_value_roots_evaluate_directly() {
@@ -364,62 +364,44 @@ mod tests {
 
     #[test]
     fn with_packages_and_multi_arg_host_resume_deliver_arguments_in_order() {
-        // Construct:
-        // fn pkg =>
-        //   let (split_at) = pkg in
-        //   do (l, r) <- (fn (a : String) (b : String) => ret (a, b)) ... wait:
-        // Directly call str_split_once_branch on ("hi:lo", ':', none, some(a, b) => ret (a, b))
         let mut arena = CoreArena::default();
-        let pkg_var = arena.vars.alloc(VarName::new("split_once"));
+        let pkg_var = arena.vars.alloc(VarName::new("arg_at"));
         let pkg_pat = arena.vpats.alloc(ir::ValuePattern::Var(pkg_var));
-        let split_fn = arena.values.alloc(ir::Value::Var(pkg_var));
+        let arg_fn = arena.values.alloc(ir::Value::Var(pkg_var));
 
-        let a_var = arena.vars.alloc(VarName::new("a"));
-        let b_var = arena.vars.alloc(VarName::new("b"));
-        let a_pat = arena.vpats.alloc(ir::ValuePattern::Var(a_var));
-        let b_pat = arena.vpats.alloc(ir::ValuePattern::Var(b_var));
-        let a_ref = arena.values.alloc(ir::Value::Var(a_var));
-        let b_ref = arena.values.alloc(ir::Value::Var(b_var));
-        let pair = arena
-            .values
-            .alloc(ir::Value::VCons(IrVCons::new(vec![a_ref, b_ref], ProductLayout { arity: 2 })));
-        let ret_pair = arena.compus.alloc(ir::Computation::Ret(Return(pair)));
-        let lam_b = arena.compus.alloc(ir::Computation::VAbs(Abs(b_pat, ret_pair)));
-        let lam_a = arena.compus.alloc(ir::Computation::VAbs(Abs(a_pat, lam_b)));
-        let some_thk = arena.values.alloc(ir::Value::Thunk(Thunk(lam_a)));
+        let found_var = arena.vars.alloc(VarName::new("found"));
+        let found_pat = arena.vpats.alloc(ir::ValuePattern::Var(found_var));
+        let found_ref = arena.values.alloc(ir::Value::Var(found_var));
+        let ret_found = arena.compus.alloc(ir::Computation::Ret(Return(found_ref)));
+        let lam_found = arena.compus.alloc(ir::Computation::VAbs(Abs(found_pat, ret_found)));
+        let some_thk = arena.values.alloc(ir::Value::Thunk(Thunk(lam_found)));
 
         let empty_str = arena.values.alloc(ir::Value::Lit(Literal::String("none".into())));
         let none_ret = arena.compus.alloc(ir::Computation::Ret(Return(empty_str)));
         let none_thk = arena.values.alloc(ir::Value::Thunk(Thunk(none_ret)));
 
-        let input_str = arena.values.alloc(ir::Value::Lit(Literal::String("hi:lo".into())));
-        let sep_char = arena.values.alloc(ir::Value::Lit(Literal::Char(':')));
+        let index = arena.values.alloc(ir::Value::Lit(Literal::Integer(IntegerLiteral::Int(1))));
 
-        let f0 = arena.compus.alloc(ir::Computation::Force(Force(split_fn)));
-        let a1 = arena.compus.alloc(ir::Computation::VApp(App(f0, input_str)));
-        let a2 = arena.compus.alloc(ir::Computation::VApp(App(a1, sep_char)));
-        let a3 = arena.compus.alloc(ir::Computation::VApp(App(a2, none_thk)));
-        let a4 = arena.compus.alloc(ir::Computation::VApp(App(a3, some_thk)));
-        let root = arena.compus.alloc(ir::Computation::VAbs(Abs(pkg_pat, a4)));
+        let f0 = arena.compus.alloc(ir::Computation::Force(Force(arg_fn)));
+        let a1 = arena.compus.alloc(ir::Computation::VApp(App(f0, index)));
+        let a2 = arena.compus.alloc(ir::Computation::VApp(App(a1, none_thk)));
+        let a3 = arena.compus.alloc(ir::Computation::VApp(App(a2, some_thk)));
+        let root = arena.compus.alloc(ir::Computation::VAbs(Abs(pkg_pat, a3)));
 
         let program = CoreProgram::new(arena, CoreRoot::Compu(root));
-        let plan = BuiltinPackagePlan {
-            value: BuiltinPackageValue::Operation(BuiltinValueRole::StrSplitOnce),
-        };
+        let plan =
+            BuiltinPackagePlan { value: BuiltinPackageValue::Operation(BuiltinValueRole::ArgAt) };
+        let args = ["skip".to_string(), "hi".to_string()];
         let mut input = std::io::empty();
         let mut output = Vec::new();
         let mut stderr = Vec::new();
-        let result = Runtime::new(&mut input, &mut output, &mut stderr, &[], &program)
+        let result = Runtime::new(&mut input, &mut output, &mut stderr, &args, &program)
             .with_packages(&[plan])
             .run();
-        let ProgKont::Ret(SemValue::VCons(ref fields)) = result else { panic!("expected pair") };
-        assert!(matches!(
-            &fields[..],
-            [
-                SemValue::Literal(Literal::String(first)),
-                SemValue::Literal(Literal::String(second)),
-            ] if first.as_str() == "hi" && second.as_str() == "lo"
-        ));
+        let ProgKont::Ret(SemValue::Literal(Literal::String(ref found))) = result else {
+            panic!("expected string argument")
+        };
+        assert_eq!(found.as_str(), "hi");
     }
 
     #[test]
@@ -429,16 +411,6 @@ mod tests {
             .spawn(|| {
                 // Loop 20,000 times subtracting 1 until 0, then return 0.
                 let mut arena = CoreArena::default();
-                let _pkg_var = arena.vars.alloc(VarName::new("pkg"));
-                let sub_var = arena.vars.alloc(VarName::new("sub"));
-                let eq_var = arena.vars.alloc(VarName::new("eq"));
-                let sub_pat = arena.vpats.alloc(ir::ValuePattern::Var(sub_var));
-                let eq_pat = arena.vpats.alloc(ir::ValuePattern::Var(eq_var));
-                let pkg_pat = arena.vpats.alloc(ir::ValuePattern::VCons(IrVCons::new(
-                    vec![sub_pat, eq_pat],
-                    ProductLayout { arity: 2 },
-                )));
-
                 let rec_var = arena.vars.alloc(VarName::new("loop"));
                 let n_var = arena.vars.alloc(VarName::new("n"));
                 let n_pat = arena.vpats.alloc(ir::ValuePattern::Var(n_var));
@@ -452,8 +424,13 @@ mod tests {
                 let n_ref_sub = arena.values.alloc(ir::Value::Var(n_var));
                 let one =
                     arena.values.alloc(ir::Value::Lit(Literal::Integer(IntegerLiteral::Int(1))));
-                let sub_ref = arena.values.alloc(ir::Value::Var(sub_var));
-                let sub_f = arena.compus.alloc(ir::Computation::Force(Force(sub_ref)));
+                let sub_fn = arena.values.alloc(ir::Value::IntrinsicOp(
+                    zydeco_syntax::IntrinsicOp::Integer(
+                        IntegerType::Int,
+                        zydeco_syntax::IntegerIntrinsicOp::Sub,
+                    ),
+                ));
+                let sub_f = arena.compus.alloc(ir::Computation::Force(Force(sub_fn)));
                 let sub_1 = arena.compus.alloc(ir::Computation::VApp(App(sub_f, n_ref_sub)));
                 let sub_2 = arena.compus.alloc(ir::Computation::VApp(App(sub_1, one)));
 
@@ -474,8 +451,13 @@ mod tests {
                 let n_ref_eq = arena.values.alloc(ir::Value::Var(n_var));
                 let zero_b =
                     arena.values.alloc(ir::Value::Lit(Literal::Integer(IntegerLiteral::Int(0))));
-                let eq_ref = arena.values.alloc(ir::Value::Var(eq_var));
-                let eq_f = arena.compus.alloc(ir::Computation::Force(Force(eq_ref)));
+                let eq_fn = arena.values.alloc(ir::Value::IntrinsicOp(
+                    zydeco_syntax::IntrinsicOp::Integer(
+                        IntegerType::Int,
+                        zydeco_syntax::IntegerIntrinsicOp::Eq,
+                    ),
+                ));
+                let eq_f = arena.compus.alloc(ir::Computation::Force(Force(eq_fn)));
                 let eq_1 = arena.compus.alloc(ir::Computation::VApp(App(eq_f, n_ref_eq)));
                 let eq_2 = arena.compus.alloc(ir::Computation::VApp(App(eq_1, zero_b)));
                 let eq_3 = arena.compus.alloc(ir::Computation::VApp(App(eq_2, done_thk)));
@@ -486,27 +468,12 @@ mod tests {
                     .values
                     .alloc(ir::Value::Lit(Literal::Integer(IntegerLiteral::Int(20_000))));
                 let app_start = arena.compus.alloc(ir::Computation::VApp(App(fix, count)));
-                let root = arena.compus.alloc(ir::Computation::VAbs(Abs(pkg_pat, app_start)));
-
-                let program = CoreProgram::new(arena, CoreRoot::Compu(root));
-                let plan = BuiltinPackagePlan {
-                    value: BuiltinPackageValue::Product(vec![
-                        BuiltinPackageValue::Operation(BuiltinValueRole::Integer(
-                            IntegerType::Int,
-                            IntegerOperation::Sub,
-                        )),
-                        BuiltinPackageValue::Operation(BuiltinValueRole::Integer(
-                            IntegerType::Int,
-                            IntegerOperation::Eq,
-                        )),
-                    ]),
-                };
+                let program = CoreProgram::new(arena, CoreRoot::Compu(app_start));
                 let mut input = std::io::empty();
                 let mut output = Vec::new();
                 let mut stderr = Vec::new();
-                let result = Runtime::new(&mut input, &mut output, &mut stderr, &[], &program)
-                    .with_packages(&[plan])
-                    .run();
+                let result =
+                    Runtime::new(&mut input, &mut output, &mut stderr, &[], &program).run();
                 assert!(matches!(
                     result,
                     ProgKont::Ret(SemValue::Literal(Literal::Integer(IntegerLiteral::Int(0))))

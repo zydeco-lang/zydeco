@@ -1,5 +1,7 @@
 -- Structural codata interfaces agree even when their declarations order tags differently.
-param (/int; /process; builtin) : @(import("../../std/builtin.zy")) in
+param (/process; builtin) : @(import("../../std/builtin.zy")) in
+let (/numeric = _prim_numeric) = @(import("../../std/primitive/package.zy")) in
+let (/int) = _prim_numeric in
 begin
   let First =
     codata

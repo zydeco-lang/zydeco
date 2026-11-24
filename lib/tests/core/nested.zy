@@ -1,5 +1,6 @@
 begin
-  param (/process; /numeric) : @(import("../../std/builtin.zy")) that
+  param (/process) : @(import("../../std/builtin.zy")) that
+  let (/numeric) = @(import("../../std/primitive/package.zy")) that
   let int = numeric/int that
   do x <- ret 40;
   do y <- ret 30;

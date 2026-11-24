@@ -16,7 +16,9 @@ impl Fixture {
         let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
         let source = directory.path().join("comparison.zy");
         std::fs::write(&source, format!(
-            "param (/CType; /OS; /Ret; /Thk; /Int8; /Int16; /Int32; /Int64; /Int; /UInt8; /UInt16; /UInt32; /UInt64; /UInt; /Float32; /Float64; /numeric; /process) : @(import(\"{}\")) in {body}\n",
+            "let (/numeric) = @(import(\"{}\")) in \
+             param (/CType; /OS; /Ret; /Thk; /Int8; /Int16; /Int32; /Int64; /Int; /UInt8; /UInt16; /UInt32; /UInt64; /UInt; /Float32; /Float64; /process) : @(import(\"{}\")) in {body}\n",
+            workspace.join("lib/std/primitive/package.zy").display(),
             workspace.join("lib/std/builtin.zy").display(),
         )).unwrap();
         Self { directory, workspace, source }
@@ -171,7 +173,7 @@ fn comparisons_emit_instructions_without_host_imports() {
             let backend =
                 CommandCompiler::default().with_sps_passes(plan).lower(&fixture.source).unwrap();
             let low = backend.render_sps_low();
-            assert!(low.contains(&format!("compare {}_eq", ty.to_lowercase())), "{low}");
+            assert!(low.contains(&format!("compare {}/eq", ty.to_lowercase())), "{low}");
             assert!(!Fixture::is_comparison_import(&low));
             assert!(
                 backend.sps_low.arena().inner.compus.iter().all(|(_, compu)| {
@@ -243,7 +245,7 @@ fn direct_comparisons_inline_branches_and_keep_one_shared_continuation() {
         ! process/exit result in ! probe 3",
     );
     let low = CommandCompiler::default().lower(&fixture.source).unwrap().render_sps_low();
-    assert!(low.contains("compare int_lt"), "{low}");
+    assert!(low.contains("compare int/lt"), "{low}");
     assert!(
         !low.contains("open-closure "),
         "known comparison branches must not dispatch through thunks: {low}"
@@ -260,7 +262,7 @@ fn runtime_selected_comparisons_keep_indirect_dispatch_with_primitive_bodies() {
         do greater <- ! choose 1;
         ! less OS 1 2 { ! greater OS 2 1 { ! process/exit 0 } { ! process/exit 91 } } { ! process/exit 92 }");
     let low = CommandCompiler::default().lower(&fixture.source).unwrap().render_sps_low();
-    assert!(low.contains("compare int_lt") && low.contains("compare int_gt"), "{low}");
+    assert!(low.contains("compare int/lt") && low.contains("compare int/gt"), "{low}");
     assert!(low.contains("pack-closure(") && low.contains("open-closure "), "{low}");
     assert!(!low.contains("_branch/4>"), "{low}");
     fixture.execute_all();

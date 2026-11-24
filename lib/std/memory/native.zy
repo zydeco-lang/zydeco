@@ -1,7 +1,7 @@
 -- Raw operations: callers establish lifetime, initialization, bounds, and allocator ownership.
 let (/Fault) = @(import("fault.zy")) in
 begin
-  param val (/Addr; /memory; /numeric; builtin) : @(import("../builtin.zy")) that
+  param val (/Addr; /memory; /scalar; builtin) : @(import("../builtin/memory.zy")) that
 
   let error : Thk (forall (R : CType) . Thk (Fault -> R) -> Int -> R) = {
     fn R no code =>
@@ -35,8 +35,8 @@ begin
         #null = memory/null, #offset = memory/offset, = free, = retain,
         #copy = memory/copy, #fill = memory/fill,
         #load_addr = memory/load_addr, #store_addr = memory/store_addr,
-        #load_u8 = numeric/uint8/load_le, #store_u8 = numeric/uint8/store_le,
-        #load_i64 = numeric/int/load_le, #store_i64 = numeric/int/store_le)
+        #load_u8 = scalar/uint8/load_le, #store_u8 = scalar/uint8/store_le,
+        #load_i64 = scalar/int/load_le, #store_i64 = scalar/int/store_le)
     )
   end
 end

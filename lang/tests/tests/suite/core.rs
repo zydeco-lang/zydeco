@@ -100,7 +100,7 @@ mod normalization {
         assert_eq!(label_jumps(&sps), 2, "{sps}");
         assert!(!sps.contains("pack-closure("), "{sps}");
         assert!(!sps.contains("open-closure "), "{sps}");
-        assert_eq!(sps.matches("<primitive:int_add>").count(), 1, "{sps}");
+        assert_eq!(sps.matches("<primitive:int/add>").count(), 1, "{sps}");
         assert!(!sps.contains("<extern:int_add/2>"), "{sps}");
         assert_eq!(sps.matches("pack-continuation(").count(), 2, "{sps}");
         assert!(!sps.contains("<extern:int_mul/2>"), "{sps}");

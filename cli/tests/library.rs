@@ -179,7 +179,7 @@ fn shared_library_c_harness_round_trips_integer_payloads_and_has_only_declared_e
 "#
         .into(),
     );
-    fixture.write("library.zy", &format!("@[package(library(c, {}), name(example/math))]\nparam val (/Thk; /Ret; /Unit; /numeric; {}) : @(import({:?})) in ({})", contracts.join(", "), integers.iter().map(|integer| format!("/{integer}")).collect::<Vec<_>>().join("; "), Fixture::builtin(), fields.join(", ")));
+    fixture.write("library.zy", &format!("@[package(library(c, {}), name(example/math))]\nlet (/numeric) = @(import({:?})) in\nparam val (/Thk; /Ret; /Unit; {}) : @(import({:?})) in ({})", contracts.join(", "), Fixture::primitive(), integers.iter().map(|integer| format!("/{integer}")).collect::<Vec<_>>().join("; "), Fixture::builtin(), fields.join(", ")));
     let runtime = Path::new(env!("CARGO_MANIFEST_DIR")).join("../runtime").canonicalize().unwrap();
     let output = fixture.command(&[
         "build",
@@ -274,6 +274,13 @@ impl Fixture {
 
     fn builtin() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../lib/std/builtin.zy").canonicalize().unwrap()
+    }
+
+    fn primitive() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../lib/std/primitive/package.zy")
+            .canonicalize()
+            .unwrap()
     }
 
     fn build(
@@ -392,10 +399,12 @@ fn library_factory_accepts_only_a_builtin_value_domain() {
         Ok(()),
     );
     let builtin = Fixture::builtin();
+    let primitive = Fixture::primitive();
     fixture.checked(
         &format!(
             r#"@[package(library(c, export(root, symbol("f"))), name(example/composed))]
-let factory = param val (/Thk; /Ret; /Int; /numeric) : @(import({builtin:?})) in
+let factory = param val (/Thk; /Ret; /Int) : @(import({builtin:?})) in
+let (/numeric) = @(import({primitive:?})) in
 ({{ fn x => ! numeric/int/add x 1 }} : Thk (Int -> Ret Int)) in factory"#
         ),
         Ok(()),
@@ -426,7 +435,8 @@ fn nested_units_preserve_gc_roots_with_shared_and_raw_runtime_support() {
         &format!(
             r#"
 @[package(library(c, export(root, symbol("inner_identity"))), name(example/inner))]
-param val (/Thk; /Ret; /Int; /numeric) : @(import({:?})) in
+param val (/Thk; /Ret; /Int) : @(import({:?})) in
+let (/numeric) = @(import({:?})) in
 ({{ fn x =>
     let fix loop (n : Int) : Ret Int =
         ! numeric/int/eq (Ret Int) n 0 {{ ret x }}
@@ -434,7 +444,8 @@ param val (/Thk; /Ret; /Int; /numeric) : @(import({:?})) in
     in ! loop 100000
 }} : Thk (Int -> Ret Int))
 "#,
-            Fixture::builtin()
+            Fixture::builtin(),
+            Fixture::primitive()
         ),
     );
     for (index, (inner_kind, outer_kind)) in
@@ -451,7 +462,8 @@ param val (/Thk; /Ret; /Int; /numeric) : @(import({:?})) in
             &format!(
                 r#"
 @[package(library(c, export(root, symbol("outer_identity"))), name(example/outer))]
-param val (/Thk; /Ret; /Int; /numeric) : @(import({:?})) in
+param val (/Thk; /Ret; /Int) : @(import({:?})) in
+let (/numeric) = @(import({:?})) in
 let other = @(import({:?})) in
 ({{ fn x => do y <- ! other x;
     let fix loop (n : Int) : Ret Int =
@@ -462,6 +474,7 @@ let other = @(import({:?})) in
 }} : Thk (Int -> Ret Int))
 "#,
                 Fixture::builtin(),
+                Fixture::primitive(),
                 base.join(&interface.bindings.path)
             ),
         );
@@ -478,12 +491,14 @@ let other = @(import({:?})) in
             "consumer.zy",
             &format!(
                 r#"
-param (/Thk; /Ret; /Int; /OS; /numeric; /process) : @(import({:?})) in
+param (/Thk; /Ret; /Int; /OS; /process) : @(import({:?})) in
+let (/numeric) = @(import({:?})) in
 let identity = @(import({:?})) in
 do result <- ! identity -4611686018427387904;
 ! numeric/int/eq OS result -4611686018427387904 {{ ! process/exit 0 }} {{ ! process/exit 1 }}
 "#,
                 Fixture::builtin(),
+                Fixture::primitive(),
                 base.join(&interface.bindings.path)
             ),
         );
@@ -684,11 +699,12 @@ fn interpreter_uses_the_supplied_exact_library_path() {
     }
     Fixture::success(&cc.arg(c).arg("-o").arg(&library).output().unwrap());
     let source = fixture.write("consumer.zy", &format!(r#"
-param (/Thk; /Ret; /Int; /OS; /numeric; /process) : @(import({:?})) in
+param (/Thk; /Ret; /Int; /OS; /process) : @(import({:?})) in
+let (/numeric) = @(import({:?})) in
 let foreign = (@(ffi(c, library("zydeco_exact_path_fixture"), symbol("exact_identity"))) : Thk (Int -> Ret Int)) in
 do result <- ! foreign -4611686018427387904;
 ! numeric/int/eq OS result -4611686018427387904 {{ ! process/exit 0 }} {{ ! process/exit 1 }}
-"#, Fixture::builtin()));
+"#, Fixture::builtin(), Fixture::primitive()));
     let compiler = CommandCompiler::default();
     let executable = compiler.executable(&source).unwrap();
     let paths = BTreeMap::from([(
@@ -710,12 +726,14 @@ do result <- ! foreign -4611686018427387904;
 fn repeated_c_calls_recycle_runtime_instances_cleanly_with_string_work() {
     let fixture = Fixture::new();
     let builtin = Fixture::builtin();
+    let primitive = Fixture::primitive();
     let source = fixture.write(
         "library.zy",
         &format!(
             r#"
 @[package(library(c, export(root, symbol("str_work"))), name(example/reusable))]
-param val (/Thk; /Ret; /Int; /String; /numeric; /text) : @(import({builtin:?})) in
+param val (/Thk; /Ret; /Int; /String) : @(import({builtin:?})) in
+let (/numeric; /text) = @(import({primitive:?})) in
 let int_to_string = numeric/int/to_string in
 let append = text/string/append in
 let byte_len = text/string/byte_length in

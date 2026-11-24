@@ -1,4 +1,5 @@
-param (/process; /numeric; /text; builtin) : @(import("../../std/builtin.zy")) in
+param (/process; builtin) : @(import("../../std/builtin.zy")) in
+let (/numeric; /text) = @(import("../../std/primitive/package.zy")) in
 begin
   let int8 = numeric/int8 that
   let int16 = numeric/int16 that

@@ -1,5 +1,6 @@
 -- The live row keeps a boxed Float64 payload reachable across collection.
-param (/numeric; builtin) : @(import("../../std/builtin.zy")) in
+param (/OS = _; builtin) : @(import("../../std/builtin.zy")) in
+let (/numeric) = @(import("../../std/primitive/package.zy")) in
 begin
   let make_std = @(import("../../std/std.zy")) that
 

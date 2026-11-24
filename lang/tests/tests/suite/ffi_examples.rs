@@ -41,11 +41,11 @@ impl ForeignExamples {
         format!(
             r#"
 let (/make = make_bytes) = @(import("{library}/std/text/bytes.zy")) in
-let (/Bytes; /bytes; byte_package) = make_bytes builtin in
-let (/Uninit; /Init; /Ptr; /fixed; /allocation; /pointer) = builtin |> (@(import("{library}/std/memory/package.zy"))) in
+let (/Bytes; /bytes; byte_package) = make_bytes memory_builtin in
+let (/Uninit; /Init; /Ptr; /fixed; /allocation; /pointer) = memory_builtin |> (@(import("{library}/std/memory/package.zy"))) in
 let (= Plan, = Layout, memory) = fixed in
 let (/Alloc; /heap) = allocation in
-let decode = (builtin |> (@(import("{library}/tests/ffi/record-input.zy")))) byte_package in
+let decode = (memory_builtin |> (@(import("{library}/tests/ffi/record-input.zy")))) byte_package in
 let Record = UInt8 * UInt32 in
 let fail = {{ ! exit 1 }} in
 match memory/product UInt8 UInt32 memory/uint8 memory/uint32
@@ -155,10 +155,14 @@ do foreign <- ! bytes/from_string "{literal}";
     std::fs::write(
         &program,
         format!(
-            "param (/VType; /CType; /Thk; /Ret; /OS; /UInt8; /UInt32; \
-             /numeric; /process; builtin) : @(import(\"{}/std/builtin.zy\")) in \
+            "let Builtin = @(import(\"{lib}/std/builtin.zy\")) in \
+             let MemoryBuiltin = @(import(\"{lib}/std/builtin/memory.zy\")) in \
+             let (/numeric) = @(import(\"{lib}/std/primitive/package.zy\")) in \
+             param (/VType; /CType; /Thk; /Ret; /OS; /UInt8; /UInt32; \
+             /Addr; /memory_ops; /process; builtin) : Builtin in \
+             let memory_builtin : MemoryBuiltin = (= Addr, memory_ops) in \
              let exit = process/exit in {source}",
-            SourceLiteral::escape(&ForeignExamples::library())
+            lib = SourceLiteral::escape(&ForeignExamples::library())
         ),
     )
     .unwrap();

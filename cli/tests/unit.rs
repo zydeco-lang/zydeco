@@ -56,6 +56,13 @@ impl Fixture {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../lib/std/builtin.zy").canonicalize().unwrap()
     }
 
+    fn primitive() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../lib/std/primitive/package.zy")
+            .canonicalize()
+            .unwrap()
+    }
+
     fn runtime() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../runtime").canonicalize().unwrap()
     }
@@ -201,7 +208,8 @@ fn source_free_units_share_captures_and_continuations_across_collection() {
             &format!(
                 r#"
 @[package(library(zydeco), name(example/producer))]
-param val (/Thk; /Ret; /Unit; /Int; /{ty}; /numeric) : @(import({:?})) in
+let (/numeric) = @(import({:?})) in
+param val (/Thk; /Ret; /Unit; /Int; /{ty}) : @(import({:?})) in
 (
   #make_adder = ({{ fn (delta : {ty}) =>
     ret {{ fn (value : {ty}) =>
@@ -219,6 +227,7 @@ param val (/Thk; /Ret; /Unit; /Int; /{ty}; /numeric) : @(import({:?})) in
   #pair = ((({delta} : {ty}), ({argument} : {ty})), "native unit")
 )
 "#,
+                Fixture::primitive(),
                 Fixture::builtin()
             ),
         );
@@ -255,7 +264,8 @@ let init = @(import({:?})) in
             "client.zy",
             &format!(
                 r#"
-param (/Unit; /Ret; /Int; /{ty}; /OS; /numeric; /process) : @(import({:?})) in
+let (/numeric) = @(import({:?})) in
+param (/Unit; /Ret; /Int; /{ty}; /OS; /process) : @(import({:?})) in
 let init = @(import({:?})) in
 let shifted = {{
     do make <- ! init;
@@ -278,6 +288,7 @@ do second <- ! add {argument};
     {{ ! numeric/{group}/eq OS second {expected} {{ ! shifted 0 }} {{ ! process/exit 2 }} }}
     {{ ! process/exit 1 }}
 "#,
+                Fixture::primitive(),
                 Fixture::builtin(),
                 middle_binding
             ),

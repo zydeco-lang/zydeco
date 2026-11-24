@@ -8,7 +8,7 @@ let (/Either) = @(import("../data/either.zy")) in
 let (/Error) = @(import("layout-error.zy")) in
 begin
   param val (/Addr; /memory; builtin) : @(import(
-    "../builtin.zy"
+    "../builtin/memory.zy"
   )) in
   param val (/Uninit; /Init; /Fields; /Ptr; /unsafe; types) : Types Addr in
   param val Field : VType -> VType -> VType in

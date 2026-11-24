@@ -7,8 +7,8 @@ use std::{
     rc::Rc,
 };
 use zydeco_syntax::{
-    BuiltinValueRole, ComparisonOp, FloatIntrinsicOp, FloatOperation, HostOp, IntegerIntrinsicOp,
-    IntegerOperation, IntegerType, IntrinsicOp, PrimitiveError, PrimitiveOp, PrimitiveType,
+    BuiltinValueRole, ComparisonOp, FloatIntrinsicOp, HostOp, IntegerIntrinsicOp, IntegerType,
+    IntrinsicOp, PrimitiveError, PrimitiveOp, PrimitiveType, ScalarMemoryOp,
 };
 
 /// Typed access to host operations used to construct the Builtin package and intrinsic thunks.
@@ -99,55 +99,19 @@ impl BuiltinRuntime {
             },
             | HostOp::Builtin(role) => match role {
                 | Role::Integer(integer, operation) => match operation {
-                    | IntegerOperation::Add
-                    | IntegerOperation::Sub
-                    | IntegerOperation::Mul
-                    | IntegerOperation::Div
-                    | IntegerOperation::Mod => {
-                        unreachable!("arithmetic roles dispatch through PrimitiveOp")
-                    }
-                    | IntegerOperation::Eq | IntegerOperation::Lt | IntegerOperation::Gt => {
-                        unreachable!("comparisons dispatch through ComparisonOp")
-                    }
-                    | IntegerOperation::ToString => integer_to_string(integer, args),
-                    | IntegerOperation::StoreLe => ScalarMemory::store(args),
-                    | IntegerOperation::LoadLe => {
+                    | ScalarMemoryOp::StoreLe => ScalarMemory::store(args),
+                    | ScalarMemoryOp::LoadLe => {
                         return ScalarMemory::load(PrimitiveType::Integer(integer), args)
                             .map_err(BuiltinFailure::Runtime);
                     }
                 },
                 | Role::Float(float, operation) => match operation {
-                    | FloatOperation::Add
-                    | FloatOperation::Sub
-                    | FloatOperation::Mul
-                    | FloatOperation::Div => {
-                        unreachable!("arithmetic roles dispatch through PrimitiveOp")
-                    }
-                    | FloatOperation::Eq | FloatOperation::Lt | FloatOperation::Gt => {
-                        unreachable!("comparisons dispatch through ComparisonOp")
-                    }
-                    | FloatOperation::ToString => float_to_string(float, args),
-                    | FloatOperation::StoreLe => ScalarMemory::store(args),
-                    | FloatOperation::LoadLe => {
+                    | ScalarMemoryOp::StoreLe => ScalarMemory::store(args),
+                    | ScalarMemoryOp::LoadLe => {
                         return ScalarMemory::load(PrimitiveType::Float(float), args)
                             .map_err(BuiltinFailure::Runtime);
                     }
                 },
-                | Role::Int64FromInt => IntegerConversion::widen(IntegerType::Int64, args),
-                | Role::UInt64FromUInt => IntegerConversion::widen(IntegerType::UInt64, args),
-                | Role::Int64ToInt => IntegerConversion::narrow(IntegerType::Int, args),
-                | Role::UInt64ToUInt => IntegerConversion::narrow(IntegerType::UInt, args),
-                | Role::StrScalarLength => str_scalar_length(args),
-                | Role::StrByteLength => str_byte_length(args),
-                | Role::StrAppend => str_append(args),
-                | Role::StrSplitOnce => str_split_once_branch(args),
-                | Role::StrSplitAt => str_split_at_branch(args),
-                | Role::StrEq => str_eq_branch(args),
-                | Role::StrGet => str_get_branch(args),
-                | Role::CharToStr => char_to_str(args),
-                | Role::CharCodepoint => char_codepoint(args),
-                | Role::CharFromCodepoint => char_from_codepoint_branch(args),
-                | Role::StrParseInt => str_parse_int_branch(args),
                 | Role::MemoryCopy
                 | Role::MemoryFill
                 | Role::MemoryNull
@@ -220,7 +184,7 @@ mod tests {
             IntegerType::UInt64,
             IntegerType::UInt,
         ] {
-            for operation in [IntegerOperation::Div, IntegerOperation::Mod] {
+            for operation in [IntegerIntrinsicOp::Div, IntegerIntrinsicOp::Mod] {
                 for divisor in [0, 2] {
                     let args = [7, divisor]
                         .map(|value| {
@@ -233,7 +197,7 @@ mod tests {
                     let mut output = Vec::new();
                     let mut error_output = Vec::new();
                     let result = BuiltinRuntime::invoke(
-                        HostOp::Builtin(BuiltinValueRole::Integer(integer, operation)),
+                        HostOp::Intrinsic(IntrinsicOp::Integer(integer, operation)),
                         args,
                         &mut input,
                         &mut output,
@@ -244,12 +208,12 @@ mod tests {
                     match (divisor, operation, result) {
                         | (
                             0,
-                            IntegerOperation::Div,
+                            IntegerIntrinsicOp::Div,
                             Err(BuiltinFailure::Runtime(RuntimeError::IntegerDivisionByZero)),
                         )
                         | (
                             0,
-                            IntegerOperation::Mod,
+                            IntegerIntrinsicOp::Mod,
                             Err(BuiltinFailure::Runtime(RuntimeError::IntegerRemainderByZero)),
                         ) => {}
                         | (
@@ -257,7 +221,7 @@ mod tests {
                             operation,
                             Ok(HostAction::Return(SemValue::Literal(Literal::Integer(value)))),
                         ) => {
-                            let expected = if operation == IntegerOperation::Div { 3 } else { 1 };
+                            let expected = if operation == IntegerIntrinsicOp::Div { 3 } else { 1 };
                             assert_eq!(value, IntegerLiteral::from_value(expected, integer));
                         }
                         | _ => panic!("arithmetic returned the wrong result or failure"),

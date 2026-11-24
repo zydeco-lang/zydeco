@@ -269,9 +269,9 @@ let first : View (Checked Fault) Int Int = val value => {
   fn R no yes => ! int/lt R value 0 { ! no +Bounds() } { ! yes value }
 } in
 ! raw/allocate OS 8 8 no { fn marker =>
-! int/store_le OS marker 0 {
+! scalar/int/store_le OS marker 0 {
 let second : View (Checked Fault) Int Int = val value => {
-  fn R _ yes => ! int/store_le R marker 1 { ! yes value }
+  fn R _ yes => ! scalar/int/store_le R marker 1 { ! yes value }
 } in
 let bad = compose_checked Fault Int Int Int first second in
 ! (bad -1) OS { fn fault =>
@@ -280,7 +280,7 @@ let bad = compose_checked Fault Int Int Int first second in
     let mapped = map_checked Fault Int Int (Int * Int) pure (val value => (value, value)) in
     ! (mapped 7) OS no { fn (a, b) =>
       ! int/eq OS a b {
-        ! int/load_le OS marker { fn observed =>
+        ! scalar/int/load_le OS marker { fn observed =>
           ! int/eq OS observed 0 {
             ! raw/unsafe/free OS marker 8 8 no { ! exit 0 }
           } fail

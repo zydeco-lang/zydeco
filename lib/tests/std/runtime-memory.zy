@@ -1,9 +1,11 @@
 -- stage: run
 -- backends: all
 @[package(test(of(/std)))]
-param (/Addr; /numeric; /process; builtin) : @(import(
+param (/Addr; /process; /memory_ops; builtin) : @(import(
   /std/builtin
 )) in
+let (/numeric) = @(import(/std/primitive/ops)) in
+let memory_builtin : @(import(/std/builtin/memory)) = (= Addr, memory_ops) in
 begin
   let (/storage; /codecs;
     /Uninit;
@@ -19,7 +21,7 @@ begin
     /pointer
   )
   =
-    builtin |> (@(import(/std/memory)))
+    memory_builtin |> (@(import(/std/memory)))
   in
   let (= Plan, = Layout, layout) = fixed in
   let (/Cps; /DynamicView; /unsafe = view_unsafe) = views in

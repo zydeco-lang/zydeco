@@ -357,48 +357,18 @@ impl Display for PrimitiveType {
     }
 }
 
-/// Operations exported per [`IntegerType`].
+/// Little-endian memory access operations exported per scalar numeric type.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub enum IntegerOperation {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Mod,
-    Eq,
-    Lt,
-    Gt,
-    ToString,
+pub enum ScalarMemoryOp {
     StoreLe,
     LoadLe,
 }
 
-impl IntegerOperation {
-    pub const VARIANTS: &'static [Self] = &[
-        Self::Add,
-        Self::Sub,
-        Self::Mul,
-        Self::Div,
-        Self::Mod,
-        Self::Eq,
-        Self::Lt,
-        Self::Gt,
-        Self::ToString,
-        Self::StoreLe,
-        Self::LoadLe,
-    ];
+impl ScalarMemoryOp {
+    pub const VARIANTS: &'static [Self] = &[Self::StoreLe, Self::LoadLe];
 
     pub const fn source_name(self) -> &'static str {
         match self {
-            | Self::Add => "add",
-            | Self::Sub => "sub",
-            | Self::Mul => "mul",
-            | Self::Div => "div",
-            | Self::Mod => "mod",
-            | Self::Eq => "eq",
-            | Self::Lt => "lt",
-            | Self::Gt => "gt",
-            | Self::ToString => "to_string",
             | Self::StoreLe => "store_le",
             | Self::LoadLe => "load_le",
         }
@@ -410,79 +380,9 @@ impl IntegerOperation {
 
     pub const fn arity(self) -> usize {
         match self {
-            | Self::Add | Self::Sub | Self::Mul | Self::Div | Self::Mod => 2,
-            | Self::Eq | Self::Lt | Self::Gt => 4,
-            | Self::ToString => 1,
             | Self::StoreLe => 3,
             | Self::LoadLe => 2,
         }
-    }
-
-    pub const fn is_branch(self) -> bool {
-        matches!(self, Self::Eq | Self::Lt | Self::Gt | Self::StoreLe | Self::LoadLe)
-    }
-}
-
-/// Operations exported per [`FloatType`].
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub enum FloatOperation {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Eq,
-    Lt,
-    Gt,
-    ToString,
-    StoreLe,
-    LoadLe,
-}
-
-impl FloatOperation {
-    pub const VARIANTS: &'static [Self] = &[
-        Self::Add,
-        Self::Sub,
-        Self::Mul,
-        Self::Div,
-        Self::Eq,
-        Self::Lt,
-        Self::Gt,
-        Self::ToString,
-        Self::StoreLe,
-        Self::LoadLe,
-    ];
-
-    pub const fn source_name(self) -> &'static str {
-        match self {
-            | Self::Add => "add",
-            | Self::Sub => "sub",
-            | Self::Mul => "mul",
-            | Self::Div => "div",
-            | Self::Eq => "eq",
-            | Self::Lt => "lt",
-            | Self::Gt => "gt",
-            | Self::ToString => "to_string",
-            | Self::StoreLe => "store_le",
-            | Self::LoadLe => "load_le",
-        }
-    }
-
-    pub fn from_source_name(name: &str) -> Option<Self> {
-        Self::VARIANTS.iter().copied().find(|op| op.source_name() == name)
-    }
-
-    pub const fn arity(self) -> usize {
-        match self {
-            | Self::Add | Self::Sub | Self::Mul | Self::Div => 2,
-            | Self::Eq | Self::Lt | Self::Gt => 4,
-            | Self::ToString => 1,
-            | Self::StoreLe => 3,
-            | Self::LoadLe => 2,
-        }
-    }
-
-    pub const fn is_branch(self) -> bool {
-        matches!(self, Self::Eq | Self::Lt | Self::Gt | Self::StoreLe | Self::LoadLe)
     }
 }
 
@@ -730,8 +630,8 @@ macro_rules! define_builtins {
         /// in the Builtin package signature.
         #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
         pub enum BuiltinValueRole {
-            Integer(IntegerType, IntegerOperation),
-            Float(FloatType, FloatOperation),
+            Integer(IntegerType, ScalarMemoryOp),
+            Float(FloatType, ScalarMemoryOp),
             $( $variant, )*
         }
 
@@ -775,21 +675,6 @@ macro_rules! define_builtins {
 }
 
 define_builtins! {
-    (Int64FromInt, "int64_from_int", "int64_from_int", 1, Returning, Some(SpareBox::Opaque), false, BuiltinOperationAbi::pure([INT], Atom::Integer(IntegerType::Int64))),
-    (Int64ToInt, "int64_to_int", "int64_to_int_branch", 3, Control, None, false, BuiltinOperationAbi::optional([Atom::Integer(IntegerType::Int64)], INT)),
-    (UInt64FromUInt, "uint64_from_uint", "uint64_from_uint", 1, Returning, Some(SpareBox::Opaque), false, BuiltinOperationAbi::pure([Atom::Integer(IntegerType::UInt)], Atom::Integer(IntegerType::UInt64))),
-    (UInt64ToUInt, "uint64_to_uint", "uint64_to_uint_branch", 3, Control, None, false, BuiltinOperationAbi::optional([Atom::Integer(IntegerType::UInt64)], Atom::Integer(IntegerType::UInt))),
-    (StrScalarLength, "str_scalar_length", "str_scalar_length", 1, Returning, None, false, BuiltinOperationAbi::pure([Atom::String], INT)),
-    (StrByteLength, "str_byte_length", "str_byte_length", 1, Returning, None, false, BuiltinOperationAbi::pure([Atom::String], INT)),
-    (StrAppend, "str_append", "str_append", 2, Returning, None, true, BuiltinOperationAbi::pure([Atom::String, Atom::String], Atom::String)),
-    (StrSplitOnce, "str_split_once", "str_split_once_branch", 4, Control, None, true, BuiltinOperationAbi::optional_pair([Atom::String, Atom::Char])),
-    (StrSplitAt, "str_split_at", "str_split_at_branch", 4, Control, None, true, BuiltinOperationAbi::optional_pair([Atom::String, INT])),
-    (StrEq, "str_eq", "str_eq_branch", 4, Control, None, false, BuiltinOperationAbi::branch([Atom::String, Atom::String])),
-    (StrGet, "str_get", "str_get_branch", 4, Control, None, false, BuiltinOperationAbi::optional([Atom::String, INT], Atom::Char)),
-    (CharToStr, "char_to_str", "char_to_str", 1, Returning, None, true, BuiltinOperationAbi::pure([Atom::Char], Atom::String)),
-    (CharCodepoint, "char_codepoint", "char_codepoint", 1, Returning, None, false, BuiltinOperationAbi::pure([Atom::Char], INT)),
-    (CharFromCodepoint, "char_from_codepoint", "char_from_codepoint_branch", 3, Control, None, false, BuiltinOperationAbi::optional([INT], Atom::Char)),
-    (StrParseInt, "str_parse_int", "str_parse_int_branch", 3, Control, None, false, BuiltinOperationAbi::optional([Atom::String], INT)),
     (MemoryNull, "memory_null", "memory_null", 0, Returning, None, false, BuiltinOperationAbi::pure([], Atom::Addr)),
     (MemoryCopy, "memory_copy", "memory_copy", 4, Control, None, false, BuiltinOperationAbi::memory_success([Atom::Addr, Atom::Addr, INT], None)),
     (MemoryFill, "memory_fill", "memory_fill", 4, Control, None, false, BuiltinOperationAbi::memory_success([Atom::Addr, INT, Atom::Integer(IntegerType::UInt8)], None)),
@@ -831,13 +716,13 @@ impl BuiltinValueRole {
             .iter()
             .copied()
             .flat_map(|integer| {
-                IntegerOperation::VARIANTS
+                ScalarMemoryOp::VARIANTS
                     .iter()
                     .copied()
                     .map(move |operation| Self::Integer(integer, operation))
             })
             .chain(FloatType::VARIANTS.iter().copied().flat_map(|float| {
-                FloatOperation::VARIANTS
+                ScalarMemoryOp::VARIANTS
                     .iter()
                     .copied()
                     .map(move |operation| Self::Float(float, operation))
@@ -849,7 +734,7 @@ impl BuiltinValueRole {
         let numeric = IntegerType::VARIANTS.iter().copied().find_map(|integer| {
             name.strip_prefix(integer.source_name())
                 .and_then(|suffix| suffix.strip_prefix('_'))
-                .and_then(IntegerOperation::from_source_name)
+                .and_then(ScalarMemoryOp::from_source_name)
                 .map(|operation| Self::Integer(integer, operation))
         });
         if numeric.is_some() {
@@ -858,7 +743,7 @@ impl BuiltinValueRole {
         let numeric = FloatType::VARIANTS.iter().copied().find_map(|float| {
             name.strip_prefix(float.source_name())
                 .and_then(|suffix| suffix.strip_prefix('_'))
-                .and_then(FloatOperation::from_source_name)
+                .and_then(ScalarMemoryOp::from_source_name)
                 .map(|operation| Self::Float(float, operation))
         });
         if numeric.is_some() {
@@ -882,21 +767,19 @@ impl BuiltinValueRole {
     /// Runtime symbol used when the role is materialized in the foundational Builtin package.
     pub fn host_name(self) -> String {
         match self {
-            | Self::Integer(integer, operation) if operation.is_branch() => {
+            | Self::Integer(integer, operation) => {
                 format!("{}_{}_branch", integer.source_name(), operation.source_name())
             }
-            | Self::Float(float, operation) if operation.is_branch() => {
+            | Self::Float(float, operation) => {
                 format!("{}_{}_branch", float.source_name(), operation.source_name())
             }
-            | Self::Integer(..) | Self::Float(..) => self.source_name(),
             | role => role.named_spec().host_name.to_owned(),
         }
     }
 
     pub const fn arity(self) -> usize {
         match self {
-            | Self::Integer(_, operation) => operation.arity(),
-            | Self::Float(_, operation) => operation.arity(),
+            | Self::Integer(_, operation) | Self::Float(_, operation) => operation.arity(),
             | role => role.named_spec().arity,
         }
     }
@@ -904,20 +787,7 @@ impl BuiltinValueRole {
     /// Whether the host operation returns one word or selects a continuation.
     pub const fn call_mode(self) -> HostCallMode {
         match self {
-            | Self::Integer(_, operation) => {
-                if operation.is_branch() {
-                    HostCallMode::Control
-                } else {
-                    HostCallMode::Returning
-                }
-            }
-            | Self::Float(_, operation) => {
-                if operation.is_branch() {
-                    HostCallMode::Control
-                } else {
-                    HostCallMode::Returning
-                }
-            }
+            | Self::Integer(..) | Self::Float(..) => HostCallMode::Control,
             | role => role.named_spec().call_mode,
         }
     }
@@ -933,8 +803,7 @@ impl BuiltinValueRole {
     /// Whether executing this host operation can allocate a managed GC object (e.g. a `String`).
     pub const fn may_allocate_gc(self) -> bool {
         match self {
-            | Self::Integer(_, operation) => matches!(operation, IntegerOperation::ToString),
-            | Self::Float(_, operation) => matches!(operation, FloatOperation::ToString),
+            | Self::Integer(..) | Self::Float(..) => false,
             | role => role.named_spec().may_allocate_gc,
         }
     }
@@ -952,19 +821,10 @@ impl BuiltinOperationAbi {
             | BuiltinValueRole::Integer(integer, operation) => {
                 let atom = BuiltinValueAtom::Integer(integer);
                 match operation {
-                    | IntegerOperation::Add
-                    | IntegerOperation::Sub
-                    | IntegerOperation::Mul
-                    | IntegerOperation::Div
-                    | IntegerOperation::Mod => Self::pure([atom, atom], atom),
-                    | IntegerOperation::Eq | IntegerOperation::Lt | IntegerOperation::Gt => {
-                        Self::branch([atom, atom])
-                    }
-                    | IntegerOperation::ToString => Self::pure([atom], BuiltinValueAtom::String),
-                    | IntegerOperation::StoreLe => {
+                    | ScalarMemoryOp::StoreLe => {
                         Self::memory_success([BuiltinValueAtom::Addr, atom], None)
                     }
-                    | IntegerOperation::LoadLe => {
+                    | ScalarMemoryOp::LoadLe => {
                         Self::memory_success([BuiltinValueAtom::Addr], Some(atom))
                     }
                 }
@@ -972,18 +832,10 @@ impl BuiltinOperationAbi {
             | BuiltinValueRole::Float(float, operation) => {
                 let atom = BuiltinValueAtom::Float(float);
                 match operation {
-                    | FloatOperation::Add
-                    | FloatOperation::Sub
-                    | FloatOperation::Mul
-                    | FloatOperation::Div => Self::pure([atom, atom], atom),
-                    | FloatOperation::Eq | FloatOperation::Lt | FloatOperation::Gt => {
-                        Self::branch([atom, atom])
-                    }
-                    | FloatOperation::ToString => Self::pure([atom], BuiltinValueAtom::String),
-                    | FloatOperation::StoreLe => {
+                    | ScalarMemoryOp::StoreLe => {
                         Self::memory_success([BuiltinValueAtom::Addr, atom], None)
                     }
-                    | FloatOperation::LoadLe => {
+                    | ScalarMemoryOp::LoadLe => {
                         Self::memory_success([BuiltinValueAtom::Addr], Some(atom))
                     }
                 }

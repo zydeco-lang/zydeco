@@ -1,7 +1,8 @@
 -- Unlike std's StateExn, this packed instance keeps State when an exception is raised.
-param (/numeric; /process) : @(import(
+param (/process) : @(import(
   "../../std/builtin.zy"
 )) in
+let (/numeric) = @(import("../../std/primitive/package.zy")) in
 let (/Monad; /Algebra) = @(import("../../std/effect/monad.zy")) in
 let (/MonadState) = @(import("../../std/effect/state.zy")) in
 let (/MonadThrow) = @(import("../../std/effect/exception.zy")) in

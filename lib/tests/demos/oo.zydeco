@@ -1,8 +1,9 @@
 -- We can do good old object-oriented programming in here
 -- e.g. define a Counter that can incr and project out Int or String
-param (/stdio; /process; /numeric; builtin) : @(import(
+param (/stdio; /process; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
+let (/numeric) = @(import("../../std/primitive/package.zy")) in
 begin
   let int = numeric/int that
   def Counter : CType =

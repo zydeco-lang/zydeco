@@ -1,6 +1,7 @@
-param (/numeric; /process; builtin) : @(import(
+param (/process; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
+let (/numeric) = @(import("../../std/primitive/package.zy")) in
 let Choice =
   data
   | +First : Int

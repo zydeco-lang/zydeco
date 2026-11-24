@@ -18,6 +18,16 @@ const ALL_TARGETS: [NativeTarget; 4] = [
     NativeTarget::new(NativeArch::Aarch64, NativeOs::Macos),
 ];
 
+fn primitive_path() -> String {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../lib/std/primitive/package.zy")
+        .canonicalize()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_owned()
+}
+
 fn builtin_path() -> String {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../lib/std/builtin.zy")
@@ -97,9 +107,11 @@ fn assert_object_magic(target: NativeTarget, bytes: &[u8]) {
 #[test]
 fn all_four_targets_and_strategies_emit_deterministic_elf_and_macho_objects() {
     let builtin = builtin_path();
+    let primitive = primitive_path();
     let proc_src = format!(
         r#"
-param (/OS; /Unit; /Int; /String; /numeric; /process; /system) : @(import({builtin:?})) in
+let (/numeric) = @(import({primitive:?})) in
+param (/OS; /Unit; /Int; /String; /process; /system) : @(import({builtin:?})) in
 ! system/stdio/write_line "cross-target" {{
   do s <- ! numeric/int/add 20 22;
   ! process/exit s
@@ -109,7 +121,7 @@ param (/OS; /Unit; /Int; /String; /numeric; /process; /system) : @(import({built
     let c_src = format!(
         r#"
 @[package(library(c, export(root, symbol("c_add"))), name(example/c))]
-param val (/Thk; /Ret; /Int; /Int64; /numeric) : @(import({builtin:?})) in
+let (/numeric) = @(import({primitive:?})) in
 ({{ fn (a : Int) (b : Int64) =>
   do _ <- ! numeric/int64/add b (1 : Int64);
   ! numeric/int/add a a

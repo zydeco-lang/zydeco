@@ -1,8 +1,8 @@
 //! Typed scalar operations for static calculation and instruction selection.
 
 use crate::{
-    BuiltinValueRole, FloatIntrinsicOp, FloatLiteral, FloatOperation, FloatType, HostOp,
-    IntegerIntrinsicOp, IntegerLiteral, IntegerOperation, IntegerType, IntrinsicOp, Literal,
+    FloatIntrinsicOp, FloatLiteral, FloatType, HostOp, IntegerIntrinsicOp, IntegerLiteral,
+    IntegerType, IntrinsicOp, Literal,
 };
 pub use zydeco_abi::ValueIntOp;
 
@@ -83,7 +83,7 @@ impl ComparisonOp {
     pub fn from_host(op: HostOp) -> Option<Self> {
         match op {
             | HostOp::Intrinsic(op) => Self::from_intrinsic(op),
-            | HostOp::Builtin(role) => Self::from_builtin(role),
+            | HostOp::Builtin(_) => None,
         }
     }
 
@@ -110,51 +110,6 @@ impl ComparisonOp {
 
     pub fn host(self) -> HostOp {
         HostOp::Intrinsic(self.intrinsic())
-    }
-
-    pub fn from_builtin(role: BuiltinValueRole) -> Option<Self> {
-        Some(match role {
-            | BuiltinValueRole::Integer(ty, operation) => Self::Integer(
-                ty,
-                match operation {
-                    | IntegerOperation::Eq => ComparisonPredicate::Eq,
-                    | IntegerOperation::Lt => ComparisonPredicate::Lt,
-                    | IntegerOperation::Gt => ComparisonPredicate::Gt,
-                    | _ => return None,
-                },
-            ),
-            | BuiltinValueRole::Float(ty, operation) => Self::Float(
-                ty,
-                match operation {
-                    | FloatOperation::Eq => ComparisonPredicate::Eq,
-                    | FloatOperation::Lt => ComparisonPredicate::Lt,
-                    | FloatOperation::Gt => ComparisonPredicate::Gt,
-                    | _ => return None,
-                },
-            ),
-            | _ => return None,
-        })
-    }
-
-    pub fn builtin(self) -> BuiltinValueRole {
-        match self {
-            | Self::Integer(ty, predicate) => BuiltinValueRole::Integer(
-                ty,
-                match predicate {
-                    | ComparisonPredicate::Eq => IntegerOperation::Eq,
-                    | ComparisonPredicate::Lt => IntegerOperation::Lt,
-                    | ComparisonPredicate::Gt => IntegerOperation::Gt,
-                },
-            ),
-            | Self::Float(ty, predicate) => BuiltinValueRole::Float(
-                ty,
-                match predicate {
-                    | ComparisonPredicate::Eq => FloatOperation::Eq,
-                    | ComparisonPredicate::Lt => FloatOperation::Lt,
-                    | ComparisonPredicate::Gt => FloatOperation::Gt,
-                },
-            ),
-        }
     }
 
     pub fn operand_type(self) -> crate::PrimitiveType {
@@ -184,7 +139,7 @@ impl ComparisonOp {
 
 impl std::fmt::Display for ComparisonOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.builtin().fmt(f)
+        self.intrinsic().fmt(f)
     }
 }
 
@@ -229,7 +184,7 @@ impl PrimitiveOp {
     pub fn from_host(op: HostOp) -> Option<Self> {
         match op {
             | HostOp::Intrinsic(op) => Self::from_intrinsic(op),
-            | HostOp::Builtin(role) => Self::from_builtin(role),
+            | HostOp::Builtin(_) => None,
         }
     }
 
@@ -259,57 +214,6 @@ impl PrimitiveOp {
 
     pub fn host(self) -> HostOp {
         HostOp::Intrinsic(self.intrinsic())
-    }
-
-    pub fn from_builtin(role: BuiltinValueRole) -> Option<Self> {
-        Some(match role {
-            | BuiltinValueRole::Integer(ty, op) => Self::Integer(
-                ty,
-                match op {
-                    | IntegerOperation::Add => IntegerArithmetic::Add,
-                    | IntegerOperation::Sub => IntegerArithmetic::Sub,
-                    | IntegerOperation::Mul => IntegerArithmetic::Mul,
-                    | IntegerOperation::Div => IntegerArithmetic::Div,
-                    | IntegerOperation::Mod => IntegerArithmetic::Mod,
-                    | _ => return None,
-                },
-            ),
-            | BuiltinValueRole::Float(ty, op) => Self::Float(
-                ty,
-                match op {
-                    | FloatOperation::Add => FloatArithmetic::Add,
-                    | FloatOperation::Sub => FloatArithmetic::Sub,
-                    | FloatOperation::Mul => FloatArithmetic::Mul,
-                    | FloatOperation::Div => FloatArithmetic::Div,
-                    | _ => return None,
-                },
-            ),
-            | _ => return None,
-        })
-    }
-
-    pub fn builtin(self) -> BuiltinValueRole {
-        match self {
-            | Self::Integer(ty, op) => BuiltinValueRole::Integer(
-                ty,
-                match op {
-                    | IntegerArithmetic::Add => IntegerOperation::Add,
-                    | IntegerArithmetic::Sub => IntegerOperation::Sub,
-                    | IntegerArithmetic::Mul => IntegerOperation::Mul,
-                    | IntegerArithmetic::Div => IntegerOperation::Div,
-                    | IntegerArithmetic::Mod => IntegerOperation::Mod,
-                },
-            ),
-            | Self::Float(ty, op) => BuiltinValueRole::Float(
-                ty,
-                match op {
-                    | FloatArithmetic::Add => FloatOperation::Add,
-                    | FloatArithmetic::Sub => FloatOperation::Sub,
-                    | FloatArithmetic::Mul => FloatOperation::Mul,
-                    | FloatArithmetic::Div => FloatOperation::Div,
-                },
-            ),
-        }
     }
 
     pub fn may_trap(self) -> bool {
@@ -393,7 +297,7 @@ impl PrimitiveOp {
 
 impl std::fmt::Display for PrimitiveOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.builtin().fmt(f)
+        self.intrinsic().fmt(f)
     }
 }
 
@@ -414,7 +318,8 @@ mod tests {
             };
             for (index, &predicate) in ComparisonPredicate::VARIANTS.iter().enumerate() {
                 let operation = ComparisonOp::Integer(ty, predicate);
-                assert_eq!(ComparisonOp::from_builtin(operation.builtin()), Some(operation));
+                assert_eq!(ComparisonOp::from_intrinsic(operation.intrinsic()), Some(operation));
+                assert_eq!(ComparisonOp::from_host(operation.host()), Some(operation));
                 let wrong =
                     if ty == IntegerType::Int { IntegerType::UInt } else { IntegerType::Int };
                 for operands in [
@@ -450,7 +355,8 @@ mod tests {
             };
             for (index, &predicate) in ComparisonPredicate::VARIANTS.iter().enumerate() {
                 let operation = ComparisonOp::Float(ty, predicate);
-                assert_eq!(ComparisonOp::from_builtin(operation.builtin()), Some(operation));
+                assert_eq!(ComparisonOp::from_intrinsic(operation.intrinsic()), Some(operation));
+                assert_eq!(ComparisonOp::from_host(operation.host()), Some(operation));
                 assert_eq!(
                     operation.evaluate(&[literal(0.0), Literal::Integer(IntegerLiteral::Int(0))]),
                     Err(PrimitiveError::OperandType)

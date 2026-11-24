@@ -1,5 +1,9 @@
 -- One recursive interface instantiated with both value and computation arguments.
-param (/int; /char; /string; /args; /process; builtin) : @(import("../../std/builtin.zy")) in
+param (/args; /process; builtin) : @(import("../../std/builtin.zy")) in
+let (/numeric = _prim_numeric; /text = _prim_text) = @(import("../../std/primitive/package.zy")) in
+let (/int) = _prim_numeric in
+let (/char) = _prim_text in
+let (/string) = _prim_text in
 begin
   def Stream (A : VType) (R : CType) : CType =
     codata

@@ -500,7 +500,7 @@ mod numeric_tests {
             );
             assert_eq!(integer.bits(), 63);
             assert_eq!(integer.storage_bits(), 64);
-            for &operation in IntegerOperation::VARIANTS {
+            for &operation in ScalarMemoryOp::VARIANTS {
                 assert_eq!(BuiltinValueRole::Integer(integer, operation).spare_box(), None);
             }
         }
@@ -511,16 +511,16 @@ mod numeric_tests {
             );
             assert_eq!(integer.bits(), 64);
             assert_eq!(integer.storage_bits(), 64);
-            for &operation in IntegerOperation::VARIANTS {
+            for &operation in ScalarMemoryOp::VARIANTS {
                 assert_eq!(BuiltinValueRole::Integer(integer, operation).spare_box(), None);
             }
         }
         assert_eq!(
-            BuiltinValueRole::Float(FloatType::Float64, FloatOperation::Add).spare_box(),
+            BuiltinValueRole::Float(FloatType::Float64, ScalarMemoryOp::LoadLe).spare_box(),
             None
         );
-        assert_eq!(BuiltinValueRole::Int64FromInt.spare_box(), Some(SpareBox::Opaque));
-        assert_eq!(BuiltinValueRole::UInt64FromUInt.spare_box(), Some(SpareBox::Opaque));
+        assert_eq!(IntrinsicOp::Int64FromInt.spare_box(), Some(SpareBox::Opaque));
+        assert_eq!(IntrinsicOp::UInt64FromUInt.spare_box(), Some(SpareBox::Opaque));
     }
 
     #[test]

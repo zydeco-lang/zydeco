@@ -1,8 +1,10 @@
 let (/List; /list; /bool) = @(import("../../std/data/package.zy")) in
 let nondet = @(import("../../std/effect/nondet.zy")) in
-param (/numeric; /string; builtin) : @(import(
+param (/OS = _; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
+let (/numeric; /text = _prim_text) = @(import("../../std/primitive/package.zy")) in
+let (/string) = _prim_text in
 let (/with_trace) = builtin |> (@(import("effect-test-basis.zy"))) in
 let (/render; /check) = @(import("nondet-test-basis.zy")) in
 let (N, n) = nondet/instance in

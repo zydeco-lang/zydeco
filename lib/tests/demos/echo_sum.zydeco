@@ -3,7 +3,8 @@
 -- It then prints the sum of all numbers received so far, followed by a newline.
 -- Then it loops.
 -- If the input is not a number, the program exits.
-param (/stdio; /process; /numeric; builtin) : @(import("../../std/builtin.zy")) in
+param (/stdio; /process; builtin) : @(import("../../std/builtin.zy")) in
+let (/numeric) = @(import("../../std/primitive/package.zy")) in
 begin
   let int = numeric/int that
   (

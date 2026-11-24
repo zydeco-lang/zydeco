@@ -63,7 +63,11 @@ mod tests {
     #[test]
     fn builtin_catalog_is_complete_unique_and_consistent() {
         let all: alloc::vec::Vec<_> = BuiltinValueRole::all().collect();
-        assert_eq!(all.len(), 10 * 11 + 2 * 10 + 48);
+        assert_eq!(all.len(), 10 * 2 + 2 * 2 + 33);
+        for removed in ["int_add", "float64_add", "str_append", "char_codepoint", "int64_from_int"]
+        {
+            assert_eq!(BuiltinValueRole::from_source_name(removed), None);
+        }
 
         let mut source_names = BTreeSet::new();
         let mut host_names = BTreeSet::new();

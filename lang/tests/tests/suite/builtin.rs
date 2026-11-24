@@ -179,3 +179,78 @@ fn retired_intrinsic_int_add_name_is_rejected() {
         "expected unknown intrinsic role `int_add`, got: {msg}"
     );
 }
+
+#[test]
+fn retired_pure_builtin_roles_are_rejected() {
+    for role in ["int_add", "str_append", "float64_add"] {
+        let source = format!("let T = @[builtin({role})] (#op :: Int) in ! exit 0");
+        let err = zydeco_tests::utils::SourceCase::check(&source).unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(
+            msg.contains(&format!("UnknownRole(\"{role}\")")),
+            "expected unknown builtin role `{role}`, got: {msg}"
+        );
+    }
+}
+
+#[test]
+fn system_only_builtin_executable_runs_without_memory_capability() {
+    let dir = tempfile::tempdir().unwrap();
+    let std =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lib/std").canonicalize().unwrap();
+    let path = dir.path().join("system_only.zy");
+    std::fs::write(
+        &path,
+        format!(
+            r#"
+param (/stdio; /process) : @(import("{std}/builtin/system.zy")) in
+! stdio/write_line "sys-only" {{ ! process/exit 0 }}
+"#,
+            std = std.display()
+        ),
+    )
+    .unwrap();
+    SourceProgram::setup(path).test_io_all("sys-only\n", 0);
+
+    for field in ["Addr", "memory", "scalar"] {
+        let source = format!(
+            "param (/{field}) : @(import(\"{std}/builtin/system.zy\")) in ! exit 0",
+            std = std.display()
+        );
+        zydeco_tests::utils::SourceCase::assert_rejected(
+            zydeco_tests::utils::SourceCase::check(&source),
+            zydeco_statics::TyckDiagnosticCode::MissingNamedField,
+        );
+    }
+}
+
+#[test]
+fn memory_only_builtin_executable_is_rejected_without_os_witness() {
+    let dir = tempfile::tempdir().unwrap();
+    let std =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lib/std").canonicalize().unwrap();
+    let path = dir.path().join("memory_only.zy");
+    std::fs::write(
+        &path,
+        format!(
+            r#"
+param (/Addr; /memory) : @(import("{std}/builtin/memory.zy")) in
+! memory/null
+"#,
+            std = std.display()
+        ),
+    )
+    .unwrap();
+    let Err(err) = CommandCompiler::default().executable(&path) else {
+        panic!("expected MissingOSWitness for memory-only builtin executable");
+    };
+    assert!(
+        matches!(
+            err,
+            zydeco_cli::CompileError::Executable(zydeco_session::ExecutableError::Builtin(
+                zydeco_statics::BuiltinPackagePlanError::MissingOSWitness
+            ))
+        ),
+        "expected MissingOSWitness for memory-only builtin executable, got: {err:?}"
+    );
+}

@@ -2,9 +2,10 @@
 
 let (/BytesPackage) = @(import("../text/bytes.zy")) in
 let (/Alloc) = @(import("allocation.zy")) in
+let (/numeric) = @(import("../primitive/package.zy")) in
 begin
-  param val (/Addr; /numeric; builtin) : @(import(
-    "../builtin.zy"
+  param val (/Addr; builtin) : @(import(
+    "../builtin/memory.zy"
   )) that
   param val (/Bytes; /bytes) : BytesPackage Addr in
   let (/Fault; /unsafe; native) = builtin |> (@(import("native.zy"))) in

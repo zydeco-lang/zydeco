@@ -1,8 +1,10 @@
 let (/Option; /List; /list) = @(import("../../std/data/package.zy")) in
 let nondet = @(import("../../std/effect/nondet.zy")) in
-param (/string; /numeric; builtin) : @(import(
+param (/OS = _; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
+let (/numeric; /text = _prim_text) = @(import("../../std/primitive/package.zy")) in
+let (/string) = _prim_text in
 let (/Monoid; writer) = @(import("../../std/effect/writer.zy")) in
 let optional = @(import("../../std/effect/option.zy")) in
 let (/render; /check) = @(import("nondet-test-basis.zy")) in

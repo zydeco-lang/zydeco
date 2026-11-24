@@ -1288,14 +1288,16 @@ mod tests {
         let fixture = Fixture::new();
         let library = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lib/std");
         let builtin = library.join("builtin.zy").canonicalize().unwrap();
+        let primitive = library.join("primitive/package.zy").canonicalize().unwrap();
         let source = format!(
             r#"let Builtin = @(import("{builtin}")) in
+let (/numeric) = @(import("{primitive}")) in
 param (
   /VType; /CType; /Thk; /Ret; /Unit;
   /Int8; /Int16; /Int32; /Int64; /Int;
   /UInt8; /UInt16; /UInt32; /UInt64; /UInt;
   /Float32; /Float64; /Char; /String; /Addr;
-  /Reader; /Writer; /OS; /numeric; /process; builtin
+  /Reader; /Writer; /OS; /process; builtin
 ) : Builtin in
 let int = numeric/int in
 let Thunk = Thk in
@@ -1319,6 +1321,7 @@ begin
 end
 "#,
             builtin = builtin.display(),
+            primitive = primitive.display(),
         );
         let root = fixture.write("root.zy", &source);
         let session = CompilerSession::default();

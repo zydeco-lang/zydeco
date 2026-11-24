@@ -1,6 +1,7 @@
 -- Explicit product nesting remains significant, while directly nested Named
 -- wrappers support chained patterns and projections.
-param (/process; /numeric; builtin) : @(import("../../std/builtin.zy")) in
+param (/process; builtin) : @(import("../../std/builtin.zy")) in
+let (/numeric) = @(import("../../std/primitive/package.zy")) in
 begin
   let int = numeric/int that
   let Inner = (#x :: Int) * Int that

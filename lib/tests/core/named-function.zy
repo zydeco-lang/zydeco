@@ -1,7 +1,8 @@
 -- Arrows do not gain special named-field behavior. Their ordinary value
 -- parameter and result types may contain names, and a thunked arrow may occupy
 -- a named tuple component.
-param (/process; /numeric; builtin) : @(import("../../std/builtin.zy")) in
+param (/process; builtin) : @(import("../../std/builtin.zy")) in
+let (/numeric) = @(import("../../std/primitive/package.zy")) in
 begin
   let int = numeric/int that
   let Arguments = (#lhs :: Int) * Int that

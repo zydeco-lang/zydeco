@@ -536,16 +536,19 @@ fn wasm_sps_linked_module_imports_only_wasi_snapshot_preview1() {
 fn wasm_sps_tail_calls_run_100k_iterations_without_stack_overflow() {
     let fixture = Fixture::new();
     let builtin = Path::new(env!("CARGO_MANIFEST_DIR")).join("../lib/std/builtin.zy");
+    let primitive = Path::new(env!("CARGO_MANIFEST_DIR")).join("../lib/std/primitive/package.zy");
     fixture.write(
         "tail.zy",
         &format!(
-            "param (/OS; /Int; /process; /numeric; /system) : @(import({:?})) in\n\
+            "let (/numeric) = @(import({:?})) in\n\
+             param (/OS; /Int; /process; /system) : @(import({:?})) in\n\
              let fix count (n : Int) : OS =\n\
                ! numeric/int/eq OS n 0\n\
                  {{ ! system/stdio/write_line \"done\" {{ ! process/exit 0 }} }}\n\
                  {{ do next <- ! numeric/int/sub n 1; ! count next }}\n\
              in\n\
              ! count 100000\n",
+            primitive.to_str().unwrap(),
             builtin.to_str().unwrap(),
         ),
     );

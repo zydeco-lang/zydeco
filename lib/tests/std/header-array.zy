@@ -1,10 +1,14 @@
 -- stage: run
 -- backends: all
 @[package(test(of(/std)))]
-param (/numeric; /process; builtin) : @(import(
+let (/numeric) = @(import(/std/primitive/ops)) in
+param (/Addr; /memory_ops; /process) : @(import(
   /std/builtin
 )) in
+let memory_builtin : @(import(/std/builtin/memory)) = (= Addr, memory_ops) in
 begin
+  let (/scalar) = memory_ops in
+  let memory_builtin : @(import(/std/builtin/memory)) = (= Addr, memory_ops) in
   let (/storage; /codecs;
     /Uninit;
     /Init;
@@ -19,7 +23,7 @@ begin
     /pointer
   )
   =
-    builtin |> (@(import(/std/memory)))
+    memory_builtin |> (@(import(/std/memory)))
   in
   let (= Plan, = Layout, layout) = fixed in
   let (/heap) = allocation in
@@ -84,7 +88,7 @@ begin
                                             ! (element/codec/read last) OS {
                                               fn item =>
                                                 ! numeric/uint32/eq OS item 73 {
-                                                  ! numeric/int/store_le OS base 0 {
+                                                  ! scalar/int/store_le OS base 0 {
                                                     ! (
                                                       inline/open Init (
                                                         inline/from_address Init base
@@ -94,7 +98,7 @@ begin
                                                       fn (_, current_count) =>
                                                         ! numeric/int/eq OS saved_count 4 {
                                                           ! numeric/int/eq OS current_count 0 {
-                                                            ! numeric/int/store_le OS base 9 {
+                                                            ! scalar/int/store_le OS base 9 {
                                                               ! (
                                                                 checked (
                                                                   inline/from_address Init base

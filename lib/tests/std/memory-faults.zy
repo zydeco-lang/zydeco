@@ -1,10 +1,14 @@
 -- stage: run
 -- backends: all
 @[package(test(of(/std)))]
-param (/Addr; /numeric; /process; builtin) : @(import(/std/builtin)) in
+let (/numeric) = @(import(/std/primitive/ops)) in
+param (/Addr; /memory_ops; /process) : @(import(/std/builtin)) in
+let memory_builtin : @(import(/std/builtin/memory)) = (= Addr, memory_ops) in
 begin
+  let (/scalar) = memory_ops in
+  let memory_builtin : @(import(/std/builtin/memory)) = (= Addr, memory_ops) in
   let (/Uninit; /Init; /Ptr; /Slice; /slices; /fixed; /dynamic; /allocation; /pointer; /raw) =
-    builtin |> (@(import(/std/memory)))
+    memory_builtin |> (@(import(/std/memory)))
   in
   let (= Plan, = Layout, layout) = fixed in
   let (/Alloc; /heap) = allocation in
@@ -24,14 +28,14 @@ begin
   let ! copy_test (next : Thk OS) : OS =
     ! raw/allocate OS 4 1 no {
       fn base =>
-        ! numeric/uint32/store_le OS base 67305985 {
+        ! scalar/uint32/store_le OS base 67305985 {
           do second <- ! raw/unsafe/offset base 1;
           ! raw/unsafe/copy OS base second 3 {
-            ! numeric/uint32/load_le OS base {
+            ! scalar/uint32/load_le OS base {
               fn right =>
                 ! numeric/uint32/eq OS right 50462977 {
                   ! raw/unsafe/copy OS second base 3 {
-                    ! numeric/uint32/load_le OS base {
+                    ! scalar/uint32/load_le OS base {
                       fn left =>
                         ! numeric/uint32/eq OS left 50528769 {
                           do empty <- ! raw/unsafe/null;

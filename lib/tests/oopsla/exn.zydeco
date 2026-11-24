@@ -1,7 +1,8 @@
 --| Examples of exception monads
-param (/numeric; /stdio; /process; builtin) : @(import(
+param (/stdio; /process; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
+let (/numeric) = @(import("../../std/primitive/package.zy")) in
 begin
   let monadic_basis = @(import("../../std/effect/monad.zy")) that
 

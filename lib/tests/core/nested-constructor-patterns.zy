@@ -1,7 +1,8 @@
 -- Nested constructors require decisions, even without a monadic annotation.
-param (/numeric; /process; builtin) : @(import(
+param (/process; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
+let (/numeric) = @(import("../../std/primitive/package.zy")) in
 def Choice =
   data
   | +Left : Int

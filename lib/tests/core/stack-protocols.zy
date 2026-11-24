@@ -1,5 +1,8 @@
 -- Ret describes an installed continuation; pending argument/tag depth is dynamic.
-param (/numeric; /int; /string; /args; /process; builtin) : @(import("../../std/builtin.zy")) in
+param (/args; /process; builtin) : @(import("../../std/builtin.zy")) in
+let (/numeric; /text = _prim_text) = @(import("../../std/primitive/package.zy")) in
+let (/int) = numeric in
+let (/string) = _prim_text in
 begin
   def Stream : CType =
     codata

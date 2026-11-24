@@ -1,5 +1,6 @@
 begin
-  param (/process; /numeric; /text) : @(import("../../std/builtin.zy")) that
+  param (/process) : @(import("../../std/builtin.zy")) that
+  let (/numeric; /text) = @(import("../../std/primitive/package.zy")) that
   let int = numeric/int that
   let char = text/char that
   let string = text/string that

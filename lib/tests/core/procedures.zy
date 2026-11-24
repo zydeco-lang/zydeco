@@ -1,4 +1,5 @@
-param (/process; /numeric; builtin) : @(import("../../std/builtin.zy")) in
+param (/process; builtin) : @(import("../../std/builtin.zy")) in
+let (/numeric) = @(import("../../std/primitive/package.zy")) in
 begin
   let int = numeric/int that
 
@@ -15,9 +16,10 @@ begin
     let finish : Thk (Int -> Ret Int) = { fn x => ! int/add x offset } in
     match choice
     | +Left(x) => ! finish x
-    | +Right(x) => do doubled <- ! int/mul x 2; ! finish doubled
-    end
-  that
+    | +Right(x) =>
+      do doubled <- ! int/mul x 2;
+      ! finish doubled
+    end that
 
   -- The second call of `scale` waits for the first, so it runs inside a continuation, and `scale`
   -- reads `factor`. Its label is closed, and each call pushes `factor`.

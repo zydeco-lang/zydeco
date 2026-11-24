@@ -1,7 +1,8 @@
 -- stage: run
 -- backends: all
 @[package(test(of(/std)))]
-param (/numeric; builtin) : @(import(/std/builtin)) in
+param (/OS = _; builtin) : @(import(/std/builtin)) in
+let (/numeric) = @(import(/std/primitive/ops)) in
 begin
   let make_std = @(import(/std)) that
 

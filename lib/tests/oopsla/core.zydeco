@@ -2,7 +2,8 @@
 --| Value Type and Computation Type
 --| Thunk Type and Return Type
 --| Primitive Base Types
-param val (/stdio; /process; /numeric; /text; builtin) : @(import("../../std/builtin.zy")) in
+param val (/stdio; /process; builtin) : @(import("../../std/builtin.zy")) in
+let (/numeric; /text) = @(import("../../std/primitive/package.zy")) in
 begin
   let int = numeric/int that
   let string = text/string that

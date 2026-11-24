@@ -1,0 +1,6 @@
+@[prelude(none)]
+@[package(library, name(std/builtin/memory))]
+exists
+  @[builtin(addr)] (= Addr : @(intrinsic(vtype)))
+.
+  (@(import("memory/ops.zy"))) Addr

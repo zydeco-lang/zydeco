@@ -1,14 +1,16 @@
 let (/List; /list) = @(import("../../std/data/package.zy")) in
 let nondet = @(import("../../std/effect/nondet.zy")) in
-param (/numeric; /string; builtin) : @(import(
+let (/numeric; /text) = @(import("../../std/primitive/package.zy")) in
+let (/string) = text in
+param (/OS = _; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
 let reader = @(import("../../std/effect/reader.zy")) in
 let (/Monoid; writer) = @(import("../../std/effect/writer.zy")) in
 let (/with_trace) = builtin |> (@(import("effect-test-basis.zy"))) in
 let (/render) = @(import("nondet-test-basis.zy")) in
-let (/branch_laws) = builtin |> (@(import("nondet-law-suite.zy"))) in
-let (/laws; /lift_laws) = builtin |> (@(import("effect-law-suite.zy"))) in
+let (/branch_laws) = @(import("nondet-law-suite.zy")) in
+let (/laws; /lift_laws) = @(import("effect-law-suite.zy")) in
 let (N, n) = nondet/instance in
 let (R, r) = reader/instance Int in
 let output : Monoid String = (#empty = "", #append = string/append) in

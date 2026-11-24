@@ -29,9 +29,10 @@ begin
   in
   let make =
     -- Allocator context is explicit. Free requires the same allocator and allocation layout.
+    let (/numeric) = @(import("../primitive/package.zy")) in
     begin
-      param val (/Addr; /numeric; builtin) : @(import(
-        "../builtin.zy"
+      param val (/Addr; builtin) : @(import(
+        "../builtin/memory.zy"
       )) that
       param val (/Uninit; /Ptr; /unsafe) : Types Addr that
       param val (/Storage; /DynamicStorage; /constant; /runtime) : StoragePackage in

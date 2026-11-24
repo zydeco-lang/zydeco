@@ -1,5 +1,7 @@
 -- A single packed carrier supports both effects; catch rolls State back on failure.
-param (/numeric; /string; /stdio; /process) : @(import("../../std/builtin.zy")) in
+param (/stdio; /process) : @(import("../../std/builtin.zy")) in
+let (/numeric; /text = _prim_text) = @(import("../../std/primitive/package.zy")) in
+let (/string) = _prim_text in
 let (/Monad; /Algebra) = @(import("../../std/effect/monad.zy")) in
 let (/raise; /catch) = @(import("../../std/effect/exception.zy")) in
 let (/modify) = @(import("../../std/effect/state.zy")) in

@@ -20,8 +20,9 @@ impl Fixture {
             source,
         };
         std::fs::write(fixture.source(), format!(
-            "param (/system; /process; /numeric; /OS; /Ret; /Thk; /Addr; /Int8; /Int16; /Int32; /Int64; /Int; /UInt8; /UInt16; /UInt32; /UInt64; /UInt; /Float32; /Float64) : @(import(\"{}\")) in {body}\n",
+            "param (/system; /process; /memory_ops; /OS; /Ret; /Thk; /Addr; /Int8; /Int16; /Int32; /Int64; /Int; /UInt8; /UInt16; /UInt32; /UInt64; /UInt; /Float32; /Float64) : @(import(\"{}\")) in let (/memory; /scalar) = memory_ops in let (/numeric) = @(import(\"{}\")) in {body}\n",
             fixture.workspace.join("lib/std/builtin.zy").display(),
+            fixture.workspace.join("lib/std/primitive/package.zy").display(),
         )).unwrap();
         fixture
     }
@@ -450,22 +451,22 @@ fn address_offsets_lower_without_host_calls_and_preserve_wrapping() {
     let fixture = Fixture::new(
         r#"
 let fail = { fn (_ : Int) => ! process/exit 41 } in
-! system/memory/allocate OS 16 8 fail {
+! memory/allocate OS 16 8 fail {
   fn base =>
-    do null <- ! system/memory/null;
-    do before_null <- ! system/memory/offset null (-1);
-    do wrapped <- ! system/memory/offset before_null 1;
-    ! system/memory/store_addr OS base wrapped {
-      ! numeric/uint64/load_le OS base {
+    do null <- ! memory/null;
+    do before_null <- ! memory/offset null (-1);
+    do wrapped <- ! memory/offset before_null 1;
+    ! memory/store_addr OS base wrapped {
+      ! scalar/uint64/load_le OS base {
         fn bits =>
           ! numeric/uint64/eq OS bits (0 : UInt64) {
-            do after <- ! system/memory/offset base 9;
-            do inside <- ! system/memory/offset after (-8);
-            ! numeric/uint8/store_le OS inside (42 : UInt8) {
-              do expected <- ! system/memory/offset base 1;
-              ! numeric/uint8/load_le OS expected {
+            do after <- ! memory/offset base 9;
+            do inside <- ! memory/offset after (-8);
+            ! scalar/uint8/store_le OS inside (42 : UInt8) {
+              do expected <- ! memory/offset base 1;
+              ! scalar/uint8/load_le OS expected {
                 fn value =>
-                  ! system/memory/free OS base 16 8 fail {
+                  ! memory/free OS base 16 8 fail {
                     ! numeric/uint8/eq OS value (42 : UInt8)
                       { ! process/exit 0 } { ! process/exit 42 }
                   }
@@ -506,13 +507,13 @@ fn known_zero_address_offset_disappears() {
     let fixture = Fixture::new(
         r#"
 let fail = { fn (_ : Int) => ! process/exit 41 } in
-! system/memory/allocate OS 8 8 fail {
+! memory/allocate OS 8 8 fail {
   fn base =>
-    let offset = system/memory/offset in
+    let offset = memory/offset in
     do same <- ! offset base 0;
     do same <- ! offset same 0;
-    ! numeric/uint64/store_le OS same (42 : UInt64) {
-      ! system/memory/free OS base 8 8 fail { ! process/exit 0 }
+    ! scalar/uint64/store_le OS same (42 : UInt64) {
+      ! memory/free OS base 8 8 fail { ! process/exit 0 }
     }
 }
 "#,
@@ -535,15 +536,15 @@ fn scalar_memory_repeated_builtin_loads_keep_independent_observations() {
         r#"
 let fail = { ! process/exit 41 } in
 let no = { fn (_ : Int) => ! fail } in
-! system/memory/allocate OS 8 8 no { fn address =>
-  let load = numeric/int/load_le in
-  ! numeric/int/store_le OS address 4 {
+! memory/allocate OS 8 8 no { fn address =>
+  let load = scalar/int/load_le in
+  ! scalar/int/store_le OS address 4 {
     ! load OS address { fn saved =>
-      ! numeric/int/store_le OS address 0 {
+      ! scalar/int/store_le OS address 0 {
         ! load OS address { fn current =>
           ! numeric/int/eq OS saved 4 {
             ! numeric/int/eq OS current 0 {
-              ! system/memory/free OS address 8 8 no { ! process/exit 0 }
+              ! memory/free OS address 8 8 no { ! process/exit 0 }
             } fail
           } fail
         }
@@ -583,25 +584,25 @@ fn scalar_memory_accesses_preserve_width_endianness_and_unaligned_extremes() {
         IntegerLiteral::UInt((1 << 63) - 1),
     ];
     for value in values {
-        let next = "! system/memory/free OS base 16 8 fail { ! process/exit 0 }".to_owned();
+        let next = "! memory/free OS base 16 8 fail { ! process/exit 0 }".to_owned();
         let ty = value.integer_type().unwrap();
         let group = format!("{ty}").to_lowercase();
         let scalar = MemoryScalar::Integer(ty);
         let bytes = scalar.bits(&Literal::Integer(value)).unwrap().to_le_bytes();
         let checked = bytes[..scalar.bytes() as usize].iter().enumerate().rev().fold(next, |next, (index, byte)| format!(
-            "do byte_address <- ! system/memory/offset slot {index}; ! numeric/uint8/load_le OS byte_address {{ fn byte => ! numeric/uint8/eq OS byte {byte} {{ {next} }} bad }}"
+            "do byte_address <- ! memory/offset slot {index}; ! scalar/uint8/load_le OS byte_address {{ fn byte => ! numeric/uint8/eq OS byte {byte} {{ {next} }} bad }}"
         ));
         let after = scalar.bytes() + 1;
         let body = format!(
             r#"
-! system/memory/fill OS base 16 (165 : UInt8) {{
-  ! numeric/{group}/store_le OS slot ({number} : {ty}) {{
-    ! numeric/{group}/load_le OS slot {{ fn loaded =>
+! memory/fill OS base 16 (165 : UInt8) {{
+  ! scalar/{group}/store_le OS slot ({number} : {ty}) {{
+    ! scalar/{group}/load_le OS slot {{ fn loaded =>
       ! numeric/{group}/eq OS loaded ({number} : {ty}) {{
-        ! numeric/uint8/load_le OS base {{ fn before =>
+        ! scalar/uint8/load_le OS base {{ fn before =>
           ! numeric/uint8/eq OS before (165 : UInt8) {{
-            do after <- ! system/memory/offset base {after};
-            ! numeric/uint8/load_le OS after {{ fn after =>
+            do after <- ! memory/offset base {after};
+            ! scalar/uint8/load_le OS after {{ fn after =>
               ! numeric/uint8/eq OS after (165 : UInt8) {{ {checked} }} bad
             }}
           }} bad
@@ -617,8 +618,8 @@ fn scalar_memory_accesses_preserve_width_endianness_and_unaligned_extremes() {
             r#"
 let fail = {{ fn (_ : Int) => ! process/exit 41 }} in
 let bad = {{ ! process/exit 42 }} in
-! system/memory/allocate OS 16 8 fail {{ fn base =>
-  do slot <- ! system/memory/offset base 1;
+! memory/allocate OS 16 8 fail {{ fn base =>
+  do slot <- ! memory/offset base 1;
   {body}
 }}
 "#
@@ -651,13 +652,13 @@ fn scalar_memory_load_boxing_preserves_live_roots_during_collection() {
 let fail = { fn (_ : Int) => ! process/exit 41 } in
 let fix churn (address : Addr) (keep : Int64) (count : Int) : OS =
   ! numeric/int/eq OS count 0 {
-    ! system/memory/free OS address 8 8 fail {
+    ! memory/free OS address 8 8 fail {
       ! numeric/int64/eq OS keep (4096 : Int64) { ! process/exit 0 } { ! process/exit 42 }
     }
   } {
-    ! numeric/uint64/load_le OS address { fn value =>
+    ! scalar/uint64/load_le OS address { fn value =>
       do copied <- ! numeric/uint64/add value (0 : UInt64);
-      ! numeric/uint64/store_le OS address copied {
+      ! scalar/uint64/store_le OS address copied {
         do next <- ! numeric/int/sub count 1;
         ! churn address keep next
       }
@@ -665,8 +666,8 @@ let fix churn (address : Addr) (keep : Int64) (count : Int) : OS =
   }
 in
 do keep <- ! numeric/int64/from_int 4096;
-! system/memory/allocate OS 8 8 fail { fn address =>
-  ! numeric/uint64/store_le OS address (18446744073709551615 : UInt64) {
+! memory/allocate OS 8 8 fail { fn address =>
+  ! scalar/uint64/store_le OS address (18446744073709551615 : UInt64) {
     ! churn address keep 200000
   }
 }
@@ -696,16 +697,16 @@ fn scalar_memory_keeps_float_bits_through_unknown_callbacks() {
             r#"
 let fail = {{ fn (_ : Int) => ! process/exit 41 }} in
 let fix read (address : Addr) (next : Thk ({float} -> OS)) : OS =
-  ! numeric/{floats}/load_le OS address next
+  ! scalar/{floats}/load_le OS address next
 in
-! system/memory/allocate OS 24 8 fail {{ fn base =>
-  do source <- ! system/memory/offset base 1;
-  do destination <- ! system/memory/offset base 11;
-  ! numeric/{integers}/store_le OS source ({bits} : {integer}) {{
+! memory/allocate OS 24 8 fail {{ fn base =>
+  do source <- ! memory/offset base 1;
+  do destination <- ! memory/offset base 11;
+  ! scalar/{integers}/store_le OS source ({bits} : {integer}) {{
     ! read source {{ fn value =>
-      ! numeric/{floats}/store_le OS destination value {{
-        ! numeric/{integers}/load_le OS destination {{ fn result =>
-          ! system/memory/free OS base 24 8 fail {{
+      ! scalar/{floats}/store_le OS destination value {{
+        ! scalar/{integers}/load_le OS destination {{ fn result =>
+          ! memory/free OS base 24 8 fail {{
             ! numeric/{integers}/eq OS result ({bits} : {integer})
               {{ ! process/exit 0 }} {{ ! process/exit 42 }}
           }}
@@ -737,11 +738,11 @@ fn scalar_memory_checks_invalid_carriers_before_resuming_or_later_effects() {
         let fixture = Fixture::new(&format!(
             r#"
 let fail = {{ fn (_ : Int) => ! process/exit 41 }} in
-! system/memory/allocate OS 8 8 fail {{ fn address =>
-  ! numeric/uint64/store_le OS address ({bits} : UInt64) {{
+! memory/allocate OS 8 8 fail {{ fn address =>
+  ! scalar/uint64/store_le OS address ({bits} : UInt64) {{
     ! system/stdio/write_line "before" {{
-      ! numeric/{group}/load_le OS address {{ fn _ =>
-        ! numeric/uint64/store_le OS address (0 : UInt64) {{
+      ! scalar/{group}/load_le OS address {{ fn _ =>
+        ! scalar/uint64/store_le OS address (0 : UInt64) {{
           ! system/stdio/write_line "after" {{ ! process/exit 0 }}
         }}
       }}
@@ -908,21 +909,21 @@ fn scalar_memory_kernels_keep_values_raw_and_preserve_ordinary_fallbacks() {
             r#"
 let fail = {{ fn (_ : Int) => ! process/exit 41 }} in
 let fix update (source : Addr) (destination : Addr) (amount : {ty}) : OS =
-  ! numeric/{group}/load_le OS source {{ fn value =>
+  ! scalar/{group}/load_le OS source {{ fn value =>
     do first <- ! numeric/{group}/add value amount;
     do result <- ! numeric/{group}/mul first ({one} : {ty});
-    ! numeric/{group}/store_le OS destination result {{
-      ! numeric/{group}/load_le OS destination {{ fn observed =>
-        ! system/memory/free OS source 16 8 fail {{
+    ! scalar/{group}/store_le OS destination result {{
+      ! scalar/{group}/load_le OS destination {{ fn observed =>
+        ! memory/free OS source 16 8 fail {{
           ! numeric/{group}/eq OS observed ({expected} : {ty}) {{ ! process/exit 0 }} {{ ! process/exit 42 }}
         }}
       }}
     }}
   }}
 in
-! system/memory/allocate OS 16 8 fail {{ fn source =>
-  do destination <- ! system/memory/offset source 8;
-  ! numeric/{group}/store_le OS source ({initial} : {ty}) {{
+! memory/allocate OS 16 8 fail {{ fn source =>
+  do destination <- ! memory/offset source 8;
+  ! scalar/{group}/store_le OS source ({initial} : {ty}) {{
     ! update source destination ({amount} : {ty})
   }}
 }}
@@ -979,17 +980,17 @@ fn scalar_memory_kernel_failure_precedes_the_store_and_later_arithmetic() {
 let fail = { fn (_ : Int) => ! process/exit 41 } in
 let fix update (address : Addr) (zero : Int64) : OS =
   ! system/stdio/write_line "before" {
-    ! numeric/int64/load_le OS address { fn value =>
+    ! scalar/int64/load_le OS address { fn value =>
       do quotient <- ! numeric/int64/div value zero;
       do remainder <- ! numeric/int64/mod quotient zero;
-      ! numeric/int64/store_le OS address remainder {
+      ! scalar/int64/store_le OS address remainder {
         ! system/stdio/write_line "after" { ! process/exit 42 }
       }
     }
   }
 in
-! system/memory/allocate OS 8 8 fail { fn address =>
-  ! numeric/int64/store_le OS address (7 : Int64) {
+! memory/allocate OS 8 8 fail { fn address =>
+  ! scalar/int64/store_le OS address (7 : Int64) {
     ! update address (0 : Int64)
   }
 }
@@ -1026,7 +1027,7 @@ fn scalar_memory_kernel_stops_at_shared_values_and_unknown_callbacks() {
     use zydeco_stackir::low::{representation::RepresentationPolicy as _, scalar::ScalarPlans};
     for (reader, continuation) in [
         (
-            "numeric/int64/load_le OS",
+            "scalar/int64/load_le OS",
             "! numeric/int64/eq OS result (8 : Int64) { ! process/exit 0 } { ! process/exit 42 }",
         ),
         ("read", "! process/exit 0"),
@@ -1035,14 +1036,14 @@ fn scalar_memory_kernel_stops_at_shared_values_and_unknown_callbacks() {
             r#"
 let fail = {{ fn (_ : Int) => ! process/exit 41 }} in
 let fix read (address : Addr) (next : Thk (Int64 -> OS)) : OS =
-  ! numeric/int64/load_le OS address next
+  ! scalar/int64/load_le OS address next
 in
-! system/memory/allocate OS 8 8 fail {{ fn address =>
-  ! numeric/int64/store_le OS address (7 : Int64) {{
+! memory/allocate OS 8 8 fail {{ fn address =>
+  ! scalar/int64/store_le OS address (7 : Int64) {{
     ! {reader} address {{ fn value =>
       do result <- ! numeric/int64/add value (1 : Int64);
-      ! numeric/int64/store_le OS address result {{
-        ! system/memory/free OS address 8 8 fail {{ {continuation} }}
+      ! scalar/int64/store_le OS address result {{
+        ! memory/free OS address 8 8 fail {{ {continuation} }}
       }}
     }}
   }}
@@ -1074,14 +1075,14 @@ fn scalar_memory_kernel_bounds_preserve_fallback_and_aliasing() {
         let fixture = Fixture::new(&format!(
             r#"
 let fail = {{ fn (_ : Int) => ! process/exit 41 }} in
-! system/memory/allocate OS 16 8 fail {{ fn address =>
-  ! numeric/int64/store_le OS address (7 : Int64) {{
-    do destination <- ! system/memory/offset address 1;
-    ! numeric/int64/load_le OS address {{ fn v0 =>
+! memory/allocate OS 16 8 fail {{ fn address =>
+  ! scalar/int64/store_le OS address (7 : Int64) {{
+    do destination <- ! memory/offset address 1;
+    ! scalar/int64/load_le OS address {{ fn v0 =>
       {arithmetic}
-      ! numeric/int64/store_le OS destination v{operations} {{
-        ! numeric/int64/load_le OS destination {{ fn result =>
-          ! system/memory/free OS address 16 8 fail {{
+      ! scalar/int64/store_le OS destination v{operations} {{
+        ! scalar/int64/load_le OS destination {{ fn result =>
+          ! memory/free OS address 16 8 fail {{
             ! numeric/int64/eq OS result ({expected} : Int64) {{ ! process/exit 0 }} {{ ! process/exit 42 }}
           }}
         }}
@@ -1130,16 +1131,16 @@ fn scalar_memory_kernel_moves_only_total_independent_address_bindings() {
             r#"
 let fail = {{ fn (_ : Int) => ! process/exit 41 }} in
 let fix run (divisor : Int) : OS =
-! system/memory/allocate OS 16 8 fail {{ fn address =>
-  ! numeric/int64/store_le OS address (7 : Int64) {{
-    ! numeric/int64/load_le OS address {{ fn value =>
+! memory/allocate OS 16 8 fail {{ fn address =>
+  ! scalar/int64/store_le OS address (7 : Int64) {{
+    ! scalar/int64/load_le OS address {{ fn value =>
       do updated <- ! numeric/int64/{arithmetic};
       {calculate}
-      do destination <- ! system/memory/offset address {displacement};
-      ! numeric/int64/store_le OS destination updated {{
-        ! numeric/int64/load_le OS destination {{ fn observed =>
+      do destination <- ! memory/offset address {displacement};
+      ! scalar/int64/store_le OS destination updated {{
+        ! scalar/int64/load_le OS destination {{ fn observed =>
           ! numeric/int64/eq OS observed (8 : Int64) {{
-            ! system/memory/free OS address 16 8 fail {{ ! process/exit 0 }}
+            ! memory/free OS address 16 8 fail {{ ! process/exit 0 }}
           }} {{ ! process/exit 42 }}
         }}
       }}

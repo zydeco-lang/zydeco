@@ -16,10 +16,9 @@ begin
     /stdio;
     /process;
     /String;
-    /Int;
-    /numeric;
-    /text
+    /Int
   ) : @(import("../../lib/std/builtin.zy")) that
+  let (/numeric; /text) = @(import("../../lib/std/primitive/package.zy")) that
   let int = numeric/int that
   let string = text/string that
   def Option (A : VType) =

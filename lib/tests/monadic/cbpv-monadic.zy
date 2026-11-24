@@ -1,4 +1,5 @@
-param (/numeric; /text; /stdio; /process; builtin) : @(import("../../std/builtin.zy")) in
+param (/stdio; /process; builtin) : @(import("../../std/builtin.zy")) in
+let (/numeric; /text) = @(import("../../std/primitive/package.zy")) in
 begin
   let U = Thk that
   let F = Ret that

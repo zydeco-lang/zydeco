@@ -5,7 +5,7 @@ let (/FieldOperations) = @(import("field.zy")) in
 let (/StoragePackage) = @(import("storage.zy")) in
 let (/Codec) = @(import("codecs.zy")) in
 begin
-  param val (/Addr; builtin) : @(import("../builtin.zy")) in
+  param val (/Addr; builtin) : @(import("../builtin/memory.zy")) in
   param val (/Uninit; /Init; /Ptr; types) : Types Addr in
   param val Field : VType -> VType -> VType in
   param val DynamicField : VType -> VType -> VType in

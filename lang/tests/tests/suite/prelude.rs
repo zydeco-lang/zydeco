@@ -491,9 +491,11 @@ fn provider_independent_libraries_need_no_manual_primitive_import() {
     ] {
         let analysis = Fixture::new().analyze(&format!("@(import(\"$std/{name}.zy\"))")).unwrap();
         assert!(analysis.outcome().root().is_some(), "{name}: {:?}", analysis.outcome());
-        assert!(
-            !analysis.graph().source_inputs().any(|source| source.path.ends_with("builtin.zy"))
-        );
+        assert!(!analysis.graph().source_inputs().any(|source| {
+            source.path.ends_with("builtin.zy")
+                || source.path.ends_with("builtin/memory.zy")
+                || source.path.ends_with("builtin/system.zy")
+        }));
         assert!(
             analysis
                 .graph()

@@ -11,7 +11,9 @@
 -- values at the same type: two packages differing only in the operation they
 -- carry, read by one unpack, have to give two answers.
 begin
-  param (/Thk; /Ret; /Int; /Unit; /OS; /int; /process) : @(import("../../std/builtin.zy")) that
+  param (/Thk; /Ret; /Int; /Unit; /OS; /process) : @(import("../../std/builtin.zy")) that
+  let (/numeric = _prim_numeric) = @(import("../../std/primitive/package.zy")) that
+  let (/int) = _prim_numeric that
   def ! require (want : Int) (got : Int) (k : Thk OS) : OS =
     ! int/eq OS want got k { ! process/exit 1 }
   that
@@ -19,67 +21,90 @@ begin
   -- a manifest package: the witness is disclosed, so the payload leaves the
   -- unpack with a type the host can still read
   do a <- @[cbv] (
-    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
+    let VType = @(intrinsic(vtype)) that
+    let Int : VType = @(intrinsic(int)) that
     let Clear : VType = exists (X as Int : VType) . X that
-    let p = ((Int, 7) : Clear) that let (X, v) = p that v);
+    let p = ((Int, 7) : Clear) that
+    let (X, v) = p that
+    v
+  );
   ! require 7 a {
 
-  -- an abstract package used through its own operation. The payload's type is
-  -- opaque inside the block and the only thing that may consume it is the
-  -- function the package carries, which is what an existential is for.
-  do b <- @[cbv] (
-    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
-    let Showable : VType = exists (X : VType) . (X * (X -> Int)) that
-    let p = ((Int, 7, fn (n : Int) => n) : Showable) that
-    let (X, v, k) = p that k v
-  );
-  ! require 7 b {
+    -- an abstract package used through its own operation. The payload's type is
+    -- opaque inside the block and the only thing that may consume it is the
+    -- function the package carries, which is what an existential is for.
+    do b <- @[cbv] (
+      let VType = @(intrinsic(vtype)) that
+      let Int : VType = @(intrinsic(int)) that
+      let Showable : VType = exists (X : VType) . X * (X -> Int) that
+      let p = ((Int, 7, fn (n : Int) => n) : Showable) that
+      let (X, v, k) = p that
+      k v
+    );
+    ! require 7 b {
 
-  -- the same type, the same unpack, a different carried operation: the answer
-  -- follows the operation and not the payload, so `k` is what ran
-  do c <- @[cbv] (
-    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
-    let Showable : VType = exists (X : VType) . (X * (X -> Int)) that
-    let p = ((Int, 7, fn (n : Int) => 3) : Showable) that
-    let (X, v, k) = p that k v
-  );
-  ! require 3 c {
+      -- the same type, the same unpack, a different carried operation: the answer
+      -- follows the operation and not the payload, so `k` is what ran
+      do c <- @[cbv] (
+        let VType = @(intrinsic(vtype)) that
+        let Int : VType = @(intrinsic(int)) that
+        let Showable : VType = exists (X : VType) . X * (X -> Int) that
+        let p = ((Int, 7, fn (n : Int) => 3) : Showable) that
+        let (X, v, k) = p that
+        k v
+      );
+      ! require 3 c {
 
-  -- and a different witness at the same abstract type
-  do d <- @[cbv] (
-    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
-    let Unit : VType = @(intrinsic(unit)) that
-    let Showable : VType = exists (X : VType) . (X * (X -> Int)) that
-    let p = ((Unit, (), fn (u : Unit) => 4) : Showable) that
-    let (X, v, k) = p that k v
-  );
-  ! require 4 d {
+        -- and a different witness at the same abstract type
+        do d <- @[cbv] (
+          let VType = @(intrinsic(vtype)) that
+          let Int : VType = @(intrinsic(int)) that
+          let Unit : VType = @(intrinsic(unit)) that
+          let Showable : VType = exists (X : VType) . X * (X -> Int) that
+          let p = ((Unit, (), fn (u : Unit) => 4) : Showable) that
+          let (X, v, k) = p that
+          k v
+        );
+        ! require 4 d {
 
-  -- a record built and read in one block, by projection
-  do e <- @[cbv] (
-    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
-    let Lib : VType = (#id :: Int -> Int, #base :: Int) that
-    let l = ((#id = fn (x : Int) => x, #base = 5) : Lib) that (l/id) (l/base));
-  ! require 5 e {
+          -- a record built and read in one block, by projection
+          do e <- @[cbv] (
+            let VType = @(intrinsic(vtype)) that
+            let Int : VType = @(intrinsic(int)) that
+            let Lib : VType = (#id :: Int -> Int, #base :: Int) that
+            let l = ((#id = fn (x : Int) => x, #base = 5) : Lib) that
+            l/id l/base
+          );
+          ! require 5 e {
 
-  -- by pattern, which binds each field under its own name. The operation is
-  -- not the identity, so the answer distinguishes `id base` from `base`.
-  do f <- @[cbv] (
-    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
-    let Lib : VType = (#id :: Int -> Int, #base :: Int) that
-    let l = ((#id = fn (x : Int) => 6, #base = 5) : Lib) that
-    let (= id, = base) = l that id base
-  );
-  ! require 6 f {
+            -- by pattern, which binds each field under its own name. The operation is
+            -- not the identity, so the answer distinguishes `id base` from `base`.
+            do f <- @[cbv] (
+              let VType = @(intrinsic(vtype)) that
+              let Int : VType = @(intrinsic(int)) that
+              let Lib : VType = (#id :: Int -> Int, #base :: Int) that
+              let l = ((#id = fn (x : Int) => 6, #base = 5) : Lib) that
+              let (= id, = base) = l that
+              id base
+            );
+            ! require 6 f {
 
-  -- a field whose payload is a computation is sequenced before the record is
-  -- built, so the field holds the result and not the computation
-  do g <- @[cbv] (
-    let VType = @(intrinsic(vtype)) that let Int : VType = @(intrinsic(int)) that
-    let Lib : VType = (#id :: Int -> Int, #base :: Int) that
-    let l = ((#id = fn (x : Int) => x, #base = (fn (x : Int) => x) 9) : Lib) that l/base
-  );
-  ! require 9 g {
+              -- a field whose payload is a computation is sequenced before the record is
+              -- built, so the field holds the result and not the computation
+              do g <- @[cbv] (
+                let VType = @(intrinsic(vtype)) that
+                let Int : VType = @(intrinsic(int)) that
+                let Lib : VType = (#id :: Int -> Int, #base :: Int) that
+                let l = ((#id = fn (x : Int) => x, #base = (fn (x : Int) => x) 9) : Lib) that
+                l/base
+              );
+              ! require 9 g {
 
-  ! process/exit 0 }}}}}}}
+                ! process/exit 0 }
+            }
+          }
+        }
+      }
+    }
+  }
 end

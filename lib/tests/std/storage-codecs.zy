@@ -1,10 +1,14 @@
 -- stage: run
 -- backends: all
 @[package(test(of(/std)))]
-param (/numeric; /process; builtin) : @(import(/std/builtin)) in
+let (/numeric) = @(import(/std/primitive/ops)) in
+param (/Addr; /memory_ops; /process) : @(import(/std/builtin)) in
+let memory_builtin : @(import(/std/builtin/memory)) = (= Addr, memory_ops) in
 begin
+  let (/scalar) = memory_ops in
+  let memory_builtin : @(import(/std/builtin/memory)) = (= Addr, memory_ops) in
   let (/Storage; /DynamicStorage; /Uninit; /Init; /Ptr; /storage; /codecs; /allocation) =
-    builtin |> (@(import(/std/memory)))
+    memory_builtin |> (@(import(/std/memory)))
   in
   let (/Fault) = @(import("../../std/memory/fault.zy")) in
   let fail = { ! process/exit 1 } in
@@ -14,7 +18,7 @@ begin
     match checked
     | +Left(_) => ! fail
     | +Right(= L, geometry) =>
-      let value = codecs/unsafe/scalar L Int64 numeric/int64/store_le numeric/int64/load_le in
+      let value = codecs/unsafe/scalar L Int64 scalar/int64/store_le scalar/int64/load_le in
       let codec = codecs/materialize L Int64 value in
       ! allocation/dynamic_reserve L OS allocation/heap geometry no {
         fn vacant =>
@@ -33,7 +37,7 @@ begin
   match storage/constant/create 8 8
   | +Left(_) => ! fail
   | +Right(= L, geometry) =>
-    let codec = codecs/unsafe/scalar L Int64 numeric/int64/store_le numeric/int64/load_le in
+    let codec = codecs/unsafe/scalar L Int64 scalar/int64/store_le scalar/int64/load_le in
     let carried : DynamicStorage L = storage/constant/materialize L geometry in
     let facts = storage/runtime/query L carried in
     ! numeric/int/eq OS facts/size 8 {

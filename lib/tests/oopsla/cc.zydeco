@@ -1,9 +1,10 @@
 --| Three different calling conventions and the sum_and_mult example
 
 --| Funciton Type (A -> B)
-param (/process; /numeric; builtin) : @(import(
+param (/process; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
+let (/numeric) = @(import("../../std/primitive/package.zy")) in
 begin
   let int = numeric/int that
   def Fn (A : VType) (B : CType) =

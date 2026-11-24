@@ -47,7 +47,7 @@ fn storage_geometry_is_validated_and_sealed() {
 #[test]
 fn codecs_require_matching_states_values_and_layout_witnesses() {
     let prefix = "match storage/constant/create 8 8 | +Left(_) => ! fail | +Right(= L, layout) => \
-        let codec = codecs/unsafe/scalar L Int64 numeric/int64/store_le numeric/int64/load_le in \
+        let codec = codecs/unsafe/scalar L Int64 scalar/int64/store_le scalar/int64/load_le in \
         ! (allocation/reserve L Unit allocation/static_heap () layout) OS no { fn vacant => ";
     let source = |body: &str| MemoryCase::source(&format!("{prefix} {body} }} end"));
     let valid = "! (codec/init vacant (7 : Int64)) OS { fn initialized => \
@@ -68,7 +68,7 @@ fn codecs_require_matching_states_values_and_layout_witnesses() {
         ),
         (
             "match storage/constant/create 8 8 | +Left(_) => ! fail | +Right(= Other, _) => \
-         let other = codecs/unsafe/scalar Other Int64 numeric/int64/store_le numeric/int64/load_le in \
+         let other = codecs/unsafe/scalar Other Int64 scalar/int64/store_le scalar/int64/load_le in \
          ! (other/init vacant (7 : Int64)) OS { fn _ => ! exit 0 } end",
             TyckDiagnosticCode::NamedLabelMismatch,
         ),

@@ -1,5 +1,6 @@
 -- module Identity
-param val (/stdio; /numeric; /text; builtin) : @(import("../../std/builtin.zy")) in
+param val (/stdio; builtin) : @(import("../../std/builtin.zy")) in
+let (/numeric; /text) = @(import("../../std/primitive/package.zy")) in
 begin
   let int = numeric/int that
   let char = text/char that

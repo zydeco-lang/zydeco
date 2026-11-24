@@ -1,5 +1,6 @@
 -- Churns dynamic managed strings across dozens of collections while keeping roots live.
-param (/numeric; /text; /process; builtin) : @(import("../../std/builtin.zy")) in
+param (/process; builtin) : @(import("../../std/builtin.zy")) in
+let (/numeric; /text) = @(import("../../std/primitive/package.zy")) in
 begin
   let make_std = @(import("../../std/std.zy")) that
   let (/bool; /int) = builtin |> make_std in

@@ -1,5 +1,7 @@
 -- Successive observations change the argument type; this is not a regular cycle.
-param (/int; /process; builtin) : @(import("../../std/builtin.zy")) in
+param (/process; builtin) : @(import("../../std/builtin.zy")) in
+let (/numeric = _prim_numeric) = @(import("../../std/primitive/package.zy")) in
+let (/int) = _prim_numeric in
 begin
   def Growing (A : VType) : CType =
     codata

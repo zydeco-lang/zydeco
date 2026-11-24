@@ -634,6 +634,8 @@ pub mod utils {
         fn wrap(prelude: SourceCasePrelude, source: &str) -> String {
             let library = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lib/std");
             let builtin = library.join("builtin.zy").canonicalize().unwrap();
+            let memory_builtin = library.join("builtin/memory.zy").canonicalize().unwrap();
+            let primitive = library.join("primitive/package.zy").canonicalize().unwrap();
             let monadic = match prelude {
                 | SourceCasePrelude::Core => String::new(),
                 | SourceCasePrelude::Monadic => {
@@ -653,13 +655,18 @@ pub mod utils {
 
             format!(
                 r#"let Builtin = @(import("{builtin}")) in
+let MemoryBuiltin = @(import("{memory_builtin}")) in
+let (/numeric; /text) = @(import("{primitive}")) in
+let (/char; /string) = text in
 {monadic}param (
   /VType; /CType; /Thk; /Ret; /Unit;
   /Int8; /Int16; /Int32; /Int64; /Int;
   /UInt8; /UInt16; /UInt32; /UInt64; /UInt;
   /Float32; /Float64; /Char; /String; /Addr;
-  /Reader; /Writer; /OS; /numeric; /process; builtin
+  /Reader; /Writer; /OS; /memory_ops; /process; builtin
 ) : Builtin in
+let (/memory; /scalar) = memory_ops in
+let memory_builtin : MemoryBuiltin = (= Addr, memory_ops) in
 let int = numeric/int in
 let Thunk = Thk in
 let U = Thk in
@@ -672,6 +679,8 @@ let triv : Thk Top = {{ comatch end }} in
 {source}
 "#,
                 builtin = SourceLiteral::escape(&builtin),
+                memory_builtin = SourceLiteral::escape(&memory_builtin),
+                primitive = SourceLiteral::escape(&primitive),
             )
         }
     }

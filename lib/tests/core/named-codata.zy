@@ -1,6 +1,7 @@
 -- Codata destructors remain dot eliminations. Their arguments and results may
 -- use named value types, and slash can project from a returned named value.
-param (/process; /numeric; builtin) : @(import("../../std/builtin.zy")) in
+param (/process; builtin) : @(import("../../std/builtin.zy")) in
+let (/numeric) = @(import("../../std/primitive/package.zy")) in
 begin
   let int = numeric/int that
   def Gauge =

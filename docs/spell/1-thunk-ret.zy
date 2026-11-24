@@ -6,7 +6,8 @@
 -- inhabit.
 
 begin
-  param (/Thk; /Ret; /process; /Int; /numeric) : @(import("../../lib/std/builtin.zy")) that
+  param (/Thk; /Ret; /process; /Int) : @(import("../../lib/std/builtin.zy")) that
+  let (/numeric) = @(import("../../lib/std/primitive/package.zy")) that
   let int = numeric/int that
   -- Integers, characters, and strings are host value types supplied by the
   -- Builtin package. A sealed value definition may bind one directly.
@@ -49,5 +50,5 @@ end
 
 -- `Thk` and `Ret` are core CBPV constructors bound by opening the Builtin
 -- package. Their intrinsic definitions occur once in that package's signature.
--- Arithmetic and process termination are host capabilities selected from the
--- same package; neither class of operation arrives through an ambient prelude.
+-- Pure arithmetic comes from the primitive package, while process termination
+-- is a host capability selected from Builtin.

@@ -5,9 +5,10 @@
 -- methods, while a comatch supplies their implementations.
 
 begin
-  param (/CType; /Thk; /Ret; /stdio; /process; /String; /Int; /numeric) : @(import(
+  param (/CType; /Thk; /Ret; /stdio; /process; /String; /Int) : @(import(
     "../../lib/std/builtin.zy"
   )) that
+  let (/numeric) = @(import("../../lib/std/primitive/package.zy")) that
   let int = numeric/int that
   def Counter : CType =
     codata

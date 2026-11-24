@@ -7,9 +7,10 @@ let (/Alloc) = @(import("allocation.zy")) in
 let (/Fault) = @(import("fault.zy")) in
 let (/Error) = @(import("layout-error.zy")) in
 let (/Either) = @(import("../data/either.zy")) in
+let (/numeric) = @(import("../primitive/package.zy")) in
 begin
-  param val (/Addr; /numeric; builtin) : @(import(
-    "../builtin.zy"
+  param val (/Addr; builtin) : @(import(
+    "../builtin/memory.zy"
   )) in
   param val (/Uninit; /Init; /Ptr; types) : Types Addr in
   param val (/Storage; /DynamicStorage; /constant; /runtime) : StoragePackage in

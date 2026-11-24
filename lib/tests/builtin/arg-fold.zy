@@ -1,12 +1,13 @@
 -- stage: run
 -- backends: interpreter, exe
 -- args: ["alpha", "beta"]
-param (/process; /text; builtin) : @(import(
+let (/text) = @(import("../../std/primitive/package.zy")) in
+param (/process; /args) : @(import(
   "../../std/builtin.zy"
 )) in
 begin
   let make_arguments = @(import("../../std/system/arguments.zy")) in
-  let arguments = builtin |> make_arguments in
+  let arguments = args |> make_arguments in
   let string = text/string that
   do joined <- ! arguments/fold
     (Ret String)

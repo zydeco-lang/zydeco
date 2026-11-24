@@ -107,19 +107,8 @@ fn one_package_signature_rejects_duplicate_operation_roles() {
         let second = Alloc::alloc(tycker, Label(FieldName::from("second"), unit), vtype, &());
         let operations = Alloc::alloc(tycker, Prod(vec![first, second]), vtype, &());
         let domain = Alloc::alloc(tycker, Label(FieldName::from("int"), operations), vtype, &());
-        tycker
-            .statics
-            .builtin_roles
-            .attach_value(first, BuiltinValueRole::Integer(IntegerType::Int, IntegerOperation::Add))
-            .unwrap();
-        tycker
-            .statics
-            .builtin_roles
-            .attach_value(
-                second,
-                BuiltinValueRole::Integer(IntegerType::Int, IntegerOperation::Add),
-            )
-            .unwrap();
+        tycker.statics.builtin_roles.attach_value(first, BuiltinValueRole::MemoryOffset).unwrap();
+        tycker.statics.builtin_roles.attach_value(second, BuiltinValueRole::MemoryOffset).unwrap();
         let signature =
             PackPi { domain, witnesses: PackTelescope::singleton(witness), codomain: unit };
 
@@ -129,7 +118,7 @@ fn one_package_signature_rejects_duplicate_operation_roles() {
         assert!(matches!(
             error.duplicates.as_slice(),
             [DuplicateBuiltinRole::Value {
-                role: BuiltinValueRole::Integer(IntegerType::Int, IntegerOperation::Add),
+                role: BuiltinValueRole::MemoryOffset,
                 entries,
             }] if entries == &vec![first, second]
         ));
@@ -171,17 +160,12 @@ fn foundational_operation_roles_require_their_exact_classifier() {
         let int =
             TestFixture::primitive_type(tycker, vtype, PrimitiveType::Integer(IntegerType::Int));
         let (os_witness, os) = TestFixture::builtin_type(tycker, ctype, BuiltinTypeRole::OS);
-        let valid_classifier = TestFixture::add_classifier(tycker, vtype, ctype, int, 2);
+        let thk = Alloc::alloc(tycker, ThkTy, vtype, &());
+        let valid_body = Alloc::alloc(tycker, Arrow(int, os), ctype, &());
+        let valid_classifier = Alloc::alloc(tycker, App(thk, valid_body), vtype, &());
         let valid_entry =
-            Alloc::alloc(tycker, Label(FieldName::from("add"), valid_classifier), vtype, &());
-        tycker
-            .statics
-            .builtin_roles
-            .attach_value(
-                valid_entry,
-                BuiltinValueRole::Integer(IntegerType::Int, IntegerOperation::Add),
-            )
-            .unwrap();
+            Alloc::alloc(tycker, Label(FieldName::from("exit"), valid_classifier), vtype, &());
+        tycker.statics.builtin_roles.attach_value(valid_entry, BuiltinValueRole::Exit).unwrap();
         let valid_signature = PackPi {
             domain: valid_entry,
             witnesses: PackTelescope::singleton(os_witness),
@@ -189,13 +173,10 @@ fn foundational_operation_roles_require_their_exact_classifier() {
         };
         assert!(BuiltinSignatureValidator::new(&tycker.statics).validate(&valid_signature).is_ok());
 
-        let classifier = TestFixture::add_classifier(tycker, vtype, ctype, int, 1);
-        let entry = Alloc::alloc(tycker, Label(FieldName::from("add"), classifier), vtype, &());
-        tycker
-            .statics
-            .builtin_roles
-            .attach_value(entry, BuiltinValueRole::Integer(IntegerType::Int, IntegerOperation::Add))
-            .unwrap();
+        let invalid_body = Alloc::alloc(tycker, Arrow(int, valid_body), ctype, &());
+        let classifier = Alloc::alloc(tycker, App(thk, invalid_body), vtype, &());
+        let entry = Alloc::alloc(tycker, Label(FieldName::from("exit"), classifier), vtype, &());
+        tycker.statics.builtin_roles.attach_value(entry, BuiltinValueRole::Exit).unwrap();
         let signature =
             PackPi { domain: entry, witnesses: PackTelescope::singleton(os_witness), codomain: os };
 
@@ -205,7 +186,7 @@ fn foundational_operation_roles_require_their_exact_classifier() {
         assert!(matches!(
             error.classifiers.as_slice(),
             [BuiltinClassifierError::Mismatch {
-                role: BuiltinValueRole::Integer(IntegerType::Int, IntegerOperation::Add),
+                role: BuiltinValueRole::Exit,
                 entry: found,
                 ..
             }] if *found == entry

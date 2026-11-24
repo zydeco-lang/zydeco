@@ -1,6 +1,7 @@
 -- stage: run
 -- backends: interpreter, exe
-param (/numeric; /process; builtin) : @(import("../../std/builtin.zy")) in
+param (/process; builtin) : @(import("../../std/builtin.zy")) in
+let (/numeric) = @(import("../../std/primitive/package.zy")) in
 begin
   let monadic_basis = @(import("../../std/effect/monad.zy")) that
 

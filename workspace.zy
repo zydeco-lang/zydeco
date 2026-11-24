@@ -1,2 +1,10 @@
-@[discover(include("lib/std/*.zy", "lib/std/*/package.zy", "lib/tests/std/**/*.zy"))]
+@[discover(
+  include(
+    "lib/std/*.zy",
+    "lib/std/builtin/memory.zy",
+    "lib/std/builtin/system.zy",
+    "lib/std/*/package.zy",
+    "lib/tests/std/**/*.zy"
+  )
+)]
 ()

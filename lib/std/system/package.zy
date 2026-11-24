@@ -4,13 +4,13 @@ let (/BytesPackage) = @(import("../text/bytes.zy")) in
 let (/List; /bool; /option; /either; /list) = @(import("../data/package.zy")) in
 let (/numeric) = @(import("../primitive/package.zy")) in
 let int = numeric/int in
-param val (/Addr; /Reader; /Writer; /io; /fs; /stdio; /random; /process; builtin) : @(import(
+param val (/Addr; /Reader; /Writer; /io; /fs; /stdio; /args; /random; /process; builtin) : @(import(
   "../builtin.zy"
 )) in
 begin
   param val (/Bytes; /bytes) : BytesPackage Addr in
   let make_arguments = @(import("arguments.zy")) in
-  let arguments = builtin |> make_arguments in
+  let arguments = args |> make_arguments in
   begin
     def IoErrorKind =
       data

@@ -1,7 +1,9 @@
 -- Run with two Boolean arguments (0 = false, 1 = true): `1 1`, `1 0`, or `0 ...`.
 -- An argument is read and checked only when its test runs. In particular,
 -- `0 invalid` and `0` reach M5 without evaluating the second test.
-param (/args; /string; /stdio; /process; builtin) : @(import("../../std/builtin.zy")) in
+param (/args; /stdio; /process; builtin) : @(import("../../std/builtin.zy")) in
+let (/text = _prim_text) = @(import("../../std/primitive/package.zy")) in
+let (/string) = _prim_text in
 begin
   let (/Bool) = @(import("../../std/data/bool.zy")) in
   let ! read_bool (index : Int) : Ret Bool =

@@ -1,6 +1,7 @@
 -- Flat products may freely mix named and unnamed components. Projection skips
 -- unnamed components but preserves their physical positions.
-param (/process; /numeric; builtin) : @(import("../../std/builtin.zy")) in
+param (/process; builtin) : @(import("../../std/builtin.zy")) in
+let (/numeric) = @(import("../../std/primitive/package.zy")) in
 begin
   let int = numeric/int that
   let Mixed = (

@@ -1,13 +1,15 @@
 -- The eager returned-list dictionary typechecks but fails branching associativity.
 let (/List; /list) = @(import("../../std/data/package.zy")) in
-param (/string; builtin) : @(import(
+let (/text) = @(import("../../std/primitive/package.zy")) in
+let (/string) = text in
+param (/OS = _; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
 let (/Monad) = @(import("../../std/effect/monad.zy")) in
 let (/MonadNonDet) = @(import("../../std/effect/nondet.zy")) in
 let (/render) = @(import("nondet-test-basis.zy")) in
 let (/with_trace) = builtin |> (@(import("effect-test-basis.zy"))) in
-let (/branch_laws) = builtin |> (@(import("nondet-law-suite.zy"))) in
+let (/branch_laws) = @(import("nondet-law-suite.zy")) in
 let Eager (A : VType) = Ret (List A) in
 let monad : Thk (Monad Eager) = {
   comatch

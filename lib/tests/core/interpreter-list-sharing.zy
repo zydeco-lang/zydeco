@@ -1,6 +1,9 @@
 -- Reproducer for https://github.com/zydeco-lang/zydeco/issues/71.
 -- Building and walking this list used to deep-copy the remaining spine at every step.
-param (/int; /string; /args; /stdio; /process) : @(import("../../std/builtin.zy")) in
+param (/args; /stdio; /process) : @(import("../../std/builtin.zy")) in
+let (/numeric = _prim_numeric; /text = _prim_text) = @(import("../../std/primitive/package.zy")) in
+let (/int) = _prim_numeric in
+let (/string) = _prim_text in
 begin
   def List : VType =
     data

@@ -21,8 +21,10 @@ impl RuntimeFixture {
         std::fs::write(
             &source,
             format!(
-            "param (/OS; /Ret; /Int8; /Int16; /Int32; /Int64; /Int; /UInt8; /UInt16; /UInt32; /UInt64; /UInt; /Float32; /Float64; /String; /numeric; /process; /system; /text; builtin) : @(import(\"{}\")) in {body}\n",
+            "let (/numeric; /text) = @(import(\"{}\")) in let (/char; /string) = text in param (/Addr; /OS; /Ret; /Int8; /Int16; /Int32; /Int64; /Int; /UInt8; /UInt16; /UInt32; /UInt64; /UInt; /Float32; /Float64; /String; /memory_ops; /process; /system; builtin) : @(import(\"{}\")) in let memory_builtin : @(import(\"{}\")) = (= Addr, memory_ops) in let (/memory; /scalar) = memory_ops in {body}\n",
+                self.workspace.join("lib/std/primitive/package.zy").display(),
                 self.workspace.join("lib/std/builtin.zy").display(),
+                self.workspace.join("lib/std/builtin/memory.zy").display(),
             ),
         )
         .unwrap();
@@ -302,7 +304,7 @@ let failed = { fn (_ : Int) (_ : String) => ! process/exit 42 } in
 "#;
     let body = format!(
         "let (/make = make_bytes) = @(import(\"{}\")) in \
-         let (/Bytes; /bytes) = make_bytes builtin in {body}",
+         let (/Bytes; /bytes) = make_bytes memory_builtin in {body}",
         fixture.workspace.join("lib/std/text/bytes.zy").display(),
     );
     for backend in ["interpreter", "exe", "wasm-sps"] {
@@ -415,13 +417,13 @@ fn integer_decoding_rejects_noncanonical_storage_on_every_backend() {
         let body = format!(
             r#"
 let (/make = make_bytes) = @(import("{root}/lib/std/text/bytes.zy")) in
-let (/Bytes; /bytes; byte_package) = make_bytes builtin in
-let codecs = (builtin |> (@(import("{root}/lib/std/numeric/codecs.zy")))) byte_package in
+let (/Bytes; /bytes; byte_package) = make_bytes memory_builtin in
+let codecs = (memory_builtin |> (@(import("{root}/lib/std/numeric/codecs.zy")))) byte_package in
 do prefix <- ! bytes/from_string "1234567";
 do high <- ! bytes/singleton {high};
 do invalid <- ! bytes/append prefix high;
 ! bytes/unsafe/with_window OS invalid {{ fn _ => ! process/exit 42 }} {{
-    fn address _ => ! numeric/{integer}/load_le OS address {{ fn _ => ! system/stdio/write_line "must not resume" {{ ! process/exit 0 }} }}
+    fn address _ => ! scalar/{integer}/load_le OS address {{ fn _ => ! system/stdio/write_line "must not resume" {{ ! process/exit 0 }} }}
 }}
 "#,
             root = fixture.workspace.display()
@@ -458,8 +460,8 @@ fn integer_parsing_and_byte_codecs_reject_out_of_range_values() {
     let body = format!(
         r#"
 let (/make = make_bytes) = @(import("{root}/lib/std/text/bytes.zy")) in
-let (/Bytes; /bytes; byte_package) = make_bytes builtin in
-let codecs = (builtin |> (@(import("{root}/lib/std/numeric/codecs.zy")))) byte_package in
+let (/Bytes; /bytes; byte_package) = make_bytes memory_builtin in
+let codecs = (memory_builtin |> (@(import("{root}/lib/std/numeric/codecs.zy")))) byte_package in
 do prefix <- ! bytes/from_string "1234567";
 {tail}
 "#,

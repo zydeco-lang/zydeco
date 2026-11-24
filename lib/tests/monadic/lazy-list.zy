@@ -1,7 +1,8 @@
 -- Regression for #66: nominal lazy-list tails reinterpret Ret through State.
-param (/numeric; /stdio; /process; builtin) : @(import(
+param (/stdio; /process; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
+let (/numeric) = @(import("../../std/primitive/package.zy")) in
 let monadic_basis = @(import("../../std/effect/monad.zy")) in
 let (/Monad; /Algebra) = monadic_basis in
 let int = numeric/int in

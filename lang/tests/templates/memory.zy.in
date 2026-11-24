@@ -3,7 +3,7 @@ let (
   /Ptr; /fields; /records; /headers; /arrays; /views; /Slice; /slices;
   /Storage; /DynamicStorage; /Codec; /DynamicCodec; /storage; /codecs;
   /fixed; /dynamic; /allocation; /pointer; /raw
-) = builtin |> (@(import("${directory}/package.zy"))) in
+) = memory_builtin |> (@(import("${directory}/package.zy"))) in
 let (= Plan, = Layout, memory) = fixed in
 let (/Alloc; /heap) = allocation in
 let (/Fault) = @(import("${directory}/fault.zy")) in

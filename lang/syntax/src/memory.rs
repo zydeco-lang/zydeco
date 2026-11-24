@@ -1,6 +1,6 @@
 //! Scalar memory access contracts, independent of temporary value representation.
 
-use crate::{BuiltinValueRole, FloatOperation, FloatType, HostOp, IntegerOperation, IntegerType};
+use crate::{BuiltinValueRole, FloatType, HostOp, IntegerType, ScalarMemoryOp};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum MemoryScalar {
@@ -142,16 +142,16 @@ impl MemoryAccess {
 
     pub fn from_builtin(role: BuiltinValueRole) -> Option<Self> {
         let (scalar, kind) = match role {
-            | BuiltinValueRole::Integer(ty, IntegerOperation::LoadLe) => {
+            | BuiltinValueRole::Integer(ty, ScalarMemoryOp::LoadLe) => {
                 (MemoryScalar::Integer(ty), AccessKind::Load)
             }
-            | BuiltinValueRole::Integer(ty, IntegerOperation::StoreLe) => {
+            | BuiltinValueRole::Integer(ty, ScalarMemoryOp::StoreLe) => {
                 (MemoryScalar::Integer(ty), AccessKind::Store)
             }
-            | BuiltinValueRole::Float(ty, FloatOperation::LoadLe) => {
+            | BuiltinValueRole::Float(ty, ScalarMemoryOp::LoadLe) => {
                 (MemoryScalar::Float(ty), AccessKind::Load)
             }
-            | BuiltinValueRole::Float(ty, FloatOperation::StoreLe) => {
+            | BuiltinValueRole::Float(ty, ScalarMemoryOp::StoreLe) => {
                 (MemoryScalar::Float(ty), AccessKind::Store)
             }
             | BuiltinValueRole::MemoryLoadAddr => (MemoryScalar::Address, AccessKind::Load),
@@ -164,16 +164,16 @@ impl MemoryAccess {
     pub fn builtin(self) -> BuiltinValueRole {
         match (self.scalar, self.kind) {
             | (MemoryScalar::Integer(ty), AccessKind::Load) => {
-                BuiltinValueRole::Integer(ty, IntegerOperation::LoadLe)
+                BuiltinValueRole::Integer(ty, ScalarMemoryOp::LoadLe)
             }
             | (MemoryScalar::Integer(ty), AccessKind::Store) => {
-                BuiltinValueRole::Integer(ty, IntegerOperation::StoreLe)
+                BuiltinValueRole::Integer(ty, ScalarMemoryOp::StoreLe)
             }
             | (MemoryScalar::Float(ty), AccessKind::Load) => {
-                BuiltinValueRole::Float(ty, FloatOperation::LoadLe)
+                BuiltinValueRole::Float(ty, ScalarMemoryOp::LoadLe)
             }
             | (MemoryScalar::Float(ty), AccessKind::Store) => {
-                BuiltinValueRole::Float(ty, FloatOperation::StoreLe)
+                BuiltinValueRole::Float(ty, ScalarMemoryOp::StoreLe)
             }
             | (MemoryScalar::Address, AccessKind::Load) => BuiltinValueRole::MemoryLoadAddr,
             | (MemoryScalar::Address, AccessKind::Store) => BuiltinValueRole::MemoryStoreAddr,
@@ -240,13 +240,14 @@ mod tests {
                 );
             }
         }
+        assert_eq!(MemoryAccess::from_builtin(BuiltinValueRole::MemoryOffset), None);
+        assert_eq!(MemoryAccess::from_builtin(BuiltinValueRole::Exit), None);
         assert_eq!(
-            MemoryAccess::from_builtin(BuiltinValueRole::Integer(
-                IntegerType::Int64,
-                IntegerOperation::Add
-            )),
+            MemoryAccess::from_host(HostOp::Intrinsic(crate::IntrinsicOp::Integer(
+                crate::IntegerType::Int64,
+                crate::IntegerIntrinsicOp::Add
+            ))),
             None
         );
-        assert_eq!(MemoryAccess::from_builtin(BuiltinValueRole::MemoryOffset), None);
     }
 }
