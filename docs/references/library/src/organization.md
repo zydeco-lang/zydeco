@@ -52,6 +52,15 @@ As a result, dependent modules accept only their capability root (`MemoryBuiltin
 of forwarding intermediate contract packages, while `std/memory` and `std` re-export the resulting sealed types
 as manifest witnesses (`(= Type as Type)`).
 
+Choosing between local `let` imports, `param val`/`fn` abstraction,
+and `seal` follows each component's dependency profile:
+
+| Component dependency profile | Binding mechanism | Rationale |
+| --- | --- | --- |
+| Canonical types, pure data, pure primitive ops, pure effects (`Bool`, `List`, `String`, `Int`, `StateT`, `NonDet`) | `let` + `@(import(...))` | One canonical meaning; nominal and transparent identities merge automatically across imports without wiring. |
+| Genuine multi-instantiation templates (`numeric/{integer,float}`, `MonadTrans`, `Writer` over `Monoid`, custom `Alloc`) | `fn` / `param val` with narrow signature | Definition-site abstraction is the intended parametricity boundary; canonical types remain concrete. |
+| Runtime capabilities and sealed invariants (`Builtin`, `Addr`, `OS`, `Bytes`, `memory/*`, `system/*`) | `param val` at capability roots with `seal` | Preserves explicit authority and representation opacity while sharing applicative identities across diamond imports. |
+
 ## Either Values
 
 The data library's shared [`Either L R`](../../../../lib/std/data/either.zy) represents a
