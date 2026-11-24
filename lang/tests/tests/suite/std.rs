@@ -91,17 +91,13 @@ impl RepresentationCase {
         let library = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lib/std");
         format!(
             r#"
-let (/BytesPackage; /make = make_bytes) = @(import("{library}/text/bytes.zy")) in
-let byte_package : BytesPackage Addr = make_bytes memory_builtin in
-let (/Bytes; /bytes) = byte_package in
-let (/Types; /make = make_types) = @(import("{library}/memory/types.zy")) in
-let type_package : Types Addr = make_types Addr in
-let (/Uninit; /Init; /Ptr; types) = type_package in
-let (/StoragePackage; /storage = storage_package) = @(import("{library}/memory/storage.zy")) in
-let (/Storage; /DynamicStorage; /SizeAlign) = storage_package in
-let (/FieldOperations; /make = make_fields) = @(import("{library}/memory/field.zy")) in
-let (= Field, = DynamicField, field_operations) = make_fields memory_builtin types in
-let _ : FieldOperations Uninit Init Ptr Field DynamicField = field_operations in
+let (/Bytes; /bytes) = memory_builtin |> (@(import("{library}/text/bytes.zy"))) in
+let (/Uninit; /Init; /Fields; /Ptr; types) = (@(import("{library}/memory/types.zy"))) Addr in
+let (/Storage; /DynamicStorage; /SizeAlign) = @(import("{library}/memory/storage.zy")) in
+let (/Field; /DynamicField; field_operations) = memory_builtin |> (@(import("{library}/memory/field.zy"))) in
+let (/Slice; slices) = memory_builtin |> (@(import("{library}/memory/slice.zy"))) in
+let (= Buffer, buffer) = memory_builtin |> (@(import("{library}/memory/buffer.zy"))) in
+let (/Path; /IoErrorKind; /IoError; system_pkg) = builtin |> (@(import("{library}/system/package.zy"))) in
 {body}
 "#,
             library = library.display(),
@@ -118,6 +114,11 @@ fn colocated_contracts_preserve_representation_opacity() {
         ("DynamicStorage Int", "SizeAlign"),
         ("Field Int Int", "val pi (_ : Unit) . Int"),
         ("DynamicField Int Int", "Int"),
+        ("Slice Int Init", "Ptr Int Init * Int"),
+        ("Buffer", "Addr * Int * Int"),
+        ("Path", "String"),
+        ("IoErrorKind", "Unit"),
+        ("IoError", "(#kind :: IoErrorKind) * (#message :: String)"),
     ] {
         let accepted = RepresentationCase::source(&format!(
             "let _ = val (value : {abstract_type}) => (value : {abstract_type}) in ! exit 0"
@@ -132,15 +133,85 @@ fn colocated_contracts_preserve_representation_opacity() {
 }
 
 #[test]
-fn colocated_factories_keep_independent_openings_distinct() {
-    SourceCase::assert_accepted(SourceCase::check_invariants(&RepresentationCase::source(
-        "let _ : Thk (Ret Bytes) = bytes/empty in ! exit 0",
-    )));
+fn applicative_sealing_unifies_stdlib_diamonds_and_preserves_isolation_and_generativity() {
+    let library = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lib/std");
+
+    let diamond = format!(
+        r#"
+let (/Bytes = StdBytes; /Buffer = StdBuffer; /Path = StdPath; /IoErrorKind = StdIoErrorKind; /IoError = StdIoError; /fs; /bytes = std_bytes; /buffer = std_buffer) =
+  builtin |> (@(import("{library}/std.zy")))
+in
+let (
+  /Uninit = MemUninit; /Init = MemInit; /Fields = MemFields; /Ptr = MemPtr; /Slice = MemSlice;
+  /Storage = MemStorage; /DynamicStorage = MemDynamicStorage; /Field = MemField; /DynamicField = MemDynamicField;
+  /storage = mem_storage; /slices = mem_slices; /fields = mem_fields
+) = memory_builtin |> (@(import("{library}/memory/package.zy"))) in
+let (/Bytes; /bytes = direct_bytes) = memory_builtin |> (@(import("{library}/text/bytes.zy"))) in
+let (/Uninit; /Init; /Fields; /Ptr) = (@(import("{library}/memory/types.zy"))) Addr in
+let (/Storage; /DynamicStorage; /constant; /runtime) = @(import("{library}/memory/storage.zy")) in
+let (/Field; /DynamicField) = memory_builtin |> (@(import("{library}/memory/field.zy"))) in
+let (/Slice) = memory_builtin |> (@(import("{library}/memory/slice.zy"))) in
+let (/Buffer) = memory_builtin |> (@(import("{library}/memory/buffer.zy"))) in
+let (/Path; /IoErrorKind; /IoError) = builtin |> (@(import("{library}/system/package.zy"))) in
+
+let _ = val (v : Bytes) => (v : StdBytes) in
+let _ = val (v : Buffer) => (v : StdBuffer) in
+let _ = val (v : Uninit) => (v : MemUninit) in
+let _ = val (v : Init) => (v : MemInit) in
+let _ = val (v : Fields Int Int) => (v : MemFields Int Int) in
+let _ = val (v : Ptr Int Init) => (v : MemPtr Int Init) in
+let _ = val (v : Storage Int) => (v : MemStorage Int) in
+let _ = val (v : DynamicStorage Int) => (v : MemDynamicStorage Int) in
+let _ = val (v : Field Int Int) => (v : MemField Int Int) in
+let _ = val (v : DynamicField Int Int) => (v : MemDynamicField Int Int) in
+let _ = val (v : Slice Int Init) => (v : MemSlice Int Init) in
+let _ = val (v : Path) => (v : StdPath) in
+let _ = val (v : IoErrorKind) => (v : StdIoErrorKind) in
+let _ = val (v : IoError) => (v : StdIoError) in
+
+do chunk <- ! direct_bytes/from_string "diamond";
+do len <- ! std_bytes/length chunk;
+do p <- ! fs/path "ok";
+! int/eq OS len 7 {{ ! exit 0 }} {{ ! exit 1 }}
+"#,
+        library = library.display(),
+    );
+    SourceCase::assert_accepted(SourceCase::check_invariants(&diamond));
+    SourceCase::assert_accepted(SourceCase::lower(&diamond));
+    SourceCase::assert_accepted(SourceCase::run(&diamond));
+
+    let isolated_addrs = format!(
+        r#"
+let make_types = @(import("{library}/memory/types.zy")) in
+let _ = fn (A1 : VType) (A2 : VType) =>
+  let (/Ptr = Ptr1) = make_types A1 in
+  let (/Ptr = Ptr2) = make_types A2 in
+  let _ = val (p : Ptr1 Int Unit) => (p : Ptr2 Int Unit) in
+  ret ()
+in
+! exit 0
+"#,
+        library = library.display(),
+    );
     SourceCase::assert_rejected(
-        SourceCase::check(&RepresentationCase::source(
-            "let (/Bytes = OtherBytes) = byte_package in \
-             let _ = val (value : Bytes) => (value : OtherBytes) in ! exit 0",
-        )),
+        SourceCase::check(&isolated_addrs),
+        TyckDiagnosticCode::TypeMismatch,
+    );
+
+    let generative_storage = RepresentationCase::source(
+        r#"
+let (/Storage; /constant) = @(import("{lib}/memory/storage.zy")) in
+match (constant/create 8 8, constant/create 8 8)
+| (+Right(/L = L1, s1), +Right(/L = L2, _)) =>
+  let (_ : Storage L2) = s1 in
+  ! exit 0
+| _ => ! exit 1
+end
+"#,
+    )
+    .replace("{lib}", &library.display().to_string());
+    SourceCase::assert_rejected(
+        SourceCase::check(&generative_storage),
         TyckDiagnosticCode::TypeMismatch,
     );
 }
@@ -202,6 +273,10 @@ fn retired_data_factories_and_bool_indexed_numeric_dictionaries_are_rejected() {
         "let (/make) = @(import(\"{library}/data/package.zy\")) in ! exit 0",
         "let (/make) = @(import(\"{library}/effect/nondet.zy\")) in ! exit 0",
         "let (/make) = @(import(\"{library}/memory/storage.zy\")) in ! exit 0",
+        "let (/StoragePackage) = @(import(\"{library}/memory/storage.zy\")) in ! exit 0",
+        "let (/Types) = (@(import(\"{library}/memory/types.zy\"))) Addr in ! exit 0",
+        "let (/FieldOperations) = memory_builtin |> (@(import(\"{library}/memory/field.zy\"))) in ! exit 0",
+        "let (/BytesPackage) = memory_builtin |> (@(import(\"{library}/text/bytes.zy\"))) in ! exit 0",
     ] {
         let source = body.replace("{library}", &library.display().to_string());
         SourceCase::assert_rejected(
@@ -251,10 +326,9 @@ fn memory_and_system_capabilities_bridge_through_builtin_and_share_bytes() {
     let library = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lib/std");
     let source = format!(
         r#"
-let (/BytesPackage; /make = make_bytes) = @(import("{library}/text/bytes.zy")) in
-let (/Bytes; /bytes; byte_package) : BytesPackage Addr = make_bytes memory_builtin in
+let (/Bytes; /bytes) = memory_builtin |> (@(import("{library}/text/bytes.zy"))) in
 let (/Path; /IoError; /fs; /process = sys_proc) =
-  (builtin |> (@(import("{library}/system/package.zy")))) byte_package in
+  builtin |> (@(import("{library}/system/package.zy"))) in
 do chunk <- ! bytes/from_string "bridge";
 let _ : Thk (Path -> Bytes -> Thk (Either IoError Unit -> OS) -> OS) = fs/write_bytes in
 do len <- ! bytes/length chunk;

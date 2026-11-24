@@ -1,12 +1,11 @@
 -- stage: run
 -- backends: all
 @[package(test(of(/std)))]
-let (/make = make_bytes) = @(import("../../std/text/bytes.zy")) in
 param (/Addr; /process; /memory_ops; builtin) : @(import(/std/builtin)) in
 let (/numeric; /text = _prim_text) = @(import(/std/primitive/ops)) in
 let (/string) = _prim_text in
 let memory_builtin : @(import(/std/builtin/memory)) = (= Addr, memory_ops) in
-let (/Bytes; /bytes) = memory_builtin |> make_bytes in
+let (/Bytes; /bytes) = memory_builtin |> (@(import("../../std/text/bytes.zy"))) in
 let (/Fault; native) = memory_builtin |> (@(import("../../std/memory/native.zy"))) in
 let int = numeric/int in
 let exit = process/exit in

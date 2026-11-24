@@ -1,11 +1,10 @@
-let (/make = make_bytes) = @(import("../../std/text/bytes.zy")) in
 param (/Addr; /process; /memory_ops; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
 let (/numeric) = @(import("../../std/primitive/package.zy")) in
 let memory_builtin : @(import("../../std/builtin/memory.zy")) = (= Addr, memory_ops) in
 begin
-  let (/Bytes; /bytes; byte_package) = memory_builtin |> make_bytes in
+  let (/Bytes; /bytes) = memory_builtin |> (@(import("../../std/text/bytes.zy"))) in
 
   let uint = numeric/uint that
   let zero = (@(ffi(c, library("zyffi_boundary"), symbol("zyffi_zero"))) : Thk (Ret UInt)) that

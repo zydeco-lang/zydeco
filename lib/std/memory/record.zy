@@ -1,22 +1,16 @@
 -- replace requires the same projected child after its state transition; aliases remain manual.
 
-let (/Types) = @(import("types.zy")) in
-let (/FieldOperations) = @(import("field.zy")) in
-let (/StoragePackage) = @(import("storage.zy")) in
-let (/Codec) = @(import("codecs.zy")) in
 let (/Either) = @(import("../data/either.zy")) in
 let (/Error) = @(import("layout-error.zy")) in
 begin
   param val (/Addr; /memory; builtin) : @(import(
     "../builtin/memory.zy"
   )) in
-  param val (/Uninit; /Init; /Fields; /Ptr; /unsafe; types) : Types Addr in
-  param val Field : VType -> VType -> VType in
-  param val DynamicField : VType -> VType -> VType in
-  param val (/constant = /unsafe = field_unsafe) : FieldOperations Uninit
-    Init Ptr Field DynamicField in
-  param val (/Storage; /constant) : StoragePackage in
-  let Codec = Codec Uninit Init Ptr in
+  let (/Uninit; /Init; /Fields; /Ptr; /unsafe) = (@(import("types.zy"))) Addr in
+  let (/Field; /DynamicField; field_ops) = builtin |> (@(import("field.zy"))) in
+  let (/constant = /unsafe = field_unsafe) = field_ops in
+  let (/Storage; /constant) = @(import("storage.zy")) in
+  let (/Codec; _) = builtin |> (@(import("codecs.zy"))) in
 
   let size = @(import("size.zy")) in
   let compare = @(intrinsic(val/int/compare)) in

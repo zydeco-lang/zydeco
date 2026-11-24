@@ -1,7 +1,6 @@
-let (/BytesPackage) = @(import("../std/text/bytes.zy")) in
 param val (/Addr; builtin) : @(import("../std/builtin/memory.zy")) in
 begin
-  param val (/Bytes; /bytes) : BytesPackage Addr in
+  let (/Bytes; /bytes) = builtin |> (@(import("../std/text/bytes.zy"))) in
   let Window = Addr in
   let hash32 : Thk (Window -> Int -> UInt32 -> Ret UInt32) =
     @(ffi(c, library("xxhash"), symbol("XXH32")))

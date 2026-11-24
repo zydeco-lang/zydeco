@@ -1,50 +1,43 @@
 @[package(library, name(std/memory))]
-let (/make = make_types) = @(import("types.zy")) in
-let (/storage = storage_package) = @(import("storage.zy")) in
-let (/make = make_codecs) = @(import("codecs.zy")) in
-let (/make = make_field) = @(import("field.zy")) in
-let (/make = make_allocation) = @(import("allocation.zy")) in
 begin
   param val (/Addr; builtin) : @(import("../builtin/memory.zy")) that
-  let (/Uninit; /Init; /Fields; /Ptr; /unsafe; types) = make_types Addr in
+  let (/Uninit; /Init; /Fields; /Ptr; /unsafe) = (@(import("types.zy"))) Addr in
   let (
     /Storage;
     /DynamicStorage;
     /SizeAlign;
     /constant = storage_constant;
-    /runtime = storage_runtime;
-    storage
+    /runtime = storage_runtime
   )
   =
-    storage_package
+    @(import("storage.zy"))
   in
-  let (/Codec; /DynamicCodec; /materialize = materialize_codec; /unsafe = codec_unsafe) = (
-    builtin |> make_codecs
-  ) types in
-  let (= Field, = DynamicField, field_ops) = (builtin |> make_field) types in
+  let (/Codec; /DynamicCodec; /materialize = materialize_codec; /unsafe = codec_unsafe) =
+    builtin |> (@(import("codecs.zy")))
+  in
+  let (= Field, = DynamicField, field_ops) = builtin |> (@(import("field.zy"))) in
   let fields = field_ops/constant in
   let runtime_fields = field_ops/runtime in
-  let headers = (builtin |> (@(import("header.zy")))) types Field DynamicField field_ops storage in
-  let records = (builtin |> (@(import("record.zy")))) types Field DynamicField field_ops storage in
-  let product_codec = (builtin |> (@(import("product-codec.zy")))) types Field DynamicField
-    field_ops in
-  let arrays = (builtin |> (@(import("array.zy")))) types storage in
-  let views = (builtin |> (@(import("view.zy")))) types storage in
-  let fixed = (builtin |> (@(import("layout.zy")))) types storage in
-  let dynamic = (builtin |> (@(import("dynamic-layout.zy")))) types storage in
-  let allocation = (builtin |> make_allocation) types storage in
-  let (= Slice, slices) = (builtin |> (@(import("slice.zy")))) types storage in
+  let headers = builtin |> (@(import("header.zy"))) in
+  let records = builtin |> (@(import("record.zy"))) in
+  let product_codec = builtin |> (@(import("product-codec.zy"))) in
+  let arrays = builtin |> (@(import("array.zy"))) in
+  let views = builtin |> (@(import("view.zy"))) in
+  let fixed = builtin |> (@(import("layout.zy"))) in
+  let dynamic = builtin |> (@(import("dynamic-layout.zy"))) in
+  let allocation = builtin |> (@(import("allocation.zy"))) in
+  let (= Slice, slices) = builtin |> (@(import("slice.zy"))) in
   let raw = builtin |> (@(import("native.zy"))) in
   pack
-    (= Uninit : VType) is Uninit
-    (= Init : VType) is Init
-    (= Field : VType -> VType -> VType) is Field
-    (= DynamicField : VType -> VType -> VType) is DynamicField
-    (= Fields : VType -> VType -> VType) is Fields
-    (= Ptr : VType -> VType -> VType) is Ptr
-    (= Slice : VType -> VType -> VType) is Slice
-    (= Storage : VType -> VType) is Storage
-    (= DynamicStorage : VType -> VType) is DynamicStorage
+    (= Uninit as Uninit)
+    (= Init as Init)
+    (= Field as Field)
+    (= DynamicField as DynamicField)
+    (= Fields as Fields)
+    (= Ptr as Ptr)
+    (= Slice as Slice)
+    (= Storage as Storage)
+    (= DynamicStorage as DynamicStorage)
     (= SizeAlign as SizeAlign)
     (= Codec as Codec)
     (= DynamicCodec as DynamicCodec)

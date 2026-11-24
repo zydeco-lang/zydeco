@@ -40,12 +40,11 @@ impl ForeignExamples {
         let library = Self::library();
         format!(
             r#"
-let (/make = make_bytes) = @(import("{library}/std/text/bytes.zy")) in
-let (/Bytes; /bytes; byte_package) = make_bytes memory_builtin in
+let (/Bytes; /bytes) = memory_builtin |> (@(import("{library}/std/text/bytes.zy"))) in
 let (/Uninit; /Init; /Ptr; /fixed; /allocation; /pointer) = memory_builtin |> (@(import("{library}/std/memory/package.zy"))) in
 let (= Plan, = Layout, memory) = fixed in
 let (/Alloc; /heap) = allocation in
-let decode = (memory_builtin |> (@(import("{library}/tests/ffi/record-input.zy")))) byte_package in
+let decode = memory_builtin |> (@(import("{library}/tests/ffi/record-input.zy"))) in
 let Record = UInt8 * UInt32 in
 let fail = {{ ! exit 1 }} in
 match memory/product UInt8 UInt32 memory/uint8 memory/uint32

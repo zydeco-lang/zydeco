@@ -1,17 +1,15 @@
-let (/make = make_bytes) = @(import("../../std/text/bytes.zy")) in
 let (/numeric) = @(import("../../std/primitive/package.zy")) in
 param (/Addr; /memory_ops; /process; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
-let memory_builtin : @(import("../../std/builtin/memory.zy")) = (= Addr, memory_ops) in
 begin
   let memory_builtin : @(import("../../std/builtin/memory.zy")) = (= Addr, memory_ops) in
   let make_xxhash = @(import("../../ffi/xxhash.zy")) that
 
-  let (/Bytes; /bytes; byte_package) = memory_builtin |> make_bytes in
+  let (/Bytes; /bytes) = memory_builtin |> (@(import("../../std/text/bytes.zy"))) in
 
   let uint32 = numeric/uint32 that
-  let (/xxh32; /xxh64; /xxh3_64bits) = (memory_builtin |> make_xxhash) byte_package in
+  let (/xxh32; /xxh64; /xxh3_64bits) = memory_builtin |> make_xxhash in
 
   do input <- ! bytes/from_string "hello";
   do actual <- ! xxh32 input 0;

@@ -1,16 +1,42 @@
 -- A slice carries only a typed pointer and a runtime element count.
 -- The caller guarantees allocation extent, element stride, state, and alias validity.
 
-let (/Types) = @(import("types.zy")) in
-let (/StoragePackage) = @(import("storage.zy")) in
 let (/Fault) = @(import("fault.zy")) in
 let (/numeric) = @(import("../primitive/package.zy")) in
 begin
   param val (/Addr; builtin) : @(import(
     "../builtin/memory.zy"
   )) in
-  param val (/Uninit; /Init; /Ptr; /unsafe; types) : Types Addr in
-  param val (/Storage; /DynamicStorage; storage) : StoragePackage in
+  let (/Uninit; /Init; /Ptr; /unsafe) = (@(import("types.zy"))) Addr in
+  let (/Storage; /DynamicStorage; storage) = @(import("storage.zy")) in
+  let SliceSig =
+    exists (= Slice : VType -> VType -> VType) .
+        (#length :: val pi (L : VType) (S : VType) (slice : Slice L S) . Int)
+      * (
+          #for_layout :: val pi (L : VType) (layout : Storage L) .
+            (
+              #unsafe :: #at :: Thk (
+                forall (S : VType) (R : CType) .
+                  Slice L S -> Int -> Thk (Fault -> R) -> Thk (Ptr L S -> R) -> R
+              )
+            )
+        )
+      * (
+          #for_dynamic_layout :: val pi (L : VType) (layout : DynamicStorage L) .
+            (
+              #unsafe :: #at :: Thk (
+                forall (S : VType) (R : CType) .
+                  Slice L S -> Int -> Thk (Fault -> R) -> Thk (Ptr L S -> R) -> R
+              )
+            )
+        )
+      * (
+          #unsafe :: #from_parts :: Thk (
+            forall (L : VType) (S : VType) (R : CType) .
+              Ptr L S -> Int -> Thk (Fault -> R) -> Thk (Slice L S -> R) -> R
+          )
+        )
+  in
 
   let int = numeric/int in
   let Slice (L : VType) (S : VType) = Ptr L S * Int in
@@ -23,31 +49,28 @@ begin
       ! int/lt R count 0 { ! no +Bounds() } { ! yes (pointer, count) }
   } in
   let (/Cps; /View; /fat; /as_cps; /counted; /dynamic_counted) =
-    (builtin |> (@(import("view.zy")))) types storage
+    builtin |> (@(import("view.zy")))
   in
-  let val for_layout (L : VType) (layout : Storage L) =
-    let at : Thk (
-      forall (S : VType) (R : CType) .
-        Slice L S -> Int -> Thk (Fault -> R) -> Thk (Ptr L S -> R) -> R
-    ) = {
-      fn S R slice index no yes =>
-        let view = as_cps (Ptr L S * Int) (Ptr L S * Int) (fat L S Int) in
-        ! (counted L S (Ptr L S * Int) layout view (slice, index)) R no yes
-    } in
-    (#unsafe = = at)
-  in
-  let val for_dynamic_layout (L : VType) (layout : DynamicStorage L) =
-    let at : Thk (
-      forall (S : VType) (R : CType) .
-        Slice L S -> Int -> Thk (Fault -> R) -> Thk (Ptr L S -> R) -> R
-    ) = {
-      fn S R slice index no yes =>
-        let view = as_cps (Ptr L S * Int) (Ptr L S * Int) (fat L S Int) in
-        ! (dynamic_counted L S (Ptr L S * Int) layout view (slice, index)) R no yes
-    } in
-    (#unsafe = = at)
-  in
-  pack (= Slice : VType -> VType -> VType) is Slice
-  where
-    (= length, = for_layout, = for_dynamic_layout, #unsafe = = from_parts) end
+  seal
+    (
+      = Slice,
+      = length,
+      #for_layout = val L layout =>
+        (
+          #unsafe = #at = {
+            fn S R slice index no yes =>
+              let view = as_cps (Ptr L S * Int) (Ptr L S * Int) (fat L S Int) in
+              ! (counted L S (Ptr L S * Int) layout view (slice, index)) R no yes
+          }
+        ),
+      #for_dynamic_layout = val L layout =>
+        (
+          #unsafe = #at = {
+            fn S R slice index no yes =>
+              let view = as_cps (Ptr L S * Int) (Ptr L S * Int) (fat L S Int) in
+              ! (dynamic_counted L S (Ptr L S * Int) layout view (slice, index)) R no yes
+          }
+        ),
+      #unsafe = = from_parts
+    ) : SliceSig
 end

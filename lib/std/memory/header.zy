@@ -1,19 +1,14 @@
 -- Recover both handle conventions from paths in one finalized enclosing layout.
 
-let (/Types) = @(import("types.zy")) in
-let (/FieldOperations) = @(import("field.zy")) in
-let (/StoragePackage) = @(import("storage.zy")) in
-let (/Codec) = @(import("codecs.zy")) in
 begin
   param val (/Addr; builtin) : @(import("../builtin/memory.zy")) in
-  param val (/Uninit; /Init; /Ptr; types) : Types Addr in
-  param val Field : VType -> VType -> VType in
-  param val DynamicField : VType -> VType -> VType in
-  param val (/constant = /offset) : FieldOperations Uninit Init Ptr Field
-    DynamicField in
-  param val (/Storage; /DynamicStorage; storage) : StoragePackage in
-  let Codec = Codec Uninit Init Ptr in
-  let (/Header; /unsafe = view) = (builtin |> (@(import("view.zy")))) types storage in
+  let (/Uninit; /Init; /Ptr; /unsafe = _; _) = (@(import("types.zy"))) Addr in
+  let (/Field; /DynamicField; /constant = /offset; /runtime = _; _) =
+    builtin |> (@(import("field.zy")))
+  in
+  let (/Storage; /DynamicStorage; /constant = _; /runtime = _; _) = @(import("storage.zy")) in
+  let (/Codec; _) = builtin |> (@(import("codecs.zy"))) in
+  let (/Header; /unsafe = view) = builtin |> (@(import("view.zy"))) in
   let val from_fields (Parent : VType) (Metadata : VType) (Payload : VType) (M : VType)
     (metadata : Codec Metadata M) (metadata_path : Field Parent Metadata) (
       payload_path : Field Parent Payload

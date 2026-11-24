@@ -1,7 +1,6 @@
 -- stage: run
 -- backends: all
 @[package(test(of(/std)))]
-let (/make = make_bytes) = @(import("../../std/text/bytes.zy")) in
 param (/Addr; /process; /memory_ops; builtin) : @(import(/std/builtin)) in
 let (/numeric) = @(import(/std/primitive/ops)) in
 let memory_builtin : @(import(/std/builtin/memory)) = (= Addr, memory_ops) in
@@ -15,9 +14,8 @@ begin
   let fail = { ! process/exit 1 } in
   let no = { fn (_ : Fault) => ! fail } in
 
-  let (/Bytes; /bytes; byte_package) = memory_builtin |> make_bytes in
-  let (= Buffer, buffer) = (memory_builtin |> (@(import("../../std/memory/buffer.zy"))))
-    byte_package in
+  let (/Bytes; /bytes) = memory_builtin |> (@(import("../../std/text/bytes.zy"))) in
+  let (= Buffer, buffer) = memory_builtin |> (@(import("../../std/memory/buffer.zy"))) in
   do first <- ! bytes/from_string "ab";
   do expected <- ! bytes/from_string "abc";
   ! buffer/allocate OS heap 4 no {

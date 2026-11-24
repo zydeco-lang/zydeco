@@ -1,10 +1,9 @@
 -- Collection and comparison conveniences over sealed runtime byte buffers.
-let (/BytesPackage) = @(import("bytes.zy")) in
 let (/List; /bool; /option; /list) = @(import("../data/package.zy")) in
 let (/int) = @(import("../numeric/package.zy")) in
 begin
-  param val Addr : VType that
-  param val (/Bytes; /bytes) : BytesPackage Addr in
+  param val (/Addr; builtin) : @(import("../builtin/memory.zy")) in
+  let (/Bytes; /bytes) = builtin |> (@(import("bytes.zy"))) in
   let ! compare (A : VType)
     (
       predicate : Thk (
