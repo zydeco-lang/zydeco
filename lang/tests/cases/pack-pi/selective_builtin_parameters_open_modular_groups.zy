@@ -7,13 +7,15 @@ begin
         (
           /VType = SelectedVType;
           /String = SelectedString;
-          /string;
+          /stdio;
+          /process;
           builtin
         ) : Builtin
       )
     =>
       let Selected : SelectedVType = SelectedString in
-      ! string/append "" ""
+      let message : Selected = "" in
+      ! stdio/write_line message { ! process/exit 0 }
   } that
 
   selective

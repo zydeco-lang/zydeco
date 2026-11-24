@@ -1333,23 +1333,26 @@ value
             .join("../../lib/std/data/package.zy")
             .canonicalize()
             .unwrap();
-        let source = std::fs::read_to_string(&path).unwrap();
-        let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
+        let source = concat!(
+            "let LongRecord (A : VType) (B : VType) =\n",
+            "  (#first_value :: A)\n",
+            "  * (#second_value :: B)\n",
+            "  * (#third_value :: A)\n",
+            "  * (#fourth_value :: B)\n",
+            "  * (#fifth_value :: A)\n",
+            "  * (#sixth_value :: B)\n",
+            "in\n",
+            "()\n",
+        );
+        let overrides = HashMap::from([(path.clone(), source.to_owned())]);
+        let (project, session) = ProjectState::load(&path, &overrides).unwrap();
         let long = project
-            .hover(
-                &session,
-                &path,
-                source_position(&source, "OptionModule"),
-                HoverOptions::default(),
-            )
+            .hover(&session, &path, source_position(source, "LongRecord"), HoverOptions::default())
             .unwrap();
         let HoverContents::Markup(long) = long.contents else {
             panic!("type hover should use markup content")
         };
-        assert_eq!(
-            long.value,
-            "```zydeco\nOptionModule : VType -> VType -> VType -> VType =\n  ...\n```"
-        );
+        assert_eq!(long.value, "```zydeco\nLongRecord : VType -> VType -> VType =\n  ...\n```");
     }
 
     #[test]
