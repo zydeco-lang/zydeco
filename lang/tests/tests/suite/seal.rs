@@ -328,3 +328,63 @@ ret ()
     );
     SourceCase::assert_rejected(SourceCase::check(&in_cbv), TyckDiagnosticCode::Expressivity);
 }
+
+#[test]
+fn seal_allows_unreduced_payload_calls_and_preserves_witness_opacity_in_val_pi() {
+    let unreduced_payload = r#"
+let with_param = val (f : val pi (_ : Int) . Int) =>
+  seal
+    (Int, (#zero = f 0, #read = { fn (x : Int) => ret x }))
+  : exists (T : VType) . (#zero :: T) * (#read :: Thk (T -> Ret Int))
+in
+let (T, (/zero = z; /read = read)) = with_param (val (x : Int) => x) in
+do n <- ! read z;
+! exit 0
+"#;
+    SourceCase::assert_accepted(SourceCase::check_invariants(unreduced_payload));
+    SourceCase::assert_accepted(SourceCase::lower(unreduced_payload));
+    SourceCase::assert_accepted(SourceCase::run(unreduced_payload));
+
+    let direct_manifest_rejected = r#"
+let sealed_pkg =
+  seal (#T = Int, #item = 42)
+  : exists (= T : VType) . (#item :: T)
+in
+let project = val ((/T; /item = x) : exists (= T : VType) . (#item :: T)) => x in
+let _ = project sealed_pkg in
+! exit 0
+"#;
+    SourceCase::assert_rejected(
+        SourceCase::check(direct_manifest_rejected),
+        TyckDiagnosticCode::TypeMismatch,
+    );
+
+    let val_pi_opacity_ok = r#"
+let sealed_pkg =
+  seal (#T = Int, #item = 42)
+  : exists (= T : VType) . (#item :: T)
+in
+let (/T = SealedT; /item = item) = sealed_pkg in
+let project = val ((/T; /item = x) : exists (= T : VType) . (#item :: T)) => x in
+let (ok : SealedT) = project (#T = SealedT, #item = item) in
+! exit 0
+"#;
+    SourceCase::assert_accepted(SourceCase::check_invariants(val_pi_opacity_ok));
+    SourceCase::assert_accepted(SourceCase::lower(val_pi_opacity_ok));
+    SourceCase::assert_accepted(SourceCase::run(val_pi_opacity_ok));
+
+    let val_pi_opacity_leak = r#"
+let sealed_pkg =
+  seal (#T = Int, #item = 42)
+  : exists (= T : VType) . (#item :: T)
+in
+let (/T = SealedT; /item = item) = sealed_pkg in
+let project = val ((/T; /item = x) : exists (= T : VType) . (#item :: T)) => x in
+let (leaked : Int) = project (#T = SealedT, #item = item) in
+! exit 0
+"#;
+    SourceCase::assert_rejected(
+        SourceCase::check(val_pi_opacity_leak),
+        TyckDiagnosticCode::TypeMismatch,
+    );
+}

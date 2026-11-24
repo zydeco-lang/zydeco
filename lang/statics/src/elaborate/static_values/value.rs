@@ -147,13 +147,13 @@ impl StaticElaborator<'_, '_> {
             | Value::VCons(fields) => {
                 let fields = fields
                     .into_iter()
-                    .map(|field| self.value(field, env))
+                    .map(|field| self.inspect_child(field, env))
                     .collect::<Result<Vec<_>>>()?;
                 let max_scope = fields.iter().map(|field| field.0.max_scope).max().unwrap_or(0);
                 Ok(self.make_value(source, ty, max_scope, ValueForm::Product(fields)))
             }
             | Value::Ctor(Ctor(name, payload)) => {
-                let payload = self.value(payload, env)?;
+                let payload = self.inspect_child(payload, env)?;
                 let max_scope = payload.0.max_scope;
                 let data = self.resolve_data_id(source, ty);
                 Ok(self.make_value(
@@ -164,11 +164,16 @@ impl StaticElaborator<'_, '_> {
                 ))
             }
             | Value::Named(Named(name, payload)) => {
-                let payload = self.value(payload, env)?;
+                let payload = self.inspect_child(payload, env)?;
                 let max_scope = payload.0.max_scope;
                 Ok(self.make_value(source, ty, max_scope, ValueForm::Named(name, payload)))
             }
-            | Value::Seal(inner) => self.value(inner, env),
+            | Value::Seal(inner) => {
+                if self.purpose != Purpose::Inspect {
+                    return self.value(inner, env);
+                }
+                self.inspect_seal(source, ty, inner, env)
+            }
             | Value::SCons(ConsN(prefix, payload)) => {
                 let prefix = prefix
                     .into_iter()
@@ -177,7 +182,7 @@ impl StaticElaborator<'_, '_> {
                         | StaticTermId::Kind(_) => Ok(witness),
                     })
                     .collect::<Result<Vec<_>>>()?;
-                let payload = self.value(payload, env)?;
+                let payload = self.inspect_child(payload, env)?;
                 let max_scope = payload.0.max_scope;
                 Ok(self.make_value(
                     source,
@@ -314,6 +319,86 @@ impl StaticElaborator<'_, '_> {
         } else {
             Ok(value)
         }
+    }
+
+    fn inspect_child(&mut self, value: ValueId, env: &Environment) -> Result<StaticValue> {
+        if self.purpose != Purpose::Inspect {
+            return self.value(value, env);
+        }
+        let saved_errors = self.tycker.errors.len();
+        match self.value(value, env) {
+            | Ok(value) => Ok(value),
+            | Err(_) => {
+                self.tycker.errors.truncate(saved_errors);
+                let ty = self.ty(self.tycker.statics.annotations_value[&value], env)?;
+                Ok(self.make_value(value, ty, 0, ValueForm::RuntimeTerm(Rc::new(Cell::new(None)))))
+            }
+        }
+    }
+
+    fn inspect_seal(
+        &mut self, source: ValueId, ty: TypeId, inner: ValueId, env: &Environment,
+    ) -> Result<StaticValue> {
+        let mut sealed_prefix = Vec::new();
+        let mut cursor = ty;
+        loop {
+            cursor = cursor.unroll(self.tycker)?;
+            match self.tycker.type_filled(&cursor)?.to_owned() {
+                | Type::ManifestKind(ManifestKind { definition, body, .. }) => {
+                    sealed_prefix.push(StaticTermId::Kind(definition));
+                    cursor = body;
+                }
+                | Type::Exists(exists) => match exists.mode {
+                    | ExistsMode::Manifest(definition) => {
+                        let introduced =
+                            exists.binder.pattern.introduce_payload(self.tycker, definition)?;
+                        sealed_prefix.push(StaticTermId::Type(introduced));
+                        cursor = exists
+                            .body
+                            .subst_abst(self.tycker, (exists.binder.witness, definition))?;
+                    }
+                    | ExistsMode::Abstract => break,
+                },
+                | _ => break,
+            }
+        }
+        let mut remaining = sealed_prefix.len();
+        let mut payload = self.inspect_child(inner, env)?;
+        while remaining > 0 {
+            let stripped = match &payload.0.form {
+                | ValueForm::Named(_, next) => Some((next.clone(), remaining)),
+                | ValueForm::Package(ConsN(inner_prefix, inner_payload))
+                    if inner_prefix.len() <= remaining =>
+                {
+                    Some((inner_payload.clone(), remaining - inner_prefix.len()))
+                }
+                | ValueForm::Package(ConsN(inner_prefix, inner_payload)) => {
+                    let tail_prefix = inner_prefix[remaining..].to_vec();
+                    let wrapped = self.make_value(
+                        inner_payload.0.source,
+                        inner_payload.0.ty,
+                        inner_payload.0.max_scope,
+                        ValueForm::Package(ConsN(tail_prefix, inner_payload.clone())),
+                    );
+                    Some((wrapped, 0))
+                }
+                | _ => None,
+            };
+            match stripped {
+                | Some((next_payload, next_remaining)) => {
+                    payload = next_payload;
+                    remaining = next_remaining;
+                }
+                | None => break,
+            }
+        }
+        let max_scope = payload.0.max_scope;
+        Ok(self.make_value(
+            source,
+            ty,
+            max_scope,
+            ValueForm::Package(ConsN(sealed_prefix, payload)),
+        ))
     }
 
     pub(super) fn project(
