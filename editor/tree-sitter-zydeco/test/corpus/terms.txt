@@ -784,3 +784,23 @@ Malformed metadata paths
             (meta_identifier
               (lower_identifier))
             (ERROR)))))))
+
+==================
+Seal expression
+==================
+
+seal (= T, #item = x) : Sig
+
+---
+
+(source_file
+  body: (seal_expression
+    term: (parenthesized_term
+      (punned_term
+        name: (upper_identifier))
+      (named_term
+        name: (field_identifier)
+        value: (variable
+          name: (lower_identifier))))
+    signature: (variable
+      name: (upper_identifier))))

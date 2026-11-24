@@ -41,6 +41,7 @@ const KEYWORDS = [
   'exists',
   'sigma',
   'pack',
+  'seal',
   'where',
   'is',
 ];
@@ -92,6 +93,7 @@ module.exports = grammar({
       $.do_expression,
       $.parameter_expression,
       $.context_binding,
+      $.seal_expression,
       $.metadata_expression,
     ),
 
@@ -403,6 +405,13 @@ module.exports = grammar({
     value_modifier: _ => 'val',
 
     recursion_modifier: _ => 'fix',
+
+    seal_expression: $ => prec.right(PREC.binding, seq(
+      'seal',
+      field('term', $._term),
+      ':',
+      field('signature', $._term),
+    )),
 
     metadata_expression: $ => prec.right(PREC.binding, choice(
       seq(

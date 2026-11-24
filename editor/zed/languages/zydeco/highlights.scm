@@ -84,6 +84,7 @@
   "exists"
   "sigma"
   "pack"
+  "seal"
   "where"
   "is"
 ] @keyword

@@ -82,7 +82,7 @@
         },
         {
           "name": "storage.modifier.zydeco",
-          "match": "\\b(as|fn|val|fix|pack|is)\\b"
+          "match": "\\b(as|fn|val|fix|pack|seal|is)\\b"
         },
         {
           "name": "keyword.declaration.zydeco",

@@ -100,6 +100,10 @@
         },
         {
           "type": "SYMBOL",
+          "name": "seal_expression"
+        },
+        {
+          "type": "SYMBOL",
           "name": "metadata_expression"
         }
       ]
@@ -1653,6 +1657,39 @@
       "type": "STRING",
       "value": "fix"
     },
+    "seal_expression": {
+      "type": "PREC_RIGHT",
+      "value": 1,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "STRING",
+            "value": "seal"
+          },
+          {
+            "type": "FIELD",
+            "name": "term",
+            "content": {
+              "type": "SYMBOL",
+              "name": "_term"
+            }
+          },
+          {
+            "type": "STRING",
+            "value": ":"
+          },
+          {
+            "type": "FIELD",
+            "name": "signature",
+            "content": {
+              "type": "SYMBOL",
+              "name": "_term"
+            }
+          }
+        ]
+      }
+    },
     "metadata_expression": {
       "type": "PREC_RIGHT",
       "value": 1,
@@ -2012,6 +2049,10 @@
               {
                 "type": "STRING",
                 "value": "pack"
+              },
+              {
+                "type": "STRING",
+                "value": "seal"
               },
               {
                 "type": "STRING",

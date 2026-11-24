@@ -180,6 +180,10 @@
         "named": true
       },
       {
+        "type": "seal_expression",
+        "named": true
+      },
+      {
         "type": "sigma_type",
         "named": true
       },
@@ -2129,6 +2133,32 @@
     }
   },
   {
+    "type": "seal_expression",
+    "named": true,
+    "fields": {
+      "signature": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_term",
+            "named": true
+          }
+        ]
+      },
+      "term": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_term",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "sigma_type",
     "named": true,
     "fields": {
@@ -2555,6 +2585,10 @@
   },
   {
     "type": "ret",
+    "named": false
+  },
+  {
+    "type": "seal",
     "named": false
   },
   {
