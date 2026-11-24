@@ -1,13 +1,11 @@
-let (/make = make_data) = @(import("../../std/data/package.zy")) in
-let (/make = make_nondet) = @(import("../../std/effect/nondet.zy")) in
+let (/Option; /List; /list) = @(import("../../std/data/package.zy")) in
+let nondet = @(import("../../std/effect/nondet.zy")) in
 param (/string; /numeric; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
-let (/Option; /List; /list; data_package) = builtin |> make_data in
-let nondet = (builtin |> make_nondet) data_package in
 let (/Monoid; writer) = @(import("../../std/effect/writer.zy")) in
 let optional = @(import("../../std/effect/option.zy")) in
-let (/render; /check) = (builtin |> (@(import("nondet-test-basis.zy")))) data_package in
+let (/render; /check) = @(import("nondet-test-basis.zy")) in
 let (/with_trace) = builtin |> (@(import("effect-test-basis.zy"))) in
 let output : Monoid String = (#empty = "", #append = string/append) in
 let (N, n) = nondet/instance in

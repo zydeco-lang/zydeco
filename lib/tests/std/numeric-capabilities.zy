@@ -8,7 +8,7 @@ begin
   let (/Bool; /Numeric; /bool; /int; /float64; /process; dictionaries) = builtin |> make_std in
   let int_raw = numeric/int in
   let ! multiply_add_equal (A : VType)
-    (dictionary : Numeric Bool A)
+    (dictionary : Numeric A)
     (left : A)
     (right : A)
     (offset : A)
@@ -19,7 +19,7 @@ begin
       ! dictionary/order/equality/eq total expected
   in
   let ! strictly_less (A : VType)
-    (dictionary : Numeric Bool A)
+    (dictionary : Numeric A)
     (left : A)
     (right : A)
   : Ret Bool = ! dictionary/order/lt left right in

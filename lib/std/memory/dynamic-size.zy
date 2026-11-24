@@ -2,7 +2,7 @@
 let (/Either) = @(import("../data/either.zy")) in
 let (/Error) = @(import("layout-error.zy")) in
 begin
-  param val (/numeric; builtin) : @(import("../builtin.zy")) in
+  let (/numeric) = @(import("../primitive/package.zy")) in
 
   let Checked = Either Error Int in
   let int = numeric/int in

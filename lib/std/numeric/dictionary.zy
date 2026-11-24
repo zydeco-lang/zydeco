@@ -10,21 +10,21 @@ begin
       (#one :: A)
     * (#mul :: Thk (A -> A -> Ret A))
   in
-  let PartialEquality (Bool : VType) (A : VType) =
+  let PartialEquality (A : VType) =
       (#eq :: Thk (A -> A -> Ret Bool))
     * (#ne :: Thk (A -> A -> Ret Bool))
   in
-  let PartialOrder (Bool : VType) (A : VType) =
-      (#equality :: PartialEquality Bool A)
+  let PartialOrder (A : VType) =
+      (#equality :: PartialEquality A)
     * (#lt :: Thk (A -> A -> Ret Bool))
     * (#le :: Thk (A -> A -> Ret Bool))
     * (#gt :: Thk (A -> A -> Ret Bool))
     * (#ge :: Thk (A -> A -> Ret Bool))
   in
-  let Numeric (Bool : VType) (A : VType) =
+  let Numeric (A : VType) =
       (#additive :: Additive A)
     * (#multiplicative :: Multiplicative A)
-    * (#order :: PartialOrder Bool A)
+    * (#order :: PartialOrder A)
   in
   pack
     (= Additive as Additive)

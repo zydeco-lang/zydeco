@@ -460,9 +460,11 @@ fn the_closed_view_exports_no_runtime_provider_or_operations() {
 #[test]
 fn provider_independent_libraries_need_no_manual_primitive_import() {
     for name in [
+        "primitive/package",
         "data/bool",
         "data/option",
         "data/either",
+        "data/package",
         "algebra/monoid",
         "effect/monad",
         "effect/transformer",
@@ -473,7 +475,15 @@ fn provider_independent_libraries_need_no_manual_primitive_import() {
         "effect/state",
         "effect/exception",
         "effect/state-exn",
+        "effect/nondet",
         "numeric/dictionary",
+        "numeric/integer",
+        "numeric/float",
+        "numeric/package",
+        "text/package",
+        "memory/size",
+        "memory/dynamic-size",
+        "memory/storage",
         "memory/types",
         "memory/shape",
         "memory/fault",

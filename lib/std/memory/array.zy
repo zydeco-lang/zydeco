@@ -15,7 +15,7 @@ begin
   param val (/Storage; /DynamicStorage; /constant; /runtime) : StoragePackage in
 
   let size = @(import("size.zy")) in
-  let dynamic_size = builtin |> (@(import("dynamic-size.zy"))) in
+  let dynamic_size = @(import("dynamic-size.zy")) in
   let (/Array; /make = fixed_core) = (builtin |> (@(import("array-core.zy")))) types Storage in
   let (/Array = RuntimeParts; /make = dynamic_core) = (builtin |> (@(import("array-core.zy"))))
     types DynamicStorage in

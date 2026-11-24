@@ -1,28 +1,26 @@
--- Shared observations for the search regressions; the caller forwards one List opening.
-let (/DataPackage) = @(import("../../std/data/package.zy")) in
+-- Shared observations for the search regressions.
+let (/List; /list) = @(import("../../std/data/package.zy")) in
+let (/numeric; /text) = @(import("../../std/primitive/package.zy")) in
+let string = text/string in
 begin
-  param val (/numeric; /string; builtin) : @(import("../../std/builtin.zy")) in
-  param val (/List; /list) : DataPackage in
-  begin
-    def ! render (values : List Int) : Ret String =
-      ! list/fold Int (Ret String) values { ret "" } {
-        fn value rest =>
-          do head <- ! numeric/int/to_string value;
-          do tail <- ! rest;
-          do separated <- ! string/append "," tail;
-          ! string/append head separated
-      }
-    that
-    def ! check (observation : Thk (Ret String)) (expected : String) (expected_trace : Int)
-      (read : Thk (Ret Int)) (reset : Thk (Ret Unit))
-    : Ret Int =
-        do _ <- ! reset;
-        do actual <- ! observation;
-        do trace <- ! read;
-        ! string/eq (Ret Int) actual expected {
-          ! numeric/int/eq (Ret Int) trace expected_trace { ret 0 } { ret 1 }
-        } { ret 1 }
-    that
-    (= render, = check)
-  end
+  def ! render (values : List Int) : Ret String =
+    ! list/fold Int (Ret String) values { ret "" } {
+      fn value rest =>
+        do head <- ! numeric/int/to_string value;
+        do tail <- ! rest;
+        do separated <- ! string/append "," tail;
+        ! string/append head separated
+    }
+  that
+  def ! check (observation : Thk (Ret String)) (expected : String) (expected_trace : Int)
+    (read : Thk (Ret Int)) (reset : Thk (Ret Unit))
+  : Ret Int =
+      do _ <- ! reset;
+      do actual <- ! observation;
+      do trace <- ! read;
+      ! string/eq (Ret Int) actual expected {
+        ! numeric/int/eq (Ret Int) trace expected_trace { ret 0 } { ret 1 }
+      } { ret 1 }
+  that
+  (= render, = check)
 end

@@ -17,7 +17,7 @@ begin
   let Codec = Codec Uninit Init Ptr in
   let DynamicCodec = DynamicCodec Uninit Init Ptr in
   let size = @(import("size.zy")) in
-  let dynamic_size = builtin |> (@(import("dynamic-size.zy"))) in
+  let dynamic_size = @(import("dynamic-size.zy")) in
   let val identity (A : VType) : View Ret A A = val value => { ret value } in
   let val as_cps (H : VType) (A : VType) (view : View Ret H A) : View Cps H A =
     val handle =>

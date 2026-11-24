@@ -36,13 +36,11 @@ begin
           )
     end
   in
-  let make =
+  let storage =
     -- Geometry is sealed after validation. A layout witness never identifies an allocation instance.
     begin
-      param val (/OS = _; builtin) : @(import("../builtin.zy")) in
-
       let size = @(import("size.zy")) in
-      let dynamic = builtin |> (@(import("dynamic-size.zy"))) in
+      let dynamic = @(import("dynamic-size.zy")) in
       let SizeAlign = (#size :: Int) * (#alignment :: Int) in
       let Storage (L : VType) = val pi (_ : Unit) . SizeAlign in
       let DynamicStorage (L : VType) = SizeAlign in
@@ -104,6 +102,6 @@ begin
   pack
     (= StoragePackage as StoragePackage)
   where
-    = make
+    = storage
   end
 end

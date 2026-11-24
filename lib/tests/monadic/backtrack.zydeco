@@ -2,14 +2,10 @@
 param (/numeric; /stdio; /process; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
-let (/make = make_data) = @(import("../../std/data/package.zy")) in
-let (/Bool; /List; /list; /bool; data_package) = make_data builtin in
+let (/List; /list; /bool) = @(import("../../std/data/package.zy")) in
 let (/Monad; /Algebra) = @(import("../../std/effect/monad.zy")) in
 let (/instance = ret_instance) = @(import("../../std/effect/ret.zy")) in
-let nondet =
-  let (/make = make_nondet) = @(import("../../std/effect/nondet.zy")) in
-  make_nondet builtin data_package
-in
+let nondet = @(import("../../std/effect/nondet.zy")) in
 let (N, n) = nondet/instance in
 do empty <- ! list/nil Int;
 do xs_tail <- ! list/cons Int 2 empty;

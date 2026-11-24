@@ -46,7 +46,7 @@ begin
     let (/Codec; /DynamicCodec; codecs) = (builtin |> make_codecs) types in
     let Representation = Representation DynamicStorage DynamicCodec in
     let Layout (A : VType) = Thk (forall (R : CType) . Thk R -> Thk (Representation A -> R) -> R) in
-    let size = builtin |> (@(import("dynamic-size.zy"))) in
+    let size = @(import("dynamic-size.zy")) in
     let ! make (A : VType) (R : CType) (count : Int) (alignment : Int)
       (codec : DynamicCodec Unit A) (no : Thk R) (yes : Thk (Representation A -> R))
     : R =

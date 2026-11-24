@@ -530,7 +530,23 @@ impl ModulePlan {
                 | _ => None,
             })
             .collect::<std::collections::BTreeSet<_>>();
-        let host_imports = builtins
+        let mut by_name = std::collections::BTreeMap::new();
+        let mut unique_roles = Vec::new();
+        let mut host_functions = std::collections::HashMap::new();
+        for role in builtins {
+            let host_name = role.host_name();
+            let index = match by_name.get(&host_name) {
+                | Some(&index) => index,
+                | None => {
+                    let index = unique_roles.len();
+                    by_name.insert(host_name, index);
+                    unique_roles.push(role);
+                    index
+                }
+            };
+            host_functions.insert(role, index);
+        }
+        let host_imports = unique_roles
             .iter()
             .copied()
             .enumerate()
@@ -548,8 +564,6 @@ impl ModulePlan {
                 })
             })
             .collect::<Result<Vec<_>, EmitError>>()?;
-        let host_functions =
-            builtins.into_iter().enumerate().map(|(index, role)| (role, index)).collect();
         let import_count = first_host_function
             .checked_add(Limits::u32(host_imports.len(), "host import count")?)
             .ok_or(WasmEmitError::Limit { what: "host import count", value: host_imports.len() })?;

@@ -1,12 +1,8 @@
 @[package(library, name(std/numeric))]
-let (/DataPackage) = @(import("../data/package.zy")) in
+let (/numeric) = @(import("../primitive/package.zy")) in
+let (/make = make_integer) = @(import("integer.zy")) in
+let (/make = make_float) = @(import("float.zy")) in
 begin
-  param val (
-    (/numeric) : @(import("../builtin.zy")),
-    (/bool) : DataPackage
-  ) that
-  let (/make = make_integer) = @(import("integer.zy")) that
-  let (/make = make_float) = @(import("float.zy")) that
   let int8 = numeric/int8 in
   let int16 = numeric/int16 in
   let int32 = numeric/int32 in
@@ -21,7 +17,6 @@ begin
   let float64 = numeric/float64 in
   let (/operations = int8_module; /dictionary = int8_dictionary) =
     (
-      bool,
       (
         #add = int8/add,
         #sub = int8/sub,
@@ -39,7 +34,6 @@ begin
   in
   let (/operations = int16_module; /dictionary = int16_dictionary) =
     (
-      bool,
       (
         #add = int16/add,
         #sub = int16/sub,
@@ -57,7 +51,6 @@ begin
   in
   let (/operations = int32_module; /dictionary = int32_dictionary) =
     (
-      bool,
       (
         #add = int32/add,
         #sub = int32/sub,
@@ -75,7 +68,6 @@ begin
   in
   let (/operations = int64_module; /dictionary = int64_dictionary) =
     (
-      bool,
       (
         #add = int64/add,
         #sub = int64/sub,
@@ -93,7 +85,6 @@ begin
   in
   let (/operations = int_module; /dictionary = int_dictionary) =
     (
-      bool,
       (
         #add = int/add,
         #sub = int/sub,
@@ -111,7 +102,6 @@ begin
   in
   let (/operations = uint8_module; /dictionary = uint8_dictionary) =
     (
-      bool,
       (
         #add = uint8/add,
         #sub = uint8/sub,
@@ -129,7 +119,6 @@ begin
   in
   let (/operations = uint16_module; /dictionary = uint16_dictionary) =
     (
-      bool,
       (
         #add = uint16/add,
         #sub = uint16/sub,
@@ -147,7 +136,6 @@ begin
   in
   let (/operations = uint32_module; /dictionary = uint32_dictionary) =
     (
-      bool,
       (
         #add = uint32/add,
         #sub = uint32/sub,
@@ -165,7 +153,6 @@ begin
   in
   let (/operations = uint64_module; /dictionary = uint64_dictionary) =
     (
-      bool,
       (
         #add = uint64/add,
         #sub = uint64/sub,
@@ -183,7 +170,6 @@ begin
   in
   let (/operations = uint_module; /dictionary = uint_dictionary) =
     (
-      bool,
       (
         #add = uint/add,
         #sub = uint/sub,
@@ -201,7 +187,6 @@ begin
   in
   let (/operations = float32_module; /dictionary = float32_dictionary) =
     (
-      bool,
       (
         #add = float32/add,
         #sub = float32/sub,
@@ -218,7 +203,6 @@ begin
   in
   let (/operations = float64_module; /dictionary = float64_dictionary) =
     (
-      bool,
       (
         #add = float64/add,
         #sub = float64/sub,

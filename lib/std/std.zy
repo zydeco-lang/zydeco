@@ -1,33 +1,30 @@
 @[package(library, name(std))]
+let (/List; /bool; /option; /either; /list) = @(import("data/package.zy")) in
+let (
+  /int8; /int16; /int32; /int64; /int;
+  /uint8; /uint16; /uint32; /uint64; /uint;
+  /float32; /float64;
+  /dictionaries
+)
+=
+  @(import("numeric/package.zy"))
+in
+let (/char; /string) = @(import("text/package.zy")) in
 let (/make = make_bytes) = @(import("text/bytes.zy")) in
+let make_bytes_ops = @(import("text/bytes-ops.zy")) in
 let (/Additive; /Multiplicative; /PartialEquality; /PartialOrder; /Numeric) = @(import(
   "numeric/dictionary.zy"
 )) in
 begin
-  param val (/OS = _; builtin) : @(import("builtin.zy")) that
-  let (/make = make_data) = @(import("data/package.zy")) that
-  let make_text = @(import("text/package.zy")) that
+  param val (/Addr; /OS = _; builtin) : @(import("builtin.zy")) that
   let make_system = @(import("system/package.zy")) that
-  let make_numeric = @(import("numeric/package.zy")) that
 
-  let (/Bool; /Option; /Either; /List; /bool; /option; /either; /list; base) =
-    builtin |> make_data
-  in
   let (/Bytes; byte_package) = builtin |> make_bytes in
   let codecs = (builtin |> (@(import("numeric/codecs.zy")))) byte_package in
   let (= Buffer, buffer) = (builtin |> (@(import("memory/buffer.zy")))) byte_package in
-  let (/char; /string; /bytes; text) = (builtin |> make_text) byte_package base in
+  let bytes = make_bytes_ops Addr byte_package in
   let (/Path; /IoErrorKind; /IoError; /io; /fs; /stdio; /process; system) =
-    (builtin |> make_system) byte_package base
-  in
-  let (
-    /int8; /int16; /int32; /int64; /int;
-    /uint8; /uint16; /uint32; /uint64; /uint;
-    /float32; /float64;
-    /dictionaries
-  )
-  =
-    (builtin, base) |> make_numeric
+    (builtin |> make_system) byte_package
   in
   pack
     (= Bool as Bool)
@@ -35,7 +32,7 @@ begin
     (= Either as Either)
     (= Bytes : VType) is Bytes
     (= Buffer : VType) is Buffer
-    (= List : VType -> VType) is List
+    (= List as List)
     (= Path : VType) is Path
     (= IoErrorKind : VType) is IoErrorKind
     (= IoError : VType) is IoError

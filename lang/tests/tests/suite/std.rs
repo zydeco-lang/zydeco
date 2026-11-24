@@ -8,8 +8,7 @@ impl EitherCase {
         let library = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lib/std");
         format!(
             r#"
-let (/DataPackage; /make = make_data) = @(import("{library}/data/package.zy")) in
-let data_package : DataPackage = make_data builtin in
+let data_package = @(import("{library}/data/package.zy")) in
 let (/Either; /either) = data_package in
 {body}
 "#,
@@ -98,8 +97,7 @@ let (/Bytes; /bytes) = byte_package in
 let (/Types; /make = make_types) = @(import("{library}/memory/types.zy")) in
 let type_package : Types Addr = make_types Addr in
 let (/Uninit; /Init; /Ptr; types) = type_package in
-let (/StoragePackage; /make = make_storage) = @(import("{library}/memory/storage.zy")) in
-let storage_package : StoragePackage = make_storage builtin in
+let (/StoragePackage; /storage = storage_package) = @(import("{library}/memory/storage.zy")) in
 let (/Storage; /DynamicStorage; /SizeAlign) = storage_package in
 let (/FieldOperations; /make = make_fields) = @(import("{library}/memory/field.zy")) in
 let (= Field, = DynamicField, field_operations) = make_fields builtin types in
@@ -167,4 +165,59 @@ let _ : SameAdditive Int = dictionary in
     };
     SourceCase::assert_accepted(SourceCase::check_invariants(&source("0")));
     SourceCase::assert_rejected(SourceCase::check(&source("()")), TyckDiagnosticCode::TypeMismatch);
+}
+
+#[test]
+fn list_identity_is_shared_across_data_std_and_nondet() {
+    let library = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lib/std");
+    let source = format!(
+        r#"
+let (/List = DataList; /list) = @(import("{library}/data/package.zy")) in
+let (/List = StdList; /list = std_list) = builtin |> (@(import("{library}/std.zy"))) in
+let (/NonDet; nondet) = @(import("{library}/effect/nondet.zy")) in
+let (N, n) = nondet/instance in
+do nil <- ! list/nil Int;
+do items <- ! list/cons Int 1 nil;
+let same_data : DataList Int = items in
+let same_std : StdList Int = same_data in
+do observed <- ! nondet/observe_all Int {{ ! nondet/choose (N, n) Int same_std }};
+let observed_data : DataList Int = observed in
+let observed_std : StdList Int = observed_data in
+do count <- ! std_list/length Int observed_std;
+! int/eq OS count 1 {{ ! exit 0 }} {{ ! exit 1 }}
+"#,
+        library = library.display(),
+    );
+    SourceCase::assert_accepted(SourceCase::check_invariants(&source));
+    SourceCase::assert_accepted(SourceCase::lower(&source));
+    SourceCase::assert_accepted(SourceCase::run(&source));
+}
+
+#[test]
+fn retired_data_factories_and_bool_indexed_numeric_dictionaries_are_rejected() {
+    let library = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lib/std");
+    for body in [
+        "let (/DataPackage) = @(import(\"{library}/data/package.zy\")) in ! exit 0",
+        "let (/BoolModule) = @(import(\"{library}/data/package.zy\")) in ! exit 0",
+        "let (/make) = @(import(\"{library}/data/package.zy\")) in ! exit 0",
+        "let (/make) = @(import(\"{library}/effect/nondet.zy\")) in ! exit 0",
+        "let (/make) = @(import(\"{library}/memory/storage.zy\")) in ! exit 0",
+    ] {
+        let source = body.replace("{library}", &library.display().to_string());
+        SourceCase::assert_rejected(
+            SourceCase::check(&source),
+            TyckDiagnosticCode::MissingNamedField,
+        );
+    }
+    for body in [
+        "let (/PartialEquality) = @(import(\"{library}/numeric/dictionary.zy\")) in \
+         let _ = val (d : PartialEquality Bool Int) => d in ! exit 0",
+        "let (/PartialOrder) = @(import(\"{library}/numeric/dictionary.zy\")) in \
+         let _ = val (d : PartialOrder Bool Int) => d in ! exit 0",
+        "let (/Numeric) = @(import(\"{library}/numeric/dictionary.zy\")) in \
+         let _ = val (d : Numeric Bool Int) => d in ! exit 0",
+    ] {
+        let source = body.replace("{library}", &library.display().to_string());
+        SourceCase::assert_rejected(SourceCase::check(&source), TyckDiagnosticCode::KindMismatch);
+    }
 }

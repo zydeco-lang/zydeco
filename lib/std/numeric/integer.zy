@@ -1,4 +1,4 @@
-let (/BoolModule) = @(import("../data/package.zy")) in
+let (/bool) = @(import("../data/package.zy")) in
 let (/Numeric) = @(import("dictionary.zy")) in
 begin
   let IntegerModule (Integer : VType) =
@@ -52,12 +52,11 @@ begin
         (Scalar : VType)
       =
           (#operations :: IntegerModule Scalar)
-        * (#dictionary :: Numeric Bool Scalar)
+        * (#dictionary :: Numeric Scalar)
       in
       val pi
         (Scalar : VType)
         (
-          _ : BoolModule Bool,
           _ : PrimitiveIntegerModule Scalar,
           _ : Scalar,
           _ : Scalar
@@ -70,7 +69,6 @@ begin
     begin
       param val Scalar : VType that
       param val (
-        bool : BoolModule Bool,
         primitive : PrimitiveIntegerModule Scalar,
         zero : Scalar,
         one : Scalar
@@ -144,7 +142,7 @@ begin
         },
         #to_string = primitive/to_string
       ) in
-      let dictionary : Numeric Bool Scalar = (
+      let dictionary : Numeric Scalar = (
         #additive = (
           = zero,
           #add = operations/add,
