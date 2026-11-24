@@ -683,6 +683,7 @@ pub enum Value {
     Triv(Triv),
     VCons(Vec<ValueId>),
     SCons(ConsN<StaticTermId, ValueId>),
+    Seal(ValueId),
     Proj(Proj<ValueId, ResolvedField>),
     Lit(Literal),
 }

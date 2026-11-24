@@ -224,6 +224,7 @@ pub(crate) enum RelValue {
     Triv,
     VCons(Vec<RelId<ValueId>>),
     SCons(Vec<RelStaticTermId>, RelId<ValueId>),
+    Seal(RelId<ValueId>),
     Proj(RelId<ValueId>, RelResolvedField),
     Lit(Literal),
 }

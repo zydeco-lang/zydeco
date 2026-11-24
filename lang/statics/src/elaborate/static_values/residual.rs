@@ -20,10 +20,20 @@ impl StaticElaborator<'_, '_> {
             match self.tycker.statics.normalized_at(ty).cloned() {
                 | Some(Type::ValPi(_)) => false,
                 | Some(Type::Abst(witness)) => {
-                    match self.tycker.statics.seals.get(witness).copied() {
+                    match self
+                        .tycker
+                        .statics
+                        .seals
+                        .get(witness)
+                        .or_else(|| self.tycker.statics.opaque_representations.get(witness))
+                        .copied()
+                    {
                         | Some(body) => self.runtime_type_inner(body, visited),
                         | None => true,
                     }
+                }
+                | Some(Type::Abs(TypeAbstraction { body, .. })) => {
+                    self.runtime_type_inner(body, visited)
                 }
                 | Some(Type::Prod(Prod(fields))) => {
                     fields.into_iter().all(|ty| self.runtime_type_inner(ty, visited))
@@ -142,7 +152,13 @@ impl StaticElaborator<'_, '_> {
                 | Some(Type::Exists(exists)) => current = exists.body,
                 | Some(Type::ManifestKind(manifest)) => current = manifest.body,
                 | Some(Type::Abst(witness)) => {
-                    current = self.tycker.statics.seals.get(witness).copied()?;
+                    current = self
+                        .tycker
+                        .statics
+                        .seals
+                        .get(witness)
+                        .or_else(|| self.tycker.statics.opaque_representations.get(witness))
+                        .copied()?;
                 }
                 | _ => break,
             }
@@ -160,7 +176,13 @@ impl StaticElaborator<'_, '_> {
                 | Some(Type::Label(Label(_, inner)))
                 | Some(Type::Forall(Forall(_, inner))) => current = inner,
                 | Some(Type::Abst(witness)) => {
-                    current = self.tycker.statics.seals.get(witness).copied()?;
+                    current = self
+                        .tycker
+                        .statics
+                        .seals
+                        .get(witness)
+                        .or_else(|| self.tycker.statics.opaque_representations.get(witness))
+                        .copied()?;
                 }
                 | _ => break,
             }
@@ -192,7 +214,14 @@ impl StaticElaborator<'_, '_> {
                 | Some(Type::Exists(exists)) => current = exists.body,
                 | Some(Type::ManifestKind(manifest)) => current = manifest.body,
                 | Some(Type::Abst(witness)) => {
-                    let Some(next) = self.tycker.statics.seals.get(witness).copied() else {
+                    let Some(next) = self
+                        .tycker
+                        .statics
+                        .seals
+                        .get(witness)
+                        .or_else(|| self.tycker.statics.opaque_representations.get(witness))
+                        .copied()
+                    else {
                         break;
                     };
                     current = next;
@@ -655,6 +684,7 @@ impl FreeDefCollector<'_> {
             | Value::Named(Named(_, inner))
             | Value::Ctor(Ctor(_, inner))
             | Value::SCons(ConsN(_, inner))
+            | Value::Seal(inner)
             | Value::Proj(Proj(inner, _)) => self.visit_value(*inner),
             | Value::Thunk(Thunk(body)) => self.visit_compu(*body),
             | Value::VCons(fields) => {

@@ -250,6 +250,9 @@ impl ContextCollector {
             | Term::Ann(inner) => {
                 self.boundary_terms.contains(&inner.tm) || self.boundary_terms.contains(&inner.ty)
             }
+            | Term::Seal(inner) => {
+                self.boundary_terms.contains(&inner.tm) || self.boundary_terms.contains(&inner.ty)
+            }
             | Term::Cons(inner) => inner.iter().any(|item| self.boundary_terms.contains(item)),
             | Term::Abs(Abs(pats, body)) | Term::Pi(Pi(pats, body)) => {
                 pats.iter().any(|pat| self.boundary_pats.contains(pat))
@@ -353,6 +356,14 @@ impl ContextCollector {
             }
             | Term::Ann(inner) => {
                 let Ann { tm, ty } = inner;
+                self.coctxs_term_local.insert_new(term, {
+                    let co_tm = self.coctxs_term_local[tm].to_owned();
+                    let co_ty = self.coctxs_term_local[ty].to_owned();
+                    co_tm + co_ty
+                });
+            }
+            | Term::Seal(inner) => {
+                let Seal { tm, ty } = inner;
                 self.coctxs_term_local.insert_new(term, {
                     let co_tm = self.coctxs_term_local[tm].to_owned();
                     let co_ty = self.coctxs_term_local[ty].to_owned();

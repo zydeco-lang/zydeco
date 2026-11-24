@@ -436,11 +436,19 @@ impl InterfaceExtractor<'_> {
                 let s = self.ctx.statics;
                 let kind = self.kind_id(s.annotations_abst[&abst]);
                 let seal = s.seals.get(abst).copied().map(|t| self.type_id(t));
+                let opaque_representation =
+                    s.opaque_representations.get(abst).copied().map(|t| self.type_id(t));
                 let hint = s.abst_hints.get(abst).copied().map(|d| self.def_id(d));
                 let existential_skolem = s.existential_skolems.contains(abst);
                 let builtin_role = s.builtin_roles.witness(abst);
-                self.out.absts[slot as usize] =
-                    Some(RelAbstEntry { kind, seal, hint, existential_skolem, builtin_role });
+                self.out.absts[slot as usize] = Some(RelAbstEntry {
+                    kind,
+                    seal,
+                    opaque_representation,
+                    hint,
+                    existential_skolem,
+                    builtin_role,
+                });
             }
             if self.out.pending_defs.is_empty() && self.out.pending_absts.is_empty() {
                 break;
@@ -844,6 +852,7 @@ impl InterfaceExtractor<'_> {
                 st.into_iter().map(|x| self.static_term_id(x)).collect(),
                 self.value_id(v),
             ),
+            | Value::Seal(v) => RelValue::Seal(self.value_id(v)),
             | Value::Proj(Proj(v, field)) => RelValue::Proj(
                 self.value_id(v),
                 RelResolvedField {
@@ -1460,6 +1469,7 @@ impl BodyExtractor<'_> {
                         st.into_iter().map(|x| self.static_term(x)).collect(),
                         self.value(v),
                     ),
+                    | Value::Seal(v) => RelValue::Seal(self.value(v)),
                     | Value::Proj(Proj(v, field)) => RelValue::Proj(
                         self.value(v),
                         RelResolvedField {
@@ -1543,6 +1553,11 @@ impl BodyExtractor<'_> {
                 Some(RelAbstEntry {
                     kind: self.kind(s.annotations_abst[id]),
                     seal: s.seals.get(id).copied().map(|t| self.ty(t)),
+                    opaque_representation: s
+                        .opaque_representations
+                        .get(id)
+                        .copied()
+                        .map(|t| self.ty(t)),
                     hint: s.abst_hints.get(id).copied().map(&mut *def_cb),
                     existential_skolem: s.existential_skolems.contains(id),
                     builtin_role: s.builtin_roles.witness(id),

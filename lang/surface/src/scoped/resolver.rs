@@ -453,6 +453,11 @@ impl<O: ResolutionObserver> ResolveFolder<'_, O> {
                     let tm = self.lower_term(tm);
                     Ann { tm: tm?, ty: ty? }.into()
                 }
+                | t::Term::Seal(t::Seal { tm, ty }) => {
+                    let ty = self.lower_term(ty);
+                    let tm = self.lower_term(tm);
+                    Seal { tm: tm?, ty: ty? }.into()
+                }
                 | t::Term::Named(t::Named(name, inner)) => {
                     Named(name, self.lower_term(inner)?).into()
                 }

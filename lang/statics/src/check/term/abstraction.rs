@@ -54,8 +54,10 @@ impl TermChecker<'_> {
         let payload = Alloc::alloc(tycker, witness, payload_kind, &());
         let argument = pattern.introduce_payload(tycker, payload);
         let argument = argument?;
-        let body_env =
-            TyEnvT::new(binder.info.clone(), Assign(pattern, argument)).tyck(tycker, ())?.info;
+        let body_env = TyEnvT::new(binder.info.clone(), Assign(pattern, argument))
+            .tyck(tycker, ())?
+            .info
+            .with_val_witness(witness);
         let body = TyEnvT::new(body_env, source_body).tyck(tycker, Action::syn())?;
         let (body, codomain) = body.try_as_value(tycker, TyckError::SortMismatch)?;
         let classifier = ss::ValPi {
@@ -76,9 +78,13 @@ impl TermChecker<'_> {
         }
         let domain_kind = tycker.statics.type_kind(domain);
         Lub::lub(vtype, domain_kind, tycker)?;
-        let body = TyEnvT::new(binder.info.clone(), source_body).tyck(tycker, Action::syn())?;
-        let (body, codomain) = body.try_as_value(tycker, TyckError::SortMismatch)?;
         let witnesses = binder.package_telescope(tycker)?;
+        let body_env = binder
+            .info
+            .clone()
+            .with_val_witnesses(witnesses.iter().flat_map(|telescope| telescope.iter().copied()));
+        let body = TyEnvT::new(body_env, source_body).tyck(tycker, Action::syn())?;
+        let (body, codomain) = body.try_as_value(tycker, TyckError::SortMismatch)?;
         let witness_projection = PackageWitnessProjectionBuilder::build(pattern, tycker)?;
         let projected_arity = PackageWitnessProjectionBuilder::abstract_arity(&witness_projection);
         let witness_arity = witnesses.as_ref().map_or(0, ss::PackTelescope::len);
@@ -157,7 +163,10 @@ impl TermChecker<'_> {
         let payload = Alloc::alloc(tycker, expected_binder.witness, payload_kind, &());
         let argument = expected_binder.pattern.introduce_payload(tycker, payload);
         let argument = argument?;
-        let body_env = TyEnvT::new(binder.info, Assign(pattern, argument)).tyck(tycker, ())?.info;
+        let body_env = TyEnvT::new(binder.info, Assign(pattern, argument))
+            .tyck(tycker, ())?
+            .info
+            .with_val_witness(expected_binder.witness);
         let body = TyEnvT::new(body_env, source_body)
             .tyck(tycker, Action::ana_prepared(codomain.into(), &self.info))?;
         let (body, _) = body.try_as_value(tycker, TyckError::SortMismatch)?;
@@ -207,7 +216,10 @@ impl TermChecker<'_> {
                 "value-function package witness projection does not match its classifier",
             ))?
         }
-        let body = TyEnvT::new(binder.info, source_body)
+        let body_env = binder.info.with_val_witnesses(
+            actual_witnesses.iter().flat_map(|telescope| telescope.iter().copied()),
+        );
+        let body = TyEnvT::new(body_env, source_body)
             .tyck(tycker, Action::ana_prepared(codomain.into(), &self.info))?;
         let (body, _) = body.try_as_value(tycker, TyckError::SortMismatch)?;
         Ok((ss::ValBinder::Value(pattern), body))
@@ -265,7 +277,8 @@ impl TermChecker<'_> {
             }
             subst_vec
         };
-        let body_out_ann = self.mk_add(subst_vec, body).tyck(tycker, Action::syn())?;
+        let body_env = self.mk_add(subst_vec, ()).info.with_val_witness(abst);
+        let body_out_ann = TyEnvT::new(body_env, body).tyck(tycker, Action::syn())?;
         match body_out_ann {
             | TermAnnId::Type(ty, body_kd) => {
                 // a type function
@@ -312,15 +325,19 @@ impl TermChecker<'_> {
         ValuePatternShape::require_binding(tycker, pat, vpat)?;
         // A value-pattern abstraction is pure when its body is a value
         // and computational when its body is a computation.
-        let body_out_ann =
-            TyEnvT::new(pat_out_ann.info.clone(), body).tyck(tycker, Action::syn())?;
+        let witnesses = pat_out_ann.package_telescope(tycker)?;
+        let body_env = pat_out_ann
+            .info
+            .clone()
+            .with_val_witnesses(witnesses.iter().flat_map(|telescope| telescope.iter().copied()));
+        let body_out_ann = TyEnvT::new(body_env, body).tyck(tycker, Action::syn())?;
         match body_out_ann {
             | TermAnnId::Value(_, _) => tycker.err(TyckError::Expressivity(
                 "use `val` or block-form `param val` to introduce a pure value function",
             )),
             | TermAnnId::Compu(compu, body_ty) => {
                 let ctype = ss::CType.build(tycker, &self.info);
-                let ann_id = match pat_out_ann.package_telescope(tycker)? {
+                let ann_id = match witnesses {
                     | None => {
                         pat_out_ann.close_scope(tycker, body_ty)?;
                         Alloc::alloc(tycker, ss::Type::Arrow(ss::Arrow(ty, body_ty)), ctype, &())
@@ -365,6 +382,7 @@ impl TermChecker<'_> {
             }
             | None => self.info.clone(),
         };
+        let body_env = body_env.with_local_witness(witness);
         let body_out_ann = TyEnvT::new(body_env, body).tyck(tycker, Action::ana(kd_2.into()))?;
         let (body_out, body_kd) = body_out_ann.try_as_type(tycker, TyckError::SortMismatch)?;
         let ann = Alloc::alloc(tycker, ss::Arrow(binder_kd, body_kd), (), &());
@@ -440,7 +458,11 @@ impl TermChecker<'_> {
         let abst_ty = Alloc::alloc(tycker, source_binder.witness, payload_kind, &());
         let full_argument = source_binder.pattern.introduce_payload(tycker, abst_ty);
         let full_argument = full_argument?;
-        let env = self.mk(Assign(binder, full_argument)).tyck(tycker, ())?.info;
+        let env = self
+            .mk(Assign(binder, full_argument))
+            .tyck(tycker, ())?
+            .info
+            .with_val_witness(source_binder.witness);
         let body_out_ann = TyEnvT { info: env, inner: body }
             .tyck(tycker, Action::ana_prepared(ty_body.into(), &self.info))?;
         // throwing _body_ty away because it has been substituted

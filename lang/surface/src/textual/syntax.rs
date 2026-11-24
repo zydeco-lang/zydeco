@@ -317,12 +317,20 @@ pub struct CoMatcherParam {
     pub tail: TermId,
 }
 
+/// `seal term : Sig`
+#[derive(Clone, Debug)]
+pub struct Seal {
+    pub tm: TermId,
+    pub ty: TermId,
+}
+
 #[derive(From, Clone, Debug)]
 pub enum Term {
     Meta(MetaTerm<TermId>),
     SourceBoundary(SourceBoundary<TermId>),
     SignatureBoundary(SignatureBoundary<TermId>),
     Ann(Ann<TermId, TermId>),
+    Seal(Seal),
     Hole(Hole),
     Var(VarName),
     Named(Named<FieldName, TermId>),

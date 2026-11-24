@@ -67,6 +67,10 @@ impl Node<'_> {
                     child((*tm).into());
                     child((*ty).into());
                 }
+                | Term::Seal(Seal { tm, ty }) => {
+                    child((*tm).into());
+                    child((*ty).into());
+                }
                 | Term::Cons(terms) => terms.iter().for_each(|term| child((*term).into())),
                 | Term::Abs(Abs(patterns, body)) | Term::Pi(Pi(patterns, body)) => {
                     patterns.iter().for_each(|pattern| child((*pattern).into()));

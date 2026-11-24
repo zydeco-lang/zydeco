@@ -75,7 +75,13 @@ impl TypeResolver {
                     break;
                 }
                 | Some(ss::Type::Abst(candidate)) => {
-                    pending.extend(statics.seals.get(candidate).copied());
+                    pending.extend(
+                        statics
+                            .seals
+                            .get(candidate)
+                            .or_else(|| statics.opaque_representations.get(candidate))
+                            .copied(),
+                    );
                 }
                 | Some(ss::Type::Abs(ss::TypeAbstraction { binder, body }))
                 | Some(ss::Type::Forall(ss::Forall(binder, body))) => {
@@ -120,7 +126,12 @@ impl TypeResolver {
         &mut self, statics: &StaticsArena, source: SourceType, active: &mut FxHashSet<ss::TypeId>,
     ) -> Option<Head> {
         match statics.normalized_at(source.ty)? {
-            | ss::Type::Abst(witness) => match statics.seals.get(witness).copied() {
+            | ss::Type::Abst(witness) => match statics
+                .seals
+                .get(witness)
+                .or_else(|| statics.opaque_representations.get(witness))
+                .copied()
+            {
                 | Some(body) => {
                     let body = self.close(statics, body, &source.bindings);
                     self.reduce(statics, body, active)

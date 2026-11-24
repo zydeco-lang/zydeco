@@ -703,6 +703,10 @@ impl HashWriter {
                 self.u8(16);
                 self.str(&op.source_name());
             }
+            | RelValue::Seal(v) => {
+                self.u8(17);
+                self.rel_id(*v);
+            }
         }
     }
 
@@ -948,6 +952,7 @@ pub(crate) fn compute_accepted_digest(
     w.slice(&interface.absts, |w, a| {
         w.rel_id(a.kind);
         w.option(a.seal.as_ref(), |w, t| w.rel_id(*t));
+        w.option(a.opaque_representation.as_ref(), |w, t| w.rel_id(*t));
         w.option(a.hint.as_ref(), |w, d| w.rel_def(*d));
         w.bool(a.existential_skolem);
         w.option(a.builtin_role.as_ref(), |w, r| w.builtin_role(*r));

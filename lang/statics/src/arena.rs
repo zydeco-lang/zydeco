@@ -673,6 +673,11 @@ pub struct StaticsIndexes {
     pub absts: DenseArena<AbstId, ()>,
     /// the abstract types generated from sealed types
     pub seals: SecondaryMap<AbstId, TypeId>,
+    /// private representations behind applicatively sealed abstract type families
+    ///
+    /// Type checking never consults this map; only post-checking static elaboration,
+    /// protocol extraction, and separate-compilation transport unfold it.
+    pub opaque_representations: SecondaryMap<AbstId, TypeId>,
     /// name hints for abstract types
     pub abst_hints: SecondaryMap<AbstId, DefId>,
     /// abstract types introduced by existential elimination

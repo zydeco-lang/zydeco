@@ -92,6 +92,7 @@ impl TextArena {
                 | Term::Dtor(Dtor(inner, _))
                 | Term::Proj(Proj(inner, _)) => vec![(*inner).into()],
                 | Term::Ann(Ann { tm, ty }) => vec![(*tm).into(), (*ty).into()],
+                | Term::Seal(Seal { tm, ty }) => vec![(*tm).into(), (*ty).into()],
                 | Term::Arrow(Arrow(left, right)) => vec![(*left).into(), (*right).into()],
                 | Term::Paren(Paren(terms)) | Term::App(Appli(terms)) | Term::Prod(Prod(terms)) => {
                     terms.iter().copied().map(Into::into).collect()

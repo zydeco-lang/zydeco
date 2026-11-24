@@ -172,7 +172,7 @@ impl<'a> TextualBlockCollector<'a> {
             | t::Term::Ctor(t::Ctor(_, inner))
             | t::Term::Dtor(t::Dtor(inner, _))
             | t::Term::Proj(t::Proj(inner, _)) => self.scan_term(*inner, prelude, out),
-            | t::Term::Ann(t::Ann { tm, ty }) => {
+            | t::Term::Ann(t::Ann { tm, ty }) | t::Term::Seal(t::Seal { tm, ty }) => {
                 self.scan_term(*tm, prelude, out);
                 self.scan_term(*ty, prelude, out);
             }

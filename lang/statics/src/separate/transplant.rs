@@ -580,6 +580,9 @@ impl<'a> Relocator<'a> {
         if let Some(seal) = entry.seal {
             statics.seals.insert_new(id, self.ty(u, seal));
         }
+        if let Some(opaque) = entry.opaque_representation {
+            statics.opaque_representations.insert_new(id, self.ty(u, opaque));
+        }
         if let Some(hint) = entry.hint {
             statics.abst_hints.insert_new(id, self.def(u, hint));
         }
@@ -955,6 +958,7 @@ impl<'a> Relocator<'a> {
                 st.iter().map(|x| self.static_term(u, *x)).collect(),
                 self.value(u, *v),
             )),
+            | RelValue::Seal(v) => Value::Seal(self.value(u, *v)),
             | RelValue::Proj(v, field) => Value::Proj(Proj(
                 self.value(u, *v),
                 ResolvedField {

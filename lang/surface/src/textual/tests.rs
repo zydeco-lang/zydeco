@@ -8,12 +8,12 @@ use crate::{
     },
     scoped::{self, ResolveError, ResolveFolder, fmt::Formatter as ScopedFormatter},
     textual::syntax::{
-        Alias, Ann, Appli, BindingFlavor, Block, BuiltinRole, BuiltinValueRole, ContextBind, Ctor,
-        DefinitionMode, Dtor, EntityId, ExistentialParameter, Exists, Force, Hole, IntegerLiteral,
-        IntegerType, IntrinsicRole, Label, Literal, ManifestPattern, Meta, MetaNode, MetaTerm,
-        Named, Pack, Param, ParameterFlavor, Paren, Parser, PatId, Pattern, Pipeline,
-        PipelineDirection, Placement, Prod, Proj, ProjectionPattern, Return, SourceUnit, Term,
-        TermId, ViewPattern,
+        Abs, Alias, Ann, Appli, BindingFlavor, Block, BuiltinRole, BuiltinValueRole, ContextBind,
+        Ctor, DefinitionMode, Dtor, EntityId, ExistentialParameter, Exists, Force, Hole,
+        IntegerLiteral, IntegerType, IntrinsicRole, Label, Literal, ManifestPattern, Meta,
+        MetaNode, MetaTerm, Named, Pack, Param, ParameterFlavor, Paren, Parser, PatId, Pattern,
+        Pipeline, PipelineDirection, Placement, Prod, Proj, ProjectionPattern, Return, Seal,
+        SourceUnit, Term, TermId, ViewPattern,
     },
 };
 use std::{collections::HashMap, ops::Range};
@@ -2077,6 +2077,29 @@ fn text_block_attachment_stops_at_blank_lines_comments_arms_and_eof() {
             "--| Trailing EOF",
         ]
     );
+}
+
+#[test]
+fn parses_seal_expression_with_existential_signature_and_binder_precedence() {
+    let source = "val (x : Int) => seal (= T, x) : exists (= T : VType) . T";
+    let mut parser = Parser::new();
+    let term = StrictParser::source(source, &mut parser).map(|unit| unit.root).unwrap();
+    let Term::ValAbs(Abs(_, body)) = &parser.arena.terms[&term] else {
+        panic!("expected a value abstraction")
+    };
+    let Term::Seal(Seal { tm, ty }) = &parser.arena.terms[body] else {
+        panic!("expected `seal` in binder position")
+    };
+    assert!(matches!(parser.arena.terms[tm], Term::Paren(_)));
+    assert!(matches!(parser.arena.terms[ty], Term::Exists(_)));
+
+    let in_let = "let s = seal pkg : exists (T : VType) . T in s";
+    let mut parser = Parser::new();
+    let term = StrictParser::source(in_let, &mut parser).map(|unit| unit.root).unwrap();
+    let Term::ContextBind(ContextBind { binding, .. }) = &parser.arena.terms[&term] else {
+        panic!("expected `let` binding")
+    };
+    assert!(matches!(parser.arena.terms[&binding.bindee], Term::Seal(_)));
 }
 
 #[test]

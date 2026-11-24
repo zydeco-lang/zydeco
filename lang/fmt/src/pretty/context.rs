@@ -62,7 +62,8 @@ impl<'arena> GrammarContext<'arena> {
             | Term::Do(_)
             | Term::Let(_)
             | Term::Param(_)
-            | Term::ContextBind(_) => RenderedTermClass::Term(TermPrecedence::Binder),
+            | Term::ContextBind(_)
+            | Term::Seal(_) => RenderedTermClass::Term(TermPrecedence::Binder),
         }
     }
 

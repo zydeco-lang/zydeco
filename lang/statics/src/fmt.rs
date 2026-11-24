@@ -338,6 +338,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for ValueId {
                 | Value::Triv(value) => value.pretty(f),
                 | Value::VCons(value) => value.pretty(f),
                 | Value::SCons(value) => value.pretty(f),
+                | Value::Seal(value) => RcDoc::concat([RcDoc::text("seal "), value.pretty(f)]),
                 | Value::Proj(value) => value.pretty(f),
                 | Value::Lit(value) => value.pretty(f),
             }

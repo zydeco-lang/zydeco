@@ -261,6 +261,7 @@ impl TermChecker<'_> {
             | Tm::Sigma(term) => self.check_sigma(tycker, term, switch)?,
             | Tm::ManifestExists(term) => self.check_manifest_exists(tycker, *term, switch)?,
             | Tm::Pack(term) => self.check_pack(tycker, *term, switch)?,
+            | Tm::Seal(term) => self.check_seal(tycker, term, switch)?,
             | Tm::Thunk(term) => self.check_thunk(tycker, term, switch)?,
             | Tm::Force(term) => self.check_force(tycker, term, switch)?,
             | Tm::Ret(term) => self.check_ret(tycker, term, switch)?,

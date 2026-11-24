@@ -79,6 +79,8 @@ pub enum Tok<'input> {
     Where,
     #[token("is")]
     Is,
+    #[token("seal")]
+    Seal,
 
     #[regex(r"[\+-]?(?:[0-9]+\.[0-9]+(?:[eE][\+-]?[0-9]+)?|[0-9]+[eE][\+-]?[0-9]+)", priority = 4)]
     FloatLit(&'input str),
@@ -352,7 +354,8 @@ impl<'source> LexicalTokens<'source> {
             | Tok::Exists
             | Tok::Pack
             | Tok::Where
-            | Tok::Is => Role::Keyword,
+            | Tok::Is
+            | Tok::Seal => Role::Keyword,
             | Tok::FloatLit(_) | Tok::IntLit(_) | Tok::MalformedNumber(_) => Role::Number,
             | Tok::StrLit(_)
             | Tok::CharLit(_)

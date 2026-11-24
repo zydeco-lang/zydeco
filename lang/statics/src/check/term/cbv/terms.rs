@@ -348,6 +348,9 @@ impl TermChecker<'_> {
             // members are bound before any of them is checked, so a member can
             // mention itself, and that needs a judgment over the whole group.
             | Tm::RecGroup(group) => self.cbv_rec_group(tycker, scope, group, expected),
+            | Tm::Seal(_) => tycker.err(TyckError::Expressivity(
+                "applicative sealing is not supported inside `@[cbv]` blocks",
+            )),
             | Tm::SourceBoundary(_) => self.cbv_reject_import(tycker),
             // [[V]]v_term = ret [[V]]v
             | _ => self.cbv_value_as_term(tycker, scope, term, expected),

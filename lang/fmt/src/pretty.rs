@@ -1597,6 +1597,25 @@ impl<'arena> PrettyFormatter<'arena> {
                 *ty,
                 requirement != TermRequirement::Annotated,
             ),
+            | Term::Seal(Seal { tm, ty }) => {
+                let value = self.term_through_fragment(*tm, TermPrecedence::Binder);
+                let anchors = value.anchors;
+                let head = LayoutFragment {
+                    document: self.prefixed(
+                        term,
+                        "seal",
+                        BoundaryLayout::hanging("", self.indent()),
+                        value,
+                    ),
+                    anchors,
+                };
+                self.staged_join(
+                    head,
+                    self.term_through_fragment(*ty, TermPrecedence::Binder),
+                    StagedBoundary::Annotation,
+                )
+                .document
+            }
             | Term::Hole(_) => RcDoc::text("_"),
             | Term::Var(name) => self.variable(name),
             | Term::Named(Named(field, inner)) => self.named_term(term, field, *inner),
@@ -5555,6 +5574,39 @@ mod tests {
         let reparsed = ParsedSource::new(&inside_formatted);
         assert_eq!(inside.desugared_shape(), reparsed.desugared_shape());
         assert_eq!(inside_formatted, reparsed.render(LayoutIntentions::Preserve));
+    }
+
+    #[test]
+    fn seal_formatting_round_trips_and_parenthesizes_tighter_contexts() {
+        for (source, expected) in [
+            (
+                "val (x : Int) => seal (= T, x) : exists (= T : VType) . T",
+                "val (x : Int) => seal (= T, x) : exists (= T : VType) . T\n",
+            ),
+            (
+                "let s =\n  seal\n    begin\n      (= T, 1)\n    end : exists (= T : VType) . T\nin\ns",
+                concat!(
+                    "let s =\n",
+                    "  seal\n",
+                    "    begin\n",
+                    "      (= T, 1)\n",
+                    "    end : exists (= T : VType) . T\n",
+                    "in\n",
+                    "s\n",
+                ),
+            ),
+            (
+                "(seal (= T, 1) : exists (= T : VType) . T)/field",
+                "(seal (= T, 1) : exists (= T : VType) . T)/field\n",
+            ),
+        ] {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+            assert_eq!(formatted, expected, "source: {source}");
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+        }
     }
 
     #[test]

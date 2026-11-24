@@ -123,11 +123,13 @@ mod impls_skolem_scope {
 }
 
 /// Typing environment mapping definitions to annotations together with the
-/// existential witnesses visible at that point.
+/// existential witnesses and enclosing local/val type witnesses visible at that point.
 #[derive(Clone, Debug)]
 pub struct TyEnv {
     defs: Env<AnnId>,
     skolems: SkolemScope,
+    val_witnesses: rpds::VectorSync<AbstId>,
+    local_witnesses: rpds::HashTrieSetSync<AbstId>,
 }
 
 mod impls_ty_env {
@@ -135,15 +137,48 @@ mod impls_ty_env {
 
     impl TyEnv {
         pub fn new() -> Self {
-            Self { defs: Env::new(), skolems: SkolemScope::default() }
+            Self {
+                defs: Env::new(),
+                skolems: SkolemScope::default(),
+                val_witnesses: rpds::VectorSync::new_sync(),
+                local_witnesses: rpds::HashTrieSetSync::new_sync(),
+            }
         }
 
         pub fn skolem_scope(&self) -> &SkolemScope {
             &self.skolems
         }
 
+        pub fn val_witnesses(&self) -> impl Iterator<Item = AbstId> + '_ {
+            self.val_witnesses.iter().copied()
+        }
+
+        pub fn is_local_witness(&self, witness: &AbstId) -> bool {
+            self.local_witnesses.contains(witness)
+        }
+
         pub fn with_skolem(mut self, skolem: AbstId) -> Self {
             self.skolems = self.skolems.with(skolem);
+            self.local_witnesses.insert_mut(skolem);
+            self
+        }
+
+        pub fn with_val_witness(mut self, witness: AbstId) -> Self {
+            self.val_witnesses.push_back_mut(witness);
+            self.local_witnesses.insert_mut(witness);
+            self
+        }
+
+        pub fn with_val_witnesses(mut self, witnesses: impl IntoIterator<Item = AbstId>) -> Self {
+            for witness in witnesses {
+                self.val_witnesses.push_back_mut(witness);
+                self.local_witnesses.insert_mut(witness);
+            }
+            self
+        }
+
+        pub fn with_local_witness(mut self, witness: AbstId) -> Self {
+            self.local_witnesses.insert_mut(witness);
             self
         }
 
@@ -152,7 +187,7 @@ mod impls_ty_env {
             self
         }
 
-        /// Whether this environment preserves every binding and skolem visible in `base`.
+        /// Whether this environment preserves every binding, skolem, and local/val witness in `base`.
         pub fn is_extension_of(&self, base: &Self) -> bool {
             let preserves_definitions = self.defs.0.ptr_eq(&base.defs.0)
                 || (self.defs.len() >= base.defs.len()
@@ -160,7 +195,22 @@ mod impls_ty_env {
             let preserves_skolems = self.skolems.0.ptr_eq(&base.skolems.0)
                 || (self.skolems.0.size() >= base.skolems.0.size()
                     && base.skolems.0.iter().all(|skolem| self.skolems.contains(skolem)));
-            preserves_definitions && preserves_skolems
+            let preserves_val_witnesses = self.val_witnesses.len() >= base.val_witnesses.len()
+                && self
+                    .val_witnesses
+                    .iter()
+                    .zip(base.val_witnesses.iter())
+                    .all(|(left, right)| left == right);
+            let preserves_local_witnesses = self.local_witnesses.ptr_eq(&base.local_witnesses)
+                || (self.local_witnesses.size() >= base.local_witnesses.size()
+                    && base
+                        .local_witnesses
+                        .iter()
+                        .all(|witness| self.local_witnesses.contains(witness)));
+            preserves_definitions
+                && preserves_skolems
+                && preserves_val_witnesses
+                && preserves_local_witnesses
         }
 
         pub fn monadic_new(tycker: &mut Tycker<'_>, ori: &TyEnv) -> Self {
@@ -174,7 +224,12 @@ mod impls_ty_env {
                         || tycker.statics.global_defs.get(def).is_some()
                 })
                 .collect();
-            Self { defs, skolems: ori.skolems.clone() }
+            Self {
+                defs,
+                skolems: ori.skolems.clone(),
+                val_witnesses: ori.val_witnesses.clone(),
+                local_witnesses: ori.local_witnesses.clone(),
+            }
         }
         pub fn recursively_get_type(&self, tycker: &Tycker<'_>, def: &DefId) -> Option<&AnnId> {
             let ann = self.defs.get(def)?;
@@ -236,7 +291,12 @@ mod impls_ty_env {
 
     impl FromIterator<(DefId, AnnId)> for TyEnv {
         fn from_iter<I: IntoIterator<Item = (DefId, AnnId)>>(iter: I) -> Self {
-            Self { defs: iter.into_iter().collect(), skolems: SkolemScope::default() }
+            Self {
+                defs: iter.into_iter().collect(),
+                skolems: SkolemScope::default(),
+                val_witnesses: rpds::VectorSync::new_sync(),
+                local_witnesses: rpds::HashTrieSetSync::new_sync(),
+            }
         }
     }
 
@@ -326,13 +386,23 @@ pub struct MonEnv {
 /// content comparison.
 impl PartialEq for TyEnv {
     fn eq(&self, other: &Self) -> bool {
-        if self.defs.0.ptr_eq(&other.defs.0) && self.skolems.0.ptr_eq(&other.skolems.0) {
+        let same_val_witnesses = self.val_witnesses.len() == other.val_witnesses.len()
+            && self.val_witnesses.iter().zip(other.val_witnesses.iter()).all(|(a, b)| a == b);
+        if !same_val_witnesses {
+            return false;
+        }
+        if self.defs.0.ptr_eq(&other.defs.0)
+            && self.skolems.0.ptr_eq(&other.skolems.0)
+            && self.local_witnesses.ptr_eq(&other.local_witnesses)
+        {
             return true;
         }
         self.defs.len() == other.defs.len()
             && self.defs.iter().all(|(def, ann)| other.defs.get(def) == Some(ann))
             && self.skolems.0.size() == other.skolems.0.size()
             && self.skolems.0.iter().all(|skolem| other.skolems.contains(skolem))
+            && self.local_witnesses.size() == other.local_witnesses.size()
+            && self.local_witnesses.iter().all(|witness| other.local_witnesses.contains(witness))
     }
 }
 
@@ -349,9 +419,8 @@ impl std::hash::Hash for TyEnv {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         use zydeco_foundation::dense::DenseId;
 
-        // Both components are unordered collections, so combine per-entry
-        // mixed hashes with wrapping addition: equal environments hash equally
-        // regardless of traversal order without zeroing identical halves.
+        // Combine unordered sets by wrapping addition and ordered `val_witnesses`
+        // sequentially so equivalent environments hash equally.
         let mut acc = 0u64;
         for (def, ann) in self.defs.iter() {
             let def_mix =
@@ -367,7 +436,16 @@ impl std::hash::Hash for TyEnv {
             let skolem_mix = mix_u64(u64::from(skolem.raw_u32()));
             acc = acc.wrapping_add(skolem_mix);
         }
+        let mut local_acc = 0u64;
+        for witness in self.local_witnesses.iter() {
+            local_acc = local_acc.wrapping_add(mix_u64(u64::from(witness.raw_u32()) ^ 0x517cc1b7));
+        }
         acc.hash(state);
+        local_acc.hash(state);
+        self.val_witnesses.len().hash(state);
+        for witness in self.val_witnesses.iter() {
+            witness.raw_u32().hash(state);
+        }
     }
 }
 

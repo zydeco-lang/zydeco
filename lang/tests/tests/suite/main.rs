@@ -33,6 +33,7 @@ mod native_model;
 mod nondet;
 mod oopsla;
 mod pack;
+mod seal;
 mod partial;
 mod prelude;
 mod representation;

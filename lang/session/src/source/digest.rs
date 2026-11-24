@@ -369,6 +369,11 @@ impl HashWriter {
                 self.u8(37);
                 self.literal(lit);
             }
+            | t::Term::Seal(t::Seal { tm, ty }) => {
+                self.u8(38);
+                self.term(arena, *tm);
+                self.term(arena, *ty);
+            }
             | _ => unreachable!("covered in term_inner"),
         }
     }

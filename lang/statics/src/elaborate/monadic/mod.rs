@@ -1735,6 +1735,11 @@ fn value_translation(
             let ConsN(witnesses, body) = value;
             package_value_translation(tycker, env, &witnesses, body, ty_)?
         }
+        | Value::Seal(inner) => {
+            let (env, lifted) = value_translation(tycker, env, inner)?;
+            let sealed = Alloc::alloc(tycker, Value::Seal(lifted), ty_, &());
+            (env, sealed)
+        }
         | Value::Proj(value) => {
             let Proj(head, field) = value;
             ValueProjectionTranslation { head, field, result: ty_ }.translate(tycker, env)?

@@ -42,6 +42,7 @@ pub(crate) struct RelDefFacts {
 pub(crate) struct RelAbstEntry {
     pub kind: RelId<KindId>,
     pub seal: Option<RelId<TypeId>>,
+    pub opaque_representation: Option<RelId<TypeId>>,
     pub hint: Option<RelDefId>,
     pub existential_skolem: bool,
     pub builtin_role: Option<BuiltinRole>,
@@ -536,6 +537,7 @@ mod tests {
             | 1 => verify_rejected_interface_digest_distinguishes_distinct_failures(db),
             | 2 => verify_diamond_and_stub_assembly(db),
             | 3 => verify_monadic_unit_preloads_dependency_bodies(db),
+            | 4 => verify_sealed_diamond_assembly(db),
             | _ => unreachable!(),
         }
     }
@@ -565,6 +567,13 @@ mod tests {
     fn monadic_unit_preloads_dependency_bodies() {
         let db = TestDb::default();
         let case = SeparateTestCase::new(&db, 3);
+        run_separate_test(&db, case);
+    }
+
+    #[test]
+    fn sealed_diamond_preserves_applicative_identity_and_opacity() {
+        let db = TestDb::default();
+        let case = SeparateTestCase::new(&db, 4);
         run_separate_test(&db, case);
     }
 
@@ -881,5 +890,152 @@ mod tests {
             ],
         );
         assert!(matches!(assembled.outcome, SourceCheckOutcome::Checked(_)));
+    }
+
+    fn verify_sealed_diamond_assembly(db: &dyn TyckDb) {
+        let prov_src = format!(
+            "{PREAMBLE}{{ fn (A : VType) => ret (seal (Unit, (#item = (), #use = {{ fn _ => ret () }})) : exists (T : VType) . (#item :: T) * (#use :: Thk (T -> Ret Unit))) }}"
+        );
+        let pass_src = "let mk = @(import(\"s.zy\")) in mk";
+        let (shared_spans, shared_scoped, shared_root, shared_out) =
+            check_standalone(db, &prov_src);
+        assert!(shared_out.interface.is_accepted(), "sealed provider must check cleanly");
+        let (left_spans, left_res) = resolve_unit(pass_src);
+        let (right_spans, right_res) = resolve_unit(pass_src);
+        let left_scoped = Arc::new(left_res.arena.into_inner());
+        let right_scoped = Arc::new(right_res.arena.into_inner());
+        let registry: KeySpaceRegistry<usize> = KeySpaceRegistry::default();
+        let shared_dep = [ImportedUnitDep {
+            interface: &shared_out.interface,
+            body: None,
+            dep_to_global: &[],
+            synthetic_def_space: registry.intern(0),
+        }];
+        let check_pass = |spans, scoped, root, boundary| {
+            check_unit(
+                db,
+                UnitCheckInput {
+                    spans,
+                    scoped,
+                    root,
+                    signature_dep: None,
+                    has_monadic: false,
+                    boundary_deps: &[(boundary, 0)],
+                    deps: &shared_dep,
+                },
+            )
+        };
+        let left_out = check_pass(&left_spans, &left_scoped, left_res.root, left_res.imports[0].1);
+        let right_out =
+            check_pass(&right_spans, &right_scoped, right_res.root, right_res.imports[0].1);
+        assert!(left_out.interface.is_accepted());
+        assert!(right_out.interface.is_accepted());
+
+        let main_diamond = format!(
+            "{PREAMBLE}let lmk = @(import(\"l.zy\")) in let rmk = @(import(\"r.zy\")) in do (T1, (/item = _; /use = luse)) <- ! lmk Unit; do (T2, (/item = rv; /use = _)) <- ! rmk Unit; ! luse rv"
+        );
+        let (main_spans, main_res) = resolve_unit(&main_diamond);
+        let main_scoped = Arc::new(main_res.arena.into_inner());
+        let diamond_deps = [
+            ImportedUnitDep {
+                interface: &shared_out.interface,
+                body: None,
+                dep_to_global: &[],
+                synthetic_def_space: registry.intern(0),
+            },
+            ImportedUnitDep {
+                interface: &left_out.interface,
+                body: None,
+                dep_to_global: &[0],
+                synthetic_def_space: registry.intern(1),
+            },
+            ImportedUnitDep {
+                interface: &right_out.interface,
+                body: None,
+                dep_to_global: &[0],
+                synthetic_def_space: registry.intern(2),
+            },
+        ];
+        let main_ok = check_unit(
+            db,
+            UnitCheckInput {
+                spans: &main_spans,
+                scoped: &main_scoped,
+                root: main_res.root,
+                signature_dep: None,
+                has_monadic: false,
+                boundary_deps: &[(main_res.imports[0].1, 1), (main_res.imports[1].1, 2)],
+                deps: &diamond_deps,
+            },
+        );
+        assert!(
+            main_ok.interface.is_accepted(),
+            "applicative seal applied at equal types must unify across diamond imports"
+        );
+
+        let mut merged_spans = SpanArena::default();
+        for s in [&shared_spans, &left_spans, &right_spans, &main_spans] {
+            merged_spans.merge_rebased_as(s, zydeco_foundation::span::BytePos(1), None);
+        }
+        let mut merged_scoped = ScopedArena::default();
+        merged_scoped.merge_unit(&shared_scoped);
+        merged_scoped.merge_unit(&left_scoped);
+        merged_scoped.merge_unit(&right_scoped);
+        merged_scoped.merge_unit(&main_scoped);
+        merged_scoped.patch_term(left_res.imports[0].1, su::SourceBoundary(shared_root).into());
+        merged_scoped.patch_term(right_res.imports[0].1, su::SourceBoundary(shared_root).into());
+        merged_scoped.patch_term(main_res.imports[0].1, su::SourceBoundary(left_res.root).into());
+        merged_scoped.patch_term(main_res.imports[1].1, su::SourceBoundary(right_res.root).into());
+        let assembled = assemble_program(
+            db,
+            Arc::new(merged_spans),
+            Arc::new(merged_scoped),
+            main_res.root,
+            &[
+                AssembledUnitInput {
+                    interface: &shared_out.interface,
+                    body: &shared_out.body,
+                    dep_to_global: &[],
+                },
+                AssembledUnitInput {
+                    interface: &left_out.interface,
+                    body: &left_out.body,
+                    dep_to_global: &[0],
+                },
+                AssembledUnitInput {
+                    interface: &right_out.interface,
+                    body: &right_out.body,
+                    dep_to_global: &[0],
+                },
+                AssembledUnitInput {
+                    interface: &main_ok.interface,
+                    body: &main_ok.body,
+                    dep_to_global: &[0, 1, 2],
+                },
+            ],
+        );
+        assert!(matches!(assembled.outcome, SourceCheckOutcome::Checked(_)));
+
+        let leak_diamond = format!(
+            "{PREAMBLE}let lmk = @(import(\"l.zy\")) in do (T, (/item = lv; /use = _)) <- ! lmk Unit; let (leaked : Unit) = lv in ret leaked"
+        );
+        let (leak_spans, leak_res) = resolve_unit(&leak_diamond);
+        let leak_scoped = Arc::new(leak_res.arena.into_inner());
+        let leak_out = check_unit(
+            db,
+            UnitCheckInput {
+                spans: &leak_spans,
+                scoped: &leak_scoped,
+                root: leak_res.root,
+                signature_dep: None,
+                has_monadic: false,
+                boundary_deps: &[(leak_res.imports[0].1, 1)],
+                deps: &diamond_deps,
+            },
+        );
+        assert!(
+            !leak_out.interface.is_accepted(),
+            "applicative seal must keep its representation opaque across separate units"
+        );
     }
 }

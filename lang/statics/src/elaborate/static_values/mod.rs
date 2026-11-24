@@ -6,7 +6,9 @@
 //! editor queries while ensuring interpretation and lowering consume a
 //! self-contained residual IR.
 
-use crate::{Env, ReportedError, Result, SkolemScope, TyEnv, TyckError, Tycker, syntax::*};
+use crate::{
+    Env, ReportedError, Result, SkolemScope, TyEnv, TyckError, Tycker, TypeSummary, syntax::*,
+};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::{cell::Cell, rc::Rc, sync::Arc};
 use zydeco_foundation::{
@@ -253,6 +255,7 @@ pub(crate) struct StaticElaborator<'a, 'db> {
     protocols: crate::elaborate::protocols::SourceProtocols,
     data_map: FxHashMap<DataId, IrDataId>,
     types: FxHashMap<(TypeId, TypeAssignments), TypeId>,
+    erased_opaque: FxHashMap<TypeId, TypeId>,
     representations: FxHashMap<TypeId, bool>,
     unrolled_cache: FxHashMap<TypeId, TypeId>,
     thunk_free_defs: FxHashMap<CompuId, Arc<[DefId]>>,
@@ -285,6 +288,7 @@ impl<'a, 'db> StaticElaborator<'a, 'db> {
             protocols: crate::elaborate::protocols::SourceProtocols::default(),
             data_map: FxHashMap::default(),
             types: FxHashMap::default(),
+            erased_opaque: FxHashMap::default(),
             representations: FxHashMap::default(),
             unrolled_cache: FxHashMap::default(),
             thunk_free_defs: FxHashMap::default(),
@@ -379,16 +383,29 @@ impl<'a, 'db> StaticElaborator<'a, 'db> {
     }
 
     fn ty(&mut self, ty: TypeId, env: &Environment) -> Result<TypeId> {
-        if env.types.is_empty() {
+        let ty = if env.types.is_empty() {
+            ty
+        } else {
+            let key = (ty, env.types.clone());
+            if let Some(result) = self.types.get(&key) {
+                *result
+            } else {
+                let result = ty.subst_absts(self.tycker, &env.types)?;
+                self.types.insert(key, result);
+                result
+            }
+        };
+        if self.purpose == Purpose::Inspect {
             return Ok(ty);
         }
-        let key = (ty, env.types.clone());
-        if let Some(result) = self.types.get(&key) {
-            return Ok(*result);
-        }
-        let result = ty.subst_absts(self.tycker, &env.types)?;
-        self.types.insert(key, result);
-        Ok(result)
+        self.erase_opaque(ty)
+    }
+
+    fn erase_opaque(&mut self, ty: TypeId) -> Result<TypeId> {
+        use crate::fold::TypeFolder;
+        let tycker = &mut *self.tycker;
+        let mut eraser = OpaqueEraser { cache: &mut self.erased_opaque };
+        eraser.fold_type(tycker, ty)
     }
 
     /// Recursive type aliases can encode self-application without `fix`.
@@ -401,5 +418,89 @@ impl<'a, 'db> StaticElaborator<'a, 'db> {
         self.reduction_depth += 1;
         self.remaining_reductions -= 1;
         Ok(())
+    }
+}
+
+struct OpaqueEraser<'a> {
+    cache: &'a mut FxHashMap<TypeId, TypeId>,
+}
+
+impl crate::fold::TypeFolder for OpaqueEraser<'_> {
+    fn fold_data(&mut self, _tycker: &mut Tycker<'_>, source: DataId) -> Result<DataId> {
+        Ok(source)
+    }
+
+    fn fold_codata(&mut self, _tycker: &mut Tycker<'_>, source: CoDataId) -> Result<CoDataId> {
+        Ok(source)
+    }
+
+    fn fold_type(&mut self, tycker: &mut Tycker<'_>, source: TypeId) -> Result<TypeId> {
+        if tycker.statics.opaque_representations.is_empty() {
+            return Ok(source);
+        }
+        if !tycker
+            .statics
+            .types_pre
+            .summary(source)
+            .intersects(TypeSummary::HAS_FREE_ABST.union(TypeSummary::HAS_FILL))
+        {
+            return Ok(source);
+        }
+        if let Some(&cached) = self.cache.get(&source) {
+            return Ok(cached);
+        }
+        let kind = tycker.statics.type_kind(source);
+        let result = zydeco_foundation::stack::maybe_grow(|| {
+            match tycker.statics.types_pre[&source].clone() {
+                | Fillable::Fill(fill) => match tycker.statics.solus.get(fill).copied() {
+                    | Some(AnnId::Type(solution)) => self.fold_type(tycker, solution),
+                    | Some(_) => tycker.err(TyckError::SortMismatch),
+                    | None => Ok(source),
+                },
+                | Fillable::Done(Type::Abst(witness)) => {
+                    match tycker.statics.opaque_representations.get(witness).copied() {
+                        | Some(repr) => self.fold_type(tycker, repr),
+                        | None => Ok(source),
+                    }
+                }
+                | Fillable::Done(Type::App(App(function, argument))) => {
+                    let function_erased = self.fold_type(tycker, function)?;
+                    let argument_erased = self.fold_type(tycker, argument)?;
+                    if let Fillable::Done(Type::Abs(TypeAbstraction { binder, body })) =
+                        tycker.statics.types_pre[&function_erased].clone()
+                    {
+                        let payload = binder.pattern.bind_argument(tycker, argument_erased)?;
+                        let reduced = body.subst_abst(tycker, (binder.witness, payload))?;
+                        return self.fold_type(tycker, reduced);
+                    }
+                    Ok(crate::fold::TypeRebuilder::rebuild(
+                        tycker,
+                        source,
+                        App(function_erased, argument_erased).into(),
+                        kind,
+                        function_erased != function || argument_erased != argument,
+                    ))
+                }
+                | Fillable::Done(Type::Proj(Proj(head, name))) => {
+                    let head_erased = self.fold_type(tycker, head)?;
+                    if let Fillable::Done(Type::Named(Named(found, inner))) =
+                        tycker.statics.types_pre[&head_erased].clone()
+                        && found == name
+                    {
+                        return self.fold_type(tycker, inner);
+                    }
+                    Ok(crate::fold::TypeRebuilder::rebuild(
+                        tycker,
+                        source,
+                        Proj(head_erased, name).into(),
+                        kind,
+                        head_erased != head,
+                    ))
+                }
+                | Fillable::Done(node) => self.fold_children(tycker, source, node, kind),
+            }
+        })?;
+        self.cache.insert(source, result);
+        Ok(result)
     }
 }

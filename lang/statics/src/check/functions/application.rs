@@ -283,7 +283,8 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiIntroduction> {
                 found: 0,
             })?
         };
-        let body = TyEnvT::new(binder.info.clone(), body.clone())
+        let body_env = binder.info.clone().with_val_witnesses(witnesses.iter().copied());
+        let body = TyEnvT::new(body_env, body.clone())
             .tyck(tycker, Action::ana(signature.codomain.into()))?;
         let (body, codomain) = body.try_as_compu(tycker, TyckError::SortMismatch)?;
 

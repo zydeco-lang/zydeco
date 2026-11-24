@@ -124,6 +124,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for TermId {
             | Term::Internal(t) => t.pretty(f),
             | Term::Sealed(t) => t.pretty(f),
             | Term::Ann(t) => t.pretty(f),
+            | Term::Seal(t) => t.pretty(f),
             | Term::Hole(t) => t.pretty(f),
             | Term::Var(t) => t.pretty(f),
             | Term::Named(t) => t.pretty(f),
@@ -243,6 +244,13 @@ where
             ty.pretty(f),
             RcDoc::text(")"),
         ])
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Seal {
+    fn pretty(&self, f: &'a Formatter<'a>) -> RcDoc<'a> {
+        let Seal { tm, ty } = self;
+        RcDoc::concat([RcDoc::text("seal "), tm.pretty(f), RcDoc::text(" : "), ty.pretty(f)])
     }
 }
 

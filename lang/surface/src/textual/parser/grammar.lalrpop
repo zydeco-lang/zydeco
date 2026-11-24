@@ -47,6 +47,7 @@ extern {
         "pack" => ParserToken::Syntax(Tok::Pack),
         "where" => ParserToken::Syntax(Tok::Where),
         "is" => ParserToken::Syntax(Tok::Is),
+        "seal" => ParserToken::Syntax(Tok::Seal),
 
         "FloatLit" => ParserToken::Syntax(Tok::FloatLit(<&'input str>)),
         "IntLit" => ParserToken::Syntax(Tok::IntLit(<&'input str>)),
@@ -170,6 +171,7 @@ MetaSegment: String = {
     "pack" => "pack".into(),
     "where" => "where".into(),
     "is" => "is".into(),
+    "seal" => "seal".into(),
 };
 
 VarName: VarName = <MixedId> => VarName::new(<>);
@@ -561,6 +563,10 @@ Term: ParsedNode<Term> = {
             placement,
             tail,
         }.into())
+    },
+    // applicative sealing
+    "seal" <tm:TermGen<Term>> ":" <ty:TermGen<Term>> => {
+        ParsedNode::Syntax(Seal { tm, ty }.into())
     },
     // meta annotated term
     <MetaTerm<TermGen<Term>>> => ParsedNode::Syntax(<>.into()),

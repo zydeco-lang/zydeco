@@ -43,7 +43,9 @@ impl NominalMismatch {
 
     pub(super) fn labels(&self, tycker: &Tycker<'_>) -> [(Option<Span>, &'static str); 2] {
         [(self.expected, true), (self.found, false)].map(|(identity, expected)| {
-            let message = if tycker.statics.seals.get(identity).is_some() {
+            let message = if tycker.statics.seals.get(identity).is_some()
+                || tycker.statics.opaque_representations.get(identity).is_some()
+            {
                 if expected {
                     "expected type (identity 1) is sealed here"
                 } else {

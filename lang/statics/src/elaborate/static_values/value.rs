@@ -168,6 +168,7 @@ impl StaticElaborator<'_, '_> {
                 let max_scope = payload.0.max_scope;
                 Ok(self.make_value(source, ty, max_scope, ValueForm::Named(name, payload)))
             }
+            | Value::Seal(inner) => self.value(inner, env),
             | Value::SCons(ConsN(prefix, payload)) => {
                 let prefix = prefix
                     .into_iter()

@@ -219,6 +219,7 @@ impl Shapes {
                     | t::Term::SourceBoundary(_)
                     | t::Term::SignatureBoundary(_)
                     | t::Term::Ann(_)
+                    | t::Term::Seal(_)
                     | t::Term::Hole(_)
                     | t::Term::Paren(_)
                     | t::Term::Abs(_)

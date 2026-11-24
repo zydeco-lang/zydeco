@@ -52,6 +52,7 @@ impl CheckedNode {
                     | Value::IntrinsicOp(_) => {}
                     | Value::Named(Named(_, body))
                     | Value::Ctor(Ctor(_, body))
+                    | Value::Seal(body)
                     | Value::Proj(Proj(body, _)) => child(Self::Value(*body)),
                     | Value::Thunk(Thunk(body)) => child(Self::Computation(*body)),
                     | Value::VCons(fields) => {

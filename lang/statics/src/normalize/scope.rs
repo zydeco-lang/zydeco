@@ -61,6 +61,17 @@ impl TypeId {
     ) -> Result<bool> {
         Ok(TypeSupport::of(*self, tycker)?.declarations.contains(&declaration))
     }
+
+    /// Sorted free abstract witnesses (existential skolems and non-existential declarations)
+    /// mentioned without traversing sealed definitions.
+    pub(crate) fn free_witnesses(&self, tycker: &mut Tycker<'_>) -> Result<Vec<AbstId>> {
+        let support = TypeSupport::of(*self, tycker)?;
+        let mut witnesses =
+            support.skolems.into_iter().chain(support.declarations).collect::<Vec<_>>();
+        witnesses.sort_unstable();
+        witnesses.dedup();
+        Ok(witnesses)
+    }
 }
 
 #[derive(Default)]

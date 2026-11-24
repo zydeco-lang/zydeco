@@ -31,6 +31,7 @@ impl BindingCycle {
                 | su::Term::Triv(_)
                 | su::Term::Cons(_)
                 | su::Term::Pack(_)
+                | su::Term::Seal(_)
                 | su::Term::Lit(_) => return true,
                 | _ => return false,
             };

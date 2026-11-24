@@ -224,6 +224,13 @@ pub struct CoMatchClauses {
     pub clauses: Vec<CoPatternClause>,
 }
 
+/// `seal term : Sig`
+#[derive(Clone, Debug)]
+pub struct Seal {
+    pub tm: TermId,
+    pub ty: TermId,
+}
+
 /// Lowered and name-resolved surface term syntax stored in the dominant dense arena.
 ///
 /// Uncommon ternary and boxed metadata payloads stay behind `Box` so their size
@@ -237,6 +244,7 @@ pub enum Term {
     Internal(Internal),
     Sealed(Sealed<TermId>),
     Ann(Ann<TermId, TermId>),
+    Seal(Seal),
     Hole(Hole),
     #[from(ignore)]
     Var(DefId),
