@@ -30,3 +30,35 @@ fn nested_monadic_block_resolves_the_nearest_basis() {
     let analysis = compiler.analyze(&root).expect("the shadowing fixture loads");
     compiler.checked_program(&analysis).expect("the shadowing fixture checks");
 }
+
+#[test]
+fn monadic_blocks_translate_returning_and_branching_intrinsic_operations() {
+    use zydeco_tests::invariants::ArenaInvariants;
+    use zydeco_tests::utils::SourceCase;
+
+    let std = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lib/std");
+    let source = format!(
+        r#"
+let (/Monad; /Algebra) = @(import("{std}/effect/monad.zy")) in
+let (/instance = ret_instance) = @(import("{std}/effect/ret.zy")) in
+def ! m = @[monadic] begin
+  do sum <- ! (@(intrinsic(int/add))) 20 22;
+  do cp <- ! (@(intrinsic(char/codepoint))) 'A';
+  do tag <- ! (@(intrinsic(string/append))) "k" "!";
+  ! (@(intrinsic(int/eq))) (Ret Int) sum 42 {{
+    ! (@(intrinsic(int/eq))) (Ret Int) cp 65 {{
+      ! (@(intrinsic(string/eq))) (Ret Int) tag "k!" {{ ret 0 }} {{ ret 3 }}
+    }} {{ ret 2 }}
+  }} {{ ret 1 }}
+end in
+do code <- ! m Ret ret_instance/monad;
+! exit code
+"#,
+        std = std.display()
+    );
+    let (statics, root) = SourceCase::checked_arena(&source).unwrap();
+    let violations = ArenaInvariants { statics: &statics }.violations(root);
+    assert!(violations.is_empty(), "monadic intrinsic check left violations: {violations:?}");
+    SourceCase::assert_accepted(SourceCase::lower(&source));
+    SourceCase::assert_accepted(SourceCase::run(&source));
+}

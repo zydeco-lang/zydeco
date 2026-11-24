@@ -173,6 +173,7 @@ enum ValueForm {
     Hole { preallocated: Rc<Cell<Option<ir::ValueId>>> },
     Triv,
     Lit(Literal),
+    IntrinsicOp(zydeco_syntax::IntrinsicOp),
     Foreign(zydeco_syntax::CheckedImport),
     RuntimeVar(ir::VarId),
     RuntimeTerm(Rc<Cell<Option<ir::ValueId>>>),
@@ -204,6 +205,7 @@ impl StaticValue {
             | ValueForm::Hole { .. }
             | ValueForm::Triv
             | ValueForm::Lit(_)
+            | ValueForm::IntrinsicOp(_)
             | ValueForm::Foreign(_)
             | ValueForm::RuntimeVar { .. }
             | ValueForm::RuntimeTerm { .. }
@@ -221,6 +223,7 @@ impl StaticValue {
             ValueForm::Hole { .. }
                 | ValueForm::Triv
                 | ValueForm::Lit(_)
+                | ValueForm::IntrinsicOp(_)
                 | ValueForm::Foreign(_)
                 | ValueForm::RuntimeVar { .. }
                 | ValueForm::RuntimeTerm { .. }

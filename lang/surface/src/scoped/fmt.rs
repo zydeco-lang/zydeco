@@ -186,6 +186,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Internal {
             | Internal::Unit => RcDoc::text("Unit"),
             | Internal::Primitive(primitive) => RcDoc::text(primitive.type_name()),
             | Internal::ValueInt(operation) => RcDoc::text(operation.intrinsic_name()),
+            | Internal::Operation(operation) => RcDoc::text(operation.source_name()),
             | Internal::OS => RcDoc::text("OS"),
             | Internal::Monad => RcDoc::text("Monad"),
             | Internal::Algebra => RcDoc::text("Algebra"),

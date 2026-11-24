@@ -766,6 +766,30 @@ fn source_unit_decodes_typed_intrinsic_splices() {
             )),
         ),
         ("string", IntrinsicRole::Primitive(zydeco_syntax::PrimitiveType::String)),
+        ("val/int/add", IntrinsicRole::ValueInt(zydeco_syntax::ValueIntOp::Add)),
+        (
+            "int/add",
+            IntrinsicRole::Operation(zydeco_syntax::IntrinsicOp::Integer(
+                IntegerType::Int,
+                zydeco_syntax::IntegerIntrinsicOp::Add,
+            )),
+        ),
+        (
+            "int8/to_string",
+            IntrinsicRole::Operation(zydeco_syntax::IntrinsicOp::Integer(
+                IntegerType::Int8,
+                zydeco_syntax::IntegerIntrinsicOp::ToString,
+            )),
+        ),
+        (
+            "float64/eq",
+            IntrinsicRole::Operation(zydeco_syntax::IntrinsicOp::Float(
+                zydeco_syntax::FloatType::Float64,
+                zydeco_syntax::FloatIntrinsicOp::Eq,
+            )),
+        ),
+        ("char/codepoint", IntrinsicRole::Operation(zydeco_syntax::IntrinsicOp::CharCodepoint)),
+        ("string/append", IntrinsicRole::Operation(zydeco_syntax::IntrinsicOp::StringAppend)),
     ]
     .into_iter()
     .for_each(|(name, expected)| {
@@ -809,6 +833,8 @@ fn source_unit_rejects_ambiguous_or_malformed_intrinsic_splices() {
         (r#"@(intrinsic("vtype"))"#, ExpectedIntrinsicError::RoleNotIdentifier),
         ("@[intrinsic(monad)] _", ExpectedIntrinsicError::UnknownRole),
         ("@(intrinsic(monad))", ExpectedIntrinsicError::UnknownRole),
+        ("@[intrinsic(int_add)] _", ExpectedIntrinsicError::UnknownRole),
+        ("@(intrinsic(int_add))", ExpectedIntrinsicError::UnknownRole),
         ("@[intrinsic(unit)] Unit", ExpectedIntrinsicError::PayloadNotHole),
     ];
 

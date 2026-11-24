@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use zydeco_cli::CommandCompiler;
 use zydeco_stackir::low::syntax::{Computation, ExternalFunction, Value};
-use zydeco_syntax::{BuiltinValueRole, IntegerArithmetic, IntegerType, PrimitiveOp};
+use zydeco_syntax::{BuiltinValueRole, HostOp, IntegerArithmetic, IntegerType, PrimitiveOp};
 use zydeco_tests::utils::{ExecutionTarget, SourceCase, SourceProgram};
 
 #[test]
@@ -63,7 +63,7 @@ fn dead_definitions_and_undemanded_operations_are_not_emitted() {
         .collect::<Vec<_>>();
     assert_eq!(
         host_calls,
-        [BuiltinValueRole::Exit],
+        [HostOp::Builtin(BuiltinValueRole::Exit)],
         "only the called exit must survive as a host operation:\n{}",
         backend.render_sps_low()
     );

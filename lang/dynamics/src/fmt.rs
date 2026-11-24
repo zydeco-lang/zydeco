@@ -55,7 +55,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for ThunkBody {
                 body.pretty(&f.core),
                 RcDoc::text("]"),
             ]),
-            | ThunkBody::Builtin(role) => RcDoc::text(format!("prim({})[{role}]", role.arity())),
+            | ThunkBody::Host(op) => RcDoc::text(format!("prim({})[{op}]", op.arity())),
             | ThunkBody::Foreign(import) => RcDoc::text(format!("ffi[{}]", import.target().symbol)),
         }
     }

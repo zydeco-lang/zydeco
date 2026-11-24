@@ -109,7 +109,7 @@ pub struct ExternCall<S> {
 /// A call through either the Zydeco host ABI or a source-declared foreign ABI.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub enum ExternalFunction {
-    Host(BuiltinValueRole),
+    Host(HostOp),
     Foreign(ForeignImport),
     Unit(UnitImport),
 }

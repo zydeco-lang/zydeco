@@ -12,7 +12,7 @@ use zydeco_stackir::{
     },
 };
 use zydeco_syntax::scalar::ScalarBoxing;
-use zydeco_syntax::{BuiltinValueRole, Literal};
+use zydeco_syntax::{HostOp, Literal};
 use zydeco_wasm_common::{
     DataSymbol, ENTRY_SYMBOL, EncodedScalar, FuncRef, HostCallKind, HostImport, HostSections,
     Limits, PointerLocal, ProductFields, RelocFunction, RuntimeFailure, RuntimeWord, StaticString,
@@ -67,7 +67,7 @@ pub enum EmitError {
     #[error("SPS WebAssembly backend cannot find static string data for value {0:?}")]
     MissingString(ValueId),
     #[error("SPS WebAssembly backend cannot find host import `{0}`")]
-    MissingHostImport(BuiltinValueRole),
+    MissingHostImport(HostOp),
     #[error("SPS WebAssembly backend cannot import native foreign symbol `{0}`")]
     UnsupportedForeignImport(String),
     #[error("invalid SPS coproduct match: constructor arms cannot be mixed with a catch-all arm")]
@@ -448,7 +448,7 @@ struct ModulePlan {
     static_data: Vec<u8>,
     strings_symbol: Option<DataSymbol>,
     host_imports: Vec<HostImport>,
-    host_functions: HashMap<BuiltinValueRole, usize>,
+    host_functions: HashMap<HostOp, usize>,
     import_count: u32,
     scalars: ScalarPlans,
 }
@@ -592,7 +592,7 @@ impl ModulePlan {
         self.strings.get(&value).copied().ok_or(EmitError::MissingString(value))
     }
 
-    fn host(&self, role: BuiltinValueRole) -> Result<&HostImport, EmitError> {
+    fn host(&self, role: HostOp) -> Result<&HostImport, EmitError> {
         self.host_functions
             .get(&role)
             .map(|index| &self.host_imports[*index])
@@ -1264,7 +1264,7 @@ impl<'a> CaseEncoder<'a> {
         })
     }
 
-    fn emit_extern(&mut self, role: BuiltinValueRole, stack: StackId) -> Result<(), EmitError> {
+    fn emit_extern(&mut self, role: HostOp, stack: StackId) -> Result<(), EmitError> {
         let import = self.plan.host(role)?.clone();
         self.emit_stack(stack)?;
         self.function.instruction(&WasmInstruction::LocalSet(self.locals.scratch_stack));

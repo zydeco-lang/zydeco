@@ -8,7 +8,7 @@ use zydeco_stackir::low::syntax::{
     ValueExt, ValueId,
 };
 use zydeco_stackir::low::unbox::LocalUnboxing;
-use zydeco_syntax::{BuiltinValueRole, ForeignImport, ForeignLibraryName, Literal, UnitImport};
+use zydeco_syntax::{ForeignImport, ForeignLibraryName, HostOp, Literal, UnitImport};
 
 /// A first-order native procedure compiled as its own `CallConv::Tail` function.
 #[derive(Clone, Copy)]
@@ -31,7 +31,7 @@ pub(crate) struct ModulePlan {
     pub(crate) case_labels: HashMap<DefId, usize>,
     pub(crate) static_strings: Vec<StaticStringLiteral>,
     pub(crate) string_indices: HashMap<ValueId, usize>,
-    pub(crate) host_roles: BTreeSet<BuiltinValueRole>,
+    pub(crate) host_roles: BTreeSet<HostOp>,
     pub(crate) foreign_imports: Vec<ForeignImport>,
     pub(crate) foreign_libraries: Vec<ForeignLibraryName>,
     pub(crate) unit_imports: Vec<UnitImport>,
@@ -134,7 +134,7 @@ fn collect_strings(arena: &SpsLowArena) -> (Vec<StaticStringLiteral>, HashMap<Va
 
 fn collect_externs(
     arena: &SpsLowArena,
-) -> (BTreeSet<BuiltinValueRole>, Vec<ForeignImport>, Vec<ForeignLibraryName>, Vec<UnitImport>) {
+) -> (BTreeSet<HostOp>, Vec<ForeignImport>, Vec<ForeignLibraryName>, Vec<UnitImport>) {
     let mut host_roles = BTreeSet::new();
     let mut foreign_map: BTreeMap<(String, String), ForeignImport> = BTreeMap::new();
     let mut foreign_libs = BTreeSet::new();

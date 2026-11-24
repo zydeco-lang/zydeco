@@ -25,9 +25,9 @@ pub struct SpsArena {
 #[derive(Debug, Default, AsRef, AsMut, AsRefSelf, AsMutSelf)]
 pub struct SpsInnerArena {
     pub protocols: std::sync::Arc<crate::protocol::ProtocolGraph>,
-    /// Closed compiler-defined builtin bodies may be exposed at every known call.
+    /// Closed compiler-defined host-operation bodies may be exposed at every known call.
     /// This is compiler provenance, not an annotation on arbitrary source closures.
-    pub(crate) builtin_functions: SecondaryMap<ValueId, BuiltinValueRole>,
+    pub(crate) builtin_functions: SecondaryMap<ValueId, HostOp>,
     pub value_protocols: SecondaryMap<ValueId, crate::protocol::ValueProtocol>,
     pub pattern_protocols: SecondaryMap<VPatId, crate::protocol::ValueProtocol>,
     /// Intrinsic protocols of recursive entries, procedure bodies, and codata eliminations.

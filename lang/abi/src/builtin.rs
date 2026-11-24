@@ -19,10 +19,10 @@ impl ValueIntOp {
 
     pub const fn intrinsic_name(self) -> &'static str {
         match self {
-            | Self::Add => "int_add",
-            | Self::Sub => "int_sub",
-            | Self::And => "int_and",
-            | Self::Compare => "int_compare",
+            | Self::Add => "val/int/add",
+            | Self::Sub => "val/int/sub",
+            | Self::And => "val/int/and",
+            | Self::Compare => "val/int/compare",
         }
     }
 
@@ -40,7 +40,7 @@ impl ValueIntOp {
     }
 }
 
-/// Compiler-defined identities for the intrinsic CBPV structure.
+/// Compiler-defined identities for the intrinsic CBPV structure and pure primitive operations.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum IntrinsicRole {
     VType,
@@ -50,6 +50,7 @@ pub enum IntrinsicRole {
     Unit,
     Primitive(PrimitiveType),
     ValueInt(ValueIntOp),
+    Operation(IntrinsicOp),
 }
 
 impl IntrinsicRole {
@@ -63,28 +64,30 @@ impl IntrinsicRole {
             .copied()
             .chain(PrimitiveType::all().map(Self::Primitive))
             .chain(ValueIntOp::ALL.iter().copied().map(Self::ValueInt))
+            .chain(IntrinsicOp::all().map(Self::Operation))
     }
 
     pub fn from_source_name(name: &str) -> Option<Self> {
         Self::all().find(|role| role.source_name() == name)
     }
 
-    pub const fn source_name(self) -> &'static str {
+    pub fn source_name(self) -> String {
         match self {
-            | Self::VType => "vtype",
-            | Self::CType => "ctype",
-            | Self::Thk => "thk",
-            | Self::Ret => "ret",
-            | Self::Unit => "unit",
-            | Self::Primitive(primitive) => primitive.intrinsic_name(),
-            | Self::ValueInt(operation) => operation.intrinsic_name(),
+            | Self::VType => "vtype".to_owned(),
+            | Self::CType => "ctype".to_owned(),
+            | Self::Thk => "thk".to_owned(),
+            | Self::Ret => "ret".to_owned(),
+            | Self::Unit => "unit".to_owned(),
+            | Self::Primitive(primitive) => primitive.intrinsic_name().to_owned(),
+            | Self::ValueInt(operation) => operation.intrinsic_name().to_owned(),
+            | Self::Operation(operation) => operation.source_name(),
         }
     }
 }
 
 impl Display for IntrinsicRole {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(self.source_name())
+        f.write_str(&self.source_name())
     }
 }
 
@@ -1025,5 +1028,416 @@ impl BuiltinRole {
 impl Display for BuiltinRole {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(&self.source_name())
+    }
+}
+
+/// Pure integer thunk operations exposed through `@(intrinsic(<ty>/<op>))`.
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum IntegerIntrinsicOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+    Eq,
+    Lt,
+    Gt,
+    ToString,
+}
+
+impl IntegerIntrinsicOp {
+    pub const VARIANTS: &'static [Self] = &[
+        Self::Add,
+        Self::Sub,
+        Self::Mul,
+        Self::Div,
+        Self::Mod,
+        Self::Eq,
+        Self::Lt,
+        Self::Gt,
+        Self::ToString,
+    ];
+
+    pub const fn source_name(self) -> &'static str {
+        match self {
+            | Self::Add => "add",
+            | Self::Sub => "sub",
+            | Self::Mul => "mul",
+            | Self::Div => "div",
+            | Self::Mod => "mod",
+            | Self::Eq => "eq",
+            | Self::Lt => "lt",
+            | Self::Gt => "gt",
+            | Self::ToString => "to_string",
+        }
+    }
+
+    pub fn from_source_name(name: &str) -> Option<Self> {
+        Self::VARIANTS.iter().copied().find(|op| op.source_name() == name)
+    }
+
+    pub const fn arity(self) -> usize {
+        match self {
+            | Self::Add | Self::Sub | Self::Mul | Self::Div | Self::Mod => 2,
+            | Self::Eq | Self::Lt | Self::Gt => 4,
+            | Self::ToString => 1,
+        }
+    }
+
+    pub const fn is_branch(self) -> bool {
+        matches!(self, Self::Eq | Self::Lt | Self::Gt)
+    }
+}
+
+/// Pure floating-point thunk operations exposed through `@(intrinsic(<ty>/<op>))`.
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum FloatIntrinsicOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Eq,
+    Lt,
+    Gt,
+    ToString,
+}
+
+impl FloatIntrinsicOp {
+    pub const VARIANTS: &'static [Self] =
+        &[Self::Add, Self::Sub, Self::Mul, Self::Div, Self::Eq, Self::Lt, Self::Gt, Self::ToString];
+
+    pub const fn source_name(self) -> &'static str {
+        match self {
+            | Self::Add => "add",
+            | Self::Sub => "sub",
+            | Self::Mul => "mul",
+            | Self::Div => "div",
+            | Self::Eq => "eq",
+            | Self::Lt => "lt",
+            | Self::Gt => "gt",
+            | Self::ToString => "to_string",
+        }
+    }
+
+    pub fn from_source_name(name: &str) -> Option<Self> {
+        Self::VARIANTS.iter().copied().find(|op| op.source_name() == name)
+    }
+
+    pub const fn arity(self) -> usize {
+        match self {
+            | Self::Add | Self::Sub | Self::Mul | Self::Div => 2,
+            | Self::Eq | Self::Lt | Self::Gt => 4,
+            | Self::ToString => 1,
+        }
+    }
+
+    pub const fn is_branch(self) -> bool {
+        matches!(self, Self::Eq | Self::Lt | Self::Gt)
+    }
+}
+
+#[derive(Clone, Copy)]
+struct NamedIntrinsicSpec {
+    op: IntrinsicOp,
+    source_name: &'static str,
+    host_name: &'static str,
+    arity: usize,
+    call_mode: HostCallMode,
+    spare_box: Option<SpareBox>,
+    may_allocate_gc: bool,
+}
+
+macro_rules! define_intrinsic_ops {
+    (
+        $(
+            ($variant:ident, $src:expr, $host:expr, $arity:expr, $mode:ident, $spare:expr, $gc:expr, $abi:expr)
+        ),* $(,)?
+    ) => {
+        /// Pure primitive thunk operations exposed via canonical `@(intrinsic(...))` forms.
+        #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+        pub enum IntrinsicOp {
+            Integer(IntegerType, IntegerIntrinsicOp),
+            Float(FloatType, FloatIntrinsicOp),
+            $( $variant, )*
+        }
+
+        const NAMED_INTRINSIC_SPECS: &[NamedIntrinsicSpec] = &[
+            $(
+                NamedIntrinsicSpec {
+                    op: IntrinsicOp::$variant,
+                    source_name: $src,
+                    host_name: $host,
+                    arity: $arity,
+                    call_mode: HostCallMode::$mode,
+                    spare_box: $spare,
+                    may_allocate_gc: $gc,
+                },
+            )*
+        ];
+
+        impl IntrinsicOp {
+            pub const NAMED_VARIANTS: &'static [Self] = &[ $( Self::$variant, )* ];
+
+            const fn named_spec(self) -> &'static NamedIntrinsicSpec {
+                #[allow(non_camel_case_types)]
+                #[repr(usize)]
+                enum NamedSlot { $( $variant, )* }
+
+                let index = match self {
+                    | Self::Integer(..) | Self::Float(..) => unreachable!(),
+                    $( | Self::$variant => NamedSlot::$variant as usize, )*
+                };
+                &NAMED_INTRINSIC_SPECS[index]
+            }
+
+            pub(crate) fn named_abi(self) -> BuiltinValueClassifier {
+                match self {
+                    | Self::Integer(..) | Self::Float(..) => unreachable!(),
+                    $( | Self::$variant => $abi, )*
+                }
+            }
+        }
+    };
+}
+
+define_intrinsic_ops! {
+    (Int64FromInt, "int64/from_int", "int64_from_int", 1, Returning, Some(SpareBox::Opaque), false, BuiltinOperationAbi::pure([INT], Atom::Integer(IntegerType::Int64))),
+    (Int64ToInt, "int64/to_int", "int64_to_int_branch", 3, Control, None, false, BuiltinOperationAbi::optional([Atom::Integer(IntegerType::Int64)], INT)),
+    (UInt64FromUInt, "uint64/from_uint", "uint64_from_uint", 1, Returning, Some(SpareBox::Opaque), false, BuiltinOperationAbi::pure([Atom::Integer(IntegerType::UInt)], Atom::Integer(IntegerType::UInt64))),
+    (UInt64ToUInt, "uint64/to_uint", "uint64_to_uint_branch", 3, Control, None, false, BuiltinOperationAbi::optional([Atom::Integer(IntegerType::UInt64)], Atom::Integer(IntegerType::UInt))),
+    (CharToString, "char/to_string", "char_to_str", 1, Returning, None, true, BuiltinOperationAbi::pure([Atom::Char], Atom::String)),
+    (CharCodepoint, "char/codepoint", "char_codepoint", 1, Returning, None, false, BuiltinOperationAbi::pure([Atom::Char], INT)),
+    (CharFromCodepoint, "char/from_codepoint", "char_from_codepoint_branch", 3, Control, None, false, BuiltinOperationAbi::optional([INT], Atom::Char)),
+    (StringLength, "string/length", "str_scalar_length", 1, Returning, None, false, BuiltinOperationAbi::pure([Atom::String], INT)),
+    (StringByteLength, "string/byte_length", "str_byte_length", 1, Returning, None, false, BuiltinOperationAbi::pure([Atom::String], INT)),
+    (StringAppend, "string/append", "str_append", 2, Returning, None, true, BuiltinOperationAbi::pure([Atom::String, Atom::String], Atom::String)),
+    (StringSplitOnce, "string/split_once", "str_split_once_branch", 4, Control, None, true, BuiltinOperationAbi::optional_pair([Atom::String, Atom::Char])),
+    (StringSplitAt, "string/split_at", "str_split_at_branch", 4, Control, None, true, BuiltinOperationAbi::optional_pair([Atom::String, INT])),
+    (StringEq, "string/eq", "str_eq_branch", 4, Control, None, false, BuiltinOperationAbi::branch([Atom::String, Atom::String])),
+    (StringGet, "string/get", "str_get_branch", 4, Control, None, false, BuiltinOperationAbi::optional([Atom::String, INT], Atom::Char)),
+    (StringParseInt, "string/parse_int", "str_parse_int_branch", 3, Control, None, false, BuiltinOperationAbi::optional([Atom::String], INT)),
+}
+
+impl IntrinsicOp {
+    pub fn all() -> impl Iterator<Item = Self> {
+        IntegerType::VARIANTS
+            .iter()
+            .copied()
+            .flat_map(|integer| {
+                IntegerIntrinsicOp::VARIANTS
+                    .iter()
+                    .copied()
+                    .map(move |operation| Self::Integer(integer, operation))
+            })
+            .chain(FloatType::VARIANTS.iter().copied().flat_map(|float| {
+                FloatIntrinsicOp::VARIANTS
+                    .iter()
+                    .copied()
+                    .map(move |operation| Self::Float(float, operation))
+            }))
+            .chain(Self::NAMED_VARIANTS.iter().copied())
+    }
+
+    pub fn from_source_name(name: &str) -> Option<Self> {
+        if let Some(named) =
+            NAMED_INTRINSIC_SPECS.iter().find(|spec| spec.source_name == name).map(|spec| spec.op)
+        {
+            return Some(named);
+        }
+        let (prefix, suffix) = name.split_once('/')?;
+        if let Some(integer) =
+            IntegerType::VARIANTS.iter().copied().find(|ty| ty.source_name() == prefix)
+            && let Some(op) = IntegerIntrinsicOp::from_source_name(suffix)
+        {
+            return Some(Self::Integer(integer, op));
+        }
+        if let Some(float) =
+            FloatType::VARIANTS.iter().copied().find(|ty| ty.source_name() == prefix)
+            && let Some(op) = FloatIntrinsicOp::from_source_name(suffix)
+        {
+            return Some(Self::Float(float, op));
+        }
+        None
+    }
+
+    pub fn source_name(self) -> String {
+        match self {
+            | Self::Integer(integer, operation) => {
+                format!("{}/{}", integer.source_name(), operation.source_name())
+            }
+            | Self::Float(float, operation) => {
+                format!("{}/{}", float.source_name(), operation.source_name())
+            }
+            | op => op.named_spec().source_name.to_owned(),
+        }
+    }
+
+    /// Runtime symbol shared with compiled backends and host thunks.
+    pub fn host_name(self) -> String {
+        match self {
+            | Self::Integer(integer, operation) if operation.is_branch() => {
+                format!("{}_{}_branch", integer.source_name(), operation.source_name())
+            }
+            | Self::Float(float, operation) if operation.is_branch() => {
+                format!("{}_{}_branch", float.source_name(), operation.source_name())
+            }
+            | Self::Integer(integer, operation) => {
+                format!("{}_{}", integer.source_name(), operation.source_name())
+            }
+            | Self::Float(float, operation) => {
+                format!("{}_{}", float.source_name(), operation.source_name())
+            }
+            | op => op.named_spec().host_name.to_owned(),
+        }
+    }
+
+    pub const fn arity(self) -> usize {
+        match self {
+            | Self::Integer(_, operation) => operation.arity(),
+            | Self::Float(_, operation) => operation.arity(),
+            | op => op.named_spec().arity,
+        }
+    }
+
+    pub const fn call_mode(self) -> HostCallMode {
+        match self {
+            | Self::Integer(_, operation) => {
+                if operation.is_branch() {
+                    HostCallMode::Control
+                } else {
+                    HostCallMode::Returning
+                }
+            }
+            | Self::Float(_, operation) => {
+                if operation.is_branch() {
+                    HostCallMode::Control
+                } else {
+                    HostCallMode::Returning
+                }
+            }
+            | op => op.named_spec().call_mode,
+        }
+    }
+
+    pub const fn spare_box(self) -> Option<SpareBox> {
+        match self {
+            | Self::Integer(..) | Self::Float(..) => None,
+            | op => op.named_spec().spare_box,
+        }
+    }
+
+    pub const fn may_allocate_gc(self) -> bool {
+        match self {
+            | Self::Integer(_, operation) => matches!(operation, IntegerIntrinsicOp::ToString),
+            | Self::Float(_, operation) => matches!(operation, FloatIntrinsicOp::ToString),
+            | op => op.named_spec().may_allocate_gc,
+        }
+    }
+}
+
+impl Display for IntrinsicOp {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.source_name())
+    }
+}
+
+impl BuiltinOperationAbi {
+    pub fn for_intrinsic(op: IntrinsicOp) -> Self {
+        let classifier = match op {
+            | IntrinsicOp::Integer(integer, operation) => {
+                let atom = BuiltinValueAtom::Integer(integer);
+                match operation {
+                    | IntegerIntrinsicOp::Add
+                    | IntegerIntrinsicOp::Sub
+                    | IntegerIntrinsicOp::Mul
+                    | IntegerIntrinsicOp::Div
+                    | IntegerIntrinsicOp::Mod => Self::pure([atom, atom], atom),
+                    | IntegerIntrinsicOp::Eq | IntegerIntrinsicOp::Lt | IntegerIntrinsicOp::Gt => {
+                        Self::branch([atom, atom])
+                    }
+                    | IntegerIntrinsicOp::ToString => Self::pure([atom], BuiltinValueAtom::String),
+                }
+            }
+            | IntrinsicOp::Float(float, operation) => {
+                let atom = BuiltinValueAtom::Float(float);
+                match operation {
+                    | FloatIntrinsicOp::Add
+                    | FloatIntrinsicOp::Sub
+                    | FloatIntrinsicOp::Mul
+                    | FloatIntrinsicOp::Div => Self::pure([atom, atom], atom),
+                    | FloatIntrinsicOp::Eq | FloatIntrinsicOp::Lt | FloatIntrinsicOp::Gt => {
+                        Self::branch([atom, atom])
+                    }
+                    | FloatIntrinsicOp::ToString => Self::pure([atom], BuiltinValueAtom::String),
+                }
+            }
+            | named => named.named_abi(),
+        };
+        Self { classifier }
+    }
+}
+
+/// Compiler-supplied host operation invoked by the runtime evaluator or a compiled backend.
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum HostOp {
+    Intrinsic(IntrinsicOp),
+    Builtin(BuiltinValueRole),
+}
+
+impl From<IntrinsicOp> for HostOp {
+    fn from(op: IntrinsicOp) -> Self {
+        Self::Intrinsic(op)
+    }
+}
+
+impl From<BuiltinValueRole> for HostOp {
+    fn from(role: BuiltinValueRole) -> Self {
+        Self::Builtin(role)
+    }
+}
+
+impl HostOp {
+    pub fn host_name(self) -> String {
+        match self {
+            | Self::Intrinsic(op) => op.host_name(),
+            | Self::Builtin(role) => role.host_name(),
+        }
+    }
+
+    pub const fn arity(self) -> usize {
+        match self {
+            | Self::Intrinsic(op) => op.arity(),
+            | Self::Builtin(role) => role.arity(),
+        }
+    }
+
+    pub const fn call_mode(self) -> HostCallMode {
+        match self {
+            | Self::Intrinsic(op) => op.call_mode(),
+            | Self::Builtin(role) => role.call_mode(),
+        }
+    }
+
+    pub const fn spare_box(self) -> Option<SpareBox> {
+        match self {
+            | Self::Intrinsic(op) => op.spare_box(),
+            | Self::Builtin(role) => role.spare_box(),
+        }
+    }
+
+    pub const fn may_allocate_gc(self) -> bool {
+        match self {
+            | Self::Intrinsic(op) => op.may_allocate_gc(),
+            | Self::Builtin(role) => role.may_allocate_gc(),
+        }
+    }
+}
+
+impl Display for HostOp {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            | Self::Intrinsic(op) => op.fmt(f),
+            | Self::Builtin(role) => role.fmt(f),
+        }
     }
 }

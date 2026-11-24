@@ -316,6 +316,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for ValueId {
                         right.pretty(f),
                     ])
                 }
+                | Value::IntrinsicOp(operation) => {
+                    RcDoc::text(format!("@(intrinsic({}))", operation.source_name()))
+                }
                 | Value::ValAbs(Abs(binder, body)) => RcDoc::concat([
                     RcDoc::text("val"),
                     RcDoc::space(),

@@ -1,0 +1,156 @@
+@[package(library, name(std/primitive/ops))]
+(
+  #numeric = (
+    #int8 = (
+      #add = @(intrinsic(int8/add)),
+      #sub = @(intrinsic(int8/sub)),
+      #mul = @(intrinsic(int8/mul)),
+      #div = @(intrinsic(int8/div)),
+      #mod = @(intrinsic(int8/mod)),
+      #eq = @(intrinsic(int8/eq)),
+      #lt = @(intrinsic(int8/lt)),
+      #gt = @(intrinsic(int8/gt)),
+      #to_string = @(intrinsic(int8/to_string))
+    ),
+    #int16 = (
+      #add = @(intrinsic(int16/add)),
+      #sub = @(intrinsic(int16/sub)),
+      #mul = @(intrinsic(int16/mul)),
+      #div = @(intrinsic(int16/div)),
+      #mod = @(intrinsic(int16/mod)),
+      #eq = @(intrinsic(int16/eq)),
+      #lt = @(intrinsic(int16/lt)),
+      #gt = @(intrinsic(int16/gt)),
+      #to_string = @(intrinsic(int16/to_string))
+    ),
+    #int32 = (
+      #add = @(intrinsic(int32/add)),
+      #sub = @(intrinsic(int32/sub)),
+      #mul = @(intrinsic(int32/mul)),
+      #div = @(intrinsic(int32/div)),
+      #mod = @(intrinsic(int32/mod)),
+      #eq = @(intrinsic(int32/eq)),
+      #lt = @(intrinsic(int32/lt)),
+      #gt = @(intrinsic(int32/gt)),
+      #to_string = @(intrinsic(int32/to_string))
+    ),
+    #int64 = (
+      #add = @(intrinsic(int64/add)),
+      #sub = @(intrinsic(int64/sub)),
+      #mul = @(intrinsic(int64/mul)),
+      #div = @(intrinsic(int64/div)),
+      #mod = @(intrinsic(int64/mod)),
+      #eq = @(intrinsic(int64/eq)),
+      #lt = @(intrinsic(int64/lt)),
+      #gt = @(intrinsic(int64/gt)),
+      #to_string = @(intrinsic(int64/to_string)),
+      #from_int = @(intrinsic(int64/from_int)),
+      #to_int = @(intrinsic(int64/to_int))
+    ),
+    #int = (
+      #add = @(intrinsic(int/add)),
+      #sub = @(intrinsic(int/sub)),
+      #mul = @(intrinsic(int/mul)),
+      #div = @(intrinsic(int/div)),
+      #mod = @(intrinsic(int/mod)),
+      #eq = @(intrinsic(int/eq)),
+      #lt = @(intrinsic(int/lt)),
+      #gt = @(intrinsic(int/gt)),
+      #to_string = @(intrinsic(int/to_string))
+    ),
+    #uint8 = (
+      #add = @(intrinsic(uint8/add)),
+      #sub = @(intrinsic(uint8/sub)),
+      #mul = @(intrinsic(uint8/mul)),
+      #div = @(intrinsic(uint8/div)),
+      #mod = @(intrinsic(uint8/mod)),
+      #eq = @(intrinsic(uint8/eq)),
+      #lt = @(intrinsic(uint8/lt)),
+      #gt = @(intrinsic(uint8/gt)),
+      #to_string = @(intrinsic(uint8/to_string))
+    ),
+    #uint16 = (
+      #add = @(intrinsic(uint16/add)),
+      #sub = @(intrinsic(uint16/sub)),
+      #mul = @(intrinsic(uint16/mul)),
+      #div = @(intrinsic(uint16/div)),
+      #mod = @(intrinsic(uint16/mod)),
+      #eq = @(intrinsic(uint16/eq)),
+      #lt = @(intrinsic(uint16/lt)),
+      #gt = @(intrinsic(uint16/gt)),
+      #to_string = @(intrinsic(uint16/to_string))
+    ),
+    #uint32 = (
+      #add = @(intrinsic(uint32/add)),
+      #sub = @(intrinsic(uint32/sub)),
+      #mul = @(intrinsic(uint32/mul)),
+      #div = @(intrinsic(uint32/div)),
+      #mod = @(intrinsic(uint32/mod)),
+      #eq = @(intrinsic(uint32/eq)),
+      #lt = @(intrinsic(uint32/lt)),
+      #gt = @(intrinsic(uint32/gt)),
+      #to_string = @(intrinsic(uint32/to_string))
+    ),
+    #uint64 = (
+      #add = @(intrinsic(uint64/add)),
+      #sub = @(intrinsic(uint64/sub)),
+      #mul = @(intrinsic(uint64/mul)),
+      #div = @(intrinsic(uint64/div)),
+      #mod = @(intrinsic(uint64/mod)),
+      #eq = @(intrinsic(uint64/eq)),
+      #lt = @(intrinsic(uint64/lt)),
+      #gt = @(intrinsic(uint64/gt)),
+      #to_string = @(intrinsic(uint64/to_string)),
+      #from_uint = @(intrinsic(uint64/from_uint)),
+      #to_uint = @(intrinsic(uint64/to_uint))
+    ),
+    #uint = (
+      #add = @(intrinsic(uint/add)),
+      #sub = @(intrinsic(uint/sub)),
+      #mul = @(intrinsic(uint/mul)),
+      #div = @(intrinsic(uint/div)),
+      #mod = @(intrinsic(uint/mod)),
+      #eq = @(intrinsic(uint/eq)),
+      #lt = @(intrinsic(uint/lt)),
+      #gt = @(intrinsic(uint/gt)),
+      #to_string = @(intrinsic(uint/to_string))
+    ),
+    #float32 = (
+      #add = @(intrinsic(float32/add)),
+      #sub = @(intrinsic(float32/sub)),
+      #mul = @(intrinsic(float32/mul)),
+      #div = @(intrinsic(float32/div)),
+      #eq = @(intrinsic(float32/eq)),
+      #lt = @(intrinsic(float32/lt)),
+      #gt = @(intrinsic(float32/gt)),
+      #to_string = @(intrinsic(float32/to_string))
+    ),
+    #float64 = (
+      #add = @(intrinsic(float64/add)),
+      #sub = @(intrinsic(float64/sub)),
+      #mul = @(intrinsic(float64/mul)),
+      #div = @(intrinsic(float64/div)),
+      #eq = @(intrinsic(float64/eq)),
+      #lt = @(intrinsic(float64/lt)),
+      #gt = @(intrinsic(float64/gt)),
+      #to_string = @(intrinsic(float64/to_string))
+    )
+  ),
+  #text = (
+    #char = (
+      #to_string = @(intrinsic(char/to_string)),
+      #codepoint = @(intrinsic(char/codepoint)),
+      #from_codepoint = @(intrinsic(char/from_codepoint))
+    ),
+    #string = (
+      #length = @(intrinsic(string/length)),
+      #byte_length = @(intrinsic(string/byte_length)),
+      #append = @(intrinsic(string/append)),
+      #split_once = @(intrinsic(string/split_once)),
+      #split_at = @(intrinsic(string/split_at)),
+      #eq = @(intrinsic(string/eq)),
+      #get = @(intrinsic(string/get)),
+      #parse_int = @(intrinsic(string/parse_int))
+    )
+  )
+)

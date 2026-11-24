@@ -527,8 +527,8 @@ fn defaults_add_no_residual_code_or_runtime_metadata() {
     let implicit = lower(fixture.write("implicit.zy", &source));
     let explicit = lower(fixture.write("explicit.zy", &Fixture::explicit(&source)));
     use zydeco_stackir::low::syntax::{
-        BuiltinValueRole, Computation, Cons, ExternalFunction, IntegerLiteral, Literal, Stack,
-        Value, ValuePattern,
+        BuiltinValueRole, Computation, Cons, ExternalFunction, HostOp, IntegerLiteral, Literal,
+        Stack, Value, ValuePattern,
     };
     for program in [&implicit.sps_low, &explicit.sps_low] {
         let arena = &program.arena().inner;
@@ -547,7 +547,7 @@ fn defaults_add_no_residual_code_or_runtime_metadata() {
             }
             | other => panic!("unexpected residual computation: {other:?}"),
         };
-        assert_eq!(call.function, ExternalFunction::Host(BuiltinValueRole::Exit));
+        assert_eq!(call.function, ExternalFunction::Host(HostOp::Builtin(BuiltinValueRole::Exit)));
         let Stack::Arg(Cons(value, residual)) = arena.stacks[&call.stack] else { panic!() };
         assert!(matches!(
             arena.values[&value],

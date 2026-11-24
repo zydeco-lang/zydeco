@@ -116,6 +116,7 @@ pub enum Value {
         steps: Vec<ProductProjection>,
     },
     Lit(Literal),
+    IntrinsicOp(zydeco_syntax::IntrinsicOp),
     Foreign(CheckedImport),
 }
 

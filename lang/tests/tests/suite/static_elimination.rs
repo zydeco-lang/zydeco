@@ -17,8 +17,8 @@ struct ResidualValues<'a> {
 #[test]
 fn calculated_values_leave_only_literals_in_the_residual_program() {
     let source = r#"
-let add = @(intrinsic(int_add)) in
-let sub = @(intrinsic(int_sub)) in
+let add = @(intrinsic(val/int/add)) in
+let sub = @(intrinsic(val/int/sub)) in
 let result = match add 12 4 | 16 => sub 16 16 | _ => 1 end in
 ! exit result
 "#;
@@ -86,6 +86,7 @@ impl ResidualValues<'_> {
             | ir::Value::Var(_)
             | ir::Value::Triv(_)
             | ir::Value::Lit(_)
+            | ir::Value::IntrinsicOp(_)
             | ir::Value::Foreign(_) => {}
         }
     }

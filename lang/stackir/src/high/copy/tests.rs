@@ -51,7 +51,10 @@ impl Fixture {
         let closure = Closure { stack: StackVar, body }.build(&mut self.arena, site);
         let thunk = ValueProtocol::Thunk(Box::default());
         self.arena.inner.value_protocols.insert_new(closure, thunk);
-        self.arena.inner.builtin_functions.insert_new(closure, BuiltinValueRole::Exit);
+        self.arena
+            .inner
+            .builtin_functions
+            .insert_new(closure, HostOp::Builtin(BuiltinValueRole::Exit));
         let site = self.pat();
         let binder = ValuePattern::Var(f).build(&mut self.arena, site);
         self.arena.inner.pattern_protocols.insert_new(binder, ValueProtocol::Unit);
@@ -136,7 +139,10 @@ fn copies_render_alike_and_keep_sites_protocols_and_provenance() {
         inner.value_protocols.get(copied.closure),
         inner.value_protocols.get(source.closure)
     );
-    assert_eq!(inner.builtin_functions.get(copied.closure), Some(&BuiltinValueRole::Exit));
+    assert_eq!(
+        inner.builtin_functions.get(copied.closure),
+        Some(&HostOp::Builtin(BuiltinValueRole::Exit))
+    );
     assert_eq!(inner.pattern_protocols.get(copied.binder), Some(&ValueProtocol::Unit));
     assert_eq!(inner.compu_protocols.get(copied.body), inner.compu_protocols.get(source.body));
 }

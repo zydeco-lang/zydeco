@@ -180,7 +180,7 @@ fn comparisons_emit_instructions_without_host_imports() {
                         Computation::ExternCall(call)
                             if matches!(
                                 call.function,
-                                ExternalFunction::Host(role) if ComparisonOp::from_builtin(role).is_some()
+                                ExternalFunction::Host(role) if ComparisonOp::from_host(role).is_some()
                             )
                     )
                 }),

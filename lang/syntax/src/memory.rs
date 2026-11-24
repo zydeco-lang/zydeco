@@ -1,6 +1,6 @@
 //! Scalar memory access contracts, independent of temporary value representation.
 
-use crate::{BuiltinValueRole, FloatOperation, FloatType, IntegerOperation, IntegerType};
+use crate::{BuiltinValueRole, FloatOperation, FloatType, HostOp, IntegerOperation, IntegerType};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum MemoryScalar {
@@ -129,6 +129,17 @@ impl MemoryScalar {
 }
 
 impl MemoryAccess {
+    pub fn from_host(op: HostOp) -> Option<Self> {
+        match op {
+            | HostOp::Intrinsic(_) => None,
+            | HostOp::Builtin(role) => Self::from_builtin(role),
+        }
+    }
+
+    pub fn host(self) -> HostOp {
+        HostOp::Builtin(self.builtin())
+    }
+
     pub fn from_builtin(role: BuiltinValueRole) -> Option<Self> {
         let (scalar, kind) = match role {
             | BuiltinValueRole::Integer(ty, IntegerOperation::LoadLe) => {

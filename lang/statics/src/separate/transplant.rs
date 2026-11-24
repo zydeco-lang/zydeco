@@ -945,6 +945,7 @@ impl<'a> Relocator<'a> {
                 operation: *operation,
                 operands: [self.value(u, *a), self.value(u, *b)],
             }),
+            | RelValue::IntrinsicOp(op) => Value::IntrinsicOp(*op),
             | RelValue::Thunk(c) => Value::Thunk(Thunk(self.compu(u, *c))),
             | RelValue::ThunkStub(slot) => Value::Thunk(Thunk(self.resolve_stub_compu(u, *slot))),
             | RelValue::Ctor(c, v) => Value::Ctor(Ctor(*c, self.value(u, *v))),

@@ -82,8 +82,8 @@ begin
       let val product_at (L : VType) (Left : VType) (Right : VType) (A : VType) (B : VType)
         (left : Codec Left A) (right : Codec Right B) (left_offset : Int) (right_offset : Int)
       : Codec L (A * B) =
-          let left_offset = (@(intrinsic(int_add))) left_offset 0 in
-          let right_offset = (@(intrinsic(int_add))) right_offset 0 in
+          let left_offset = (@(intrinsic(val/int/add))) left_offset 0 in
+          let right_offset = (@(intrinsic(val/int/add))) right_offset 0 in
           (
             #init = val pointer (a, b) =>
               {

@@ -93,6 +93,51 @@ mod tests {
     }
 
     #[test]
+    fn intrinsic_catalog_is_complete_unique_and_consistent() {
+        let ops: alloc::vec::Vec<_> = IntrinsicOp::all().collect();
+        assert_eq!(ops.len(), 10 * 9 + 2 * 8 + 15);
+
+        let mut source_names = BTreeSet::new();
+        let mut host_names = BTreeSet::new();
+        for op in ops {
+            let src = op.source_name();
+            assert!(source_names.insert(src.clone()), "duplicate intrinsic source name {src}");
+            assert_eq!(IntrinsicOp::from_source_name(&src), Some(op));
+            assert_eq!(IntrinsicRole::from_source_name(&src), Some(IntrinsicRole::Operation(op)));
+
+            let host = op.host_name();
+            assert!(host_names.insert(host.clone()), "duplicate intrinsic host name {host}");
+
+            let abi = BuiltinOperationAbi::for_intrinsic(op).into_classifier();
+            let (abi_arity, abi_mode) = walk_classifier(&abi);
+            assert_eq!(op.arity(), abi_arity, "arity mismatch for {op}");
+            assert_eq!(op.call_mode(), abi_mode, "call_mode mismatch for {op}");
+
+            if op.may_allocate_gc() {
+                assert_eq!(
+                    op.spare_box(),
+                    None,
+                    "GC-allocating intrinsic op {op} cannot take a spare box"
+                );
+                assert!(op.arity() <= 5, "GC-allocating intrinsic op {op} exceeds 5 args");
+            }
+        }
+
+        let all_roles: alloc::vec::Vec<_> = IntrinsicRole::all().collect();
+        let mut role_names = BTreeSet::new();
+        for role in all_roles {
+            let src = role.source_name();
+            assert!(role_names.insert(src.clone()), "duplicate intrinsic role name {src}");
+            assert_eq!(IntrinsicRole::from_source_name(&src), Some(role));
+        }
+        assert_eq!(
+            IntrinsicRole::from_source_name("val/int/add"),
+            Some(IntrinsicRole::ValueInt(ValueIntOp::Add))
+        );
+        assert_eq!(IntrinsicRole::from_source_name("int_add"), None);
+    }
+
+    #[test]
     fn runtime_failure_and_abi_boundaries_validate() {
         for code in 1..=4 {
             let failure = RuntimeFailure::from_code(code).unwrap();

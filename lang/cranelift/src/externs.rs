@@ -20,7 +20,7 @@ use zydeco_machine::closure::ClosureField;
 use zydeco_machine::word::ScalarRepresentation;
 use zydeco_stackir::low::syntax::{ExternalFunction, StackId};
 use zydeco_syntax::{
-    BuiltinValueRole, ForeignImport, ForeignParameter, ForeignResult, ForeignSignature, IntegerType,
+    ForeignImport, ForeignParameter, ForeignResult, ForeignSignature, HostOp, IntegerType,
 };
 
 pub(crate) fn c_abi_signature(call_conv: CallConv, sig: &ForeignSignature) -> Signature {
@@ -74,7 +74,7 @@ pub(crate) fn emit_extern_call(
 }
 
 fn emit_host_call(
-    em: &mut CaseEmitter<'_, '_>, role: BuiltinValueRole, stack: StackId,
+    em: &mut CaseEmitter<'_, '_>, role: HostOp, stack: StackId,
 ) -> Result<(), EmitError> {
     em.emit_stack(stack)?;
     let arity = role.arity();

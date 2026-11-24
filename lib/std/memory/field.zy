@@ -72,16 +72,16 @@ begin
       param val (/Uninit; /Init; /Ptr; /unsafe; types) : Types Addr in
       let Field (P : VType) (C : VType) = val pi (_ : Unit) . Int in
       let val offset (P : VType) (C : VType) (field : Field P C) : Int =
-        (@(intrinsic(int_add))) (field ()) 0
+        (@(intrinsic(val/int/add))) (field ()) 0
       in
       let val from_offset (P : VType) (C : VType) (offset : Int) : Field P C =
-        let known = (@(intrinsic(int_add))) offset 0 in
+        let known = (@(intrinsic(val/int/add))) offset 0 in
         val () => known
       in
       let val compose (P : VType) (C : VType) (D : VType)
         (outer : Field P C) (inner : Field C D)
       : Field P D =
-          let known = (@(intrinsic(int_add))) (outer ()) (inner ()) in
+          let known = (@(intrinsic(val/int/add))) (outer ()) (inner ()) in
           val () => known
       in
       let val project (P : VType) (C : VType) (S : VType) (field : Field P C)

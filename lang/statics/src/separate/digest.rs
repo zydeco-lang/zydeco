@@ -699,6 +699,10 @@ impl HashWriter {
                 self.u8(15);
                 self.literal(l);
             }
+            | RelValue::IntrinsicOp(op) => {
+                self.u8(16);
+                self.str(&op.source_name());
+            }
         }
     }
 

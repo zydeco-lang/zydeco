@@ -45,7 +45,11 @@ impl CheckedNode {
             | Self::Value(value) => {
                 child(Self::Type(statics.annotations_value[&value]));
                 match &statics.values[&value] {
-                    | Value::Hole(_) | Value::Var(_) | Value::Triv(_) | Value::Lit(_) => {}
+                    | Value::Hole(_)
+                    | Value::Var(_)
+                    | Value::Triv(_)
+                    | Value::Lit(_)
+                    | Value::IntrinsicOp(_) => {}
                     | Value::Named(Named(_, body))
                     | Value::Ctor(Ctor(_, body))
                     | Value::Proj(Proj(body, _)) => child(Self::Value(*body)),

@@ -124,6 +124,9 @@ impl ScopedBuilder {
             | IntrinsicRole::ValueInt(operation) => {
                 self.alloc_term(Internal::ValueInt(operation), origin)
             }
+            | IntrinsicRole::Operation(operation) => {
+                self.alloc_term(Internal::Operation(operation), origin)
+            }
         }
     }
 

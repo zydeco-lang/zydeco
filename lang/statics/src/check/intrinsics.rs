@@ -174,6 +174,16 @@ impl InternalTerm {
                 }
                 TermAnnId::Value(body, codomain)
             }
+            | su::Internal::Operation(operation) => {
+                let abi = zydeco_abi::BuiltinOperationAbi::for_intrinsic(operation);
+                let classifier = abi.into_classifier();
+                let mut bound_ctypes = Vec::new();
+                let ty =
+                    Self::materialize_value_classifier(tycker, env, &classifier, &mut bound_ctypes);
+                let body = Alloc::alloc(tycker, ss::Value::IntrinsicOp(operation), ty, &());
+                tycker.statics.terms.record(self.1, ss::TermId::Value(body));
+                TermAnnId::Value(body, ty)
+            }
             | su::Internal::OS => self.builtin_type(tycker, env, ss::BuiltinTypeRole::OS)?,
             | su::Internal::Monad | su::Internal::Algebra => {
                 tycker.err(TyckError::Expressivity(
@@ -188,6 +198,69 @@ impl InternalTerm {
     ) -> Result<TermAnnId> {
         let ty = BuiltinTypeResolution(role).resolve(tycker, env)?;
         Ok(TermAnnId::Type(ty, tycker.statics.type_kind(ty)))
+    }
+    fn materialize_value_classifier(
+        tycker: &mut Tycker<'_>, env: &ss::TyEnv, classifier: &zydeco_abi::BuiltinValueClassifier,
+        bound_ctypes: &mut Vec<ss::AbstId>,
+    ) -> ss::TypeId {
+        match classifier {
+            | zydeco_abi::BuiltinValueClassifier::Atom(atom) => {
+                let primitive = atom.primitive().expect(
+                    "pure intrinsic operation classifier cannot reference host capability atoms",
+                );
+                ss::PrimitiveTy(primitive).build(tycker, env)
+            }
+            | zydeco_abi::BuiltinValueClassifier::Thunk(body) => {
+                let body =
+                    Self::materialize_computation_classifier(tycker, env, body, bound_ctypes);
+                cs::Thk(body).build(tycker, env)
+            }
+        }
+    }
+    fn materialize_computation_classifier(
+        tycker: &mut Tycker<'_>, env: &ss::TyEnv,
+        classifier: &zydeco_abi::BuiltinComputationClassifier, bound_ctypes: &mut Vec<ss::AbstId>,
+    ) -> ss::TypeId {
+        let ctype = ss::CType.build(tycker, env);
+        match classifier {
+            | zydeco_abi::BuiltinComputationClassifier::OS => {
+                unreachable!("pure intrinsic operation classifier cannot return OS")
+            }
+            | zydeco_abi::BuiltinComputationClassifier::Bound(index) => {
+                let witness = bound_ctypes
+                    .iter()
+                    .rev()
+                    .nth(*index)
+                    .copied()
+                    .expect("well-formed intrinsic classifier bound index");
+                Alloc::alloc(tycker, witness, ctype, &())
+            }
+            | zydeco_abi::BuiltinComputationClassifier::Return(value) => {
+                let value = Self::materialize_value_classifier(tycker, env, value, bound_ctypes);
+                cs::Ret(value).build(tycker, env)
+            }
+            | zydeco_abi::BuiltinComputationClassifier::Arrow(input, output) => {
+                let input = Self::materialize_value_classifier(tycker, env, input, bound_ctypes);
+                let output =
+                    Self::materialize_computation_classifier(tycker, env, output, bound_ctypes);
+                Alloc::alloc(tycker, ss::Arrow(input, output), ctype, &())
+            }
+            | zydeco_abi::BuiltinComputationClassifier::ForallCType(body) => {
+                let def = Alloc::alloc(tycker, ss::VarName::new("R"), AnnId::Kind(ctype), &());
+                let pattern = Alloc::alloc(tycker, ss::TypePattern::Var(def), ctype, &());
+                let witness = Alloc::alloc(tycker, pattern, (), &());
+                bound_ctypes.push(witness);
+                let body =
+                    Self::materialize_computation_classifier(tycker, env, body, bound_ctypes);
+                bound_ctypes.pop();
+                Alloc::alloc(
+                    tycker,
+                    ss::Forall(ss::TypeBinder { pattern, witness }, body),
+                    ctype,
+                    &(),
+                )
+            }
+        }
     }
     pub(super) fn reconcile(
         &self, tycker: &mut Tycker<'_>, synthesized: TermAnnId, switch: Switch<AnnId>,

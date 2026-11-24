@@ -8,21 +8,21 @@ impl ExternalFunction {
     where
         Arena: AsMut<SpsArena>,
     {
-        if let ExternalFunction::Host(role) = self
-            && let Some(operation) = PrimitiveOp::from_builtin(role)
+        if let ExternalFunction::Host(op) = self
+            && let Some(operation) = PrimitiveOp::from_host(op)
         {
             return Primitive::make_function(arena, operation);
         }
-        if let ExternalFunction::Host(role) = self
-            && let Some(operation) = ComparisonOp::from_builtin(role)
+        if let ExternalFunction::Host(op) = self
+            && let Some(operation) = ComparisonOp::from_host(op)
         {
             return CompareBranch::make_function(arena, operation, scheme);
         }
-        if matches!(self, ExternalFunction::Host(BuiltinValueRole::MemoryOffset)) {
+        if matches!(self, ExternalFunction::Host(HostOp::Builtin(BuiltinValueRole::MemoryOffset))) {
             return AddrOffset::make_function(arena);
         }
-        if let ExternalFunction::Host(role) = self
-            && let Some(access) = memory::MemoryAccess::from_builtin(role)
+        if let ExternalFunction::Host(op) = self
+            && let Some(access) = memory::MemoryAccess::from_host(op)
         {
             return MemoryStep::make_function(arena, access, scheme);
         }
@@ -58,7 +58,7 @@ impl Primitive {
             Let { binder: Cons(binder, StackVar), bindee, tail }.build(arena, None)
         });
         let function = Closure { stack: StackVar, body }.build(arena, None);
-        arena.as_mut().inner.builtin_functions.insert_new(function, operation.builtin());
+        arena.as_mut().inner.builtin_functions.insert_new(function, operation.host());
         function
     }
 }
@@ -109,7 +109,7 @@ impl CompareBranch {
             Let { binder: Cons(binder, StackVar), bindee, tail }.build(arena, None)
         });
         let function = Closure { stack: StackVar, body }.build(arena, None);
-        arena.as_mut().inner.builtin_functions.insert_new(function, operation.builtin());
+        arena.as_mut().inner.builtin_functions.insert_new(function, operation.host());
         function
     }
 }
@@ -167,7 +167,7 @@ impl MemoryStep {
             Let { binder: Cons(binder, StackVar), bindee, tail }.build(arena, None)
         });
         let function = Closure { stack: StackVar, body }.build(arena, None);
-        arena.as_mut().inner.builtin_functions.insert_new(function, access.builtin());
+        arena.as_mut().inner.builtin_functions.insert_new(function, access.host());
         function
     }
 }
@@ -198,7 +198,11 @@ impl AddrOffset {
             Let { binder: Cons(binder, StackVar), bindee, tail }.build(arena, None)
         });
         let function = Closure { stack: StackVar, body }.build(arena, None);
-        arena.as_mut().inner.builtin_functions.insert_new(function, BuiltinValueRole::MemoryOffset);
+        arena
+            .as_mut()
+            .inner
+            .builtin_functions
+            .insert_new(function, HostOp::Builtin(BuiltinValueRole::MemoryOffset));
         function
     }
 }

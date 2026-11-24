@@ -14,6 +14,7 @@ pub enum Internal {
     Unit,
     Primitive(zydeco_syntax::PrimitiveType),
     ValueInt(zydeco_syntax::ValueIntOp),
+    Operation(zydeco_syntax::IntrinsicOp),
     OS,
     Monad,
     Algebra,

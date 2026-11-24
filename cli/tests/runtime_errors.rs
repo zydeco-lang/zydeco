@@ -193,7 +193,7 @@ fn native_arithmetic_lowers_to_primitives_without_runtime_arithmetic_calls() {
                     Computation::ExternCall(call)
                         if matches!(
                             call.function,
-                            ExternalFunction::Host(role) if PrimitiveOp::from_builtin(role).is_some()
+                            ExternalFunction::Host(role) if PrimitiveOp::from_host(role).is_some()
                         )
                 )
             }),

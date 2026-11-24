@@ -19,9 +19,9 @@ begin
   let Codec = Codec Uninit Init Ptr in
 
   let size = @(import("size.zy")) in
-  let compare = @(intrinsic(int_compare)) in
-  let bits = @(intrinsic(int_and)) in
-  let sub = @(intrinsic(int_sub)) in
+  let compare = @(intrinsic(val/int/compare)) in
+  let bits = @(intrinsic(val/int/and)) in
+  let sub = @(intrinsic(val/int/sub)) in
   let Record (Left : VType) (Right : VType) =
     exists (= L : VType) .
         (#storage :: Storage L)

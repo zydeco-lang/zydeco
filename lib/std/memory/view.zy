@@ -85,8 +85,8 @@ begin
   let val header (M : VType) (Metadata : VType) (Payload : VType)
     (metadata : Codec Metadata M) (metadata_offset : Int) (payload_offset : Int)
   : Header M Payload =
-      let metadata_offset = (@(intrinsic(int_add))) metadata_offset 0 in
-      let payload_offset = (@(intrinsic(int_add))) payload_offset 0 in
+      let metadata_offset = (@(intrinsic(val/int/add))) metadata_offset 0 in
+      let payload_offset = (@(intrinsic(val/int/add))) payload_offset 0 in
       let H (S : VType) = Addr in
       let val from_address (S : VType) (address : Addr) : H S = address in
       let val address (S : VType) (handle : H S) : Addr = handle in

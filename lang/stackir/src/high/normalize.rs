@@ -603,10 +603,10 @@ mod tests {
         }
 
         fn primitive(&mut self) -> ValueId {
-            ExternalFunction::Host(BuiltinValueRole::Integer(
+            ExternalFunction::Host(HostOp::Intrinsic(IntrinsicOp::Integer(
                 IntegerType::Int,
-                IntegerOperation::Add,
-            ))
+                IntegerIntrinsicOp::Add,
+            )))
             .make_function(self.scheme, &mut self.arena)
         }
 
@@ -628,7 +628,10 @@ mod tests {
 
         fn external(&mut self, role: BuiltinValueRole) -> CompuId {
             let stack = self.build(StackVar);
-            self.build(ExternCall { function: ExternalFunction::Host(role), stack })
+            self.build(ExternCall {
+                function: ExternalFunction::Host(HostOp::Builtin(role)),
+                stack,
+            })
         }
 
         fn trap(&mut self, operation: &str) -> ValueId {
@@ -652,7 +655,7 @@ mod tests {
             let binder = self.build(Hole);
             let stack = self.build(Kont { binder, body });
             self.build(ExternCall {
-                function: ExternalFunction::Host(BuiltinValueRole::WriteStr),
+                function: ExternalFunction::Host(HostOp::Builtin(BuiltinValueRole::WriteStr)),
                 stack,
             })
         }
@@ -784,7 +787,7 @@ mod tests {
             (IntegerArithmetic::Add, 1, true, true),
         ] {
             let mut fixture = Fixture::default();
-            let role = PrimitiveOp::Integer(IntegerType::Int, arithmetic).builtin();
+            let role = PrimitiveOp::Integer(IntegerType::Int, arithmetic).host();
             let thunk = ExternalFunction::Host(role)
                 .make_function(SpsScheme::BranchJoin, &mut fixture.arena);
             let first = if trapping_operand {
@@ -802,7 +805,7 @@ mod tests {
             let binder = fixture.build(Hole);
             let stack = fixture.build(Kont { binder, body: call });
             let root = fixture.build(ExternCall {
-                function: ExternalFunction::Host(BuiltinValueRole::WriteStr),
+                function: ExternalFunction::Host(HostOp::Builtin(BuiltinValueRole::WriteStr)),
                 stack,
             });
 
@@ -815,7 +818,7 @@ mod tests {
             else {
                 panic!("the preceding effect must remain first")
             };
-            assert_eq!(*name, BuiltinValueRole::WriteStr);
+            assert_eq!(*name, HostOp::Builtin(BuiltinValueRole::WriteStr));
             let Stack::Ext(StackExt::Kont(Kont { body, .. })) = arena.stacks[stack] else {
                 panic!("the effect must resume its consumer")
             };
@@ -832,7 +835,7 @@ mod tests {
                 body
             };
             assert!(
-                matches!(&arena.compus[&body], Computation::ExternCall(ExternCall { function: ExternalFunction::Host(name), .. }) if *name == BuiltinValueRole::WriteLine)
+                matches!(&arena.compus[&body], Computation::ExternCall(ExternCall { function: ExternalFunction::Host(name), .. }) if *name == HostOp::Builtin(BuiltinValueRole::WriteLine))
             );
         }
     }
@@ -885,7 +888,7 @@ mod tests {
         let ambient = fixture.build(StackVar);
         let stack = fixture.build(Cons(value, ambient));
         let body = fixture.build(ExternCall {
-            function: ExternalFunction::Host(BuiltinValueRole::WriteStr),
+            function: ExternalFunction::Host(HostOp::Builtin(BuiltinValueRole::WriteStr)),
             stack,
         });
         let thunk = fixture.build(Closure { stack: StackVar, body });
@@ -1337,7 +1340,7 @@ mod tests {
                 | _ => None,
             })
             .collect::<Vec<_>>();
-        assert_eq!(calls, [BuiltinValueRole::WriteStr]);
+        assert_eq!(calls, [HostOp::Builtin(BuiltinValueRole::WriteStr)]);
     }
 
     #[test]
@@ -1868,7 +1871,9 @@ mod tests {
                     matches!(
                         c,
                         Computation::ExternCall(ExternCall {
-                            function: ExternalFunction::Host(BuiltinValueRole::WriteLine),
+                            function: ExternalFunction::Host(HostOp::Builtin(
+                                BuiltinValueRole::WriteLine
+                            )),
                             ..
                         })
                     )

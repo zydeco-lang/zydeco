@@ -112,8 +112,8 @@ begin
     in
     let val inspect (A : VType) (plan : Plan A) : Shape = plan/shape in
     let val realize (A : VType) (plan : Plan A) : Representation A =
-      let known_size = (@(intrinsic(int_add))) plan/shape/size 0 in
-      let known_alignment = (@(intrinsic(int_add))) plan/shape/alignment 0 in
+      let known_size = (@(intrinsic(val/int/add))) plan/shape/size 0 in
+      let known_alignment = (@(intrinsic(val/int/add))) plan/shape/alignment 0 in
       plan/representation
     in
     (

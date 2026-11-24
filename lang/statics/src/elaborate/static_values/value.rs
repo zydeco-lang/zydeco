@@ -52,6 +52,9 @@ impl StaticElaborator<'_, '_> {
             }
             | Value::Triv(_) => Ok(self.make_value(source, ty, 0, ValueForm::Triv)),
             | Value::Lit(literal) => Ok(self.make_value(source, ty, 0, ValueForm::Lit(literal))),
+            | Value::IntrinsicOp(operation) => {
+                Ok(self.make_value(source, ty, 0, ValueForm::IntrinsicOp(operation)))
+            }
             | Value::ValAbs(Abs(binder, body)) => {
                 let max_scope = self.function_max_scope(body, &binder, env);
                 Ok(self.make_value(

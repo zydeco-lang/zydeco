@@ -38,7 +38,7 @@ impl Folder for BuiltinPackageFolder<'_, '_> {
 }
 
 fn make_builtin_op(role: BuiltinValueRole, lowerer: &mut Lowerer<'_>) -> ValueId {
-    ExternalFunction::Host(role).make_function(lowerer.scheme, lowerer)
+    ExternalFunction::Host(HostOp::Builtin(role)).make_function(lowerer.scheme, lowerer)
 }
 
 impl BuiltinPackageFolder<'_, '_> {

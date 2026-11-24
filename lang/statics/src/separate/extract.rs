@@ -826,6 +826,7 @@ impl InterfaceExtractor<'_> {
             | Value::IntOp(IntValueOp { operation, operands: [a, b] }) => {
                 RelValue::IntOp { operation, operands: [self.value_id(a), self.value_id(b)] }
             }
+            | Value::IntrinsicOp(op) => RelValue::IntrinsicOp(op),
             | Value::Thunk(Thunk(compu)) => {
                 // Abstract computation bodies behind a typed stub so body edits preserve `UnitInterface`.
                 let stub = self.out.thunk_bodies.len() as u32;
@@ -1448,6 +1449,7 @@ impl BodyExtractor<'_> {
                     | Value::IntOp(IntValueOp { operation, operands: [a, b] }) => {
                         RelValue::IntOp { operation, operands: [self.value(a), self.value(b)] }
                     }
+                    | Value::IntrinsicOp(op) => RelValue::IntrinsicOp(op),
                     | Value::Thunk(Thunk(compu)) => RelValue::Thunk(self.compu(compu)),
                     | Value::Ctor(Ctor(c, v)) => RelValue::Ctor(c, self.value(v)),
                     | Value::Triv(_) => RelValue::Triv,

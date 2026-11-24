@@ -117,7 +117,7 @@ impl MetadataKind {
             | Self::Intrinsic => MetadataArguments::Positional(vec![MetadataParameter::new(
                 "role",
                 MetadataValue::Identifier(
-                    IntrinsicRole::all().map(|role| role.source_name().to_owned()).collect(),
+                    IntrinsicRole::all().map(IntrinsicRole::source_name).collect(),
                 ),
             )]),
             | Self::Builtin => MetadataArguments::Positional(vec![MetadataParameter::new(

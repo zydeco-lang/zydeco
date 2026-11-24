@@ -364,6 +364,7 @@ impl StaticElaborator<'_, '_> {
             }
             | ValueForm::Triv => ir::Value::Triv(Triv),
             | ValueForm::Lit(literal) => ir::Value::Lit(literal.clone()),
+            | ValueForm::IntrinsicOp(operation) => ir::Value::IntrinsicOp(*operation),
             | ValueForm::Foreign(import) => ir::Value::Foreign(import.clone()),
             | ValueForm::RuntimeVar(var) => ir::Value::Var(*var),
             | ValueForm::RuntimeTerm(id) => {
@@ -433,6 +434,7 @@ impl StaticElaborator<'_, '_> {
                 ValueForm::Function { .. }
                     | ValueForm::Triv
                     | ValueForm::Lit(_)
+                    | ValueForm::IntrinsicOp(_)
                     | ValueForm::Foreign(_)
                     | ValueForm::RuntimeVar { .. }
                     | ValueForm::Thunk { .. }
@@ -460,6 +462,7 @@ impl StaticElaborator<'_, '_> {
             | ValueForm::Hole { .. } | ValueForm::RuntimeTerm(_) => value.0.form.clone(),
             | ValueForm::Triv
             | ValueForm::Lit(_)
+            | ValueForm::IntrinsicOp(_)
             | ValueForm::Foreign(_)
             | ValueForm::RuntimeVar(_)
             | ValueForm::Thunk { .. }
@@ -648,7 +651,7 @@ impl FreeDefCollector<'_> {
         }
         zydeco_foundation::stack::maybe_grow(|| match &self.statics.values[&value] {
             | Value::Var(def) => self.refs.push(*def),
-            | Value::Hole(_) | Value::Triv(_) | Value::Lit(_) => {}
+            | Value::Hole(_) | Value::Triv(_) | Value::Lit(_) | Value::IntrinsicOp(_) => {}
             | Value::Named(Named(_, inner))
             | Value::Ctor(Ctor(_, inner))
             | Value::SCons(ConsN(_, inner))

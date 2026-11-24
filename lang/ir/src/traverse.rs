@@ -65,7 +65,11 @@ impl<'a> Iterator for RuntimeNodes<'a> {
                         | Value::VCons(VCons { items, .. }) => {
                             self.pending.extend(items.iter().copied().map(TermId::Value));
                         }
-                        | Value::Hole(_) | Value::Var(_) | Value::Triv(_) | Value::Lit(_) => {}
+                        | Value::Hole(_)
+                        | Value::Var(_)
+                        | Value::Triv(_)
+                        | Value::Lit(_)
+                        | Value::IntrinsicOp(_) => {}
                     }
                     return Some(RuntimeNode::Value(id, value));
                 }

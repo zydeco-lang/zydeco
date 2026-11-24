@@ -372,6 +372,15 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
                 self.values.push(ValuePlan::pure(value));
                 return Step::Return(());
             }
+            | ir::Value::IntrinsicOp(op) => {
+                let value = ExternalFunction::Host(HostOp::Intrinsic(*op))
+                    .make_function(self.lo.scheme, self.lo);
+                if let Some(protocol) = self.lo.core.value_protocols.get(source) {
+                    self.lo.arena.inner.value_protocols.insert_new(value, protocol.clone());
+                }
+                self.values.push(ValuePlan::pure(value));
+                return Step::Return(());
+            }
             | ir::Value::Ctor { tag, payload } => (Some(*payload), ValueParent::Ctor(tag.clone())),
             | ir::Value::Proj { head, steps } => (Some(*head), ValueParent::Proj(steps.clone())),
             | ir::Value::Let(Let { binder, bindee, tail }) => {
@@ -577,11 +586,11 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
                 let integer_type = integer
                     .integer_type()
                     .expect("a checked integer literal carries its integer type");
-                let role = zydeco_syntax::BuiltinValueRole::Integer(
+                let op = zydeco_syntax::HostOp::Intrinsic(zydeco_syntax::IntrinsicOp::Integer(
                     integer_type,
-                    zydeco_syntax::IntegerOperation::Eq,
-                );
-                let operator = ExternalFunction::Host(role).make_function(self.lo.scheme, self.lo);
+                    zydeco_syntax::IntegerIntrinsicOp::Eq,
+                ));
+                let operator = ExternalFunction::Host(op).make_function(self.lo.scheme, self.lo);
                 let success_stack = StackVar.build(self.lo, site);
                 Step::Call {
                     input: Work::MatchPlan { plan: success, stack: success_stack, site },

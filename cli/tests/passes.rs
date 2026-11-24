@@ -445,7 +445,7 @@ fn unoptimized_integer_zero_divisors_fail_before_the_continuation() {
 #[test]
 fn address_offsets_lower_without_host_calls_and_preserve_wrapping() {
     use zydeco_stackir::low::syntax::{Computation, ExternalFunction, Value};
-    use zydeco_syntax::BuiltinValueRole;
+    use zydeco_syntax::{BuiltinValueRole, HostOp};
 
     let fixture = Fixture::new(
         r#"
@@ -491,7 +491,8 @@ let fail = { fn (_ : Int) => ! process/exit 41 } in
         assert!(!arena.compus.iter().any(|(_, compu)| matches!(
             compu,
             Computation::ExternCall(call)
-                if call.function == ExternalFunction::Host(BuiltinValueRole::MemoryOffset)
+                if call.function
+                    == ExternalFunction::Host(HostOp::Builtin(BuiltinValueRole::MemoryOffset))
         )));
         for target in ["exe", "wasm-sps"] {
             Fixture::assert_success(&fixture.execute(selection, target));
@@ -626,7 +627,7 @@ let bad = {{ ! process/exit 42 }} in
         assert!(!backend.sps_low.arena().inner.compus.iter().any(|(_, compu)| matches!(
             compu,
             Computation::ExternCall(call)
-                if matches!(call.function, ExternalFunction::Host(role) if MemoryAccess::from_builtin(role).is_some())
+                if matches!(call.function, ExternalFunction::Host(role) if MemoryAccess::from_host(role).is_some())
         )));
         Fixture::assert_success(
             &Command::new(env!("CARGO_BIN_EXE_zydeco"))

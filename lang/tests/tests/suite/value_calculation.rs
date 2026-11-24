@@ -15,7 +15,8 @@ fn value_matches_and_arithmetic_reduce_through_higher_order_application() {
 
 #[test]
 fn runtime_data_cannot_supply_static_choices_or_integer_operands() {
-    for body in ["let add = @(intrinsic(int_add)) in add x 1", "match x | 0 => 1 | _ => 2 end"] {
+    for body in ["let add = @(intrinsic(val/int/add)) in add x 1", "match x | 0 => 1 | _ => 2 end"]
+    {
         SourceCase::assert_rejected(
             SourceCase::check(&format!(
                 "let f : Thk (Int -> Ret Int) = {{ fn x => ret ({body}) }} in ! exit 0"
@@ -34,8 +35,8 @@ fn value_integer_leaves_have_total_wrapping_and_signed_comparison_semantics() {
         ("compare -4611686018427387904 4611686018427387903", "-1"),
     ] {
         SourceCase::assert_accepted(SourceCase::run(&format!(
-            "let add = @(intrinsic(int_add)) in let sub = @(intrinsic(int_sub)) in \
-             let bit_and = @(intrinsic(int_and)) in let compare = @(intrinsic(int_compare)) in \
+            "let add = @(intrinsic(val/int/add)) in let sub = @(intrinsic(val/int/sub)) in \
+             let bit_and = @(intrinsic(val/int/and)) in let compare = @(intrinsic(val/int/compare)) in \
              let result = match {expression} | {expected} => 0 | _ => 1 end in ! exit result"
         )));
     }

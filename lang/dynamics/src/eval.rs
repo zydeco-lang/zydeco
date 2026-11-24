@@ -174,16 +174,16 @@ impl<'prog, 'rt> Runtime<'prog, 'rt> {
                 self.env = next_env;
                 Focus::Compu(*body)
             }
-            | ThunkBody::Builtin(role) => {
-                let mut args = Vec::with_capacity(role.arity());
-                for _ in 0..role.arity() {
+            | ThunkBody::Host(op) => {
+                let mut args = Vec::with_capacity(op.arity());
+                for _ in 0..op.arity() {
                     let Some(SemCompu::App(arg)) = self.stack.pop() else {
                         panic!("Prim on non-App")
                     };
                     args.push(arg);
                 }
                 match BuiltinRuntime::invoke(
-                    *role,
+                    *op,
                     args,
                     self.input,
                     self.output,
@@ -269,6 +269,7 @@ impl<'prog, 'rt> Runtime<'prog, 'rt> {
                 current
             }
             | ir::Value::Lit(lit) => SemValue::Literal(lit.clone()),
+            | ir::Value::IntrinsicOp(op) => BuiltinRuntime::intrinsic_value(*op),
             | ir::Value::Foreign(import) => {
                 SemValue::Thunk(Rc::new(ThunkBody::Foreign(import.clone())))
             }

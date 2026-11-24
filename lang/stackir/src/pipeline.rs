@@ -68,20 +68,22 @@ mod tests {
             self.arena.admin.alloc_def(VarName::new(name))
         }
 
-        fn primitive(&mut self, role: BuiltinValueRole) -> ValueId {
-            assert_eq!(role.call_mode(), HostCallMode::Returning);
-            ExternalFunction::Host(role).make_function(SpsScheme::BranchJoin, &mut self.arena)
+        fn primitive(&mut self, op: HostOp) -> ValueId {
+            assert_eq!(op.call_mode(), HostCallMode::Returning);
+            ExternalFunction::Host(op).make_function(SpsScheme::BranchJoin, &mut self.arena)
         }
 
-        fn literal(role: BuiltinValueRole, value: u8) -> Literal {
-            match role {
-                | BuiltinValueRole::Integer(integer, _) => {
+        fn literal(op: HostOp, value: u8) -> Literal {
+            match op {
+                | HostOp::Intrinsic(IntrinsicOp::Integer(integer, _))
+                | HostOp::Builtin(BuiltinValueRole::Integer(integer, _)) => {
                     IntegerLiteral::new(value.into()).with_type(integer).unwrap().into()
                 }
-                | BuiltinValueRole::Float(float, _) => {
+                | HostOp::Intrinsic(IntrinsicOp::Float(float, _))
+                | HostOp::Builtin(BuiltinValueRole::Float(float, _)) => {
                     FloatLiteral::from(f64::from(value)).with_type(float).unwrap().into()
                 }
-                | _ => unreachable!("arithmetic fixtures use numeric roles"),
+                | _ => unreachable!("arithmetic fixtures use numeric ops"),
             }
         }
 
@@ -93,10 +95,8 @@ mod tests {
             self.build(SForce { thunk, stack })
         }
 
-        fn literal_call(
-            &mut self, role: BuiltinValueRole, thunk: ValueId, rest: StackId,
-        ) -> CompuId {
-            let arguments = [20, 3].map(|value| self.build(Self::literal(role, value)));
+        fn literal_call(&mut self, op: HostOp, thunk: ValueId, rest: StackId) -> CompuId {
+            let arguments = [20, 3].map(|value| self.build(Self::literal(op, value)));
             self.call(thunk, arguments, rest)
         }
 
@@ -189,13 +189,13 @@ mod tests {
 
     #[test]
     fn arithmetic_primitives_compile_to_typed_values_without_call_wrappers() {
-        for (role, operation) in BuiltinValueRole::all()
-            .filter_map(|role| PrimitiveOp::from_builtin(role).map(|operation| (role, operation)))
-        {
+        for (op, operation) in IntrinsicOp::all().filter_map(|op| {
+            PrimitiveOp::from_intrinsic(op).map(|operation| (HostOp::Intrinsic(op), operation))
+        }) {
             let mut fixture = PrimitiveFixture::default();
             let params = [fixture.def("first"), fixture.def("second")];
             let arguments = params.map(|def| fixture.build(def));
-            let thunk = fixture.primitive(role);
+            let thunk = fixture.primitive(op);
             let ambient = fixture.build(StackVar);
             let call = fixture.call(thunk, arguments, ambient);
             let root = fixture.parameters(&params, call);
@@ -214,11 +214,11 @@ mod tests {
                     }
                 })
                 .collect::<Vec<_>>();
-            assert_eq!(primitives.len(), 1, "{role}");
+            assert_eq!(primitives.len(), 1, "{op}");
             assert_eq!(primitives[0].operation, operation);
             let actual = primitives[0].operands.map(|id| match program.arena().inner.values[&id] {
                 | low::Value::Var(def) => def,
-                | _ => panic!("{role}: dynamic operands must remain variables"),
+                | _ => panic!("{op}: dynamic operands must remain variables"),
             });
             // Closure conversion renames binders; each argument must refer to the corresponding parameter.
             let mut root = program.root();
@@ -229,7 +229,7 @@ mod tests {
                     ..
                 }) = program.arena().inner.compus[&root]
                 else {
-                    panic!("{role}: both parameters must remain bound")
+                    panic!("{op}: both parameters must remain bound")
                 };
                 assert!(
                     matches!(program.arena().inner.vpats[&pattern], low::ValuePattern::Var(def) if def == argument)
@@ -241,19 +241,19 @@ mod tests {
 
     #[test]
     fn literal_arithmetic_folds_at_every_numeric_width() {
-        for (role, operation) in BuiltinValueRole::all()
-            .filter_map(|role| PrimitiveOp::from_builtin(role).map(|operation| (role, operation)))
-        {
+        for (op, operation) in IntrinsicOp::all().filter_map(|op| {
+            PrimitiveOp::from_intrinsic(op).map(|operation| (HostOp::Intrinsic(op), operation))
+        }) {
             let mut fixture = PrimitiveFixture::default();
-            let thunk = fixture.primitive(role);
+            let thunk = fixture.primitive(op);
             let ambient = fixture.build(StackVar);
-            let root = fixture.literal_call(role, thunk, ambient);
+            let root = fixture.literal_call(op, thunk, ambient);
             let program = fixture.compile(root);
             PrimitiveFixture::assert_no_call_wrappers(&program);
             PrimitiveFixture::assert_returned_literal(
                 &program,
                 operation
-                    .evaluate(&[20, 3].map(|value| PrimitiveFixture::literal(role, value)))
+                    .evaluate(&[20, 3].map(|value| PrimitiveFixture::literal(op, value)))
                     .unwrap(),
             );
             assert!(
@@ -269,7 +269,8 @@ mod tests {
 
     #[test]
     fn known_addition_aliases_inline_calls_and_their_return_continuation() {
-        let role = BuiltinValueRole::Integer(IntegerType::Int, IntegerOperation::Add);
+        let role =
+            HostOp::Intrinsic(IntrinsicOp::Integer(IntegerType::Int, IntegerIntrinsicOp::Add));
         let mut fixture = PrimitiveFixture::default();
         let operation = fixture.def("operation");
         let alias = fixture.def("alias");
@@ -322,7 +323,8 @@ mod tests {
 
     #[test]
     fn an_escaping_primitive_keeps_its_interface_but_its_body_is_inline_arithmetic() {
-        let role = BuiltinValueRole::Integer(IntegerType::Int, IntegerOperation::Add);
+        let role =
+            HostOp::Intrinsic(IntrinsicOp::Integer(IntegerType::Int, IntegerIntrinsicOp::Add));
         let mut fixture = PrimitiveFixture::default();
         let operation = fixture.def("operation");
         let result = fixture.def("result");
@@ -374,7 +376,8 @@ mod tests {
 
     #[test]
     fn repeated_uses_share_one_inline_primitive_result() {
-        let role = BuiltinValueRole::Integer(IntegerType::Int, IntegerOperation::Add);
+        let role =
+            HostOp::Intrinsic(IntrinsicOp::Integer(IntegerType::Int, IntegerIntrinsicOp::Add));
         let mut fixture = PrimitiveFixture::default();
         let input = fixture.def("input");
         let result = fixture.def("result");
@@ -424,7 +427,8 @@ mod tests {
 
     #[test]
     fn unknown_arithmetic_callees_keep_runtime_dispatch() {
-        let role = BuiltinValueRole::Integer(IntegerType::Int, IntegerOperation::Add);
+        let role =
+            HostOp::Intrinsic(IntrinsicOp::Integer(IntegerType::Int, IntegerIntrinsicOp::Add));
         let mut fixture = PrimitiveFixture::default();
         let operation = fixture.def("operation");
         let thunk = fixture.build(operation);

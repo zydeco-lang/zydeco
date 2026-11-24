@@ -217,6 +217,7 @@ pub(crate) enum RelValue {
     ValApp(RelId<ValueId>, RelValArgument),
     Match { scrut: RelId<ValueId>, arms: Vec<(RelId<VPatId>, RelId<ValueId>)> },
     IntOp { operation: ValueIntOp, operands: [RelId<ValueId>; 2] },
+    IntrinsicOp(IntrinsicOp),
     Thunk(RelId<CompuId>),
     ThunkStub(u32),
     Ctor(CtorName, RelId<ValueId>),

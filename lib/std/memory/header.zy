@@ -24,7 +24,7 @@ begin
       (
         #inline = view/header M Metadata Payload metadata metadata_offset payload_offset,
         #prefix = view/prefix M Metadata Payload metadata (
-          (@(intrinsic(int_sub))) metadata_offset payload_offset
+          (@(intrinsic(val/int/sub))) metadata_offset payload_offset
         )
       )
   in

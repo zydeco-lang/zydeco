@@ -677,6 +677,7 @@ pub enum Value {
     ValApp(App<ValueId, ValArgument>),
     Match(Match<ValueId, VPatId, ValueId>),
     IntOp(IntValueOp),
+    IntrinsicOp(zydeco_syntax::IntrinsicOp),
     Thunk(Thunk<CompuId>),
     Ctor(Ctor<CtorName, ValueId>),
     Triv(Triv),

@@ -21,7 +21,7 @@ mod tests;
 pub enum ThunkBody {
     Core { body: ir::CompuId, env: EvalEnv<SemValue> },
     Fix { param: ir::VarId, body: ir::CompuId, env: EvalEnv<SemValue> },
-    Builtin(BuiltinValueRole),
+    Host(HostOp),
     Foreign(CheckedImport),
 }
 

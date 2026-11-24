@@ -16,7 +16,7 @@ use zydeco_machine::clif::{
     CLIF_FAIL_SYMBOL, CLIF_GROW_SPS_SYMBOL, CLIF_HOST_PREFIX, VMCTX_SPS_SP,
 };
 use zydeco_stackir::SpsLowProgram;
-use zydeco_syntax::{BuiltinValueRole, ForeignSymbolName};
+use zydeco_syntax::{ForeignSymbolName, HostOp};
 
 const RETURN_CONT_SYMBOL: &str = "zydeco_clif_return_cont";
 
@@ -48,7 +48,7 @@ pub(crate) struct DeclaredSymbols {
     pub(crate) return_cont: Option<FuncId>,
     pub(crate) c_export: Option<FuncId>,
     pub(crate) guard: Option<DataId>,
-    pub(crate) hosts: HashMap<BuiltinValueRole, FuncId>,
+    pub(crate) hosts: HashMap<HostOp, FuncId>,
     pub(crate) foreigns: HashMap<String, FuncId>,
     pub(crate) units: HashMap<String, FuncId>,
 }
@@ -291,7 +291,7 @@ fn declare_c_entry_symbols(
 
 fn declare_hosts(
     module: &mut cranelift_object::ObjectModule, plan: &ModulePlan, default_cc: CallConv,
-) -> Result<HashMap<BuiltinValueRole, FuncId>, EmitError> {
+) -> Result<HashMap<HostOp, FuncId>, EmitError> {
     let mut hosts = HashMap::with_capacity(plan.host_roles.len());
     for &role in &plan.host_roles {
         let mut sig = module.make_signature();

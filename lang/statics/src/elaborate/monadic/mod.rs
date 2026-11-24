@@ -1707,6 +1707,9 @@ fn value_translation(
             );
             (env, value)
         }
+        | Value::IntrinsicOp(operation) => {
+            intrinsic_op_translation(tycker, env, ty, ty_, operation)?
+        }
         | Value::ValAbs(_) => unreachable!("value abstractions translate their binder scope first"),
         | Value::ValApp(App(function, argument)) => {
             ValueFunctionTranslation::application(tycker, env, function, argument, ty_)?
@@ -1741,6 +1744,109 @@ fn value_translation(
         tycker.statics.terms.record(origin, res.into());
     }
     Ok((env, res))
+}
+
+fn peel_arrows(tycker: &mut Tycker, mut cursor: TypeId) -> (Vec<TypeId>, TypeId) {
+    let mut param_tys = Vec::new();
+    while let Some((param_ty, next_ty)) = cursor.destruct_arrow(tycker) {
+        param_tys.push(param_ty);
+        cursor = next_ty;
+    }
+    (param_tys, cursor)
+}
+
+fn alloc_intrinsic_params(
+    tycker: &mut Tycker, mut env: MonEnv, param_tys: Vec<TypeId>,
+) -> Result<(MonEnv, Vec<(VPatId, ValueId)>)> {
+    let mut params = Vec::with_capacity(param_tys.len());
+    for (index, param_ty) in param_tys.into_iter().enumerate() {
+        let lifted_param;
+        (env, lifted_param) = cs::TypeLift { ty: param_ty }.construct(tycker, env)?;
+        let def = Alloc::alloc(
+            tycker,
+            VarName::new(format!("__intrinsic_arg_{index}")),
+            AnnId::Type(lifted_param),
+            &(),
+        );
+        let vpat = Alloc::alloc(tycker, ValuePattern::Var(def), lifted_param, &());
+        let val = Alloc::alloc(tycker, Value::Var(def), lifted_param, &());
+        params.push((vpat, val));
+    }
+    Ok((env, params))
+}
+
+fn intrinsic_op_translation(
+    tycker: &mut Tycker, env: MonEnv, ty: TypeId, ty_: TypeId,
+    operation: zydeco_syntax::IntrinsicOp,
+) -> Result<(MonEnv, ValueId)> {
+    let op_val = Alloc::alloc(tycker, Value::IntrinsicOp(operation), ty, &());
+    let body_ty = ty.destruct_thk_app(tycker).expect("intrinsic op has Thk classifier");
+    let (env, translated) = if let Some((binder, inner_ty)) = body_ty.destruct_forall_binder(tycker)
+    {
+        let (param_tys, _) = peel_arrows(tycker, inner_ty);
+        let ctype = CType.build(tycker, &env.ty);
+        let (mut body_env, tpat) =
+            cs::TypeLift { ty: binder.pattern }.construct(tycker, env.clone())?;
+        let abst = Alloc::alloc(tycker, tpat, (), &());
+        body_env.subst_abst.insert_mut(binder.witness, abst);
+        let (body_env, str_pat) = cs::StrPat("str", abst, None).construct(tycker, body_env)?;
+        let r_ty = Alloc::alloc(tycker, abst, ctype, &());
+        let (mut body_env, params) = alloc_intrinsic_params(tycker, body_env, param_tys)?;
+        let force_op = Force(op_val).construct(tycker, body_env.clone())?.1;
+        let tapp = App(force_op, cs::Ty(r_ty)).construct(tycker, body_env.clone())?.1;
+        let mut body = tapp;
+        for (_, val) in &params {
+            (body_env, body) = App(body, *val).construct(tycker, body_env)?;
+        }
+        for (vpat, _) in params.into_iter().rev() {
+            (body_env, body) = Abs(vpat, move |_| body).construct(tycker, body_env)?;
+        }
+        let (_, body) = Abs(str_pat, move |_| body).construct(tycker, body_env)?;
+        let forall_ty = Alloc::alloc(
+            tycker,
+            Forall(
+                TypeBinder { pattern: tpat, witness: abst },
+                tycker.statics.annotations_compu[&body],
+            ),
+            ctype,
+            &(),
+        );
+        let tabs = Alloc::alloc(tycker, Abs(tpat, body), forall_ty, &());
+        Thunk(tabs).construct(tycker, env)?
+    } else {
+        let (param_tys, tail_ty) = peel_arrows(tycker, body_ty);
+        let result_ty =
+            tail_ty.destruct_ret_app(tycker).expect("pure returning intrinsic op ends in Ret");
+        let (body_env, params) = alloc_intrinsic_params(tycker, env.clone(), param_tys)?;
+        let (mut body_env, mut call) = Force(op_val).construct(tycker, body_env)?;
+        for (_, val) in &params {
+            (body_env, call) = App(call, *val).construct(tycker, body_env)?;
+        }
+        let (body_env, lifted_result) =
+            cs::TypeLift { ty: result_ty }.construct(tycker, body_env)?;
+        let res_def =
+            Alloc::alloc(tycker, VarName::new("__intrinsic_result"), AnnId::Type(result_ty), &());
+        let res_pat = Alloc::alloc(tycker, ValuePattern::Var(res_def), result_ty, &());
+        let res_val = Alloc::alloc(tycker, Value::Var(res_def), result_ty, &());
+        let (mut body_env, ret_m) = App(
+            App(cs::Dtor(Force(body_env.monad_impl), ".return"), cs::Ty(lifted_result)),
+            res_val,
+        )
+        .construct(tycker, body_env)?;
+        let monad_res_ty = tycker.statics.annotations_compu[&ret_m];
+        let mut body = Alloc::alloc(
+            tycker,
+            Computation::Do(Bind { binder: res_pat, bindee: call, tail: ret_m }),
+            monad_res_ty,
+            &(),
+        );
+        for (vpat, _) in params.into_iter().rev() {
+            (body_env, body) = Abs(vpat, move |_| body).construct(tycker, body_env)?;
+        }
+        Thunk(body).construct(tycker, env)?
+    };
+    Lub::lub(ty_, tycker.statics.annotations_value[&translated], tycker)?;
+    Ok((env, translated))
 }
 
 /// Term Translation (Computation) `[C]`

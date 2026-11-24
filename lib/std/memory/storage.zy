@@ -47,8 +47,8 @@ begin
       let Storage (L : VType) = val pi (_ : Unit) . SizeAlign in
       let DynamicStorage (L : VType) = SizeAlign in
       let val for_layout (L : VType) (count : Int) (boundary : Int) : Either Error (Storage L) =
-        let count = (@(intrinsic(int_add))) count 0 in
-        let boundary = (@(intrinsic(int_add))) boundary 0 in
+        let count = (@(intrinsic(val/int/add))) count 0 in
+        let boundary = (@(intrinsic(val/int/add))) boundary 0 in
         size/bind Int (Storage L) (size/size count) (
           val count =>
             size/bind Int (Storage L) (size/alignment boundary) (

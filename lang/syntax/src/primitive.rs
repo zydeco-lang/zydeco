@@ -1,8 +1,8 @@
 //! Typed scalar operations for static calculation and instruction selection.
 
 use crate::{
-    BuiltinValueRole, FloatLiteral, FloatOperation, FloatType, IntegerLiteral, IntegerOperation,
-    IntegerType, Literal,
+    BuiltinValueRole, FloatIntrinsicOp, FloatLiteral, FloatOperation, FloatType, HostOp,
+    IntegerIntrinsicOp, IntegerLiteral, IntegerOperation, IntegerType, IntrinsicOp, Literal,
 };
 pub use zydeco_abi::ValueIntOp;
 
@@ -56,6 +56,62 @@ pub enum ComparisonOp {
 }
 
 impl ComparisonOp {
+    pub fn from_intrinsic(op: IntrinsicOp) -> Option<Self> {
+        Some(match op {
+            | IntrinsicOp::Integer(ty, operation) => Self::Integer(
+                ty,
+                match operation {
+                    | IntegerIntrinsicOp::Eq => ComparisonPredicate::Eq,
+                    | IntegerIntrinsicOp::Lt => ComparisonPredicate::Lt,
+                    | IntegerIntrinsicOp::Gt => ComparisonPredicate::Gt,
+                    | _ => return None,
+                },
+            ),
+            | IntrinsicOp::Float(ty, operation) => Self::Float(
+                ty,
+                match operation {
+                    | FloatIntrinsicOp::Eq => ComparisonPredicate::Eq,
+                    | FloatIntrinsicOp::Lt => ComparisonPredicate::Lt,
+                    | FloatIntrinsicOp::Gt => ComparisonPredicate::Gt,
+                    | _ => return None,
+                },
+            ),
+            | _ => return None,
+        })
+    }
+
+    pub fn from_host(op: HostOp) -> Option<Self> {
+        match op {
+            | HostOp::Intrinsic(op) => Self::from_intrinsic(op),
+            | HostOp::Builtin(role) => Self::from_builtin(role),
+        }
+    }
+
+    pub fn intrinsic(self) -> IntrinsicOp {
+        match self {
+            | Self::Integer(ty, predicate) => IntrinsicOp::Integer(
+                ty,
+                match predicate {
+                    | ComparisonPredicate::Eq => IntegerIntrinsicOp::Eq,
+                    | ComparisonPredicate::Lt => IntegerIntrinsicOp::Lt,
+                    | ComparisonPredicate::Gt => IntegerIntrinsicOp::Gt,
+                },
+            ),
+            | Self::Float(ty, predicate) => IntrinsicOp::Float(
+                ty,
+                match predicate {
+                    | ComparisonPredicate::Eq => FloatIntrinsicOp::Eq,
+                    | ComparisonPredicate::Lt => FloatIntrinsicOp::Lt,
+                    | ComparisonPredicate::Gt => FloatIntrinsicOp::Gt,
+                },
+            ),
+        }
+    }
+
+    pub fn host(self) -> HostOp {
+        HostOp::Intrinsic(self.intrinsic())
+    }
+
     pub fn from_builtin(role: BuiltinValueRole) -> Option<Self> {
         Some(match role {
             | BuiltinValueRole::Integer(ty, operation) => Self::Integer(
@@ -143,6 +199,68 @@ pub enum PrimitiveError {
 }
 
 impl PrimitiveOp {
+    pub fn from_intrinsic(op: IntrinsicOp) -> Option<Self> {
+        Some(match op {
+            | IntrinsicOp::Integer(ty, op) => Self::Integer(
+                ty,
+                match op {
+                    | IntegerIntrinsicOp::Add => IntegerArithmetic::Add,
+                    | IntegerIntrinsicOp::Sub => IntegerArithmetic::Sub,
+                    | IntegerIntrinsicOp::Mul => IntegerArithmetic::Mul,
+                    | IntegerIntrinsicOp::Div => IntegerArithmetic::Div,
+                    | IntegerIntrinsicOp::Mod => IntegerArithmetic::Mod,
+                    | _ => return None,
+                },
+            ),
+            | IntrinsicOp::Float(ty, op) => Self::Float(
+                ty,
+                match op {
+                    | FloatIntrinsicOp::Add => FloatArithmetic::Add,
+                    | FloatIntrinsicOp::Sub => FloatArithmetic::Sub,
+                    | FloatIntrinsicOp::Mul => FloatArithmetic::Mul,
+                    | FloatIntrinsicOp::Div => FloatArithmetic::Div,
+                    | _ => return None,
+                },
+            ),
+            | _ => return None,
+        })
+    }
+
+    pub fn from_host(op: HostOp) -> Option<Self> {
+        match op {
+            | HostOp::Intrinsic(op) => Self::from_intrinsic(op),
+            | HostOp::Builtin(role) => Self::from_builtin(role),
+        }
+    }
+
+    pub fn intrinsic(self) -> IntrinsicOp {
+        match self {
+            | Self::Integer(ty, op) => IntrinsicOp::Integer(
+                ty,
+                match op {
+                    | IntegerArithmetic::Add => IntegerIntrinsicOp::Add,
+                    | IntegerArithmetic::Sub => IntegerIntrinsicOp::Sub,
+                    | IntegerArithmetic::Mul => IntegerIntrinsicOp::Mul,
+                    | IntegerArithmetic::Div => IntegerIntrinsicOp::Div,
+                    | IntegerArithmetic::Mod => IntegerIntrinsicOp::Mod,
+                },
+            ),
+            | Self::Float(ty, op) => IntrinsicOp::Float(
+                ty,
+                match op {
+                    | FloatArithmetic::Add => FloatIntrinsicOp::Add,
+                    | FloatArithmetic::Sub => FloatIntrinsicOp::Sub,
+                    | FloatArithmetic::Mul => FloatIntrinsicOp::Mul,
+                    | FloatArithmetic::Div => FloatIntrinsicOp::Div,
+                },
+            ),
+        }
+    }
+
+    pub fn host(self) -> HostOp {
+        HostOp::Intrinsic(self.intrinsic())
+    }
+
     pub fn from_builtin(role: BuiltinValueRole) -> Option<Self> {
         Some(match role {
             | BuiltinValueRole::Integer(ty, op) => Self::Integer(

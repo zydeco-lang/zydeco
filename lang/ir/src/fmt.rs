@@ -115,6 +115,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
                 RcDoc::concat([doc, RcDoc::text(format!(".{}", step.position))])
             }),
             | Value::Lit(literal) => RcDoc::text(format!("{literal:?}")),
+            | Value::IntrinsicOp(op) => RcDoc::text(format!("@(intrinsic({}))", op.source_name())),
             | Value::Foreign(import) => RcDoc::text(format!("ffi[{}]", import.target().symbol)),
         }
     }
