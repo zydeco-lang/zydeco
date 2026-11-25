@@ -32,7 +32,6 @@ Names are interpreted against the expected data type.
 Name and parameterize a data type with an ordinary definition.
 
 ```zydeco
-let Unit = @(intrinsic(unit)) in
 def Flag = data | +On : Unit | +Off : Unit end in
 match (+On() : Flag)
 | +On() => ret 1

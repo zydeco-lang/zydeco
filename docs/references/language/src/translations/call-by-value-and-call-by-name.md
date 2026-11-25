@@ -9,6 +9,8 @@ which is what the core's separation of values from computations buys.
 That order is observed once a call-by-value block sits inside a monadic block that supplies effects,
 as set out under [Composing with Monadic Blocks](#composing-with-monadic-blocks).
 In the examples below, `Int`, `Unit`, and `VType` stand for the built-in types, which a block binds for itself.
+Throughout this chapter an unqualified *block* is a call-by-value block; the core's own block is written `begin … end`,
+and [Block Scoping](#block-scoping-type-aliases-and-kind-aliases) relates the two.
 
 A block's classifier is `Ret A'`, where `A'` translates the source type `A`.
 That holds for a value body too: `@[cbv] (fn (x : Int) => x)` has type `Ret (Thk (Int -> Ret Int))`,
@@ -41,7 +43,7 @@ A **source kind** is `VType`, an arrow between source kinds, or a named kind ove
 the kind translation is the identity.
 `CType` is not one, so a quantifier over a computation kind is refused: no source type is a computation.
 A block writes `VType` with its intrinsic, `@(intrinsic(vtype))`, or by a kind name it bound,
-since the host's `VType` is a name bound outside the block.
+since the enclosing scope's `VType` is a name bound outside the block.
 A type binding's declared kind, a type binder's annotation, and an ascription's classifier are all read
 by one kind judgment, so each place a block writes a kind admits the same kinds.
 
@@ -66,7 +68,7 @@ by one kind judgment, so each place a block writes a kind admits the same kinds.
 
 Each form a source type is written with is translated compositionally:
 an ascription checks its declared kind against the translation, and `F A` translates to `F' A'`,
-so an operator and its argument are both source types rather than host ones.
+so an operator and its argument are both source types rather than core ones.
 What a name stands for needs no test of its own.
 A type binding's name stands for its translated bindee, a declaration's name for its seal, a type variable for itself,
 and an intrinsic for its primitive, so every type a block writes is the translation of a source type by construction.
@@ -90,7 +92,7 @@ A value has its own translation:
 | `(v1, ..., vn)` | `(v1', ..., vn')` |
 | `#f = v` | `#f = v'` |
 | `+C v` | `+C v'`, which needs the expected type |
-| `(T, v)` | `(T', v')`, a package, which needs the expected type |
+| `(T, v)` | `(T', v')`, a packed value, which needs the expected type |
 | `fn (x : A) => e` | `{ fn (x : A') => e' }` |
 | `fn p1 ... pn => e` | `{ fn p1' ... pn' => e' }`, one function of all `n` parameters |
 | `fn (X : K) => e` | `{ fn (X : K) => e' }`, a type abstraction; synthesizes when the kind is written, and takes it from an expected quantifier when it is not; an expected quantifier's body is pushed into `e` |
@@ -121,25 +123,25 @@ A value has its own translation:
 | `let p = e1 that e2` | the `let` row above; name resolution lifts the binding and leaves a residual |
 | `param p : A that e` | `ret { fn (p : A') => e' }` |
 
-**Four source forms have both a value row and a term row** — a tuple, a named field, a constructor, and a package.
+**Four source forms have both a value row and a term row** — a tuple, a named field, a constructor, and a packed value.
 Which applies is decided by whether the form is a source *value*, which holds for a variable, a literal,
 `()`, a hole `_`, either abstraction, and for the other four exactly when their components or payloads are.
 A `comatch` has a value row but is not counted as a source value here, so a tuple containing one is sequenced.
 The two rows agree up to `do x <- ret v; e` being `e` with `v` substituted for `x`,
 so the choice shows in the elaborated term rather than in what it computes.
 
-### Closure Boundary and Host Interoperability
+### Closure Boundary and Core Interoperability
 
 A block is **closed**, over terms, types, and kinds alike: a term that refers
 to a variable bound outside it is rejected, so is a type or kind name the block did not bind,
 and so is an import boundary anywhere within it, including in a parameter's classifier.
 What a block uses from outside arrives as a parameter it abstracts over: an operation or an effect as a value,
-and a type by type abstraction, which the host instantiates.
-The built-in types are no exception, since the host's `Int` and `VType` are names bound outside the block.
+and a type by type abstraction, which the enclosing term instantiates.
+The built-in types are no exception, since the enclosing scope's `Int` and `VType` are names bound outside the block.
 A block writes a primitive with its intrinsic, usually behind a binding of its own:
 
 ```zydeco
-param (/Ret; /Thk; /process) : @(import("../../lib/std/builtin.zy")) in
+param (/process) : @(import("../../lib/std/builtin.zy")) in
 do answer <- @[cbv] (
   let VType = @(intrinsic(vtype)) that
   let Int : VType = @(intrinsic(int)) that
@@ -151,14 +153,14 @@ An intrinsic names nothing outside the block, but it is admitted only for a prim
 `vtype`, or `ctype`: `@(intrinsic(thk))` is a shift, which no source type translates to.
 The other examples in this chapter leave these bindings out.
 
-An outside type reaches a block the way an outside value does: the block abstracts
-over it, and the host instantiates it.
-Below, the block takes a type `O` and the two operations it needs, and the host instantiates `O`
-with a host `data` type and supplies the operations, curried as the translations of the source arrows are:
+An outside type reaches a block the way an outside value does: the block abstracts over it,
+and the enclosing term instantiates it.
+Below, the block takes a type `O` and the two operations it needs, and the enclosing term instantiates `O`
+with a core `data` type and supplies the operations, curried as the translations of the source arrows are:
 
 ```zydeco
 begin
-  param (/VType; /Thk; /Ret; /Int; /Unit; /process) : @(import("../../lib/std/builtin.zy")) that
+  param (/process) : @(import("../../lib/std/builtin.zy")) that
   def Opt : VType = data | +None : Unit | +Some : Int end that
 
   do f <- @[cbv] (
@@ -188,9 +190,11 @@ end
 ```
 
 Inside the block `O` is abstract, so nothing the block does can depend on how it is represented,
-and the host may instantiate it at any value type, `Thk (Ret Int)` included, though no source type translates to that.
-The block's meaning depends on no host declaration.
-The cost is the host's: the block above is a few lines, and the instantiation and adapted operations are more.
+and the enclosing term may instantiate it at any value type, `Thk (Ret Int)` included,
+though no source type translates to that.
+The block's meaning depends on no outside declaration.
+The cost falls on the enclosing term: the block above is a few lines,
+and the instantiation and adapted operations are more.
 No sugar for instantiating a block and adapting its operations is provided.
 
 ### Binders, Telescopes, and Bidirectional Analysis
@@ -201,7 +205,7 @@ A binder may be a variable, a wildcard, `()`, a named field `(#f = p)` or `(= f)
 or a product of those, since the core's abstraction rule requires an irrefutable binder.
 A `let`'s or a parameter's binder may also be a constructor tag over one, as in `let +Box x = b in M`,
 when the tag cannot fail: its declaration has no other constructor.
-The host's own check decides that, so a tag that can fail is refused with `tyck.refutable-binding`,
+The core's own check decides that, so a tag that can fail is refused with `tyck.refutable-binding`,
 as it is outside a block.
 
 Any part of a binder may carry an annotation, `(p : A)`, as in `let (f : Int -> Int, n) = M in N`.
@@ -214,7 +218,7 @@ when they give the type of every part, so `fn ((x : Int), (y : Int)) => x` takes
 A part with no annotation would need inference, which a block does not do.
 A function type's binder may name its parameter, but no source type mentions a term: `A -> B`, `pi (_ : A) . B`,
 and `pi (x : A) . B` denote one type, and a type that mentions `x`, as `pi (x : A) . x` would, is refused by sort.
-So a function may be bound with the host's header, `let f (x : A) : B = e`,
+So a function may be bound with the core's header, `let f (x : A) : B = e`,
 whose desugared signature names the parameter.
 
 Consecutive parameters are one function.
@@ -238,13 +242,13 @@ while `fn x => x` alone still does — there is nothing to take the domain from.
 A type binder's kind is supplied the same way: an expected quantifier gives a type abstraction its kind,
 and a kind known first — a binding's declared kind, a quantifier's binder at an instantiation,
 an existential's binder at a pack, a manifest existential's binder at its definition, an operator's domain —
-gives a type operator its own, so `let F : VType -> VType = fn X => X * X` is read as the host reads it.
+gives a type operator its own, so `let F : VType -> VType = fn X => X * X` is read as the core reads it.
 An expectation that no clause could use is checked against the whole term instead,
 so `((fn (x : Int) => x) : Int)` is a mismatch rather than an unchecked abstraction.
 An application's expectation describes its *result*: recovering a function's type from its argument
 and its result is inference, not analysis, so `(((fn x => x) 5) : Int)` is refused.
 
-A term hole `_` is a typed hole, as in the host: checking reports the type it stands at, and running refuses it.
+A term hole `_` is a typed hole, as in the core: checking reports the type it stands at, and running refuses it.
 That type is the translation of the source type expected, so a hole
 where `Int -> Int` is expected reports `Thk (Int -> Ret Int)`; a hole needs an expectation,
 since with none its report would say nothing.
@@ -253,20 +257,20 @@ and `@[debug]` prints the core term the part it annotates became, rather than th
 every other annotation is refused.
 
 **Analysis stops at the block's boundary.** Every expectation comes from inside,
-and the host's own expectation is reconciled with what the block synthesized:
+and the enclosing term's expectation is reconciled with what the block synthesized:
 `(@[cbv] (fn x => x) : Ret (Thk (Int -> Ret Int)))` does not reach the binder,
 although the same ascription written inside the block does.
-A block synthesizes independently and the host compares afterwards, which is one direction in types
-as the translation is one direction in terms, and it is what makes a block's classifier a consequence
-of its body rather than of its position.
+A block synthesizes independently and the enclosing term compares afterwards,
+which is one direction in types as the translation is one direction in terms,
+and it is what makes a block's classifier a consequence of its body rather than of its position.
 
 ### Block Scoping, Type Aliases, and Kind Aliases
 
-A call-by-value block is also a block in the host's sense,
+A call-by-value block is also a block in the core's sense,
 so a [`that` binding](../bindings-and-scope.md#mobile-bindings-and-blocks) written inside one contributes
 to it and not to the block around it, and the names it introduces end at its boundary.
 That is what lets a call-by-value block be read as one closed source term.
-Inside it the host's rule still holds: a `that` binding belongs to the nearest enclosing block,
+Inside it the core's rule still holds: a `that` binding belongs to the nearest enclosing block,
 the call-by-value block itself unless a `begin … end` is nearer, and name resolution lifts it there.
 One written in a lambda's body is therefore evaluated once, at that block's level, rather than at each call,
 and cannot see the lambda's parameter; a `begin … end` around the body keeps it inside.
@@ -275,17 +279,17 @@ over the rest of its block, so a call-by-value block holding one still returns a
 `@[cbv] (param (x : Int) that x)` has type `Ret (Thk (Int -> Ret Int))`, not `Int -> Ret Int`.
 
 A block may also **name a source type**, written `let X : K = A`, and the declared kind is required.
-The host decides whether a binding binds a type or a term by synthesizing its bindee and reading off the sort,
-which is not available here: a source type is not a host type, so synthesizing one can fail rather than answer,
+The core decides whether a binding binds a type or a term by synthesizing its bindee and reading off the sort,
+which is not available here: a source type is not a core type, so synthesizing one can fail rather than answer,
 and the kind is what settles it before either judgment runs.
 A type binding emits nothing — the name is inlined, so the block's computation is its tail's.
 
 This is also how a block names a source arrow in its own spelling.
-`Int -> Int` is ill-kinded in the host, so no host binding can stand for it as written,
+`Int -> Int` is ill-kinded in the core, so no core binding can stand for it as written,
 while `let Fn : VType = Int -> Int` makes `Fn` denote `Thk (Int -> Ret Int)`.
 A classifier may then use `Fn`; `Thk` written by hand stays refused.
 
-A block names a **kind** as the host does, `let K = VType -> VType`,
+A block names a **kind** as the core does, `let K = VType -> VType`,
 and binds `VType` itself the same way, `let VType = @(intrinsic(vtype))`.
 A kind has no classifier to declare, and none is needed: no kind is a source term, so the bindee decides,
 when it is an intrinsic for `VType` or `CType`, a kind arrow, a named kind, or a kind name the block bound.
@@ -296,8 +300,8 @@ A kind binding emits nothing either.
 A block may use a **data type**, and construct and match on its values.
 It may write one in place and bind it with a kind, `let Opt : VType = data | +None : Unit | +Some : Int end`,
 and its arms are then source types, translated like any other.
-The result is transparent, and the host compares transparent data by structure,
-so a host value of the same declaration is a value of the block's type.
+The result is transparent, and the core compares transparent data by structure,
+so a value of the same declaration built outside the block is a value of the block's type.
 A `let` is not recursive, so a declaration that mentions itself is an unbound name;
 a recursive data type is a sealed declaration, `def`, as described
 in [Sealed Declarations and Mutual Recursion](#sealed-declarations-and-mutual-recursion).
@@ -327,7 +331,7 @@ Second, a field is a suspended computation, so it runs when observed and runs ag
 admitting codata puts a **by-name** corner inside a call-by-value source language.
 A field that diverges and is never observed never runs, which is what makes the choice observable without effects.
 
-A block may define a **recursive function**, with the host's existing `let fix` header:
+A block may define a **recursive function**, with the core's existing `let fix` header:
 `let fix f (x : A) : B = M in N`, where `A` and `B` are source types and a recursive call is written `f x`.
 The `Thk`, the `Ret`, and the force are the translation's, and no coercion is needed anywhere:
 `A -> B` already translates to a thunk type and the core's `fix` binds a thunk,
@@ -347,20 +351,20 @@ Its signature is checked against its parameter, so the spelling cannot declare a
 distinguishing the two entries would mean carrying the binding's flavor past desugaring, which erases it.
 
 Functions that call one another are not a group of `let fix` bindings, which would be a value cycle,
-but a single `let fix` returning a record of them, as the host takes a fixed point of codata.
+but a single `let fix` returning a record of them, as the core takes a fixed point of codata.
 A call between them goes through the record, and the header's parameter is the one every `let fix` has:
 `let fix parity (u : Unit) : Parity = comatch | .even => fn (n : Nat) => … (parity ()).odd m … end`.
 
 Data and recursion together are what let a block compute: a declaration
 with a decreasing structure makes a terminating recursive function writable with nothing else.
-Arithmetic, like any host operation, is not reachable from inside, so a block takes it as a parameter:
-`param (add : pi (_ : Int) (_ : Int) . Int) that add 2 3` returns a function, which the host applies
+Arithmetic, like every operation defined outside a block, arrives as a parameter:
+`param (add : pi (_ : Int) (_ : Int) . Int) that add 2 3` returns a function, which the enclosing term applies
 to `int/add` directly, since the parameter's type translates to `Thk (Int -> Int -> Ret Int)`.
 A curried `add : Int -> Int -> Int` would instead need `int/add` curried to `Thk (Int -> Ret (Thk (Int -> Ret Int)))`.
 
 ### Sealed Declarations and Mutual Recursion
 
-A block declares a **sealed** type with the host's `def X : K = D`, for `D` a `data` or `codata` declaration,
+A block declares a **sealed** type with the core's `def X : K = D`, for `D` a `data` or `codata` declaration,
 possibly under type parameters: `def List (X : VType) : VType = data | +Nil : Unit | +Cons : X * List X end`.
 A seal is nominal, so the only way into or out of one is the `data`
 or `codata` shape [its typing exposes](../classification-and-inference.md#nominal-seals),
@@ -389,7 +393,7 @@ so `: CType` there is refused, and so is `: X` naming a parameter.
 
 `X` is bound before `D` is translated, so `D` may mention it, and the declaration is then a recursive group of one.
 Declarations that mention one another form a single group, and the same order extends to it,
-as the host's fixpoint takes it: every member's name is bound before any member's declaration is translated,
+as the core's fixpoint takes it: every member's name is bound before any member's declaration is translated,
 so each may mention the others.
 
 ```zydeco
@@ -401,54 +405,55 @@ Binding a name needs only its kind and whether it declares `data` or `codata`,
 never what the declaration says, which is why a whole group can be bound first.
 Each member is its own seal, so two members of one shape are two types, and none may appear in the type of the tail.
 
-The host admits a binding cycle only among seals with known kinds,
-and for these cases a block gives the host's diagnostics, in the host's order:
+The core admits a binding cycle only among seals with known kinds,
+and for these cases a block gives the core's diagnostics, in the core's order:
 a value cycle directs the author to `let fix`; a kind that is absent, as in a recursive `def`
 with parameters and no written kind, or that is not a kind, as in `def N : Int = …`, is not known;
 and a transparent `let` that mentions itself or another member is missing its seal.
 These checks keep that order among themselves, member by member through the group, and a block makes them
 for every member before applying what it alone requires of a member, such as a binder that is a variable or a wildcard.
-The host checks each member's binder before it reaches the next member, so a group at fault
-in both ways can report a different error first in a block than in the host.
+The core checks each member's binder before it reaches the next member, so a group at fault
+in both ways can report a different error first in a block than in the core.
 
 A declaration's scope is the rest of its block, so the block's type may not mention it,
 as an unpack's witness may not escape; the refusal is `tyck.escaping-declaration`.
-An abstract package exports it, `((Opt, +Some 7) : exists (X : VType) . X)`, and a manifest one,
+An abstract existential value exports it, `((Opt, +Some 7) : exists (X : VType) . X)`, and a manifest one,
 which would disclose it, is refused.
 
 ### Existentials, Records, and Named Fields
 
-A block may use an **existential package**. The abstract form `exists (X : K) . A`
+A block may use a **packed value**. The abstract form `exists (X : K) . A`
 and the manifest form `exists (X as T : K) . A` may each be written where they are used or bound to a name,
 and the binder's kind must be a source kind, so `exists (R : CType) . A` is refused.
 An existential is a positive former, so its translation takes no shift and the body translates in place:
 `exists X . A` becomes `exists X . A'`.
 A manifest equation's disclosed witness is itself a source type and is translated,
-which is what keeps the equation true on the translated side: opening the package shows `X` as `T'`.
+which is what keeps the equation true on the translated side: opening the packed value shows `X` as `T'`.
 
 A **pack** is written `(T, v)` against an expected existential, with the witness first.
 It is the same syntax as a tuple, and the expected type is what decides which it is — so a pack cannot synthesize,
 and `(Int, 7)` with no expectation is read as a tuple and refused for using a type as a term.
 A telescope of several witnesses consumes that many leading components
-and the rest form the body's product, as in the host.
+and the rest form the body's product, as in the core.
 A payload that is not a source value is sequenced first, so `(Int, f 7)` evaluates `f 7` and packs the result.
 
-An **unpack** is `let (X, x) = M in N`. Nothing about it is special to packages: it is the ordinary binding clause,
-because the bindee's type is what makes the binder a package pattern rather than a product one.
+An **unpack** is `let (X, x) = M in N`.
+Nothing about it is special to packed values: it is the ordinary binding clause,
+because the bindee's type is what makes the binder open a packed value rather than match a product.
 The witness it opens behaves inside `N` as a source type variable, so a source function may be written at it;
 and the witness may not escape, so `N`'s own type may not mention it.
-That is what makes the package's own operations the only way to consume its payload,
+That is what makes the packed value's own operations the only way to consume its payload,
 which is what an existential is for.
 
 **Named fields** travel through the translation untouched.
 A field name is not a type former: it carries no polarity, so none of the three type rows takes a shift,
 and `#f :: A` becomes `#f :: A'`, a named type `(l = S)` becomes `(l = S')`, and a type projection `S/l` becomes `S'/l`.
 The kind translation is the identity, which is why a *named* kind such as `#Counter :: VType` is a source kind exactly
-when its payload is, and so a package whose telescope binds at one is admitted.
+when its payload is, and so a packed value whose telescope binds at one is admitted.
 A named kind is written wherever a block writes a kind, as in `fn (X : (#C :: VType)) => fn (x : X/C) => x`.
 `#C :: A` with `A` a type is the same node read as a field type, so where a kind belongs it is refused by sort.
 
-A package's binder may name its witness's field, as in `exists (#Counter = ((Rep as Int) : VType)) . (#zero :: Rep)`:
+An existential binder may name its witness's field, as in `exists (#Counter = ((Rep as Int) : VType)) . (#zero :: Rep)`:
 the witness has the named kind `#Counter :: VType`, and `Rep` binds its payload.
 No other type binder may: `fn (#C = (X : VType)) => M` and `forall (#C = (X : VType)) . A` are refused.
 For the term-level abstraction this is forced, because the core term a block builds for it makes a plain binder
@@ -460,18 +465,18 @@ A block builds a record with `(#f = v, #g = w)` against the record's declared ty
 and a field whose payload is a computation is sequenced before the record is built, so the field holds the result.
 It reads one either by pattern — `let (= f, = g) = r in …`, which binds each field under its own name —
 or by projection, `r/f`, which synthesizes and leaves the head to be sequenced, so the head need not be a value.
-The field itself is resolved by the host's resolver rather than by the block,
+The field itself is resolved by the core's resolver rather than by the block,
 which is what makes a field behind a product prefix reachable and gives a missing
-or ambiguous field the host's own diagnostic.
+or ambiguous field the core's own diagnostic.
 
 A record type is written in place as a product of field types, `(#fst :: Int, #snd :: Int)`,
-and is structural: a host record and the same type written in a block are one type.
+and is structural: a core record and the same type written in a block are one type.
 A pack's witness is written in place too, so `(((#Counter = Int), #zero = 0) : Pkg)` needs no outside name
 for `(#Counter = Int)`.
 
 ### Composing with Monadic Blocks
 
-Effects arrive the same way as host operations, as parameters, and a monadic block is what supplies them.
+Effects arrive the same way as outside operations, as parameters, and a monadic block is what supplies them.
 A returner is observably pure by the core's [convention](../computations-and-control.md#ret-and-explicit-cps),
 so a call-by-value block alone has no effect but divergence, which cannot tell the function-before-argument
 and left-to-right orders of the term rows from any other.
@@ -493,7 +498,7 @@ end
 
 Under `State Int` this ends in state `2`, because the tuple runs `a` before `b`;
 with the tuple written `(b (), a ())` it ends in `1`, and an application likewise runs its function before its argument.
-Quantifiers, packages, type operators, records, codata, transparent data, and `let fix` compose the same way.
+Quantifiers, packed values, type operators, records, codata, transparent data, and `let fix` compose the same way.
 So does a sealed type the call-by-value block declares, which the monadic block's
 [applicative nominal translation](monadic-blocks.md#applicative-nominal-translation) carries along,
 so a call-by-value block nested in a monadic block can recurse over a data type it declares.

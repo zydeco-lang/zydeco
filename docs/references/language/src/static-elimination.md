@@ -24,13 +24,13 @@ A library may export an unapplied value function.
 A residual runtime value cannot contain one:
 
 ```zydeco
-val (x : @(intrinsic(unit))) => x
+val (x : Unit) => x
 ```
 
 This term is rejected with `tyck.static-elimination`:
 
 ```zydeco
-ret (val (x : @(intrinsic(unit))) => x)
+ret (val (x : Unit) => x)
 ```
 
 Explicit computation thunks and representable packed value payloads may remain.

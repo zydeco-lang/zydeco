@@ -126,10 +126,10 @@ Source formation and opening rules live in [L9](../../language/src/polymorphism-
 and substitutes caller-visible evidence at application.
 A runtime thunk's implementation can be unknown while its signature supplies the dependency.
 Value-function witness projections separately record which structured argument components supply evidence.
-Product routes select argument components; package leaves consume a static prefix.
+Product routes select argument components; packed-value leaves consume a static prefix.
 An `Unpack` route records a physical prefix and continues into its payload, so witnesses separated
 by ordinary fields or generated algebra structures keep their exact paths and order.
-Routes with no remaining witness demand collapse to `Ignore`; a package opening
+Routes with no remaining witness demand collapse to `Ignore`; an opening of a packed value
 whose payload is ignored uses the same leaf form whether it came from source checking or translation.
 `PackPiInstantiationState` consumes the physical leading existential prefix
 and substitutes its abstract witnesses through the codomain.
@@ -137,13 +137,35 @@ and substitutes its abstract witnesses through the codomain.
 its structured evidence handling does not extend `PackPi` to witnesses nested beneath arbitrary product fields.
 
 [Projection checking](../../../../lang/statics/src/check/projection) shares deferred typing environments
-via `Arc<TyEnv>`, indexes a receiver's value and package field candidates once per `(TypeId, Arc<TyEnv>)` pair
+via `Arc<TyEnv>`, indexes a receiver's value and packed-value field candidates once per `(TypeId, Arc<TyEnv>)` pair
 in `FieldIndex`, and resolves unique routes through the receiver's allowed structure,
 including the identities shared by one selective opening of a packed value.
 The resolved route records every product position and its product type.
 Selected runtime fields elaborate to ordinary typed patterns; unselected static positions receive internal witnesses.
 A whole-value alias carries the same opening's prefix for forwarding.
 Witness inspection uses C6's static reducer and never obtains evidence by executing a computation.
+
+### Applicative Seals
+
+[L9's applicative sealing](../../language/src/polymorphism-and-packed-values.md#applicative-sealing) needs an
+abstract type whose identity depends only on the sealing site and its static arguments.
+[Seal checking](../../../../lang/statics/src/check/term/package.rs) checks the operand
+against the signature, reads the operand's static shape for the witnesses of the leading prefix,
+and walks the signature's telescope beside them.
+For each abstract binder it allocates one fresh abstract identity, the *sealed family*,
+whose kind takes one argument per indexing witness: the enclosing value-function witnesses,
+then the local and existential-skolem witnesses free in the representation.
+The binder's manifest definition is that family applied to the current witnesses.
+The checked operand is wrapped in a `Value::Seal` node classified by the rebuilt manifest existential.
+
+The representation, abstracted over fresh copies of the same witnesses,
+is stored in `StaticsArena::opaque_representations`.
+Type checking never reads that map, which keeps the representation opaque to equality.
+Three later consumers unfold it.
+Static elaboration reduces `Value::Seal` to its operand, and its `OpaqueEraser` folder substitutes representations
+and reduces the resulting applications before residual types are emitted.
+Protocol extraction reads through sealed families in the same way, and separate-compilation transport carries each entry
+with its family.
 
 ## Classifier Folders
 

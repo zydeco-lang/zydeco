@@ -41,7 +41,7 @@ An abstraction constructs its classifier and term from the same binder scope; it
 and generated application evidence are checked against the translated classifiers.
 The child environment ends at the abstraction, so its structure associations cannot escape to siblings.
 
-Package-opening value parameters reuse the existing layout-driven package-pattern translator.
+Value parameters that open packed values reuse the existing layout-driven opening-pattern translator.
 Its layout counts physical static fields, including manifest entries,
 while its canonical telescope counts abstract witnesses.
 Ignored product components consume neither witnesses nor structures. The `Explicit` witness-route folder rebuilds routes
@@ -51,7 +51,7 @@ the already resolved source route in a loop and inserts payload-selection steps 
 It retains translated product classifiers for residual layout without rerunning field search.
 
 These semantic cases extend the existing recursive monadic traversal and reuse its type,
-term, signature, structure, and package constructors.
+term, signature, structure, and packed-value constructors.
 They do not introduce a second whole-term pass or change the traversal's overall depth guarantees.
 The payload is checked once, then translated, finalized, and statically eliminated.
 The static evaluator can forward opaque runtime monad dictionaries through known value closures;
@@ -108,7 +108,7 @@ The `comatch` constructor accepts an expected classifier, exposes its codata sha
 and retains the nominal classifier on the result.
 This keeps codata introductions, observations, algebra signatures, and coverage hints consistent.
 [Nominal fixtures](../../../../lang/tests/cases/monadic-nominal) cover mutual recursion, growing type arguments,
-scoped and higher-kinded dependencies, packages, nested translation, and applicative equality and rejection.
+scoped and higher-kinded dependencies, packed values, nested translation, and applicative equality and rejection.
 [Rust regressions](../../../../lang/tests/tests/suite/monadic_nominal.rs) retain typed-arena invariant checks,
 lowering, source sharing, and bounded family counts on a 160-declaration cycle.
 The [State fixture](../../../../lib/tests/monadic/nominal-types.zy) checks runtime dictionary selection,
@@ -191,7 +191,7 @@ Reification builds self-contained residual nodes into `CoreArena`, erasing stati
 resolving projections and tags, memoizing repeated thunks by `(CompuId, Arc<EnvKey>)`,
 extracting partial source protocols in [protocol extraction](../../../../lang/statics/src/elaborate/protocols.rs),
 and preserving runtime sharing and effect order.
-[`BuiltinPackagePlanner`](../../../../lang/statics/src/builtin.rs) validates host package contracts
+[`BuiltinPackagePlanner`](../../../../lang/statics/src/builtin.rs) validates host Builtin contracts
 into a separate `BuiltinPackagePlan`.
 Representability checks cover surviving values, thunk bodies, and computation classifiers after instantiation.
 Export selection defers thunk-body residualization until the selected value is reified.

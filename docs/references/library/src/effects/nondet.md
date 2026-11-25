@@ -8,7 +8,7 @@ They provide neither fair interleaving nor implicit pruning or deduplication.
 
 ## Carrier and Search Operations
 
-The module is a concrete package with no `Builtin` or factory parameters.
+The module is a concrete packed value with no `Builtin` or factory parameters.
 It imports [data/package.zy](../../../../../lib/std/data/package.zy) directly via `let`, so its `choose` inputs
 and list observations share the canonical `List` identity across consumers through package merging.
 Its type exports and search operations (`instance`, `transformer`, `transformer_instance`, `choose`,

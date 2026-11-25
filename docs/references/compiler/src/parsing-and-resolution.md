@@ -211,7 +211,7 @@ A retained `none` annotation disables fallback in its payload; mobile candidates
 Source boundaries start independent environments, and the source's own generated prefix establishes its defaults.
 An otherwise unresolved enabled `OS` becomes `Internal::OS`, using the existing checked `BuiltinTypeResolution`
 against the environment's visible witnesses.
-No provider package is opened or imported by that reference, and no successful definition-reference event is fabricated.
+No provider is opened or imported by that reference, and no successful definition-reference event is fabricated.
 
 Ordinary lexical bindings follow the [source-boundary rules](../../language/src/sources.md#source-boundaries).
 Reuse between imported instances follows the

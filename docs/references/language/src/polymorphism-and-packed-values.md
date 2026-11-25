@@ -46,12 +46,11 @@ Against an expected existential, `(T, v)` supplies the witness and payload.
 `pack` synthesizes an existential type from explicit evidence:
 
 ```zydeco
-let Int = @(intrinsic(int)) in
-let package =
+let packed =
   pack (= Item as Int)
   where #value = 42 end
 in
-let (/Item; /value) = package in
+let (/Item; /value) = packed in
 ret (value : Item)
 ```
 
@@ -119,47 +118,10 @@ when the packed values have identical field names or layouts.
 This relationship uses existential elimination and ordinary bindings; it introduces no separate module object.
 
 An inferred `pack` interface is useful when its witnesses and payload already express the intended contract.
-
-## Applicative Sealing
-
-Generative `exists` introductions bind fresh opaque witnesses at every evaluation or opening,
-which prevents independent callers of a pure module constructor from sharing types
-across a diamond import graph even when they supply the same static arguments.
-Zydeco provides signature-driven applicative sealing `seal term : Sig` to separate cross-module canonical abstraction
-from per-call generativity.
-
-Checking `seal term : Sig` first checks `Sig` at kind `VType`, requires `Sig`
-to expose a non-empty leading existential prefix containing at least one abstract `exists` binder, and checks `term`
-against `Sig` using the static witnesses visible from `term` and enclosing value-function / universal / package binders.
-If those static witnesses are missing—for example when `term` is a dynamically chosen runtime package
-without manifest witnesses—checking fails with `PackageWitnessesUnavailable`;
-if `Sig` has no leading abstract type witness, checking fails with `TypeExpected`;
-if a sealed representation captures a local existential skolem without naming it as a witness parameter,
-scope checking fails with `EscapingExistential`.
-
-For each leading abstract type binder in `Sig`, `seal` allocates a canonical higher-kinded opaque type family indexed
-by the enclosing value-function and local existential/type-abstraction witnesses that appear in scope,
-records the hidden representation in `opaque_representations` without exposing it during unification
-or type checking, and returns a manifest existential type equating each sealed binder
-to that canonical family applied to the current witnesses.
-Two consequences govern modularity:
-
-- **Witness-indexed unification**: instantiating an applicatively sealed module twice
-  with identical static type and opened-capability arguments yields equal abstract types
-  across separate compilation units and diamond imports, while distinct type arguments
-  or distinct opened capability witnesses (such as two distinct `Addr` openings) yield incompatible abstract types.
-- **Nested generativity and representation erasure**: only the outer leading existential binders
-  of `Sig` are skolemized by `seal`; any nested `exists` inside fields, thunks,
-  or function codomains keeps its generative `exists`/`pack` semantics.
-  During demand-driven elaboration, `seal` acts transparently over its value and unfolds `opaque_representations`
-  before emitting residual core types, so runtime code incurs zero extra boxing while static-only representations (such
-  as `val pi` functions behind a sealed type) still fail runtime-representation checks with `StaticElimination`.
-- **Execution staging**: like other static existential sealing forms,
-  `seal` is disallowed inside `@[cbv]` value blocks (`Expressivity`).
-  An explicit annotation, including a [source companion](sources.md#source-boundaries),
-  prescribes the interface when details must be hidden.
-  `typeof` can reuse an inferred contract but couples it to the inspected implementation.
-  No companion is required merely because a term is used as a module.
+An explicit annotation, including a [source companion](sources.md#source-boundaries),
+prescribes the interface when details must be hidden.
+`typeof` can reuse an inferred contract but couples it to the inspected implementation.
+No companion is required merely because a term is used as a module.
 
 [Value functions](value-functions-and-views.md) compose modules statically.
 A provider selected at runtime instead uses an ordinary thunk or codata protocol;
@@ -173,3 +135,130 @@ The callback's classifier supplies neither purity nor single invocation nor a na
 Remaining questions concern [kind-witness introduction](../../../ideas/README.md#kind-witness-introduction),
 [computation witness routes](../../../ideas/README.md#computation-witness-routes),
 and [companion generation](../../../ideas/README.md#companion-interface-generation).
+
+## Applicative Sealing
+
+Under the shared-opening rule, an abstract type takes its identity from the opening that introduced it.
+That rule suits a provider selected once at a composition root.
+It becomes a burden for a library module that many sources use independently:
+two clients that apply the same module constructor to the same arguments open two packed values
+and obtain two incompatible abstract types.
+In a diamond-shaped import graph, the shared dependency would have to be opened once at the top and forwarded
+through every intermediate source.
+
+`seal term : Sig` gives the abstract types of `Sig` an identity determined by the sealing site and its static arguments.
+The sealing is *applicative* in the sense of ML module systems: equal arguments produce equal abstract types.
+Every use of the sealed value sees the same types, and their representation stays hidden.
+
+```zydeco
+let Counter = exists (= Count : VType) . (#zero :: Count) * (#read :: Thk (Count -> Ret Int)) in
+let counter = seal (#Count = Int, #zero = 0, #read = { fn (count : Int) => ret count }) : Counter in
+let (/zero) = counter in
+let (/read) = counter in
+! read zero
+```
+
+The two openings are independent, and both see one `Count`, so `read` accepts `zero`.
+With the ordinary annotation `(... : Counter)` in place of `seal`, each opening introduces its own `Count`,
+and the last line is rejected with `tyck.type-mismatch`.
+Sealing still hides the representation.
+This term is rejected with `tyck.type-mismatch`:
+
+```zydeco
+let Counter = exists (= Count : VType) . (#zero :: Count) * (#read :: Thk (Count -> Ret Int)) in
+let counter = seal (#Count = Int, #zero = 0, #read = { fn (count : Int) => ret count }) : Counter in
+let (/zero) = counter in
+ret (zero : Int)
+```
+
+### Static Arguments and Shared Identity
+
+A sealed type is indexed by the static context of its sealing site.
+When `seal` appears under a value function or a type abstraction, the type parameters in scope
+and the witnesses opened by enclosing binders become arguments of the sealed type.
+Instantiations that agree on those arguments agree on the sealed type:
+
+```zydeco
+let val cell (Item : VType) =
+  seal (
+    #Cell = Item,
+    #put = { fn (item : Item) => ret item },
+    #get = { fn (cell : Item) => ret cell }
+  ) : exists (= Cell : VType) . (#put :: Thk (Item -> Ret Cell)) * (#get :: Thk (Cell -> Ret Item))
+in
+let (/put) = cell Int in
+let (/get) = cell Int in
+do stored <- ! put 7;
+! get stored
+```
+
+Both applications yield the same `Cell`, so a value stored through one is read through the other.
+The same holds when the two applications sit in different sources that import the builder:
+[source copies that merge](sources/packages.md#copy-resolve-merge-analyze) share one sealing site,
+which resolves the diamond without a common opening.
+Applying `cell` at `Char` produces a different `Cell`, even for a representation that ignores `Item`.
+An opened witness indexes the sealed type in the same way.
+A builder applied to witnesses from two openings of one provider contract, such as two `Addr` openings,
+produces two incompatible types, while forwarding a single opening preserves the identity.
+
+Because a sealed type mentions the witnesses that index it,
+the [witness-scope rule](#opening-and-witness-scope) applies to it unchanged.
+A witness opened by an ordinary binding indexes the sealed type and cannot leave that binding with it.
+This term is rejected with `tyck.escaping-existential`:
+
+```zydeco
+let Item = exists (Elem : VType) . (#item :: Elem) in
+let item : Item = (Int, #item = 42) in
+let (Elem, /item = element) = item in
+seal (Elem, #item = element) : exists (Sealed : VType) . (#item :: Sealed)
+```
+
+Bind the packed value as a value-function parameter when the sealed type should depend on its witness;
+the function's witness-dependent classifier then carries the dependency.
+
+### Checking a Seal
+
+Checking `seal term : Sig` reads `Sig` at kind `VType` and checks `term` against it.
+`Sig` must begin with an existential prefix that binds at least one abstract witness,
+which gives the seal something to hide.
+A signature with no such prefix, or with a wholly manifest one, is rejected with `tyck.type-expected`.
+
+The checker must also see the witnesses that `term` supplies for that prefix.
+A packed value written in place provides them, as does one whose witnesses follow
+from enclosing value-function, universal, and packed-value binders.
+The witnesses of a packed value delivered at runtime are unknown during checking,
+so this term is rejected with `tyck.package-witnesses-unavailable`:
+
+```zydeco
+let Item = exists (Elem : VType) . (#item :: Elem) in
+let chosen : Thk (Ret Item) = { ret ((Int, #item = 1) : Item) } in
+do item <- ! chosen;
+let sealed = seal item : Item in
+ret ()
+```
+
+The result is a packed value whose classifier makes each sealed binder manifest:
+the binder equals a canonical opaque type applied to the static arguments of the sealing site.
+Entries of the prefix that were already manifest keep their equations.
+Type equality treats the opaque type as abstract and never unfolds its representation.
+
+Sealing covers the leading prefix of `Sig` only.
+An `exists` nested inside a field, a thunk, or a function codomain keeps its generative meaning,
+so a sealed module can still export an operation that returns a fresh abstract type on every call.
+
+### Erasure and Staging
+
+`seal` is a static form with no runtime trace. [Static elimination](static-elimination.md) passes through it
+to its operand and substitutes each sealed type's representation in residual types.
+A sealed value therefore has the runtime layout of its representation, with no additional boxing.
+[Residual representability](static-elimination.md#residual-representability-and-erasure) is judged
+on that representation: a sealed type standing for a `val pi` classifier is rejected
+with `tyck.static-elimination` wherever a runtime value of that type is required.
+
+The [compiler reference](../../compiler/src/checking-and-inference.md#applicative-seals) describes the
+sealed type family and where its representation is unfolded.
+
+A [call-by-value block](translations/call-by-value-and-call-by-name.md#call-by-value-blocks) has no translation
+for `seal` and rejects it with `tyck.expressivity`.
+[Standard Library Organization](../../library/src/organization.md#module-layout-and-boundaries) describes
+how library modules choose among `let` imports, parameters, and `seal`.

@@ -43,7 +43,7 @@ Checked-root lowering and SPSLow conversion compose through typed compiler passe
 Consider this executable, which exits successfully:
 
 ```zydeco
-param (/Int; /process) : @(import("../../lib/std/builtin.zy")) in
+param (/process) : @(import("../../lib/std/builtin.zy")) in
 let api = (#run = { fn (n : Int) => ret n }, #spare = 7) in
 do code <- ! api/run 0;
 ! process/exit code

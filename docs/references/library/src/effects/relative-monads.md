@@ -1,4 +1,4 @@
-# Relative Monads and Effect Packaging
+# Relative Monads and Packed Effects
 
 ## Relative Monads
 
@@ -42,7 +42,7 @@ Checking a `Monad` dictionary verifies its classifier, not these equations.
 
 An effect-polymorphic client needs a carrier, its monad dictionary, and operations at that same carrier.
 The [effect library](../../../../../lib/std/effect) separates carrier-indexed operations
-from existential packaging so several effects can share one carrier.
+from existential packing so several effects can share one carrier.
 `IState S M` contains `state : Thk (MonadState S M)`; `IException E M` contains `exception : Thk (MonadThrow E M)`
 and a `catch` operation at `M`.
 Neither operation bundle introduces a carrier or a monad dictionary of its own.
@@ -55,18 +55,18 @@ without additional effect operations:
 exists (M : VType -> CType) . Thk (Monad M)
 ```
 
-`WithMonad I` packages one leading positional witness `M : VType -> CType`,
+`WithMonad I` packs one leading positional witness `M : VType -> CType`,
 a named `monad : Thk (Monad M)` dictionary, and an operation payload of type `I M`.
 Standalone clients use `WithMonad (IState S)` or `WithMonad (IException E)`.
-The combined signature `IStateExn S E` composes the operation bundles before packaging them:
+The combined signature `IStateExn S E` composes the operation bundles before packing them:
 
 ```zydeco
 WithMonad <| fn (M : VType -> CType) =>
   IState S M * IException E M
 ```
 
-Both bundles therefore use the same `M` and the surrounding package's single monad dictionary.
-A product of independently packaged interfaces would instead introduce independent witnesses.
+Both bundles therefore use the same `M` and the surrounding packed value's single monad dictionary.
+A product of independently packed interfaces would instead introduce independent witnesses.
 These signatures constrain carrier agreement, not the algebraic laws of the supplied operations.
 
 A client whose result uses that carrier has a

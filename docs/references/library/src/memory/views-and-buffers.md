@@ -140,7 +140,7 @@ with `Writer` remain an [open idea](../../../../ideas/README.md#growable-byte-bu
 Source modules share pointer types and CPS operations from the same layout opening.
 A worker can accept `Ptr L Init`, take its fields, initialize the same destination,
 and deliver `Ptr L Init` without allocating another payload.
-There is no separate storage-conversion or call-adapter package.
+There is no separate storage-conversion or call-adapter module.
 A different layout needs an explicit allocation and field conversion, with both allocations' lifetimes settled.
 Equal numerical placement does not equate independent witnesses.
 These calls use the existing source word convention; managed logical values and continuations may still allocate.

@@ -26,7 +26,12 @@ Diagnostic wording and rendering are implementation details.
 | `tyck.refutable-binding` | Refutable pattern in an ordinary binding without `@[partial]` | [Irrefutability and Partial Binders](patterns-and-coverage.md#irrefutability-and-partial-binders) |
 | `tyck.refutable-pattern-alias` | Refutable member inside a pattern alias group `(p; q)` | [Pattern Aliases](patterns-and-coverage.md#pattern-aliases) |
 | `tyck.missing-named-field` | Field selection `v/field` with no matching public field | [Field Search and Projection Patterns](polymorphism-and-packed-values.md#field-search-and-projection-patterns) |
+| `tyck.type-mismatch` | Classifier differs from the expected one, including distinct abstract identities and hidden sealed representations | [Applicative Sealing](polymorphism-and-packed-values.md#applicative-sealing) |
+| `tyck.escaping-existential` | Abstract witness in the result classifier of the binding that opened it | [Opening and Witness Scope](polymorphism-and-packed-values.md#opening-and-witness-scope), [Static Arguments and Shared Identity](polymorphism-and-packed-values.md#static-arguments-and-shared-identity) |
+| `tyck.type-expected` | `seal` signature without a leading abstract existential witness | [Checking a Seal](polymorphism-and-packed-values.md#checking-a-seal) |
+| `tyck.package-witnesses-unavailable` | Witnesses of a packed value unknown during checking where `seal` requires them | [Checking a Seal](polymorphism-and-packed-values.md#checking-a-seal) |
 | `tyck.static-elimination` | Unresolved static value match, integer op, escaping value function, or reduction limit exceeded | [Static Elimination](static-elimination.md) |
 | `tyck.escaping-declaration` | Local `def` declaration escaping the result type of a call-by-value block | [Sealed Declarations and Mutual Recursion](translations/call-by-value-and-call-by-name.md#sealed-declarations-and-mutual-recursion) |
+| `tyck.expressivity` | Form without a translation inside a call-by-value block, such as `seal` | [Erasure and Staging](polymorphism-and-packed-values.md#erasure-and-staging) |
 | `tyck.missing-builtin-type-role` | Contextual `OS` with no visible `@[builtin(os)]` provider witness | [Explicit Providers and Shared Openings](sources/core-prelude.md#explicit-providers-and-shared-openings) |
 | `tyck.ambiguous-builtin-type-role` | Contextual `OS` with multiple visible `@[builtin(os)]` provider witnesses | [Explicit Providers and Shared Openings](sources/core-prelude.md#explicit-providers-and-shared-openings) |

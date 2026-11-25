@@ -8,7 +8,7 @@ Type parameters express polymorphism within this value-function space.
 Value binders may also open type witnesses used in the result type; arbitrary runtime values cannot index types.
 
 ```zydeco
-let val duplicate (x : @(intrinsic(int))) = (x, x) in
+let val duplicate (x : Int) = (x, x) in
 ret (4 |> duplicate)
 ```
 
@@ -23,8 +23,7 @@ A thunk in the result keeps its computation suspended.
 `match` also produces a value when every arm produces a value of the same type.
 It uses the patterns and exhaustive coverage of [Patterns and Coverage](patterns-and-coverage.md);
 computation-producing arms keep their usual meaning.
-The four integer value intrinsics below have classifier `val pi (left : Int) (right : Int) . Int`,
-where `Int` denotes `@(intrinsic(int))`:
+The four integer value intrinsics below have classifier `val pi (left : Int) (right : Int) . Int`:
 
 | Intrinsic | Result |
 | --- | --- |
@@ -34,7 +33,6 @@ where `Int` denotes `@(intrinsic(int))`:
 | `val/int/compare` | Signed comparison: −1, 0, or 1 |
 
 ```zydeco
-let Int = @(intrinsic(int)) in
 let add = @(intrinsic(val/int/add)) in
 let compare = @(intrinsic(val/int/compare)) in
 let val maximum (left : Int) (right : Int) : Int =
@@ -55,7 +53,6 @@ The source head is a variable, optionally with bracketed type arguments, as in `
 Its result pattern may be refutable in a match or partial computation binding.
 
 ```zydeco
-let Int = @(intrinsic(int)) in
 let val first ((x, _) : Int * Int) = x in
 let (first ~> x; whole) = (3, 4) in
 ret (x, whole)

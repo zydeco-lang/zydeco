@@ -12,7 +12,7 @@ let stop : Thk (Int -> OS) = process/exit in
 ! stop 0
 ```
 
-The parameter selects the provider and opens its package once.
+The parameter selects the provider and opens its packed value once.
 That opening supplies both `process` and the witness used by `OS`.
 The whole-value alias `builtin` retains it for further composition, but that spelling has no special status.
 A provider-independent source needs no such parameter: `Option Int`, or `fn (value : Int) => (ret value : Ret Int)`,
@@ -53,7 +53,7 @@ An unresolved `OS` in a default-enabled scope selects the unique visible abstrac
 with the `@[builtin(os)]` role.
 The role, rather than a signature path or binder name, identifies it.
 A signature alias or another provider contract carrying that role works by the same rule.
-A package parameter that has not been opened supplies no visible witness.
+A packed-value parameter that has not been opened supplies no visible witness.
 No visible witness produces `tyck.missing-builtin-type-role`;
 multiple witnesses produce `tyck.ambiguous-builtin-type-role` instead of silently choosing the nearest
 or first provider.
@@ -159,7 +159,7 @@ Default vocabulary is available in kind and type roots as well as value and comp
 This follows the ordinary [static-only opening rule](../bindings-and-scope.md#static-only-openings),
 not a special retry or an inserted `pack`.
 An abstract provider witness still cannot escape its opening in a raw type result;
-package the result with an appropriate dependent interface when necessary.
+pack the result with an appropriate dependent interface when necessary.
 A `.zyi` source must still denote a type.
 Checking eliminates the wholly manifest closed opening, leaving no prelude work for interpreter or backend lowering.
 No initialization computation, runtime dictionary, extra provider parameter, or runtime metadata is introduced.

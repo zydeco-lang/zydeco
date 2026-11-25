@@ -70,7 +70,7 @@ pass `(T, #monad = t/monad, #state = t/state)` to `WithMonad (IState S)`. A lift
 `WithMonad (ITransformer M)` or a composition of that bundle with effect operations. Concrete `instance` builders
 specialize to `Ret` and project the ordinary effect interface. The computation-level `transformer` is a view of the same
 derived instance, not a separate dictionary implementation. It opens its packed base and forwards the curried `M base`
-arguments to `transformer_instance`. The generated `@[monadic]` interface also remains curried; packaging belongs to the
+arguments to `transformer_instance`. The generated `@[monadic]` interface also remains curried; packing belongs to the
 library boundary, with no definitional equality between the packed and curried classifiers
 ([witness-dependent classifiers](../../../language/src/polymorphism-and-packed-values.md#universal-polymorphism-and-dependent-classifiers)).
 
@@ -79,7 +79,7 @@ Writer supplies its source with an empty value and an append operation;
 the module adapts the existing `Ret`-returning append by running it and returning its answer through the base monad.
 This retains the [Writer output contract](#writer-output-contract),
 rather than accepting arbitrary effectful base-monad append operations.
-NonDet imports the concrete data and primitive packages directly through `let`,
+NonDet imports the concrete data and primitive modules directly through `let`,
 preserving one shared `List` identity across consumers without requiring a `DataPackage` parameter.
 
 ## Elementary Effect Instances
@@ -87,7 +87,7 @@ preserving one shared `List` identity across consumers without requiring a `Data
 The [effect library](../../../../../lib/std/effect) exports elementary effects independently of OS capabilities.
 `ret.zy`, `reader.zy`, `writer.zy`, `option.zy`, `state.zy`, `exception.zy`,
 `state-exn.zy`, and [`nondet.zy`](../../../../../lib/std/effect/nondet.zy) are provider-independent
-concrete packages requiring no `Builtin` argument.
+concrete modules requiring no `Builtin` argument.
 Except for the bootstrap `Ret` instance, each concrete instance specializes its derived transformer
 to the reusable `Monad Ret` dictionary.
 `Ret` is the ambient computation carrier, not a separate pure identity effect.

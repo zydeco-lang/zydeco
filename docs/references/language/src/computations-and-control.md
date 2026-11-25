@@ -24,8 +24,6 @@ An observation can expose an arrow or another codata protocol, so copatterns may
 and destructor names, as in `.route argument .result`.
 
 ```zydeco
-let Ret = @(intrinsic(ret)) in
-let Int = @(intrinsic(int)) in
 def Probe = codata | .read : Ret Int end in
 (comatch | .read => ret 42 end : Probe).read
 ```

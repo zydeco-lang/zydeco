@@ -26,7 +26,7 @@ a nested `begin` provides a nearer boundary.
 ```zydeco
 begin
   let answer = seed that
-  param (seed : @(intrinsic(int))) that
+  param (seed : Int) that
   ret answer
 end
 ```
@@ -54,7 +54,7 @@ refutable binding patterns follow [Patterns and Coverage](patterns-and-coverage.
 ## Static-Only Openings
 
 A value binding normally has a value or computation continuation.
-A static-only package opening may also return a kind or type: its checked pattern selects static components
+A static-only opening may also return a kind or type: its checked pattern selects static components
 from a [packed value](polymorphism-and-packed-values.md#existentials-and-packed-values)
 and discards the runtime payload, introducing no runtime value binder or view pattern.
 For example, `let (/Int) = @(import("../../lib/std/primitive.zy")) in Int` returns the manifest type.

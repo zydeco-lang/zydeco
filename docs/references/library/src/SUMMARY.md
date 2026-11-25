@@ -8,7 +8,7 @@
 
 # Effects and Relative Monads
 
-- [Relative Monads and Effect Packaging](effects/relative-monads.md)
+- [Relative Monads and Packed Effects](effects/relative-monads.md)
 - [Derived Transformers and Elementary Effects](effects/transformers-and-instances.md)
 - [Ordered Depth-First Nondeterminism](effects/nondet.md)
 

@@ -24,7 +24,7 @@ The annotation synthesizes its operand once, then supplies an outer interface ap
 
 Type operands include value types, computation types, and higher-kinded type constructors.
 Their translation needs the carrier but no runtime dictionary argument.
-Value operands include thunks, value functions, and ordinary value packages used as modules;
+Value operands include thunks, value functions, and ordinary packed values used as modules;
 translation preserves them as values rather than inserting a `ret` or forcing suspended computations.
 Kinds have no operand translation and are rejected with `tyck.sort-mismatch`.
 The operand receives no expected classifier from outside the annotation; an ascription inside it applies normally.
@@ -37,7 +37,6 @@ For example, `let MonadicMonad = @[monadic] (Monad Ret)` derives the dictionary 
 Likewise, `(@[monadic] { ret 1 }) M mo` is a value of type `Thk (M Int)`.
 
 ```zydeco
-param (/Ret; /Thk; builtin) : @(import("../../lib/std/builtin.zy")) in
 let basis = @(import("../../lib/std/effect/monad.zy")) in
 let (/Monad; /Algebra) = basis in
 let mo : Thk (Monad Ret) = {
@@ -106,7 +105,7 @@ L_M(f T)
 
 The body uses the renamed witness `X'` and the structure bound by `s_X`.
 Named type patterns retain their shape. Ordinary value parameters still receive one translated argument;
-parameters that open packages use the structures already carried by those packages.
+parameters that open packed values use the structures those values already carry.
 This uniform interface supports annotated, partially applied, and higher-order value functions
 without requiring source-level structure arguments at calls inside the block.
 
@@ -139,7 +138,7 @@ Transparent aliases retain their existing behavior.
 
 The family takes the carrier, the selected `Algebra` type constructor,
 and the declaration's free type dependencies as explicit type arguments.
-The `Algebra` parameter accounts for structure fields introduced into existential packages
+The `Algebra` parameter accounts for structure fields introduced into existential values
 and polymorphic value functions.
 Equal arguments select the same nominal identity; distinct source declarations remain distinct.
 Choosing `Ret` does not identify a translated declaration with its untranslated source.
@@ -169,7 +168,6 @@ This finite construction does not impose a new positivity or productivity rule o
 For example, the type parameter and recursive constructor below both belong to the annotated payload:
 
 ```zydeco
-param (/VType; /Unit; builtin) : @(import("../../lib/std/builtin.zy")) in
 let basis = @(import("../../lib/std/effect/monad.zy")) in
 let (/Monad; /Algebra) = basis in
 @[monadic] fn (A : VType) (item : A) =>
