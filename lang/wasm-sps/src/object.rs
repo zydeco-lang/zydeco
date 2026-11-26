@@ -226,6 +226,7 @@ impl WasmObjectBuilder {
         FuncRef(index)
     }
 
+    #[cfg(test)]
     pub fn table_symbol(&self) -> TableSymbol {
         TableSymbol
     }

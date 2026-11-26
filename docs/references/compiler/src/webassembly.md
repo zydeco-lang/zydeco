@@ -2,8 +2,8 @@
 
 The [wasm-sps](../../../../lang/wasm-sps/src/emit.rs) emitter produces relocatable `wasm32` object files (`.o`
 with Linking Specification v2 `linking`, `reloc.CODE`, `reloc.DATA`,
-and `target_features` `+tail-call`) using [wasm-common](../../../../lang/wasm-common/src).
-`wasm-common` owns the shared WebAssembly contract: relocatable object scaffolding (`WasmObjectBuilder`,
+and `target_features` `+tail-call`) using the shared WebAssembly contract
+in [`lang/wasm-sps`](../../../../lang/wasm-sps/src): relocatable object scaffolding (`WasmObjectBuilder`,
 `RelocFunction`), tagged-word encoding, inline scalar/memory helpers, the host-call ABI,
 and `.rodata.strings` table packing.
 The CLI links the emitted object against cached `wasm32-wasip1` `rlib` builds of `zydeco-machine`,

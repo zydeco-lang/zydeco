@@ -61,7 +61,7 @@ Cranelift keeps additional temporary values live inside virtual registers and st
 [`scalar::emit_scalar_call`](../../../../lang/cranelift/src/scalar.rs) evaluates inputs in operand order
 before inline arithmetic and keeps raw bits in unspilled SSA registers outside the GC root slot (`roots_slot`).
 Live box pointers can therefore move during collection while raw numeric bits remain unchanged.
-The [Wasm emitter](../../../../lang/wasm-common/src/word.rs) uses distinct locals; its heap currently does not collect.
+The [Wasm emitter](../../../../lang/wasm-sps/src/word.rs) uses distinct locals; its heap currently does not collect.
 Signed minimum divided by `-1` is handled before target overflow traps.
 Host builtins still receive spare boxes before decoding arguments, so their conversion helpers do not collect.
 

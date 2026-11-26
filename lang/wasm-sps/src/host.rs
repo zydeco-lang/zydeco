@@ -56,7 +56,6 @@ pub struct HostImport {
 #[derive(Clone, Copy)]
 pub struct StaticString {
     pub offset: u32,
-    pub length: u32,
 }
 
 /// Layout of static string data in `.rodata.strings`.
@@ -85,13 +84,13 @@ impl StringTable {
             )? as usize;
             static_data.resize(aligned, 0);
             let offset = Limits::u32(static_data.len(), "static string offset")?;
-            let length = Limits::u32(string.byte_len(), "static string length")?;
+            let _ = Limits::u32(string.byte_len(), "static string length")?;
             static_data.extend_from_slice(&(string.byte_len() as u64).to_le_bytes());
             static_data.extend_from_slice(string.as_bytes());
             debug_assert!(
                 static_data.len() - offset as usize == Self::LENGTH_BYTES + string.byte_len()
             );
-            strings.insert(id, StaticString { offset, length });
+            strings.insert(id, StaticString { offset });
         }
         Ok((static_data, strings))
     }

@@ -3069,17 +3069,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zydeco-wasm-common"
-version = "0.3.0"
-dependencies = [
- "thiserror",
- "wasm-encoder",
- "wasmparser",
- "zydeco-abi",
- "zydeco-syntax",
-]
-
-[[package]]
 name = "zydeco-wasm-sps"
 version = "0.3.0"
 dependencies = [
@@ -3090,5 +3079,4 @@ dependencies = [
  "zydeco-foundation",
  "zydeco-stackir",
  "zydeco-syntax",
- "zydeco-wasm-common",
 ]

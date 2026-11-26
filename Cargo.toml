@@ -14,7 +14,6 @@ members = [
     "lang/dynamics",
     "lang/stackir",
     "lang/cranelift",
-    "lang/wasm-common",
     "lang/wasm-sps",
     "lang/session",
     "lang/tests",
@@ -54,7 +53,6 @@ zydeco-statics = { path = "lang/statics" }
 zydeco-ir = { path = "lang/ir" }
 zydeco-dynamics = { path = "lang/dynamics" }
 zydeco-cranelift = { path = "lang/cranelift" }
-zydeco-wasm-common = { path = "lang/wasm-common" }
 zydeco-wasm-sps = { path = "lang/wasm-sps" }
 zydeco-stackir = { path = "lang/stackir" }
 zydeco-session = { path = "lang/session" }

@@ -1,5 +1,11 @@
 use std::collections::{HashMap, HashSet};
 
+use crate::{
+    DataSymbol, ENTRY_SYMBOL, EncodedScalar, FuncRef, HostCallKind, HostImport, HostSections,
+    Limits, PointerLocal, ProductFields, RelocFunction, RuntimeFailure, RuntimeWord, StaticString,
+    StringTable, TableSymbol, WORD_MEMORY, WasmEmitError, WasmModule, WasmObjectBuilder,
+    WasmRuntimeFailure, WordEmitter, WordError,
+};
 use thiserror::Error;
 use wasm_encoder::{BlockType, Instruction as WasmInstruction, MemArg, ValType};
 use zydeco_abi::HostCallMode;
@@ -13,14 +19,6 @@ use zydeco_stackir::{
 };
 use zydeco_syntax::scalar::ScalarBoxing;
 use zydeco_syntax::{HostOp, Literal};
-use zydeco_wasm_common::{
-    DataSymbol, ENTRY_SYMBOL, EncodedScalar, FuncRef, HostCallKind, HostImport, HostSections,
-    Limits, PointerLocal, ProductFields, RelocFunction, RuntimeFailure, RuntimeWord, StaticString,
-    StringTable, TableSymbol, WORD_MEMORY, WasmEmitError, WasmObjectBuilder, WasmRuntimeFailure,
-    WordEmitter, WordError,
-};
-
-pub use zydeco_wasm_common::{HOST_MODULE, WasmModule};
 
 const CASE_TYPE: u32 = 0;
 const PAIR_TYPE: u32 = 1;

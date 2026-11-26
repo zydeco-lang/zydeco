@@ -563,7 +563,7 @@ local unboxing and scalar-region analyses consume SPSLow directly before Craneli
 | SPS, demand, and closure conversion | [C8–C9](docs/references/compiler/src/sps.md) | `lang/stackir/src/{high,low}` |
 | Local representations and scalar regions | [C10](docs/references/compiler/src/representation-and-scalar-regions.md) | `lang/stackir/src/low/{unbox.rs,scalar.rs}` |
 | Native Cranelift emission and runtime | [C11–C12](docs/references/compiler/src/native-emission.md) | `lang/{cranelift,machine}`, `runtime` |
-| WebAssembly emission and embedding | [C13](docs/references/compiler/src/webassembly.md) | `lang/{wasm-sps,wasm-common}` |
+| WebAssembly emission and embedding | [C13](docs/references/compiler/src/webassembly.md) | `lang/wasm-sps` |
 | Source formatting | [C15](docs/references/compiler/src/tooling/formatting-and-rendering.md) | `lang/fmt/src` |
 
 Each completed representation has one selected program root and the storage needed by its syntax.
